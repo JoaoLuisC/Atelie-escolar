@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/$1"
+    }
+  ],
+  "env": {
+    "FIREBASE_PROJECT_ID": "@firebase_project_id",
+    "FIREBASE_CLIENT_EMAIL": "@firebase_client_email",
+    "FIREBASE_PRIVATE_KEY": "@firebase_private_key",
+    "MERCADOPAGO_ACCESS_TOKEN": "@mercadopago_access_token",
+    "MERCADOPAGO_PUBLIC_KEY": "@mercadopago_public_key",
+    "APP_URL": "@app_url"
+  }
+}

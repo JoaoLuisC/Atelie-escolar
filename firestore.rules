@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Produtos - Apenas leitura pública
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if false; // Apenas via Admin SDK
+    }
+    
+    // Pedidos - Criação pública (email), leitura apenas via backend
+    match /orders/{orderId} {
+      allow read: if false; // Apenas via Admin SDK
+      allow create: if true; // Permite criar pedido com email
+      allow update, delete: if false; // Apenas via Admin SDK
+    }
+    
+    // Clientes - Histórico de compras por email
+    match /customers/{email} {
+      allow read, write: if false; // Apenas via Admin SDK
+    }
+    
+    // Tokens de download - Sem acesso direto
+    match /downloadTokens/{tokenId} {
+      allow read, write: if false; // Apenas via Admin SDK
+    }
+    
+    // Logs de download - Sem acesso direto
+    match /downloadLogs/{logId} {
+      allow read, write: if false; // Apenas via Admin SDK
+    }
+  }
+}
