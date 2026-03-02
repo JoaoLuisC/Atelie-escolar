@@ -98,6 +98,24 @@
   margin-top: var(--spacing-xl);
 }
 
+.product-clickable {
+  transition: var(--transition);
+}
+
+.product-clickable:hover {
+  opacity: 0.95;
+}
+
+.btn-view-details {
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-view-details:hover {
+  color: var(--secondary-color) !important;
+  transform: translateX(5px);
+}
+
 @media (max-width: 768px) {
   .products-grid {
     grid-template-columns: 1fr;

@@ -4,11 +4,12 @@
   "description": "Plataforma de vendas de materiais educativos - Ateliê da Escola",
   "main": "index.js",
   "scripts": {
-    "dev": "vercel dev",
+    "dev": "node server.js",
     "build": "echo 'Build completed'",
-    "start": "vercel dev",
+    "start": "node server.js",
     "setup-db": "node scripts/setup-database.js",
-    "add-product": "node scripts/add-product.js"
+    "add-product": "node scripts/add-product.js",
+    "create-admin": "node scripts/create-admin-user.js"
   },
   "keywords": ["banners", "e-commerce", "mercado-pago"],
   "author": "",

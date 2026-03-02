@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Admin - Ateliê da Escola</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <!-- Header Admin -->
+    <header class="admin-header">
+        <div class="container">
+            <div class="admin-header-content">
+                <h1>🎨 Painel Administrativo</h1>
+                <div class="admin-user-info">
+                    <span id="user-email"></span>
+                    <button id="btn-logout" class="btn-logout">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        <div class="container">
+            <!-- Botão de Adicionar Produto -->
+            <div class="admin-actions">
+                <button id="btn-add-product" class="btn-primary">
+                    ➕ Adicionar Novo Produto
+                </button>
+            </div>
+
+            <!-- Lista de Produtos -->
+            <div class="products-grid" id="products-grid">
+                <div class="loading-state">
+                    <p>Carregando produtos...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Adicionar/Editar Produto -->
+    <div id="product-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Adicionar Produto</h2>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+
+            <form id="product-form">
+                <input type="hidden" id="product-id" name="id">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="product-name">Nome do Produto *</label>
+                        <input 
+                            type="text" 
+                            id="product-name" 
+                            name="name"
+                            placeholder="Ex: Kit Criativo Completo"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="product-price">Preço (R$) *</label>
+                        <input 
+                            type="number" 
+                            id="product-price" 
+                            name="price"
+                            step="0.01"
+                            min="0"
+                            placeholder="Ex: 39.90"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="product-description">Descrição *</label>
+                        <textarea 
+                            id="product-description" 
+                            name="description"
+                            rows="4"
+                            placeholder="Descrição detalhada do produto..."
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="product-category">Categoria *</label>
+                        <input 
+                            type="text" 
+                            id="product-category" 
+                            name="category"
+                            placeholder="Ex: Arte e Educação"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Imagens do Produto *</label>
+                        <div id="images-container">
+                            <div class="image-input-group">
+                                <input 
+                                    type="url" 
+                                    class="product-image-url" 
+                                    placeholder="https://... (Imagem 1)"
+                                    required
+                                >
+                                <button type="button" class="btn-remove-image" style="display: none;">❌</button>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-add-image" class="btn-secondary" style="margin-top: 10px;">➕ Adicionar Mais Imagem</button>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Vídeos do Produto (opcional)</label>
+                        <div id="videos-container">
+                            <div class="video-input-group">
+                                <input 
+                                    type="url" 
+                                    class="product-video-url" 
+                                    placeholder="https://youtube.com/... ou https://vimeo.com/..."
+                                >
+                                <button type="button" class="btn-remove-video" style="display: none;">❌</button>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-add-video" class="btn-secondary" style="margin-top: 10px;">➕ Adicionar Mais Vídeo</button>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="product-download">URL do Download *</label>
+                        <input 
+                            type="url" 
+                            id="product-download" 
+                            name="downloadUrl"
+                            placeholder="https://drive.google.com/..."
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="product-tags">Tags (separadas por vírgula)</label>
+                        <input 
+                            type="text" 
+                            id="product-tags" 
+                            name="tags"
+                            placeholder="Ex: criança, arte, educação"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="product-active" name="active" checked>
+                            <span>Produto ativo</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="btn-cancel">Cancelar</button>
+                    <button type="submit" class="btn-primary" id="btn-save">Salvar Produto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação de Exclusão -->
+    <div id="delete-modal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Confirmar Exclusão</h2>
+                <button class="modal-close" id="delete-modal-close">&times;</button>
+            </div>
+            <p>Tem certeza que deseja excluir este produto?</p>
+            <p><strong id="delete-product-name"></strong></p>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="btn-cancel-delete">Cancelar</button>
+                <button type="button" class="btn-danger" id="btn-confirm-delete">Excluir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notificação Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script type="module" src="js/admin.js"></script>
+</body>
+</html>
