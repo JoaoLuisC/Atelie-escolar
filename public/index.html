@@ -1,126 +1,562 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ateliê da Escola - Materiais Escolares</title>
-    
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Raleway:wght@700;800&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
-    
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="/css/variables.css">
-    <link rel="stylesheet" href="/css/base.css">
-    <link rel="stylesheet" href="/css/navbar.css">
-    <link rel="stylesheet" href="/css/components.css">
-    <link rel="stylesheet" href="/css/footer.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ateliê da Escola — Materiais Escolares Digitais</title>
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,600;0,700;1,600&family=Raleway:wght@700;800;900&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/navbar.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/footer.css">
+  <link rel="stylesheet" href="/css/animations.css">
 </head>
 <body>
-    <!-- Navbar -->
-    <nav class="navbar">
-        <div class="container">
-            <a href="/" class="navbar-brand">
-                <i class="bi bi-badge-tm"></i> Ateliê da Escola
+  <div id="navbar-placeholder"></div>
+
+  <!-- ════════════════════════════════════════════════
+       HERO — fundo escuro com blobs animados e grid
+  ════════════════════════════════════════════════ -->
+  <section class="hero-animated">
+    <div class="hero-bg-gradient"></div>
+    <div class="hero-blob hero-blob-1"></div>
+    <div class="hero-blob hero-blob-2"></div>
+    <div class="hero-blob hero-blob-3"></div>
+    <div class="hero-grid"></div>
+
+    <div class="container hero-content">
+      <div class="row align-items-center" style="min-height:100vh;padding:110px 0 130px;">
+        <div class="col-lg-8">
+          <p class="hero-eyebrow">Ateliê da Escola · Materiais Digitais</p>
+          <h1 class="hero-title">
+            Banners escolares<br>
+            feitos com <span class="highlight">cuidado</span><br>
+            e criatividade
+          </h1>
+          <p class="hero-subtitle">
+            Arquivos gráficos profissionais para eventos escolares — download instantâneo,
+            prontos para impressão, em todos os tamanhos.
+          </p>
+          <div class="hero-cta-group">
+            <a href="/products.html" class="btn-hero-primary">
+              Ver Produtos <i class="bi bi-arrow-right"></i>
             </a>
-            <ul class="navbar-menu">
-                <li><a href="/">Início</a></li>
-                <li><a href="/products.html">Produtos</a></li>
-                <li>
-                    <a href="/checkout.html" class="cart-icon">
-                        <i class="bi bi-cart3"></i>
-                        <span class="cart-badge" id="cartCount">0</span>
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <section class="hero" style="background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); color: white; padding: 100px 0; text-align: center;">
-        <div class="container">
-            <h1 style="font-size: 3rem; margin-bottom: 1rem;">Banners Escolares Profissionais</h1>
-            <p style="font-size: 1.25rem; margin-bottom: 2rem; opacity: 0.9;">Materiais gráficos de alta qualidade para eventos escolares</p>
-            <a href="/products.html" class="btn btn-primary btn-lg">
-                Ver Produtos <i class="bi bi-arrow-right ms-2"></i>
+            <a href="#como-funciona" class="btn-hero-secondary">
+              Nossa história <i class="bi bi-play-circle"></i>
             </a>
+          </div>
         </div>
-    </section>
+      </div>
+    </div>
 
-    <!-- Features -->
-    <section style="padding: 80px 0;">
-        <div class="container">
-            <h2 class="text-center mb-5">Por que escolher o Ateliê da Escola?</h2>
-            <div class="row g-4">
-                <div class="col-md-4 text-center">
-                    <div style="font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem;">
-                        <i class="bi bi-lightning-charge-fill"></i>
-                    </div>
-                    <h4>Download Instantâneo</h4>
-                    <p>Receba seus arquivos imediatamente após o pagamento aprovado</p>
-                </div>
-                <div class="col-md-4 text-center">
-                    <div style="font-size: 3rem; color: var(--secondary-color); margin-bottom: 1rem;">
-                        <i class="bi bi-shield-check"></i>
-                    </div>
-                    <h4>Pagamento Seguro</h4>
-                    <p>Integração com Mercado Pago para máxima segurança</p>
-                </div>
-                <div class="col-md-4 text-center">
-                    <div style="font-size: 3rem; color: var(--info); margin-bottom: 1rem;">
-                        <i class="bi bi-file-earmark-zip"></i>
-                    </div>
-                    <h4>Arquivos Prontos</h4>
-                    <p>Arquivos enviados em diversos tamanhos para atender todas as necessidades</p>
-                </div>
-            </div>
+    <div class="hero-scroll-indicator">
+      <div class="scroll-line"></div>
+      <span>Scroll</span>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════
+       MARQUEE 1 — verde (direção normal)
+  ════════════════════════════════════════════════ -->
+  <div class="marquee-strip" aria-hidden="true">
+    <div class="marquee-track">      <span class="marquee-item">BANNERS ESCOLARES</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">FORMATURA</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">FESTA JUNINA</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">VOLTA ÀS AULAS</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">DIA DAS MÃES</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">FESTA DA FAMÍLIA</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">GINCANA</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">OLIMPÍADAS ESCOLARES</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">BANNERS ESCOLARES</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">FORMATURA</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">FESTA JUNINA</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">VOLTA ÀS AULAS</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">DIA DAS MÃES</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">FESTA DA FAMÍLIA</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">GINCANA</span>
+      <span class="marquee-item marquee-sep">✦</span>
+      <span class="marquee-item">OLIMPÍADAS ESCOLARES</span>
+      <span class="marquee-item marquee-sep">✦</span>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════
+       1. PRODUTOS EM DESTAQUE — vitrine imediata
+  ════════════════════════════════════════════════ -->
+  <section class="products-preview-section">
+    <div class="container">
+      <div class="row justify-content-between align-items-end mb-5">
+        <div class="col-lg-6 reveal">
+          <p class="section-label">Catálogo</p>
+          <h2 style="font-size:clamp(1.8rem,3vw,2.5rem);margin:0;">
+            É exatamente isso que<br>você precisa 👇
+          </h2>
         </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h4><i class="bi bi-badge-tm"></i> Ateliê da Escola</h4>
-                    <p>Plataforma de vendas de materiais gráficos para fins escolares.</p>
-                </div>
-                <div class="footer-section">
-                    <h4>Links Rápidos</h4>
-                    <ul class="footer-links">
-                        <li><a href="/">Início</a></li>
-                        <li><a href="/products.html">Produtos</a></li>
-                        <li><a href="/downloads.html">Meus Downloads</a></li>
-                    </ul>
-                </div>
-                <div class="footer-section">
-                    <h4>Contato</h4>
-                    <p><i class="bi bi-envelope"></i> contato@bannerstore.com</p>
-                    <p><i class="bi bi-whatsapp"></i> (11) 99999-9999</p>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>&copy; 2026 Ateliê da Escola. Todos os direitos reservados.</p>
-            </div>
+        <div class="col-lg-4 text-lg-end reveal">
+          <a href="/products.html" class="btn-hero-primary" style="padding:12px 28px;font-size:.9rem;">
+            Ver catálogo completo <i class="bi bi-arrow-right"></i>
+          </a>
         </div>
-    </footer>
+      </div>
+      <div class="row g-4" id="preview-products-grid">
+        <div class="col-12 text-center py-5 reveal">
+          <output class="spinner-border" style="color:var(--primary-color);" aria-label="Carregando produtos"></output>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Custom JS -->
-    <script src="/js/cart.js"></script>
-    <script>
-        // Atualizar contador do carrinho
-        document.addEventListener('DOMContentLoaded', () => {
-            updateCartCount();
+  <!-- ════════════════════════════════════════════════
+       2. COMO FUNCIONA — passo a passo vertical claro
+  ════════════════════════════════════════════════ -->
+  <section id="como-funciona" class="how-section">
+    <div class="container">
+      <div class="row justify-content-center mb-5">
+        <div class="col-lg-6 text-center reveal">
+          <p class="section-label">Simples assim</p>
+          <h2 style="font-size:clamp(1.8rem,3vw,2.5rem);">
+            Do clique à impressão<br>em minutos
+          </h2>
+          <p class="text-muted mt-2">Sem cadastro obrigatório, sem espera.</p>
+        </div>
+      </div>
+
+      <div class="how-steps-row reveal">
+
+        <div class="how-card">
+          <div class="how-num">1</div>
+          <div class="how-icon"><i class="bi bi-search"></i></div>
+          <h5>Escolha</h5>
+          <p>Navegue pelo catálogo e encontre o banner ideal para o seu evento.</p>
+        </div>
+
+        <div class="how-arrow">→</div>
+
+        <div class="how-card">
+          <div class="how-num">2</div>
+          <div class="how-icon"><i class="bi bi-credit-card-fill"></i></div>
+          <h5>Pague</h5>
+          <p>Cartão, Pix ou boleto via Mercado Pago. 100% seguro.</p>
+        </div>
+
+        <div class="how-arrow">→</div>
+
+        <div class="how-card">
+          <div class="how-num">3</div>
+          <div class="how-icon"><i class="bi bi-cloud-arrow-down-fill"></i></div>
+          <h5>Baixe na hora</h5>
+          <p>Arquivo PDF ou Canva disponível imediatamente após aprovação.</p>
+        </div>
+
+        <div class="how-arrow">→</div>
+
+        <div class="how-card how-card-accent">
+          <div class="how-num">4</div>
+          <div class="how-icon"><i class="bi bi-printer-fill"></i></div>
+          <h5>Imprima e celebre</h5>
+          <p>Leve à gráfica da sua confiança e transforme o espaço da escola.</p>
+        </div>
+
+      </div>
+
+      <!-- Nota de formatos -->
+      <div class="row justify-content-center mt-5">
+        <div class="col-lg-8">
+          <div class="how-formats-note reveal">
+            <i class="bi bi-info-circle-fill"></i>
+            <span>Os arquivos são entregues em <strong>PDF alta resolução</strong> (pronto para gráfica) e/ou <strong>Canva editável</strong> (personalize o nome da escola, data e mais). Cada produto indica os formatos disponíveis.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════
+       3. PROVA SOCIAL — mockup redes sociais
+  ════════════════════════════════════════════════ -->
+  <section class="social-proof-section">
+    <!-- blobs decorativos -->
+    <div class="sp-blob sp-blob-left" aria-hidden="true"></div>
+    <div class="sp-blob sp-blob-right" aria-hidden="true"></div>
+
+    <div class="container" style="position:relative;z-index:1;">
+      <div class="row justify-content-center mb-5">
+        <div class="col-lg-6 text-center reveal">
+          <p class="section-label">Como a escola usa</p>
+          <h2 style="font-size:clamp(1.8rem,3vw,2.5rem);">
+            Veja no Insta &amp; TikTok 📲
+          </h2>
+          <p class="text-muted mt-2">Escolas de todo o Brasil usando nossos materiais.</p>
+        </div>
+      </div>
+
+      <div class="row g-5 justify-content-center align-items-center">
+
+        <!-- ── INSTAGRAM REELS MOCKUP ── -->
+        <div class="col-md-5 col-lg-4 reveal delay-1">
+          <div class="phone-frame phone-insta">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+
+              <!-- Stories bar -->
+              <div class="ig-stories-bar">
+                <div class="ig-story-dot ig-story-you"><i class="bi bi-plus"></i></div>
+                <div class="ig-story-dot" style="background:linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7);"></div>
+                <div class="ig-story-dot" style="background:linear-gradient(135deg,#9B5DE5,#F15BB5);"></div>
+                <div class="ig-story-dot" style="background:linear-gradient(135deg,#00BBF9,#00F5D4);"></div>
+              </div>
+
+              <!-- Post principal -->
+              <div class="ig-post">
+                <div class="ig-post-header">
+                  <div class="ig-avatar"><i class="bi bi-palette-fill"></i></div>
+                  <div>
+                    <span class="ig-username">@atelie.escola</span>
+                    <span class="ig-location">São Paulo, SP</span>
+                  </div>
+                  <i class="bi bi-three-dots ig-dots"></i>
+                </div>
+                <div class="ig-post-image">
+                  <div class="ig-image-placeholder">
+                    <div class="ig-banner-preview">
+                      <div class="ibp-top">🎉 FESTA JUNINA 2026</div>
+                      <div class="ibp-sub">Escola Municipal Estrela do Sul</div>
+                      <div class="ibp-decor">🌽 🌟 🎊 🌽</div>
+                    </div>
+                  </div>
+                  <span class="ig-reels-badge"><i class="bi bi-camera-reels-fill"></i> Reels</span>
+                </div>
+                <div class="ig-actions">
+                  <i class="bi bi-heart-fill" style="color:#F15BB5;"></i>
+                  <i class="bi bi-chat"></i>
+                  <i class="bi bi-send"></i>
+                  <i class="bi bi-bookmark ms-auto"></i>
+                </div>
+                <div class="ig-likes">2.847 curtidas</div>
+                <div class="ig-caption"><strong>@atelie.escola</strong> Banner pronto, impresso em A1 e arrasando na quadra! 🎉 <span style="color:var(--primary-color);">#FestaCaipira #BannerEscolar #AtelieEscola</span></div>
+              </div>
+
+              <!-- Comentários -->
+              <div class="ig-comments">
+                <div class="ig-comment"><strong>prof_carla</strong> Amei! Vou comprar o meu! 😍</div>
+                <div class="ig-comment"><strong>diretora_ana</strong> Perfeito para minha turma! ✨</div>
+                <div class="ig-comment"><strong>escola_flores</strong> Entregaram super rápido! 👏</div>
+              </div>
+
+            </div>
+          </div>
+          <p class="text-center mt-3" style="font-size:.85rem;color:var(--gray);font-weight:600;">
+            <i class="bi bi-instagram" style="color:#ee2a7b;"></i> +4.200 seguidores
+          </p>
+        </div>
+
+        <!-- ── TIKTOK MOCKUP ── -->
+        <div class="col-md-5 col-lg-4 reveal delay-2">
+          <div class="phone-frame phone-tiktok">
+            <div class="phone-notch"></div>
+            <div class="phone-screen phone-screen-dark">
+
+              <!-- TikTok video -->
+              <div class="tt-video">
+                <div class="tt-video-bg">
+                  <div class="tt-banner-stack">
+                    <div class="tt-banner tt-b1">🎓 FORMATURA 2026</div>
+                    <div class="tt-banner tt-b2">📚 VOLTA ÀS AULAS</div>
+                    <div class="tt-banner tt-b3">🌸 DIA DAS MÃES</div>
+                  </div>
+                  <div class="tt-overlay-text">Decoração inesquecível<br>com o Ateliê! 🎊</div>
+                </div>
+                <!-- Sidebar de ações -->
+                <div class="tt-actions">
+                  <div class="tt-avatar"><i class="bi bi-palette-fill"></i><span class="tt-follow-btn">+</span></div>
+                  <div class="tt-action-btn"><i class="bi bi-heart-fill" style="color:#F15BB5;"></i><span>48.2k</span></div>
+                  <div class="tt-action-btn"><i class="bi bi-chat-fill"></i><span>1.2k</span></div>
+                  <div class="tt-action-btn"><i class="bi bi-bookmark-fill"></i><span>9.8k</span></div>
+                  <div class="tt-action-btn"><i class="bi bi-share-fill"></i><span>Share</span></div>
+                </div>
+                <!-- Rodapé do video -->
+                <div class="tt-footer">
+                  <span class="tt-username">@atelie.escola</span>
+                  <p class="tt-caption">Banner de formatura incrível! Link na bio 🔗</p>
+                  <div class="tt-music"><i class="bi bi-music-note-beamed"></i> Som original · atelie.escola</div>
+                  <div class="tt-progress"><div class="tt-progress-bar" style="width:38%;"></div></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <p class="text-center mt-3" style="font-size:.85rem;color:var(--gray);font-weight:600;">
+            <i class="bi bi-tiktok"></i> +12.1k curtidas
+          </p>
+        </div>
+
+      </div>
+
+      <!-- CTA social -->
+      <div class="row justify-content-center mt-5">
+        <div class="col-auto reveal">
+          <a href="https://www.instagram.com/atelie.escola" target="_blank" rel="noopener" class="sp-social-btn sp-btn-ig">
+            <i class="bi bi-instagram"></i> @atelie.escola no Insta
+          </a>
+          <a href="https://www.tiktok.com/@atelie.escola" target="_blank" rel="noopener" class="sp-social-btn sp-btn-tt">
+            <i class="bi bi-tiktok"></i> @atelie.escola no TikTok
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════
+       4. POR QUE ESCOLHER — cards de benefícios
+  ════════════════════════════════════════════════ -->
+  <section class="features-section">
+    <div class="container">
+      <div class="row justify-content-center mb-5">
+        <div class="col-lg-6 text-center reveal">
+          <p class="section-label">Nossas vantagens</p>
+          <h2 style="font-size:clamp(1.8rem,3vw,2.5rem);">
+            Por que escolher<br>o Ateliê da Escola?
+          </h2>
+        </div>
+      </div>
+      <div class="row g-4">
+        <div class="col-md-4 reveal delay-1">
+          <div class="feature-card-new">
+            <div class="feature-icon-wrap icon-blue"><i class="bi bi-lightning-charge-fill"></i></div>
+            <h4 style="font-size:1.2rem;">Download Instantâneo</h4>
+            <p class="text-muted" style="font-size:.95rem;margin:0;">Receba seus arquivos imediatamente após a confirmação do pagamento. Sem espera.</p>
+          </div>
+        </div>
+        <div class="col-md-4 reveal delay-2">
+          <div class="feature-card-new">
+            <div class="feature-icon-wrap icon-green"><i class="bi bi-shield-check"></i></div>
+            <h4 style="font-size:1.2rem;">Pagamento Seguro</h4>
+            <p class="text-muted" style="font-size:.95rem;margin:0;">Integração com Mercado Pago — a plataforma mais usada do Brasil.</p>
+          </div>
+        </div>
+        <div class="col-md-4 reveal delay-3">
+          <div class="feature-card-new">
+            <div class="feature-icon-wrap icon-purple"><i class="bi bi-rulers"></i></div>
+            <h4 style="font-size:1.2rem;">Nos Tamanhos Certos</h4>
+            <p class="text-muted" style="font-size:.95rem;margin:0;">Múltiplos tamanhos e resoluções para qualquer necessidade de impressão.</p>
+          </div>
+        </div>
+        <div class="col-md-4 reveal delay-1">
+          <div class="feature-card-new">
+            <div class="feature-icon-wrap icon-green"><i class="bi bi-palette-fill"></i></div>
+            <h4 style="font-size:1.2rem;">Design Profissional</h4>
+            <p class="text-muted" style="font-size:.95rem;margin:0;">Peças criadas por designer especialista em comunicação visual escolar.</p>
+          </div>
+        </div>
+        <div class="col-md-4 reveal delay-2">
+          <div class="feature-card-new">
+            <div class="feature-icon-wrap icon-blue"><i class="bi bi-pencil-square"></i></div>
+            <h4 style="font-size:1.2rem;">Editável no Canva</h4>
+            <p class="text-muted" style="font-size:.95rem;margin:0;">Personalize nome da escola, data e detalhes sem precisar de designer.</p>
+          </div>
+        </div>
+        <div class="col-md-4 reveal delay-3">
+          <div class="feature-card-new">
+            <div class="feature-icon-wrap icon-purple"><i class="bi bi-heart-fill"></i></div>
+            <h4 style="font-size:1.2rem;">Feito com Amor</h4>
+            <p class="text-muted" style="font-size:.95rem;margin:0;">Cada peça nasce da paixão pela educação e pelo cuidado com o ambiente escolar.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════
+       MARQUEE 2 — escura (direção inversa)
+  ════════════════════════════════════════════════ -->
+  <div class="marquee-strip marquee-strip-dark" aria-hidden="true">
+    <div class="marquee-track marquee-track-reverse">
+      <span class="marquee-item">ALTA RESOLUÇÃO</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">PRONTO PARA IMPRESSÃO</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">PDF + CANVA EDITÁVEL</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">DESIGN EXCLUSIVO</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">DOWNLOAD SEGURO</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">CRIADO COM CUIDADO</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">ALTA RESOLUÇÃO</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">PRONTO PARA IMPRESSÃO</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">PDF + CANVA EDITÁVEL</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">DESIGN EXCLUSIVO</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">DOWNLOAD SEGURO</span>
+      <span class="marquee-item marquee-sep">·</span>
+      <span class="marquee-item">CRIADO COM CUIDADO</span>
+      <span class="marquee-item marquee-sep">·</span>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════
+       5. CTA FINAL
+  ════════════════════════════════════════════════ -->
+  <section class="cta-final-section">
+    <div class="container" style="position:relative;z-index:1;">
+      <div class="row justify-content-center">
+        <div class="col-lg-7 text-center">
+          <p class="reveal" style="font-family:var(--font-main);font-size:.8rem;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:var(--secondary-color);margin-bottom:1.5rem;">
+            Comece agora
+          </p>
+          <h2 class="cta-title reveal">
+            A próxima festa da escola<br>vai ser inesquecível.
+          </h2>
+          <p class="cta-sub reveal">
+            Materiais gráficos profissionais ao alcance de um clique, com entrega imediata.
+          </p>
+          <div class="d-flex gap-3 justify-content-center flex-wrap reveal">
+            <a href="/products.html" class="btn-hero-primary">
+              Ver Produtos <i class="bi bi-arrow-right"></i>
+            </a>
+            <a href="https://wa.me/5511999999999?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20os%20banners."
+               target="_blank" rel="noopener" class="btn-hero-secondary">
+              <i class="bi bi-whatsapp"></i> Falar no WhatsApp
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div id="footer-placeholder"></div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+  <script src="/js/firebase-config.js"></script>
+  <script src="/js/components.js"></script>
+  <script src="/js/cart.js"></script>
+  <script src="/js/animations.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      updateCartCount();
+      loadPreviewProducts();
+    });
+
+    async function loadPreviewProducts() {
+      const grid = document.getElementById('preview-products-grid');
+      try {
+        const snap = await firebase.firestore()
+          .collection('products')
+          .where('active', '==', true)
+          .limit(3)
+          .get();
+
+        if (snap.empty) { grid.innerHTML = buildPlaceholderCards(); return; }
+
+        grid.innerHTML = snap.docs.map((doc) => buildProductCard(doc.id, doc.data())).join('');
+        grid.querySelectorAll('.reveal').forEach((el, i) => {
+          el.style.transitionDelay = (i * 0.15) + 's';
+          setTimeout(() => el.classList.add('revealed'), 100);
         });
-    </script>
+      } catch (err) {
+        console.warn('Produtos não carregados:', err);
+        grid.innerHTML = buildPlaceholderCards();
+      }
+    }
+
+    function buildProductCard(id, p) {
+      const price = typeof p.price === 'number' ? p.price.toFixed(2).replace('.', ',') : '—';
+      const icon  = getCategoryIcon(p.category);
+      const img   = p.imageUrl
+        ? `<img src="${p.imageUrl}" alt="${p.name}" class="w-100 h-100" style="object-fit:cover;">`
+        : `<i class="bi ${icon}" style="font-size:4rem;color:rgba(255,255,255,.3);"></i>`;
+      return `
+        <div class="col-md-4 reveal">
+          <div class="product-preview-card">
+            <a href="/product-details.html?id=${id}" style="text-decoration:none;">
+              <div class="product-preview-thumb">${img}</div>
+              <div class="product-preview-body">
+                <p class="product-preview-tag">${p.category || 'Banner'}</p>
+                <h5 style="font-size:1rem;font-weight:700;color:var(--dark);margin-bottom:.5rem;">${p.name}</h5>
+                <p style="font-size:.9rem;color:var(--gray);margin-bottom:1rem;line-height:1.5;">
+                  ${(p.description || '').substring(0, 80)}${p.description && p.description.length > 80 ? '…' : ''}
+                </p>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding-top:.75rem;border-top:1px solid var(--gray-light);">
+                  <span style="font-size:1.3rem;font-weight:800;color:var(--primary-color);">R$ ${price}</span>
+                  <span style="font-size:.85rem;color:var(--secondary-color);font-weight:600;">
+                    Ver detalhes <i class="bi bi-arrow-right"></i>
+                  </span>
+                </div>
+              </div>
+            </a>
+          </div>
+        </div>`;
+    }
+
+    function buildPlaceholderCards() {
+      return [
+        { name: 'Banner Festa Junina', cat: 'Festas Juninas', icon: 'bi-star-fill', price: '29,90' },
+        { name: 'Banner Formatura 2025', cat: 'Formatura', icon: 'bi-mortarboard-fill', price: '34,90' },
+        { name: 'Banner Volta às Aulas', cat: 'Volta às Aulas', icon: 'bi-book-fill', price: '24,90' },
+      ].map((it, i) => `
+        <div class="col-md-4 reveal" style="transition-delay:${i*.15}s;">
+          <div class="product-preview-card">
+            <a href="/products.html" style="text-decoration:none;">
+              <div class="product-preview-thumb">
+                <i class="bi ${it.icon}" style="font-size:4rem;color:rgba(255,255,255,.3);"></i>
+              </div>
+              <div class="product-preview-body">
+                <p class="product-preview-tag">${it.cat}</p>
+                <h5 style="font-size:1rem;font-weight:700;color:var(--dark);margin-bottom:.5rem;">${it.name}</h5>
+                <p style="font-size:.9rem;color:var(--gray);margin-bottom:1rem;">
+                  Arquivo PDF de alta resolução + Canva editável com o nome da escola.
+                </p>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding-top:.75rem;border-top:1px solid var(--gray-light);">
+                  <span style="font-size:1.3rem;font-weight:800;color:var(--primary-color);">R$ ${it.price}</span>
+                  <span style="font-size:.85rem;color:var(--secondary-color);font-weight:600;">
+                    Ver detalhes <i class="bi bi-arrow-right"></i>
+                  </span>
+                </div>
+              </div>
+            </a>
+          </div>
+        </div>`).join('');
+    }
+
+    function getCategoryIcon(cat) {
+      const map = { 'Formatura':'bi-mortarboard-fill','Festa Junina':'bi-star-fill','Volta às Aulas':'bi-book-fill','Dia das Mães':'bi-heart-fill','Gincana':'bi-trophy-fill' };
+      return map[cat] || 'bi-file-image-fill';
+    }
+  </script>
 </body>
 </html>

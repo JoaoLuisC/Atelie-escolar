@@ -72,12 +72,12 @@ img {
 
 .btn-secondary {
   background: var(--secondary-color);
-  color: var(--white);
+  color: #0e0e16; /* texto escuro sobre o mint claro */
 }
 
 .btn-secondary:hover {
   background: var(--secondary-dark);
-  color: var(--white);
+  color: #0e0e16;
 }
 
 .btn-outline {

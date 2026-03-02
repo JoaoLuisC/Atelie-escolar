@@ -1,134 +1,173 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Produtos - Ateliê da Escola</title>
-    
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Raleway:wght@700;800&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
-    
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="/css/variables.css">
-    <link rel="stylesheet" href="/css/base.css">
-    <link rel="stylesheet" href="/css/navbar.css">
-    <link rel="stylesheet" href="/css/components.css">
-    <link rel="stylesheet" href="/css/footer.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Produtos â€” AteliÃª da Escola</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Raleway:wght@700;800;900&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/navbar.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/footer.css">
+  <link rel="stylesheet" href="/css/animations.css">
 </head>
 <body>
-    <!-- Navbar -->
-    <nav class="navbar">
-        <div class="container">
-            <a href="/" class="navbar-brand">
-                <i class="bi bi-badge-tm"></i> Ateliê da Escola
-            </a>
-            <ul class="navbar-menu">
-                <li><a href="/">Início</a></li>
-                <li><a href="/products.html" style="background: var(--primary-light); color: var(--white);">Produtos</a></li>
-                <li>
-                    <a href="/checkout.html" class="cart-icon">
-                        <i class="bi bi-cart3"></i>
-                        <span class="cart-badge" id="cartCount">0</span>
-                    </a>
-                </li>
-            </ul>
+
+  <!-- â•â•â•â• NAVBAR â•â•â•â• -->
+  <div id="navbar-placeholder"></div>
+
+  <!-- â•â•â•â• PAGE HEADER â•â•â•â• -->
+  <section class="products-page-header">
+    <div class="container" style="position:relative;z-index:1;">
+      <div class="row justify-content-center text-center">
+        <div class="col-lg-6">
+          <p class="section-label" style="color:var(--secondary-color);">CatÃ¡logo completo</p>
+          <h1 style="font-family:var(--font-heading);font-size:clamp(2rem,4vw,3rem);font-weight:900;color:#fff;margin-bottom:.75rem;">
+            Banners para toda<br>ocasiÃ£o escolar
+          </h1>
+          <p style="color:rgba(255,255,255,.65);font-size:1rem;">
+            PDF alta resoluÃ§Ã£o + Canva editÃ¡vel. Download imediato.
+          </p>
         </div>
-    </nav>
+      </div>
+    </div>
+  </section>
 
-    <!-- Page Header -->
-    <section style="background: var(--gray-light); padding: 40px 0; text-align: center;">
-        <div class="container">
-            <h1>Nossos Produtos</h1>
-            <p>Escolha os melhores banners e materiais para seu evento escolar</p>
-        </div>
-    </section>
+  <!-- â•â•â•â• MAIN CONTENT â•â•â•â• -->
+  <div class="products-layout container">
 
-    <!-- Products Section -->
-    <section style="padding: 60px 0;">
-        <div class="container">
-            <!-- Loading -->
-            <div id="loading" class="text-center">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Carregando...</span>
-                </div>
-                <p class="mt-3">Carregando produtos...</p>
-            </div>
+    <!-- â”€â”€ SIDEBAR FILTROS â”€â”€ -->
+    <aside class="products-sidebar">
+      <div class="sidebar-section">
+        <h6 class="sidebar-title">Ordenar por</h6>
+        <select id="sortSelect" class="sidebar-select">
+          <option value="newest">Mais recentes</option>
+          <option value="price-asc">Menor preÃ§o</option>
+          <option value="price-desc">Maior preÃ§o</option>
+          <option value="name">Nome A-Z</option>
+        </select>
+      </div>
 
-            <!-- Products Grid -->
-            <div id="productsGrid" class="products-grid" style="display: none;"></div>
+      <div class="sidebar-section">
+        <h6 class="sidebar-title">Faixa de preÃ§o</h6>
+        <label class="sidebar-radio">
+          <input type="radio" name="price" value="all" checked> Todos
+        </label>
+        <label class="sidebar-radio">
+          <input type="radio" name="price" value="0-25"> AtÃ© R$ 25
+        </label>
+        <label class="sidebar-radio">
+          <input type="radio" name="price" value="25-50"> R$ 25 â€“ R$ 50
+        </label>
+        <label class="sidebar-radio">
+          <input type="radio" name="price" value="50+"> Acima de R$ 50
+        </label>
+      </div>
 
-            <!-- Error Message -->
-            <div id="errorMessage" class="alert alert-danger" role="alert" style="display: none;">
-                Erro ao carregar produtos. Tente novamente mais tarde.
-            </div>
-        </div>
-    </section>
+      <div class="sidebar-section">
+        <h6 class="sidebar-title">Formato</h6>
+        <label class="sidebar-check">
+          <input type="checkbox" value="pdf" checked> PDF
+        </label>
+        <label class="sidebar-check">
+          <input type="checkbox" value="canva" checked> Canva editÃ¡vel
+        </label>
+      </div>
+    </aside>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h4><i class="bi bi-badge-tm"></i> Ateliê da Escola</h4>
-                    <p>Plataforma de vendas de materiais gráficos para fins escolares.</p>
-                </div>
-                <div class="footer-section">
-                    <h4>Links Rápidos</h4>
-                    <ul class="footer-links">
-                        <li><a href="/">Início</a></li>
-                        <li><a href="/products.html">Produtos</a></li>
-                        <li><a href="/downloads.html">Meus Downloads</a></li>
-                    </ul>
-                </div>
-                <div class="footer-section">
-                    <h4>Contato</h4>
-                    <p><i class="bi bi-envelope"></i> contato@bannerstore.com</p>
-                    <p><i class="bi bi-whatsapp"></i> (11) 99999-9999</p>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>&copy; 2026 Ateliê da Escola. Todos os direitos reservados.</p>
-            </div>
-        </div>
-    </footer>
+    <!-- â”€â”€ GRID ÃREA â”€â”€ -->
+    <div class="products-main">
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Firebase SDKs -->
-    <script type="module">
-      import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-      import { getFirestore, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+      <!-- Barra de filtros de categoria -->
+      <div class="cat-filter-bar">
+        <button class="cat-btn active" data-cat="all">
+          <i class="bi bi-grid-fill"></i> Todos
+          <span class="cat-count" id="cat-all">â€”</span>
+        </button>
+        <button class="cat-btn" data-cat="Festa Junina">
+          <i class="bi bi-star-fill"></i> Festa Junina
+          <span class="cat-count" id="cat-festa">â€”</span>
+        </button>
+        <button class="cat-btn" data-cat="Formatura">
+          <i class="bi bi-mortarboard-fill"></i> Formatura
+          <span class="cat-count" id="cat-form">â€”</span>
+        </button>
+        <button class="cat-btn" data-cat="Volta Ã s Aulas">
+          <i class="bi bi-book-fill"></i> Volta Ã s Aulas
+          <span class="cat-count" id="cat-volta">â€”</span>
+        </button>
+        <button class="cat-btn" data-cat="Datas Comemorativas">
+          <i class="bi bi-calendar-heart-fill"></i> Datas Comemorativas
+          <span class="cat-count" id="cat-datas">â€”</span>
+        </button>
+        <button class="cat-btn" data-cat="DecoraÃ§Ã£o de Sala">
+          <i class="bi bi-easel-fill"></i> DecoraÃ§Ã£o de Sala
+          <span class="cat-count" id="cat-deco">â€”</span>
+        </button>
+      </div>
 
-      // Configuração do Firebase
-      const firebaseConfig = {
-        apiKey: "AIzaSyCqbiSJXD02F0q9wFqrDAEKJtd6VHBjAOk",
-        authDomain: "atelie-da-escola.firebaseapp.com",
-        projectId: "atelie-da-escola",
-        storageBucket: "atelie-da-escola.firebasestorage.app",
-        messagingSenderId: "325690647064",
-        appId: "1:325690647064:web:e1c3b4bfaaf921ab7cd96d"
-      };
+      <!-- EstatÃ­stica resultados -->
+      <p class="results-count" id="resultsCount"></p>
 
-      // Inicializar Firebase
-      const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
+      <!-- Loading -->
+      <div id="loading" class="text-center py-5">
+        <div class="spinner-border" style="color:var(--primary-color);" role="status"></div>
+        <p class="mt-3 text-muted">Carregando produtos...</p>
+      </div>
 
-      // Disponibilizar globalmente
-      window.firebaseDb = db;
-      window.firebaseQuery = query;
-      window.firebaseCollection = collection;
-      window.firebaseGetDocs = getDocs;
-      window.firebaseWhere = where;
-    </script>
+      <!-- Products Grid -->
+      <div id="productsGrid" class="products-grid-new" style="display:none;"></div>
 
-    <!-- Custom JS -->
-    <script src="/js/cart.js"></script>
-    <script src="/js/products.js"></script>
+      <!-- Empty state -->
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <i class="bi bi-search" style="font-size:2.5rem;color:var(--gray);"></i>
+        <p>Nenhum produto encontrado nessa categoria.</p>
+      </div>
+
+      <!-- Error -->
+      <div id="errorMessage" class="alert alert-danger" style="display:none;">
+        Erro ao carregar produtos. Tente novamente.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- â•â•â•â• FOOTER â•â•â•â• -->
+  <div id="footer-placeholder"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    const firebaseConfig = {
+      apiKey: "AIzaSyCqbiSJXD02F0q9wFqrDAEKJtd6VHBjAOk",
+      authDomain: "atelie-da-escola.firebaseapp.com",
+      projectId: "atelie-da-escola",
+      storageBucket: "atelie-da-escola.firebasestorage.app",
+      messagingSenderId: "325690647064",
+      appId: "1:325690647064:web:e1c3b4bfaaf921ab7cd96d"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    window.firebaseDb         = db;
+    window.firebaseQuery      = query;
+    window.firebaseCollection = collection;
+    window.firebaseGetDocs    = getDocs;
+    window.firebaseWhere      = where;
+  </script>
+
+  <script src="/js/components.js"></script>
+  <script src="/js/cart.js"></script>
+  <script src="/js/animations.js"></script>
+  <script src="/js/products.js"></script>
 </body>
 </html>

@@ -1,26 +1,31 @@
 :root {
-  /* Cores principais */
-  --primary-color: #0066cc;
-  --primary-dark: #004c99;
-  --primary-light: #3385d6;
-  
-  --secondary-color: #00cc88;
-  --secondary-dark: #009966;
-  --secondary-light: #33d6a3;
-  
-  /* Cores neutras */
-  --dark: #1a1a1a;
-  --dark-secondary: #2d2d2d;
+  /* ── Paleta principal ── */
+  --primary-color: #9B5DE5;   /* roxo */
+  --primary-dark:  #7A3DC0;
+  --primary-light: #B987FF;
+
+  --secondary-color: #00F5D4; /* mint */
+  --secondary-dark:  #00C4AA;
+  --secondary-light: #5FFAEB;
+
+  /* ── Acentos extras ── */
+  --accent-pink:   #F15BB5;
+  --accent-yellow: #FEE440;
+  --accent-blue:   #00BBF9;
+
+  /* ── Neutras ── */
+  --dark: #0e0e16;
+  --dark-secondary: #1a1a2e;
   --gray: #6c757d;
   --gray-light: #e9ecef;
   --light: #f8f9fa;
   --white: #ffffff;
-  
-  /* Cores de status */
+
+  /* ── Status ── */
   --success: #28a745;
-  --warning: #ffc107;
-  --danger: #dc3545;
-  --info: #17a2b8;
+  --warning: #FEE440;
+  --danger:  #F15BB5;
+  --info:    #00BBF9;
   
   /* Tipografia */
   --font-main: 'Poppins', sans-serif;
