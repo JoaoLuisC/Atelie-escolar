@@ -1,4 +1,11 @@
 :root {
+  /* ── Paleta Admin (Navy) ── */
+  --admin-darkest:  #0D1B2A;
+  --admin-dark:     #1B263B;
+  --admin-mid:      #415A77;
+  --admin-light:    #778DA9;
+  --admin-pale:     #E0E1DD;
+
   /* ── Paleta principal ── */
   --primary-color: #9B5DE5;   /* roxo */
   --primary-dark:  #7A3DC0;

@@ -1,186 +1,229 @@
-// Downloads - Verificar pagamento e exibir links de download
-const API_BASE_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:3000/api' 
-  : '/api';
+﻿/**
+ * downloads.js (ES Module)
+ * Requer autenticação e exibe pedidos do usuário.
+ */
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+import {
+    getAuth, onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import {
+    getFirestore, collection, query, where, orderBy, getDocs
+} from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
-// Verificar status do pedido
-async function checkOrderStatus() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const orderId = urlParams.get('order') || localStorage.getItem('lastOrderId');
-  
-  if (!orderId) {
-    showNoOrderMessage();
-    return;
-  }
-  
-  try {
-    const response = await fetch(`${API_BASE_URL}/verify-payment?orderId=${orderId}`);
-    
-    if (!response.ok) {
-      throw new Error('Erro ao verificar pedido');
+const firebaseConfig = {
+    apiKey: "AIzaSyCqbiSJXD02F0q9wFqrDAEKJtd6VHBjAOk",
+    authDomain: "atelie-da-escola.firebaseapp.com",
+    projectId: "atelie-da-escola",
+    storageBucket: "atelie-da-escola.firebasestorage.app",
+    messagingSenderId: "325690647064",
+    appId: "1:325690647064:web:e1c3b4bfaaf921ab7cd96d"
+};
+
+const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+const API_BASE = window.location.hostname === 'localhost'
+    ? 'http://localhost:3000/api'
+    : '/api';
+
+function formatPrice(v) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+}
+function formatDate(ts) {
+    if (!ts) return '—';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/* ── Auth guard ── */
+onAuthStateChanged(auth, async user => {
+    document.getElementById('loading-auth').style.display = 'none';
+
+    if (!user) {
+        window.location.href = `/login.html?redirect=${encodeURIComponent('/downloads.html')}`;
+        return;
     }
-    
-    const data = await response.json();
-    
-    if (data.success) {
-      displayOrderStatus(data.order);
-      
-      // Se pagamento aprovado, limpar carrinho
-      if (data.order.paymentStatus === 'approved') {
-        clearCart();
-      }
-    } else {
-      throw new Error('Pedido não encontrado');
+
+    /* User chip */
+    const chipWrap = document.getElementById('user-chip-wrap');
+    const avatar = user.photoURL
+        ? `<img src="${user.photoURL}" alt="">`
+        : `<i class="bi bi-person-circle"></i>`;
+    chipWrap.innerHTML = `
+        <div class="user-chip">
+            ${avatar}
+            <span>${user.displayName || user.email}</span>
+        </div>`;
+
+    document.getElementById('dl-content').style.display = 'block';
+
+    /* Single order from URL param */
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('order') || localStorage.getItem('lastOrderId');
+    if (orderId) {
+        await checkSingleOrder(orderId);
     }
-    
-  } catch (error) {
-    console.error('Error checking order:', error);
-    showErrorMessage();
-  } finally {
-    document.getElementById('loading').style.display = 'none';
-  }
-}
 
-// Exibir status do pedido
-function displayOrderStatus(order) {
-  const orderStatusDiv = document.getElementById('orderStatus');
-  orderStatusDiv.style.display = 'block';
-  
-  let statusHTML = '';
-  
-  // Status do pagamento
-  if (order.paymentStatus === 'approved') {
-    statusHTML = `
-      <div class="alert alert-success text-center" role="alert">
-        <i class="bi bi-check-circle-fill" style="font-size: 3rem;"></i>
-        <h4 class="mt-3">Pagamento Aprovado!</h4>
-        <p>Pedido: <strong>#${order.orderId}</strong></p>
-        <p>Total: <strong>${formatPrice(order.totalAmount)}</strong></p>
-      </div>
-      
-      <div class="card">
-        <div class="card-header bg-primary text-white">
-          <h5 class="mb-0"><i class="bi bi-download"></i> Seus Downloads</h5>
-        </div>
-        <div class="card-body">
-          ${order.downloadTokens && order.downloadTokens.length > 0 
-            ? order.downloadTokens.map(token => `
-              <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
-                <div>
-                  <h6 class="mb-1">${token.productName}</h6>
-                  <small class="text-muted">Disponível por ${token.expiresIn}</small>
-                </div>
-                <a href="/api/download?token=${token.token}" class="btn btn-primary">
-                  <i class="bi bi-download"></i> Baixar
-                </a>
-              </div>
-            `).join('')
-            : '<p class="text-center">Downloads em processamento... Recarregue a página em alguns instantes.</p>'
-          }
-        </div>
-      </div>
-      
-      <div class="alert alert-info mt-3" role="alert">
-        <i class="bi bi-info-circle"></i>
-        <strong>Importante:</strong> Cada link pode ser usado apenas uma vez. Salve seus arquivos com segurança.
-      </div>
-    `;
-  } else if (order.paymentStatus === 'pending') {
-    statusHTML = `
-      <div class="alert alert-warning text-center" role="alert">
-        <i class="bi bi-clock-fill" style="font-size: 3rem;"></i>
-        <h4 class="mt-3">Pagamento Pendente</h4>
-        <p>Pedido: <strong>#${order.orderId}</strong></p>
-        <p>Aguardando confirmação do pagamento...</p>
-        <button class="btn btn-primary mt-3" onclick="location.reload();">
-          <i class="bi bi-arrow-clockwise"></i> Atualizar Status
-        </button>
-      </div>
-    `;
-  } else if (order.paymentStatus === 'rejected' || order.status === 'failed') {
-    statusHTML = `
-      <div class="alert alert-danger text-center" role="alert">
-        <i class="bi bi-x-circle-fill" style="font-size: 3rem;"></i>
-        <h4 class="mt-3">Pagamento Recusado</h4>
-        <p>Pedido: <strong>#${order.orderId}</strong></p>
-        <p>O pagamento foi recusado. Tente novamente.</p>
-        <a href="/products.html" class="btn btn-primary mt-3">
-          <i class="bi bi-arrow-left"></i> Voltar para Produtos
-        </a>
-      </div>
-    `;
-  } else {
-    statusHTML = `
-      <div class="alert alert-info text-center" role="alert">
-        <i class="bi bi-hourglass-split" style="font-size: 3rem;"></i>
-        <h4 class="mt-3">Processando Pagamento</h4>
-        <p>Pedido: <strong>#${order.orderId}</strong></p>
-        <p>Status: <strong>${order.paymentStatus}</strong></p>
-        <button class="btn btn-primary mt-3" onclick="location.reload();">
-          <i class="bi bi-arrow-clockwise"></i> Atualizar
-        </button>
-      </div>
-    `;
-  }
-  
-  // Produtos do pedido
-  statusHTML += `
-    <div class="card mt-4">
-      <div class="card-header">
-        <h6 class="mb-0">Produtos do Pedido</h6>
-      </div>
-      <div class="card-body">
-        ${order.items.map(item => `
-          <div class="d-flex justify-content-between mb-2">
-            <span>${item.title} x${item.quantity}</span>
-            <strong>${formatPrice(item.price * item.quantity)}</strong>
-          </div>
-        `).join('')}
-        <hr>
-        <div class="d-flex justify-content-between">
-          <strong>Total:</strong>
-          <strong class="text-primary">${formatPrice(order.totalAmount)}</strong>
-        </div>
-      </div>
-    </div>
-  `;
-  
-  orderStatusDiv.innerHTML = statusHTML;
-}
-
-// Mostrar mensagem de nenhum pedido
-function showNoOrderMessage() {
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('orderStatus').innerHTML = `
-    <div class="alert alert-warning text-center" role="alert">
-      <i class="bi bi-exclamation-triangle" style="font-size: 3rem;"></i>
-      <h4 class="mt-3">Nenhum pedido encontrado</h4>
-      <p>Você ainda não realizou nenhuma compra.</p>
-      <a href="/products.html" class="btn btn-primary mt-3">
-        <i class="bi bi-arrow-left"></i> Ver Produtos
-      </a>
-    </div>
-  `;
-  document.getElementById('orderStatus').style.display = 'block';
-}
-
-// Mostrar mensagem de erro
-function showErrorMessage() {
-  document.getElementById('orderStatus').innerHTML = `
-    <div class="alert alert-danger text-center" role="alert">
-      <i class="bi bi-x-circle" style="font-size: 3rem;"></i>
-      <h4 class="mt-3">Erro ao verificar pedido</h4>
-      <p>Não foi possível verificar o status do seu pedido. Tente novamente.</p>
-      <button class="btn btn-primary mt-3" onclick="location.reload();">
-        <i class="bi bi-arrow-clockwise"></i> Tentar Novamente
-      </button>
-    </div>
-  `;
-  document.getElementById('orderStatus').style.display = 'block';
-}
-
-// Inicializar página de downloads
-document.addEventListener('DOMContentLoaded', () => {
-  updateCartCount();
-  checkOrderStatus();
+    /* All orders for this user */
+    await loadUserOrders(user.uid, user.email);
 });
+
+/* ── Single order (post-checkout) ── */
+async function checkSingleOrder(orderId) {
+    const wrap = document.getElementById('order-status-wrap');
+    wrap.innerHTML = `<div class="text-center py-3"><div class="spinner-border" style="color:#9B5DE5;"></div><p class="mt-2">Verificando pedido…</p></div>`;
+    try {
+        const res = await fetch(`${API_BASE}/verify-payment?orderId=${orderId}`);
+        const data = await res.json();
+        if (data.success) {
+            wrap.innerHTML = renderSingleOrderCard(data.order);
+            if (data.order.paymentStatus === 'approved') {
+                localStorage.removeItem('lastOrderId');
+                clearCart();
+            }
+        } else {
+            wrap.innerHTML = '';
+        }
+    } catch {
+        wrap.innerHTML = '';
+    }
+}
+
+function renderSingleOrderCard(order) {
+    const statusClass = {
+        approved: 'status-approved',
+        pending:  'status-pending',
+        rejected: 'status-rejected'
+    }[order.paymentStatus] || 'status-pending';
+
+    const statusLabel = {
+        approved: '✓ Aprovado',
+        pending:  '⏳ Pendente',
+        rejected: '✕ Recusado'
+    }[order.paymentStatus] || order.paymentStatus;
+
+    let downloads = '';
+    if (order.paymentStatus === 'approved' && order.downloadTokens?.length) {
+        downloads = order.downloadTokens.map(t => `
+            <div class="download-item">
+                <div>
+                    <strong>${t.productName}</strong>
+                    <div style="font-size:12px;color:#B987FF;">Expira em: ${t.expiresIn || '24h'}</div>
+                </div>
+                <a href="/api/download?token=${t.token}" class="btn-dl">
+                    <i class="bi bi-download"></i> Baixar
+                </a>
+            </div>`).join('');
+    } else if (order.paymentStatus === 'approved') {
+        downloads = '<p class="text-muted small">Downloads em processamento… Recarregue em instantes.</p>';
+    } else if (order.paymentStatus === 'pending') {
+        downloads = `<p class="text-muted small"><i class="bi bi-clock"></i> Aguardando confirmação do pagamento.
+            <button class="btn btn-sm ms-2" style="background:#9B5DE5;color:#fff;" onclick="location.reload()">Atualizar</button></p>`;
+    }
+
+    return `
+    <div class="order-card mb-4">
+        <div class="order-card-head">
+            <h5><i class="bi bi-receipt"></i> Pedido #${order.orderId}</h5>
+            <span class="status-pill ${statusClass}">${statusLabel}</span>
+        </div>
+        <div class="order-card-body">
+            ${downloads}
+            <div class="mt-3 pt-2 border-top" style="font-size:13px; color:#555;">
+                <strong>Total:</strong> ${formatPrice(order.totalAmount)}
+            </div>
+        </div>
+    </div>`;
+}
+
+/* ── All user orders from Firestore ── */
+async function loadUserOrders(uid, email) {
+    const wrap = document.getElementById('all-orders-wrap');
+    wrap.innerHTML = `<div class="text-center py-3"><div class="spinner-border" style="color:#9B5DE5;"></div><p class="mt-2 text-muted">Carregando seu histórico…</p></div>`;
+
+    try {
+        let snap;
+        try {
+            const q = query(
+                collection(db, 'orders'),
+                where('userId', '==', uid),
+                orderBy('createdAt', 'desc')
+            );
+            snap = await getDocs(q);
+        } catch {
+            const q = query(
+                collection(db, 'orders'),
+                where('customerEmail', '==', email),
+                orderBy('createdAt', 'desc')
+            );
+            snap = await getDocs(q);
+        }
+
+        if (snap.empty) {
+            wrap.innerHTML = `
+            <div class="empty-dl">
+                <i class="bi bi-bag-x d-block"></i>
+                <h4>Nenhuma compra encontrada</h4>
+                <p>Explore nossa loja e encontre materiais incríveis!</p>
+                <a href="/products.html" class="btn-dl mt-2" style="display:inline-flex;">
+                    <i class="bi bi-shop"></i> Ver Produtos
+                </a>
+            </div>`;
+            return;
+        }
+
+        let html = `<h5 style="color:#7A3DC0;font-weight:700;margin-bottom:16px;">
+            <i class="bi bi-clock-history"></i> Histórico de Compras
+        </h5>`;
+        snap.forEach(docSnap => {
+            const order = { ...docSnap.data(), id: docSnap.id };
+            html += renderHistoryCard(order);
+        });
+        wrap.innerHTML = html;
+
+    } catch (err) {
+        console.error('Erro ao carregar pedidos:', err);
+        wrap.innerHTML = `<div class="alert alert-warning">Não foi possível carregar o histórico. <button class="btn btn-sm btn-secondary ms-2" onclick="location.reload()">Tentar novamente</button></div>`;
+    }
+}
+
+function renderHistoryCard(order) {
+    const orderId = order.orderId || order.id;
+    const statusClass = {
+        approved: 'status-approved',
+        pending:  'status-pending',
+        rejected: 'status-rejected'
+    }[order.paymentStatus] || 'status-pending';
+    const statusLabel = { approved: '✓ Aprovado', pending: '⏳ Pendente', rejected: '✕ Recusado' }[order.paymentStatus] || order.paymentStatus;
+
+    const items = (order.items || []).map(i => `<span class="me-2" style="font-size:13px;">• ${i.title || i.name}</span>`).join('');
+
+    const dlBtn = order.paymentStatus === 'approved'
+        ? `<a href="/downloads.html?order=${orderId}" class="btn-dl" style="font-size:12px;padding:6px 12px;">
+               <i class="bi bi-download"></i> Downloads
+           </a>`
+        : '';
+
+    return `
+    <div class="order-card">
+        <div class="order-card-head">
+            <h5 style="font-size:14px;"><i class="bi bi-receipt"></i> Pedido #${orderId}
+                <span style="font-weight:400;opacity:.7;font-size:12px;margin-left:8px;">${formatDate(order.createdAt)}</span>
+            </h5>
+            <span class="status-pill ${statusClass}">${statusLabel}</span>
+        </div>
+        <div class="order-card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <div style="flex:1;min-width:200px;">
+                ${items}
+                <div style="font-size:13px;color:#555;margin-top:6px;"><strong>Total:</strong> ${formatPrice(order.totalAmount)}</div>
+            </div>
+            <div>${dlBtn}</div>
+        </div>
+    </div>`;
+}
+
+function clearCart() {
+    if (typeof window.clearCartItems === 'function') window.clearCartItems();
+    else localStorage.removeItem('cart');
+}

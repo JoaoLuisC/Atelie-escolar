@@ -258,3 +258,16 @@
   color: #fff !important;
 }
 .cat-btn-featured .cat-count { background: rgba(255,255,255,.25); color: #fff; }
+
+/* ── Skeleton de carregamento das vitrines ── */
+@keyframes skeletonShimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.pcard-skeleton {
+  border-radius: 14px;
+  height: 260px;
+  background: linear-gradient(90deg, #f0f2f5 25%, #e4e8ef 50%, #f0f2f5 75%);
+  background-size: 800px 100%;
+  animation: skeletonShimmer 1.4s infinite linear;
+}

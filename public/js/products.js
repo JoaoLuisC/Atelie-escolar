@@ -230,13 +230,24 @@ function waitForFirebase() {
   });
 }
 
+/* ══════ converte URL do Google Drive ══════ */
+function gdrive(url) {
+  if (!url || !url.includes('drive.google.com')) return url;
+  const m = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w800`;
+  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if (m2) return `https://drive.google.com/thumbnail?id=${m2[1]}&sz=w800`;
+  return url;
+}
+
 /* ══════ constrói card ══════ */
 function buildCard(p) {
   const price  = typeof p.price === 'number' ? 'R$ ' + p.price.toFixed(2).replace('.', ',') : '—';
   const badge  = BADGES[p.category];
-  const img    = p.imageUrl || p.image || '';
+  const rawImg = (Array.isArray(p.images) && p.images.length ? p.images[0] : '') || p.imageUrl || p.image || '';
+  const img    = gdrive(rawImg);
   const imgTag = img
-    ? `<img src="${img}" alt="${p.name}" class="pc-img" loading="lazy">`
+    ? `<img src="${img}" alt="${p.name}" class="pc-img" loading="lazy" onerror="this.onerror=null;this.style.visibility='hidden'">`
     : `<div class="pc-img-placeholder"><i class="bi bi-image" style="font-size:2.5rem;color:rgba(255,255,255,.3);"></i></div>`;
 
   return `

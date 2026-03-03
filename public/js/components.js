@@ -55,6 +55,15 @@
     // Define o link ativo da navbar
     setActiveNavLink();
 
+    // Inicializa auth state na navbar
+    if (!document.getElementById('_navbar-auth-script')) {
+      const s = document.createElement('script');
+      s.id   = '_navbar-auth-script';
+      s.type = 'module';
+      s.src  = '/js/navbar-auth.js';
+      document.body.appendChild(s);
+    }
+
     // Atualiza o contador do carrinho (definido em cart.js)
     if (typeof updateCartCount === 'function') {
       updateCartCount();

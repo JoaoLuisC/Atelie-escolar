@@ -56,10 +56,10 @@ module.exports = async (req, res) => {
       validatedItems.push({
         id: item.productId,
         title: product.name,
-        description: product.description,
+        description: product.description || '',
         price: product.price,
         quantity: quantity,
-        fileUrl: product.fileUrl,
+        fileUrl: product.fileUrl || product.downloadUrl || null,
       });
     }
 

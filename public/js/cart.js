@@ -1,5 +1,5 @@
 // Gerenciamento do carrinho de compras
-const CART_KEY = 'bannerstore_cart';
+const CART_KEY = 'cart';
 
 // Obter carrinho do localStorage
 function getCart() {

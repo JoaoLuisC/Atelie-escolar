@@ -135,3 +135,22 @@
   .brand-text { display: none; }
   .navbar-menu li:not(:last-child) { display: none; }
 }
+
+/* ── Rainbow gradient line below navbar ── */
+.nav-rainbow {
+  height: 4px;
+  background: linear-gradient(90deg,
+    #9B5DE5 0%,
+    #F15BB5 25%,
+    #FEE440 50%,
+    #00BBF9 75%,
+    #00F5D4 100%
+  );
+  background-size: 200% 100%;
+  animation: rainbowShift 6s linear infinite;
+}
+
+@keyframes rainbowShift {
+  0%   { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}

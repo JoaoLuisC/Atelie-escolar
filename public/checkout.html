@@ -3,103 +3,229 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkout - Ateliê da Escola</title>
-    
-    <!-- Bootstrap CSS -->
+    <title>Finalizar Compra – Ateliê da Escola</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Raleway:wght@700;800&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
-    
-    <!-- Mercado Pago SDK -->
-    <script src="https://sdk.mercadopago.com/js/v2"></script>
-    
-    <!-- Custom CSS -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Raleway:wght@700;800&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="/css/variables.css">
     <link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="/css/navbar.css">
+    <link rel="stylesheet" href="/css/animations.css">
     <link rel="stylesheet" href="/css/components.css">
     <link rel="stylesheet" href="/css/footer.css">
-    <link rel="stylesheet" href="/css/animations.css">
+
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
+
+    <style>
+        body { background: #f5f7fa; }
+        .ck-page { padding: 48px 0 80px; }
+
+        .ck-section-title {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: .95rem;
+            color: #2d3748;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+        .ck-section-title i { color: var(--primary-color); font-size: 1rem; }
+
+        .ck-card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,.07);
+            padding: 22px 24px;
+            margin-bottom: 20px;
+        }
+
+        /* items */
+        .ck-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 0;
+            border-bottom: 1px solid #f0e8ff;
+        }
+        .ck-item:last-child { border-bottom: none; padding-bottom: 4px; }
+        .ck-item-img {
+            width: 64px; height: 64px;
+            object-fit: cover;
+            border-radius: 10px;
+            flex-shrink: 0;
+            background: #f0e8ff;
+        }
+        .ck-item-ph {
+            width: 64px; height: 64px;
+            border-radius: 10px;
+            background: #f0e8ff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; flex-shrink: 0;
+        }
+        .ck-item-info { flex: 1; min-width: 0; }
+        .ck-item-name { font-weight: 600; font-size: 14px; color: #2d3748; }
+        .ck-item-price { font-size: 13px; color: #718096; margin-top: 2px; }
+
+        .ck-qty {
+            display: flex; align-items: center;
+            border: 1.5px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+        }
+        .ck-qty-btn {
+            width: 30px; height: 30px; border: none; background: #f7f7fb;
+            color: var(--primary-color); font-size: 14px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background .15s;
+        }
+        .ck-qty-btn:hover { background: #ede7ff; }
+        .ck-qty-val {
+            width: 34px; text-align: center; font-weight: 700; font-size: 13px;
+            border: none; border-left: 1.5px solid #e2e8f0; border-right: 1.5px solid #e2e8f0;
+            background: #fff; pointer-events: none;
+        }
+        .ck-item-subtotal {
+            font-weight: 700; font-size: 14px; color: var(--primary-color);
+            white-space: nowrap; min-width: 70px; text-align: right;
+        }
+        .ck-item-del {
+            background: none; border: none; color: #cbd5e0;
+            font-size: 17px; cursor: pointer; padding: 4px 0 4px 8px; line-height: 1;
+            transition: color .15s;
+        }
+        .ck-item-del:hover { color: #e53e3e; }
+
+        .ck-empty { text-align: center; padding: 48px 20px; color: #a0aec0; }
+        .ck-empty i { font-size: 3rem; margin-bottom: 12px; display: block; color: #d0c1f0; }
+
+        /* summary */
+        .ck-sum-row {
+            display: flex; justify-content: space-between;
+            font-size: 14px; color: #4a5568; padding: 5px 0;
+        }
+        .ck-sum-total {
+            display: flex; justify-content: space-between; align-items: center;
+            border-top: 2px solid #f0e8ff; margin-top: 8px; padding-top: 12px;
+        }
+        .ck-sum-total span:first-child { font-weight: 700; font-size: 15px; color: #2d3748; }
+        .ck-sum-total span:last-child  { font-weight: 800; font-size: 22px; color: var(--primary-color); }
+
+        /* auth notice */
+        .ck-notice {
+            border-radius: 10px; padding: 12px 14px;
+            font-size: 13px; margin-bottom: 16px;
+            display: flex; align-items: flex-start; gap: 8px;
+        }
+        .ck-notice.info  { background: #f0f9ff; border: 1.5px solid #bee3f8; color: #2b6cb0; }
+        .ck-notice.ok    { background: #f0fff4; border: 1.5px solid #9ae6b4; color: #276749; }
+
+        /* form */
+        .ck-label { font-size: 13px; font-weight: 600; color: #4a5568; margin-bottom: 4px; display: block; }
+        .ck-input {
+            border: 1.5px solid #e2e8f0; border-radius: 8px;
+            padding: 10px 14px; font-size: 14px; width: 100%; outline: none;
+            transition: border-color .2s;
+        }
+        .ck-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(155,93,229,.12); }
+        .ck-input:disabled { background: #f7f7fb; color: #718096; }
+
+        .ck-helper { font-size: 12px; color: #718096; margin-top: 5px; }
+
+        .btn-pay {
+            width: 100%; padding: 14px; border-radius: 12px; border: none;
+            background: linear-gradient(135deg, #9B5DE5 0%, #7A3DC0 100%);
+            color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+            transition: opacity .2s, transform .15s;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-pay:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+        .btn-pay:disabled { opacity: .55; cursor: not-allowed; }
+
+        .ck-trust {
+            display: flex; justify-content: center; gap: 18px;
+            padding-top: 16px; flex-wrap: wrap;
+        }
+        .ck-trust-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #718096; }
+        .ck-trust-item i { font-size: 15px; }
+
+        @media (max-width: 768px) { .ck-page { padding: 24px 0 60px; } }
+    </style>
 </head>
 <body>
     <div id="navbar-placeholder"></div>
 
-    <!-- Checkout Section -->
-    <section style="padding: 60px 0; min-height: 70vh;">
+    <section class="ck-page">
         <div class="container">
-            <h1 class="text-center mb-5">Finalizar Compra</h1>
-            
-            <div class="row">
-                <!-- Cart Items -->
+
+            <h1 style="font-family:'Raleway',sans-serif;font-weight:800;font-size:1.75rem;margin-bottom:28px;color:#2d3748;">
+                <i class="bi bi-bag-check-fill" style="color:var(--primary-color);margin-right:8px;"></i>Finalizar Compra
+            </h1>
+
+            <div class="row g-4">
+                <!-- LEFT: items -->
                 <div class="col-lg-7">
-                    <div class="card mb-4">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0"><i class="bi bi-cart3"></i> Seus Produtos</h5>
-                        </div>
-                        <div class="card-body" id="cartItems">
-                            <!-- Cart items will be loaded here -->
-                        </div>
-                    </div>
+                    <div class="ck-section-title"><i class="bi bi-cart3-fill"></i>Seus Produtos</div>
+                    <div class="ck-card" id="ck-items-wrap"></div>
                 </div>
-                
-                <!-- Order Summary -->
+
+                <!-- RIGHT: summary + form -->
                 <div class="col-lg-5">
-                    <div class="card">
-                        <div class="card-header bg-secondary text-white">
-                            <h5 class="mb-0"><i class="bi bi-receipt"></i> Resumo do Pedido</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between mb-3">
-                                <span>Subtotal:</span>
-                                <strong id="subtotal">R$ 0,00</strong>
-                            </div>
-                            <hr>
-                            <div class="d-flex justify-content-between mb-4">
-                                <h5>Total:</h5>
-                                <h5 class="text-primary" id="total">R$ 0,00</h5>
-                            </div>
-                            
-                            <!-- Customer Form -->
-                            <form id="customerForm">
-                                <div class="mb-3">
-                                    <label for="customerName" class="form-label">Nome Completo</label>
-                                    <input type="text" class="form-control" id="customerName" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="customerEmail" class="form-label">Email</label>
-                                    <input type="email" class="form-control" id="customerEmail" required>
-                                </div>
-                                
-                                <button type="submit" class="btn btn-primary w-100" id="checkoutBtn">
-                                    <i class="bi bi-credit-card"></i> Ir para Pagamento
-                                </button>
-                            </form>
+                    <div class="ck-section-title"><i class="bi bi-receipt-cutoff"></i>Resumo</div>
+                    <div class="ck-card">
+                        <div id="ck-summary-rows"></div>
+                        <div class="ck-sum-total">
+                            <span>Total</span>
+                            <span id="ck-total">R$ 0,00</span>
                         </div>
                     </div>
-                    
-                    <!-- Payment Info -->
-                    <div class="card mt-3">
-                        <div class="card-body text-center">
-                            <i class="bi bi-shield-check text-success" style="font-size: 2rem;"></i>
-                            <p class="mt-2 mb-0 small">Pagamento seguro via Mercado Pago</p>
+
+                    <div class="ck-section-title"><i class="bi bi-person-fill"></i>Seus Dados</div>
+                    <div class="ck-card">
+                        <div id="ck-auth-notice"></div>
+                        <form id="ck-form" novalidate>
+                            <div class="mb-3">
+                                <label class="ck-label" for="ck-name">Nome completo</label>
+                                <input type="text" id="ck-name" class="ck-input" placeholder="Seu nome completo" autocomplete="name" required>
+                            </div>
+                            <div class="mb-1">
+                                <label class="ck-label" for="ck-email">E-mail</label>
+                                <input type="email" id="ck-email" class="ck-input" placeholder="seu@email.com" autocomplete="email" required>
+                                <div class="ck-helper" id="ck-guest-hint" style="display:none;">
+                                    <i class="bi bi-info-circle"></i>
+                                    Uma conta será criada automaticamente para você acessar seus downloads.
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn-pay" id="ck-pay-btn" disabled>
+                                <i class="bi bi-lock-fill"></i>
+                                <span id="ck-pay-label">Ir para Pagamento</span>
+                            </button>
+                        </form>
+
+                        <div class="ck-trust">
+                            <div class="ck-trust-item"><i class="bi bi-shield-fill-check" style="color:#48bb78;"></i> Pagamento seguro</div>
+                            <div class="ck-trust-item"><i class="bi bi-lightning-fill" style="color:#f6c90e;"></i> Download imediato</div>
+                            <div class="ck-trust-item"><i class="bi bi-arrow-repeat" style="color:#48bb78;"></i> Garantia 7 dias</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
+
     <div id="footer-placeholder"></div>
 
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Custom JS -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="/js/firebase-config.js"></script>
+    <script src="/js/animations.js"></script>
     <script src="/js/components.js"></script>
     <script src="/js/cart.js"></script>
     <script src="/js/checkout.js"></script>
-    <script src="/js/animations.js"></script>
 </body>
 </html>

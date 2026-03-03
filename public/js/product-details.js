@@ -118,10 +118,19 @@ function buildFormatBadges(product) {
 // ─── Gallery ────────────────────────────────────────
 const NO_IMG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%239B5DE5' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='rgba(255,255,255,0.4)' font-size='24' font-family='sans-serif'%3ESem Imagem%3C/text%3E%3C/svg%3E`;
 
+function gdrive(url) {
+    if (!url || !url.includes('drive.google.com')) return url;
+    const m = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+    if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w800`;
+    const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+    if (m2) return `https://drive.google.com/thumbnail?id=${m2[1]}&sz=w800`;
+    return url;
+}
+
 function buildGallery(product) {
-    const images = Array.isArray(product.images) && product.images.length
+    const images = (Array.isArray(product.images) && product.images.length
         ? product.images
-        : (product.imageUrl ? [product.imageUrl] : (product.image ? [product.image] : []));
+        : (product.imageUrl ? [product.imageUrl] : (product.image ? [product.image] : []))).map(gdrive);
     const videos = Array.isArray(product.videos) ? product.videos : [];
 
     const allMedia = [
@@ -228,6 +237,12 @@ function getEmbedUrl(url) {
         const vid = url.split('vimeo.com/')[1]?.split('?')[0];
         return `https://player.vimeo.com/video/${vid}`;
     }
+    if (url.includes('drive.google.com')) {
+        const m = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+        if (m) return `https://drive.google.com/file/d/${m[1]}/preview`;
+        const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+        if (m2) return `https://drive.google.com/file/d/${m2[1]}/preview`;
+    }
     return url;
 }
 
@@ -243,7 +258,7 @@ function addToCart(product) {
             id: product.id,
             name: product.name,
             price: product.price,
-            image: imgArr[0] || product.imageUrl || product.image || '',
+            image: gdrive(imgArr[0] || product.imageUrl || product.image || ''),
             quantity: 1
         });
     }

@@ -32,7 +32,7 @@ const auth = admin.auth();
 // CONFIGURE AQUI O USUÁRIO ADMIN
 // ====================================
 const ADMIN_EMAIL = 'admin@ateliedaescola.com';
-const ADMIN_PASSWORD = 'Admin@2026!Seguro';
+const ADMIN_PASSWORD = '123456';
 // ====================================
 
 async function createAdminUser() {

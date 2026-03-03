@@ -14,11 +14,17 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
     
-    // Pedidos - Criação pública (email), leitura apenas via backend
+    // Pedidos - usuário autenticado lê os próprios pedidos; admin lê todos; criação pública
     match /orders/{orderId} {
-      allow read: if false; // Apenas via Admin SDK
-      allow create: if true; // Permite criar pedido com email
-      allow update, delete: if false; // Apenas via Admin SDK
+      allow read:   if request.auth != null && (
+                        request.auth.token.email == 'admin@ateliedaescola.com' ||
+                        resource.data.userId == request.auth.uid ||
+                        resource.data.customerEmail == request.auth.token.email
+                    );
+      allow create: if true;
+      allow update: if request.auth != null
+                    && request.auth.token.email == 'admin@ateliedaescola.com';
+      allow delete: if false;
     }
     
     // Clientes - Histórico de compras por email
@@ -31,9 +37,32 @@ service cloud.firestore {
       allow read, write: if false; // Apenas via Admin SDK
     }
     
-    // Logs de download - Sem acesso direto
+    // Logs de download - Admin lê para métricas de dashboard
     match /downloadLogs/{logId} {
-      allow read, write: if false; // Apenas via Admin SDK
+      allow read:  if request.auth != null
+                   && request.auth.token.email == 'admin@ateliedaescola.com';
+      allow write: if false; // Apenas via Admin SDK
+    }
+
+    // Usuários - cada usuário lê/escreve o próprio perfil; autenticados leem todos
+    match /users/{userId} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Configurações admin — adminConfig: só admin lê/escreve; homeSections: leitura pública
+    match /settings/adminConfig {
+      allow read, write: if request.auth != null
+                         && request.auth.token.email == 'admin@ateliedaescola.com';
+    }
+    match /settings/homeSections {
+      allow read:  if true;  // leitura pública (usada na página inicial)
+      allow write: if request.auth != null
+                   && request.auth.token.email == 'admin@ateliedaescola.com';
+    }
+    match /settings/{docId} {
+      allow read, write: if request.auth != null
+                         && request.auth.token.email == 'admin@ateliedaescola.com';
     }
   }
 }

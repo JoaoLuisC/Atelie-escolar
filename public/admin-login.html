@@ -1,260 +1,482 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Admin - Ateliê da Escola</title>
-    <link rel="stylesheet" href="css/variables.css">
-    <link rel="stylesheet" href="css/base.css">
+    <title>Acesso Admin &ndash; Ateli&ecirc; da Escola</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Raleway:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/variables.css">
+    <link rel="stylesheet" href="/css/base.css">
     <style>
-        .login-container {
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #0D1B2A 0%, #1B263B 60%, #415A77 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Poppins', sans-serif;
             padding: 20px;
+            position: relative; overflow: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background:
+                radial-gradient(circle at 20% 30%, rgba(65,90,119,.25) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(119,141,169,.15) 0%, transparent 50%);
+            pointer-events: none;
         }
 
-        .login-box {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 40px;
-            width: 100%;
-            max-width: 420px;
+        .alc-card {
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 28px 70px rgba(0,0,0,.45);
+            width: 100%; max-width: 420px;
+            overflow: hidden;
+            position: relative; z-index: 2;
         }
 
-        .login-header {
-            text-align: center;
-            margin-bottom: 30px;
+        .alc-header {
+            background: linear-gradient(135deg, #0D1B2A 0%, #1B263B 100%);
+            padding: 30px 32px 26px;
+            text-align: center; color: #E0E1DD;
         }
-
-        .login-header h1 {
-            color: #333;
-            font-size: 28px;
-            margin-bottom: 8px;
-        }
-
-        .login-header p {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 500;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: all 0.3s;
-            box-sizing: border-box;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .btn-login {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .btn-login:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn-login:active {
-            transform: translateY(0);
-        }
-
-        .btn-login:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .error-message {
-            background: #fee;
-            color: #c33;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-            font-size: 14px;
-        }
-
-        .error-message.show {
-            display: block;
-        }
-
-        .loading {
-            text-align: center;
-            color: #666;
-            margin-top: 16px;
-            font-size: 14px;
-        }
-
-        .admin-icon {
-            width: 64px;
-            height: 64px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        .alc-lock {
+            width: 58px; height: 58px;
+            background: rgba(65,90,119,.35);
             border-radius: 50%;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 32px;
+            border: 2px solid rgba(119,141,169,.35);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 14px;
+            font-size: 26px;
         }
+        .alc-header h1 {
+            font-family: 'Raleway', sans-serif;
+            font-size: 1.3rem; font-weight: 800; letter-spacing: .02em;
+        }
+        .alc-header p { margin-top: 5px; font-size: 12px; color: #778DA9; }
+
+        .alc-steps { display: flex; border-bottom: 1px solid #eef0f4; }
+        .alc-step-dot {
+            flex: 1; padding: 10px 0;
+            text-align: center; font-size: 11px; font-weight: 700;
+            letter-spacing: .06em; text-transform: uppercase;
+            color: #c0c8d4; border-bottom: 3px solid transparent;
+            transition: all .25s;
+        }
+        .alc-step-dot.active { color: #415A77; border-bottom-color: #415A77; }
+
+        .alc-body { padding: 26px 30px 30px; }
+        .step { display: none; }
+        .step.active { display: block; }
+
+        label {
+            display: block; font-size: 11px; font-weight: 700;
+            color: #1B263B; margin-bottom: 6px;
+            text-transform: uppercase; letter-spacing: .05em;
+        }
+        input[type="email"],
+        input[type="password"],
+        input[type="text"] {
+            width: 100%; padding: 11px 14px;
+            border: 2px solid #dde2ea; border-radius: 9px;
+            font-size: 14px; font-family: 'Poppins', sans-serif;
+            transition: border-color .2s, box-shadow .2s;
+            margin-bottom: 16px;
+        }
+        input:focus {
+            outline: none; border-color: #415A77;
+            box-shadow: 0 0 0 3px rgba(65,90,119,.12);
+        }
+        .pw-wrap { position: relative; }
+        .pw-wrap input { margin-bottom: 0; padding-right: 42px; }
+        .pw-toggle {
+            position: absolute; right: 12px; top: 50%;
+            transform: translateY(-50%);
+            background: none; border: none; color: #778DA9;
+            cursor: pointer; font-size: 16px; padding: 0;
+        }
+
+        .btn-submit {
+            width: 100%; margin-top: 20px; padding: 13px;
+            background: linear-gradient(135deg, #415A77 0%, #1B263B 100%);
+            color: #E0E1DD; border: none; border-radius: 9px;
+            font-size: 15px; font-weight: 700; font-family: 'Poppins', sans-serif;
+            cursor: pointer; transition: opacity .2s, transform .2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .btn-submit:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+        .btn-submit:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+        .alert {
+            padding: 10px 14px; border-radius: 8px;
+            font-size: 13px; font-weight: 500; margin-bottom: 16px;
+            display: none;
+        }
+        .alert.error   { background: #fde8e8; color: #a11; border: 1px solid #f5c6c6; display: block; }
+        .alert.success { background: #e6f4ea; color: #155724; border: 1px solid #c3e6cb; display: block; }
+
+        /* Token boxes */
+        .token-intro {
+            font-size: 13px; color: #415A77; text-align: center;
+            margin-bottom: 20px; line-height: 1.55;
+        }
+        .token-badge {
+            display: inline-block; background: #f0f4f8;
+            border: 1px solid #d0dae7; border-radius: 8px;
+            padding: 3px 10px; font-size: 11px; font-weight: 700;
+            color: #415A77; letter-spacing: .04em; margin-bottom: 12px;
+        }
+        .pin-row {
+            display: flex; justify-content: center; gap: 8px;
+            margin-bottom: 10px;
+        }
+        .pin-box {
+            width: 48px; height: 58px;
+            border: 2px solid #dde2ea; border-radius: 12px;
+            font-size: 22px; font-weight: 800; text-align: center;
+            color: #1B263B; font-family: 'Poppins', sans-serif;
+            outline: none; transition: border-color .2s, box-shadow .2s;
+            background: #fafafa;
+            margin-bottom: 0 !important;
+            padding: 0;
+        }
+        .pin-box:focus   { border-color: #415A77; box-shadow: 0 0 0 3px rgba(65,90,119,.13); background: #fff; }
+        .pin-box.has-val { border-color: #415A77; background: #fff; }
+        .pin-box.shake   { animation: pinShake .35s; }
+        @keyframes pinShake {
+            0%,100% { transform: translateX(0); }
+            20%,60% { transform: translateX(-5px); }
+            40%,80% { transform: translateX(5px); }
+        }
+        .pin-hint { text-align: center; font-size: 11px; color: #aab0ba; margin-bottom: 4px; }
+        .token-timer {
+            text-align: center; font-size: 11px; color: #8a9ab0;
+            margin-bottom: 8px;
+        }
+        .token-timer span { font-weight: 700; color: #415A77; }
+
+        .btn-back {
+            background: none; border: none; color: #778DA9;
+            font-size: 13px; cursor: pointer; margin-top: 14px; padding: 0;
+            display: flex; align-items: center; gap: 5px;
+            font-family: 'Poppins', sans-serif; transition: color .15s;
+        }
+        .btn-back:hover { color: #415A77; }
+        .back-store {
+            display: block; text-align: center;
+            margin-top: 18px; font-size: 12px;
+            color: #aab0ba; text-decoration: none; transition: color .15s;
+        }
+        .back-store:hover { color: #415A77; }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-box">
-            <div class="admin-icon">🔐</div>
-            <div class="login-header">
-                <h1>Área Administrativa</h1>
-                <p>Gerenciamento de Produtos</p>
-            </div>
 
-            <div id="error-message" class="error-message"></div>
+<div class="alc-card">
 
-            <form id="login-form">
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input 
-                        type="email" 
-                        id="email" 
-                        name="email" 
-                        placeholder="seu@email.com"
-                        required
-                        autocomplete="email"
-                    >
-                </div>
-
-                <div class="form-group">
-                    <label for="password">Senha</label>
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        placeholder="••••••••"
-                        required
-                        autocomplete="current-password"
-                    >
-                </div>
-
-                <button type="submit" class="btn-login" id="btn-login">
-                    Entrar
-                </button>
-            </form>
-        </div>
+    <div class="alc-header">
+        <div class="alc-lock"><i class="bi bi-shield-lock-fill"></i></div>
+        <h1>Acesso Restrito</h1>
+        <p>Painel Administrativo &ndash; Ateli&ecirc; da Escola</p>
     </div>
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    <div class="alc-steps">
+        <div class="alc-step-dot active" id="dot1">1 &middot; Identifica&ccedil;&atilde;o</div>
+        <div class="alc-step-dot"        id="dot2">2 &middot; Autenticador</div>
+    </div>
 
-        // Configuração do Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyCqbiSJXD02F0q9wFqrDAEKJtd6VHBjAOk",
-            authDomain: "atelie-da-escola.firebaseapp.com",
-            projectId: "atelie-da-escola",
-            storageBucket: "atelie-da-escola.firebasestorage.app",
-            messagingSenderId: "325690647064",
-            appId: "1:325690647064:web:e1c3b4bfaaf921ab7cd96d"
+    <div class="alc-body">
+        <div id="alert-box" class="alert"></div>
+
+        <!-- ETAPA 1 -->
+        <div id="step1" class="step active">
+            <label for="adm-email">E-mail</label>
+            <input type="email" id="adm-email"
+                   placeholder="admin@ateliedaescola.com"
+                   autocomplete="email">
+
+            <label for="adm-pw" style="margin-top:2px;">Senha</label>
+            <div class="pw-wrap">
+                <input type="password" id="adm-pw"
+                       placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
+                       autocomplete="current-password">
+                <button type="button" class="pw-toggle" id="pw-toggle">
+                    <i class="bi bi-eye" id="pw-icon"></i>
+                </button>
+            </div>
+
+            <button id="btn-step1" class="btn-submit" style="margin-top:22px;">
+                Continuar <i class="bi bi-arrow-right"></i>
+            </button>
+        </div>
+
+        <!-- ETAPA 2: gerada dinamicamente pelo JS -->
+        <div id="step2" class="step">
+            <div id="step2-content"></div>
+
+            <button id="btn-step2" class="btn-submit" disabled>
+                <i class="bi bi-door-open"></i> Entrar no painel
+            </button>
+            <button class="btn-back" id="btn-back">
+                <i class="bi bi-chevron-left"></i> Voltar
+            </button>
+        </div>
+
+        <a href="/" class="back-store">&larr; Voltar &agrave; loja</a>
+    </div>
+</div>
+
+<script type="module">
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+    from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { getFirestore, doc, getDoc }
+    from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import * as OTPAuth from 'https://cdn.jsdelivr.net/npm/otpauth@9.3.6/dist/otpauth.esm.js';
+
+const ADMIN_EMAIL = 'admin@ateliedaescola.com';
+const DEFAULT_PIN = '2580';
+
+const firebaseConfig = {
+    apiKey: "AIzaSyCqbiSJXD02F0q9wFqrDAEKJtd6VHBjAOk",
+    authDomain: "atelie-da-escola.firebaseapp.com",
+    projectId: "atelie-da-escola",
+    storageBucket: "atelie-da-escola.firebasestorage.app",
+    messagingSenderId: "325690647064",
+    appId: "1:325690647064:web:e1c3b4bfaaf921ab7cd96d"
+};
+
+const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+/* Modo de verificacao da etapa 2: 'totp' | 'pin' */
+let verifyMode   = 'pin';
+let totpSecret   = null;
+let savedPin     = DEFAULT_PIN;
+let timerInterval = null;
+
+onAuthStateChanged(auth, user => {
+    if (user && user.email === ADMIN_EMAIL && sessionStorage.getItem('admin_pin_ok') === '1') {
+        window.location.href = '/admin.html';
+    }
+});
+
+/* Exibir/ocultar senha */
+document.getElementById('pw-toggle').addEventListener('click', () => {
+    const inp  = document.getElementById('adm-pw');
+    const icon = document.getElementById('pw-icon');
+    if (inp.type === 'password') { inp.type = 'text';     icon.className = 'bi bi-eye-slash'; }
+    else                         { inp.type = 'password'; icon.className = 'bi bi-eye'; }
+});
+
+/* Alert */
+const alertBox = document.getElementById('alert-box');
+function showAlert(msg, type = 'error') {
+    alertBox.textContent = msg;
+    alertBox.className = `alert ${type}`;
+    if (type === 'error') setTimeout(() => { alertBox.className = 'alert'; }, 5000);
+}
+
+/* ── ETAPA 1 ── */
+document.getElementById('btn-step1').addEventListener('click', async () => {
+    const email = document.getElementById('adm-email').value.trim();
+    const pw    = document.getElementById('adm-pw').value;
+
+    if (!email || !pw) { showAlert('Preencha e-mail e senha.'); return; }
+    if (email !== ADMIN_EMAIL) { showAlert('Acesso nao autorizado para este e-mail.'); return; }
+
+    const btn = document.getElementById('btn-step1');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Verificando...';
+
+    try {
+        await signInWithEmailAndPassword(auth, email, pw);
+
+        /* Busca config do Firestore para saber o modo */
+        try {
+            const snap   = await getDoc(doc(db, 'settings', 'adminConfig'));
+            const config = snap.exists() ? snap.data() : {};
+            totpSecret = config.totpSecret || null;
+            savedPin   = config.loginPin   || DEFAULT_PIN;
+        } catch { /* se offline, usa defaults */ }
+
+        verifyMode = totpSecret ? 'totp' : 'pin';
+        buildStep2();
+
+        alertBox.className = 'alert';
+        document.getElementById('step1').classList.remove('active');
+        document.getElementById('step2').classList.add('active');
+        document.getElementById('dot1').classList.remove('active');
+        document.getElementById('dot2').classList.add('active');
+
+        /* Foca primeiro box */
+        const firstBox = document.querySelector('#step2-content .pin-box');
+        if (firstBox) firstBox.focus();
+
+    } catch (err) {
+        const msgs = {
+            'auth/invalid-credential': 'E-mail ou senha incorretos.',
+            'auth/user-not-found':     'Usuario nao encontrado.',
+            'auth/wrong-password':     'Senha incorreta.',
+            'auth/too-many-requests':  'Muitas tentativas. Aguarde alguns minutos.',
         };
+        showAlert(msgs[err.code] || 'Erro na autenticacao. Tente novamente.');
+        btn.disabled = false;
+        btn.innerHTML = 'Continuar <i class="bi bi-arrow-right"></i>';
+    }
+});
 
-        // Inicializar Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
+/* ── Constroi a UI da etapa 2 conforme o modo ── */
+function buildStep2() {
+    const count = verifyMode === 'totp' ? 6 : 4;
+    const content = document.getElementById('step2-content');
 
-        // Elementos do DOM
-        const loginForm = document.getElementById('login-form');
-        const errorMessage = document.getElementById('error-message');
-        const btnLogin = document.getElementById('btn-login');
+    let boxes = '';
+    for (let i = 0; i < count; i++) {
+        boxes += `<input class="pin-box" id="p${i}" type="password" inputmode="numeric" maxlength="1" aria-label="Digito ${i+1}">`;
+    }
 
-        // Verificar se já está logado
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                // Redirecionar para o painel admin
-                window.location.href = 'admin.html';
-            }
+    if (verifyMode === 'totp') {
+        content.innerHTML = `
+            <p class="token-intro">
+                <i class="bi bi-shield-check" style="font-size:1.4rem;display:block;margin-bottom:8px;color:#415A77;"></i>
+                <strong>Abra o FortiToken Mobile</strong><br>
+                e insira o c&oacute;digo de 6 d&iacute;gitos:
+            </p>
+            <div style="text-align:center;margin-bottom:14px;">
+                <span class="token-badge"><i class="bi bi-phone"></i> FortiToken Mobile / TOTP</span>
+            </div>
+            <div class="pin-row">${boxes}</div>
+            <p class="token-timer" id="token-timer">C&oacute;digo expira em <span id="timer-val">--</span>s</p>
+            <p class="pin-hint">Configure o autenticador na aba Seguran&ccedil;a do painel</p>`;
+        startTimer();
+    } else {
+        content.innerHTML = `
+            <p class="token-intro">
+                <i class="bi bi-shield-check" style="font-size:1.4rem;display:block;margin-bottom:8px;color:#415A77;"></i>
+                Identidade verificada.<br>
+                Insira o PIN de 4 d&iacute;gitos:
+            </p>
+            <div class="pin-row">${boxes}</div>
+            <p class="pin-hint">PIN pode ser alterado na aba Seguran&ccedil;a do painel</p>`;
+    }
+
+    /* Reinicia evento do botao */
+    const btnStep2 = document.getElementById('btn-step2');
+    btnStep2.disabled = true;
+
+    /* Adiciona listeners nos boxes */
+    const pinBoxes = Array.from({ length: count }, (_, i) => document.getElementById(`p${i}`));
+    pinBoxes.forEach((box, i) => {
+        box.addEventListener('input', () => {
+            box.value = box.value.replace(/\D/g, '');
+            box.classList.toggle('has-val', !!box.value);
+            if (box.value && i < count - 1) pinBoxes[i + 1].focus();
+            btnStep2.disabled = pinBoxes.some(b => !b.value);
         });
-
-        // Função para mostrar erro
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorMessage.classList.add('show');
-            setTimeout(() => {
-                errorMessage.classList.remove('show');
-            }, 5000);
-        }
-
-        // Tratamento do formulário de login
-        loginForm.addEventListener('submit', async (e) => {
+        box.addEventListener('keydown', e => {
+            if (e.key === 'Backspace' && !box.value && i > 0) pinBoxes[i - 1].focus();
+            if (e.key === 'Enter' && !btnStep2.disabled) btnStep2.click();
+        });
+        box.addEventListener('paste', e => {
             e.preventDefault();
-
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
-            btnLogin.disabled = true;
-            btnLogin.textContent = 'Entrando...';
-
-            try {
-                await signInWithEmailAndPassword(auth, email, password);
-                // O redirecionamento será feito pelo onAuthStateChanged
-            } catch (error) {
-                console.error('Erro no login:', error);
-                
-                let errorMsg = 'Erro ao fazer login. Tente novamente.';
-                
-                switch (error.code) {
-                    case 'auth/invalid-email':
-                        errorMsg = 'Email inválido.';
-                        break;
-                    case 'auth/user-disabled':
-                        errorMsg = 'Usuário desabilitado.';
-                        break;
-                    case 'auth/user-not-found':
-                        errorMsg = 'Usuário não encontrado.';
-                        break;
-                    case 'auth/wrong-password':
-                        errorMsg = 'Senha incorreta.';
-                        break;
-                    case 'auth/invalid-credential':
-                        errorMsg = 'Credenciais inválidas.';
-                        break;
-                }
-
-                showError(errorMsg);
-                btnLogin.disabled = false;
-                btnLogin.textContent = 'Entrar';
-            }
+            const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, count);
+            digits.split('').forEach((d, j) => {
+                if (pinBoxes[j]) { pinBoxes[j].value = d; pinBoxes[j].classList.add('has-val'); }
+            });
+            btnStep2.disabled = pinBoxes.some(b => !b.value);
+            (pinBoxes[digits.length - 1] || pinBoxes[count - 1]).focus();
         });
-    </script>
+    });
+}
+
+/* ── Timer regressivo para TOTP (30s) ── */
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    function tick() {
+        const remaining = 30 - (Math.floor(Date.now() / 1000) % 30);
+        const el = document.getElementById('timer-val');
+        if (el) el.textContent = remaining;
+    }
+    tick();
+    timerInterval = setInterval(tick, 1000);
+}
+
+/* ── ETAPA 2: verificacao ── */
+document.getElementById('btn-step2').addEventListener('click', async () => {
+    const count    = verifyMode === 'totp' ? 6 : 4;
+    const pinBoxes = Array.from({ length: count }, (_, i) => document.getElementById(`p${i}`));
+    const entered  = pinBoxes.map(b => b.value).join('');
+
+    const btnStep2 = document.getElementById('btn-step2');
+    btnStep2.disabled = true;
+    btnStep2.innerHTML = '<i class="bi bi-hourglass-split"></i> Verificando...';
+
+    let ok = false;
+
+    if (verifyMode === 'totp') {
+        try {
+            const totp  = new OTPAuth.TOTP({
+                secret:    OTPAuth.Secret.fromBase32(totpSecret),
+                algorithm: 'SHA1',
+                digits:    6,
+                period:    30,
+            });
+            ok = totp.validate({ token: entered, window: 1 }) !== null;
+        } catch {
+            showAlert('Erro ao verificar token. Tente novamente.');
+            resetStep2Btn();
+            return;
+        }
+    } else {
+        ok = entered === savedPin;
+    }
+
+    if (ok) {
+        if (timerInterval) clearInterval(timerInterval);
+        sessionStorage.setItem('admin_pin_ok', '1');
+        window.location.href = '/admin.html';
+    } else {
+        wrongCode(count);
+    }
+});
+
+function wrongCode(count) {
+    const mode = verifyMode === 'totp' ? 'Token incorreto ou expirado.' : 'PIN incorreto.';
+    showAlert(mode + ' Tente novamente.');
+    const pinBoxes = Array.from({ length: count }, (_, i) => document.getElementById(`p${i}`));
+    pinBoxes.forEach(b => {
+        b.value = '';
+        b.classList.remove('has-val');
+        b.classList.add('shake');
+        setTimeout(() => b.classList.remove('shake'), 400);
+    });
+    resetStep2Btn();
+    if (pinBoxes[0]) pinBoxes[0].focus();
+}
+
+function resetStep2Btn() {
+    const btn = document.getElementById('btn-step2');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-door-open"></i> Entrar no painel';
+}
+
+/* ── Voltar para etapa 1 ── */
+document.getElementById('btn-back').addEventListener('click', async () => {
+    await signOut(auth);
+    if (timerInterval) clearInterval(timerInterval);
+    document.getElementById('step2-content').innerHTML = '';
+    const btnStep2 = document.getElementById('btn-step2');
+    btnStep2.disabled = true;
+    document.getElementById('step2').classList.remove('active');
+    document.getElementById('step1').classList.add('active');
+    document.getElementById('dot2').classList.remove('active');
+    document.getElementById('dot1').classList.add('active');
+    document.getElementById('adm-pw').value = '';
+    alertBox.className = 'alert';
+});
+</script>
 </body>
 </html>

@@ -1885,13 +1885,22 @@ html {
 .sidebar-cat {
   display: flex;
   width: 100%;
-  border-radius: 10px;
-  margin-bottom: .3rem;
+  border-radius: 8px;
+  margin-bottom: .15rem;
   justify-content: space-between;
-  padding: .42rem .75rem;
+  align-items: center;
+  padding: .38rem .7rem;
   font-size: .83rem;
+  font-weight: 500;
+  /* sobrescreve o visual de pílula do cat-btn */
+  border: none;
+  background: transparent;
 }
 .sidebar-cat:last-child { margin-bottom: 0; }
+.sidebar-cat:hover      { background: rgba(155,93,229,.07); color: var(--primary-color); }
+.sidebar-cat.active     { background: rgba(155,93,229,.12); color: var(--primary-color); font-weight: 700; }
+.sidebar-cat .cat-count { background: rgba(0,0,0,.06); border-radius: 50px; padding: 1px .45rem; font-size: .7rem; color: var(--gray); }
+.sidebar-cat.active .cat-count { background: rgba(155,93,229,.2); color: var(--primary-color); }
 
 /* ── Barra superior da área de produtos ── */
 .products-top-bar {

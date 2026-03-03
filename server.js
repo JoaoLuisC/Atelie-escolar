@@ -1,3 +1,5 @@
+require('dotenv').config({ path: '.env.local' });
+require('dotenv').config(); // fallback to .env for any missing vars
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -16,9 +18,62 @@ const mimeTypes = {
   '.ico': 'image/x-icon'
 };
 
-const server = http.createServer((req, res) => {
-  // Strip query string before building the file path
+// Adapts plain Node.js req/res to Express-like interface expected by API handlers
+function adaptResponse(res) {
+  let statusCode = 200;
+  const adapted = {
+    setHeader: (k, v) => res.setHeader(k, v),
+    status(code) { statusCode = code; return adapted; },
+    json(data) {
+      res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
+    },
+    end(data) {
+      res.writeHead(statusCode);
+      res.end(data || '');
+    }
+  };
+  return adapted;
+}
+
+async function handleApiRequest(reqPath, req, res) {
+  const handlerPath = path.join(__dirname, 'api', reqPath.replace(/^\/api\//, '') + '.js');
+  if (!fs.existsSync(handlerPath)) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'API route not found' }));
+  }
+
+  // Parse JSON body
+  let body = {};
+  await new Promise(resolve => {
+    let raw = '';
+    req.on('data', chunk => raw += chunk);
+    req.on('end', () => {
+      try { body = JSON.parse(raw || '{}'); } catch { body = {}; }
+      resolve();
+    });
+  });
+
+  req.body = body;
+  const adapted = adaptResponse(res);
+  try {
+    const handler = require(handlerPath);
+    await handler(req, adapted);
+  } catch (err) {
+    console.error('API error:', err);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}
+
+const server = http.createServer(async (req, res) => {
   const urlPath = req.url.split('?')[0];
+
+  // Route API requests
+  if (urlPath.startsWith('/api/')) {
+    return handleApiRequest(urlPath, req, res);
+  }
+
   let filePath = path.join(__dirname, 'public', urlPath === '/' ? 'index.html' : urlPath);
   
   const extname = String(path.extname(filePath)).toLowerCase();
@@ -47,3 +102,4 @@ server.listen(PORT, () => {
   console.log('');
   console.log('Pressione Ctrl+C para parar o servidor');
 });
+

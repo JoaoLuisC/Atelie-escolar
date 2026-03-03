@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="/css/components.css">
   <link rel="stylesheet" href="/css/footer.css">
   <link rel="stylesheet" href="/css/animations.css">
+  <style>.nav-rainbow{display:none}</style>
 </head>
 <body>
   <div id="navbar-placeholder"></div>
@@ -54,22 +55,14 @@
     <div class="container hero-content">
       <div class="row align-items-center" style="min-height:50vh;padding:55px 0 60px;">
         <div class="col-lg-8">
-          <p class="hero-eyebrow">✏️ Ateliê da Escola · Materiais Digitais</p>
           <h1 class="hero-title">
             Banners escolares<br>
             feitos com <span class="highlight">cuidado</span><br>
             e criatividade
           </h1>
-          <p class="hero-subtitle">
-            Arquivos gráficos para eventos escolares — download instantâneo,
-            prontos para impressão.
-          </p>
           <div class="hero-cta-group">
             <a href="/products.html" class="btn-hero-primary">
               Ver Produtos <i class="bi bi-arrow-right"></i>
-            </a>
-            <a href="#como-funciona" class="btn-hero-secondary">
-              Nossa história <i class="bi bi-play-circle"></i>
             </a>
           </div>
         </div>
@@ -79,10 +72,11 @@
   </section>
 
   <!-- ════════════════════════════════════════════════
-       MARQUEE 1 — verde (direção normal)
+       MARQUEE — faixa de texto infinita
   ════════════════════════════════════════════════ -->
   <div class="marquee-strip" aria-hidden="true">
-    <div class="marquee-track">      <span class="marquee-item">BANNERS ESCOLARES</span>
+    <div class="marquee-track">
+      <span class="marquee-item">BANNERS ESCOLARES</span>
       <span class="marquee-item marquee-sep">✦</span>
       <span class="marquee-item">FORMATURA</span>
       <span class="marquee-item marquee-sep">✦</span>
@@ -136,219 +130,17 @@
         </div>
       </div>
 
-      <!-- ──── ROW 1: MAIS VENDIDOS ──── -->
-      <div class="catalog-row-header reveal">
-        <span class="catalog-row-badge badge-fire">🔥 Mais Vendidos</span>
-        <a href="/products.html" class="catalog-row-link">Ver todos <i class="bi bi-chevron-right"></i></a>
-      </div>
-      <div class="row g-3 mb-5">
-        <div class="col-6 col-lg-3 reveal delay-1">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#9B5DE5,#F15BB5)">
-              <span class="pcard-emoji">🎉</span>
-              <span class="pcard-badge">PDF + Canva</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Festa Junina</p>
-              <h6 class="product-title">Kit Festa Junina Completo</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;24<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
+      <!-- Vitrines dinâmicas — gerenciadas pelo admin -->
+      <div id="home-sections-wrap">
+        <!-- Skeleton de carregamento -->
+        <div class="row g-3 mb-5">
+          <div class="col-12">
+            <div style="height:22px;width:180px;background:#f0f2f5;border-radius:8px;margin-bottom:20px;"></div>
           </div>
-        </div>
-        <div class="col-6 col-lg-3 reveal delay-2">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#00BBF9,#00F5D4)">
-              <span class="pcard-emoji">🎓</span>
-              <span class="pcard-badge">PDF alta res</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Formatura</p>
-              <h6 class="product-title">Banner Formatura 2026</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;18<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3 reveal delay-3">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#FEE440,#F15BB5)">
-              <span class="pcard-emoji">📚</span>
-              <span class="pcard-badge">Canva editável</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Volta às Aulas</p>
-              <h6 class="product-title">Kit Volta às Aulas</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;19<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3 reveal delay-1">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#F15BB5,#9B5DE5)">
-              <span class="pcard-emoji">💐</span>
-              <span class="pcard-badge">PDF + Canva</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Datas Especiais</p>
-              <h6 class="product-title">Kit Dia das Mães</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;14<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ──── ROW 2: EVENTOS SAZONAIS ──── -->
-      <div class="catalog-row-header reveal">
-        <span class="catalog-row-badge badge-event">🎉 Eventos Sazonais</span>
-        <a href="/products.html" class="catalog-row-link">Ver todos <i class="bi bi-chevron-right"></i></a>
-      </div>
-      <div class="row g-3 mb-5">
-        <div class="col-6 col-lg-3 reveal delay-1">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#00F5D4,#00BBF9)">
-              <span class="pcard-emoji">👨‍👩‍👧‍👦</span>
-              <span class="pcard-badge">Canva editável</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Comunidade</p>
-              <h6 class="product-title">Kit Festa da Família</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;22<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3 reveal delay-2">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#FEE440,#00BBF9)">
-              <span class="pcard-emoji">🏅</span>
-              <span class="pcard-badge">PDF alta res</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Esportes</p>
-              <h6 class="product-title">Olimpíadas Escolares 2026</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;21<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3 reveal delay-3">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#9B5DE5,#00F5D4)">
-              <span class="pcard-emoji">🍎</span>
-              <span class="pcard-badge">PDF + Canva</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Datas Especiais</p>
-              <h6 class="product-title">Kit Halloween Escolar</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;16<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3 reveal delay-1">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#F15BB5,#FEE440)">
-              <span class="pcard-emoji">✏️</span>
-              <span class="pcard-badge">Canva editável</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Profesores</p>
-              <h6 class="product-title">Banner Dia do Professor</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;12<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ──── ROW 3: LANÇAMENTOS ──── -->
-      <div class="catalog-row-header reveal">
-        <span class="catalog-row-badge badge-new">✨ Lançamentos</span>
-        <a href="/products.html" class="catalog-row-link">Ver todos <i class="bi bi-chevron-right"></i></a>
-      </div>
-      <div class="row g-3 mb-2">
-        <div class="col-6 col-lg-3 reveal delay-1">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#00BBF9,#9B5DE5)">
-              <span class="pcard-emoji">🎮</span>
-              <span class="pcard-badge badge-novo">Novo</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Atividades</p>
-              <h6 class="product-title">Kit Gincana Interativa</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;29<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3 reveal delay-2">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#FEE440,#9B5DE5)">
-              <span class="pcard-emoji">📸</span>
-              <span class="pcard-badge badge-novo">Novo</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Formatura</p>
-              <h6 class="product-title">Painel Fotográfico Formatura</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;34<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3 reveal delay-3">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#00F5D4,#FEE440)">
-              <span class="pcard-emoji">🎈</span>
-              <span class="pcard-badge badge-novo">Novo</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Infância</p>
-              <h6 class="product-title">Kit Semana da Criança</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;19<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3 reveal delay-1">
-          <div class="product-card">
-            <div class="pcard-thumb" style="background:linear-gradient(135deg,#F15BB5,#00F5D4)">
-              <span class="pcard-emoji">🎄</span>
-              <span class="pcard-badge badge-novo">Novo</span>
-            </div>
-            <div class="product-body">
-              <p class="product-category">Datas Especiais</p>
-              <h6 class="product-title">Decoração Natal na Escola</h6>
-              <div class="product-footer">
-                <span class="product-price">R$&nbsp;24<small>,90</small></span>
-                <a href="/products.html" class="btn-add-cart">Ver</a>
-              </div>
-            </div>
-          </div>
+          <div class="col-6 col-lg-3"><div class="pcard-skeleton"></div></div>
+          <div class="col-6 col-lg-3"><div class="pcard-skeleton"></div></div>
+          <div class="col-6 col-lg-3"><div class="pcard-skeleton"></div></div>
+          <div class="col-6 col-lg-3"><div class="pcard-skeleton"></div></div>
         </div>
       </div>
 
@@ -729,96 +521,158 @@
   <script src="/js/cart.js"></script>
   <script src="/js/animations.js"></script>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      updateCartCount();
-      loadPreviewProducts();
+  <script type="module">
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, getDocs, doc, getDoc, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const _cfg = {
+      apiKey: "AIzaSyCqbiSJXD02F0q9wFqrDAEKJtd6VHBjAOk",
+      authDomain: "atelie-da-escola.firebaseapp.com",
+      projectId: "atelie-da-escola",
+      storageBucket: "atelie-da-escola.firebasestorage.app",
+      messagingSenderId: "325690647064",
+      appId: "1:325690647064:web:e1c3b4bfaaf921ab7cd96d"
+    };
+    const _app = getApps().length ? getApps()[0] : initializeApp(_cfg);
+    const _db  = getFirestore(_app);
+
+    const GRAD = [
+      'linear-gradient(135deg,#9B5DE5,#F15BB5)',
+      'linear-gradient(135deg,#00BBF9,#00F5D4)',
+      'linear-gradient(135deg,#FEE440,#F15BB5)',
+      'linear-gradient(135deg,#F15BB5,#9B5DE5)',
+      'linear-gradient(135deg,#00F5D4,#00BBF9)',
+      'linear-gradient(135deg,#FEE440,#00BBF9)',
+      'linear-gradient(135deg,#9B5DE5,#00F5D4)',
+      'linear-gradient(135deg,#F15BB5,#FEE440)',
+    ];
+
+    function badgeTextColor(hex) {
+      try {
+        const r = parseInt((hex || '#00BBF9').slice(1,3), 16);
+        const g = parseInt((hex || '#00BBF9').slice(3,5), 16);
+        const b = parseInt((hex || '#00BBF9').slice(5,7), 16);
+        return (r*299 + g*587 + b*114) / 1000 > 145 ? '#1a0533' : '#fff';
+      } catch { return '#fff'; }
+    }
+
+    /* Converte classe legada para cor hex (compatibilidade retroativa) */
+    function legacyBadgeColor(style) {
+      const map = { 'badge-fire': '#9B5DE5', 'badge-event': '#FEE440', 'badge-new': '#00BBF9', 'badge-sale': '#27ae60', 'badge-cat': '#415A77' };
+      return map[style] || '#00BBF9';
+    }
+
+    function gdrive(url) {
+      if (!url || !url.includes('drive.google.com')) return url;
+      const m = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+      if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w800`;
+      const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+      if (m2) return `https://drive.google.com/thumbnail?id=${m2[1]}&sz=w800`;
+      return url;
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (typeof updateCartCount === 'function') updateCartCount();
+      await loadHomeSections();
     });
 
-    async function loadPreviewProducts() {
-      const grid = document.getElementById('preview-products-grid');
+    async function loadHomeSections() {
+      const wrap = document.getElementById('home-sections-wrap');
+      if (!wrap) return;
+
+      /* 1. Carrega config da vitrine */
+      let sections = [];
       try {
-        const snap = await firebase.firestore()
-          .collection('products')
-          .where('active', '==', true)
-          .limit(3)
-          .get();
+        const cfgSnap = await getDoc(doc(_db, 'settings', 'homeSections'));
+        if (cfgSnap.exists()) sections = cfgSnap.data().sections || [];
+      } catch { /* sem config — usa padrão */ }
 
-        if (snap.empty) { grid.innerHTML = buildPlaceholderCards(); return; }
-
-        grid.innerHTML = snap.docs.map((doc) => buildProductCard(doc.id, doc.data())).join('');
-        grid.querySelectorAll('.reveal').forEach((el, i) => {
-          el.style.transitionDelay = (i * 0.15) + 's';
-          setTimeout(() => el.classList.add('revealed'), 100);
-        });
-      } catch (err) {
-        console.warn('Produtos não carregados:', err);
-        grid.innerHTML = buildPlaceholderCards();
+      /* Fallback: sem config mostra os 10 mais recentes */
+      if (!sections.length || !sections.some(s => s.active)) {
+        sections = [{ id:'row1', active:true, title:'Lançamentos', badge:'✨ Lançamentos', badgeStyle:'badge-new', type:'latest', limit:10, productIds:[] }];
       }
-    }
 
-    function buildProductCard(id, p) {
-      const price = typeof p.price === 'number' ? p.price.toFixed(2).replace('.', ',') : '—';
-      const icon  = getCategoryIcon(p.category);
-      const img   = p.imageUrl
-        ? `<img src="${p.imageUrl}" alt="${p.name}" class="w-100 h-100" style="object-fit:cover;">`
-        : `<i class="bi ${icon}" style="font-size:4rem;color:rgba(255,255,255,.3);"></i>`;
-      return `
-        <div class="col-md-4 reveal">
-          <div class="product-preview-card">
-            <a href="/product-details.html?id=${id}" style="text-decoration:none;">
-              <div class="product-preview-thumb">${img}</div>
-              <div class="product-preview-body">
-                <p class="product-preview-tag">${p.category || 'Banner'}</p>
-                <h5 style="font-size:1rem;font-weight:700;color:var(--dark);margin-bottom:.5rem;">${p.name}</h5>
-                <p style="font-size:.9rem;color:var(--gray);margin-bottom:1rem;line-height:1.5;">
-                  ${(p.description || '').substring(0, 80)}${p.description && p.description.length > 80 ? '…' : ''}
-                </p>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding-top:.75rem;border-top:1px solid var(--gray-light);">
-                  <span style="font-size:1.3rem;font-weight:800;color:var(--primary-color);">R$ ${price}</span>
-                  <span style="font-size:.85rem;color:var(--secondary-color);font-weight:600;">
-                    Ver detalhes <i class="bi bi-arrow-right"></i>
-                  </span>
-                </div>
-              </div>
-            </a>
-          </div>
+      /* 2. Carrega todos os produtos ativos uma vez só */
+      let allProds = [];
+      try {
+        const pSnap = await getDocs(query(collection(_db, 'products'), where('active','==',true)));
+        allProds = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch (e) { console.warn('produtos:', e); }
+
+      /* sort por data de criação desc para "latest" */
+      allProds.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      const prodMap = Object.fromEntries(allProds.map(p => [p.id, p]));
+
+      /* 3. Renderiza cada linha ativa */
+      const activeSections = sections.filter(s => s.active);
+      if (!activeSections.length) {
+        wrap.innerHTML = '<p style="text-align:center;padding:40px 0;color:#778DA9;">Nenhum produto em destaque no momento. <a href="/products.html">Ver catálogo completo</a></p>';
+        return;
+      }
+
+      wrap.innerHTML = activeSections.map((sec, si) => {
+        let prods = [];
+        const lim = Math.min(sec.limit || 10, 20);
+
+        if (sec.type === 'manual') {
+          prods = (sec.productIds || []).map(id => prodMap[id]).filter(Boolean).slice(0, lim);
+        } else if (sec.type === 'category') {
+          prods = allProds.filter(p => p.category === sec.categoryName).slice(0, lim);
+        } else { /* latest */
+          prods = allProds.slice(0, lim);
+        }
+
+        if (!prods.length) return '';
+
+        const isLast = (si === activeSections.length - 1);
+        const bg  = sec.badgeColor || legacyBadgeColor(sec.badgeStyle);
+          const fg  = badgeTextColor(bg);
+          return `
+        <div class="catalog-row-header reveal">
+          <span class="catalog-row-badge" style="background:${bg};color:${fg};">${sec.badge || sec.title}</span>
+          <a href="/products.html" class="catalog-row-link">Ver todos <i class="bi bi-chevron-right"></i></a>
+        </div>
+        <div class="row g-3 ${isLast ? 'mb-2' : 'mb-5'}">
+          ${prods.map((p, pi) => buildProdCard(p, pi)).join('')}
         </div>`;
+      }).join('');
+
+      /* Anima reveals */
+      wrap.querySelectorAll('.reveal').forEach((el, i) => {
+        el.style.transitionDelay = (i * 0.08) + 's';
+        setTimeout(() => el.classList.add('revealed'), 80);
+      });
     }
 
-    function buildPlaceholderCards() {
-      return [
-        { name: 'Banner Festa Junina', cat: 'Festas Juninas', icon: 'bi-star-fill', price: '29,90' },
-        { name: 'Banner Formatura 2025', cat: 'Formatura', icon: 'bi-mortarboard-fill', price: '34,90' },
-        { name: 'Banner Volta às Aulas', cat: 'Volta às Aulas', icon: 'bi-book-fill', price: '24,90' },
-      ].map((it, i) => `
-        <div class="col-md-4 reveal" style="transition-delay:${i*.15}s;">
-          <div class="product-preview-card">
-            <a href="/products.html" style="text-decoration:none;">
-              <div class="product-preview-thumb">
-                <i class="bi ${it.icon}" style="font-size:4rem;color:rgba(255,255,255,.3);"></i>
+    function buildProdCard(p, idx) {
+      const price = typeof p.price === 'number'
+        ? p.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '—';
+      const rawImg = Array.isArray(p.images) && p.images.length
+        ? p.images[0]
+        : (p.image || p.imageUrl || '');
+      const img = gdrive(rawImg);
+      const delays = ['delay-1','delay-2','delay-3','delay-1'];
+      const thumb = img
+        ? `<img src="${img}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.onerror=null;this.style.visibility='hidden'">`
+        : `<span style="font-size:2.5rem;">🎨</span>`;
+      const grad = GRAD[idx % GRAD.length];
+      return `
+      <div class="col-6 col-lg-3 reveal ${delays[idx % 4]}">
+        <div class="product-card">
+          <a href="/product-details.html?id=${p.id}" style="text-decoration:none;color:inherit;display:block;">
+            <div class="pcard-thumb" style="background:${img ? 'transparent' : grad};overflow:hidden;">${thumb}</div>
+            <div class="product-body">
+              <p class="product-category">${p.category || 'Banner'}</p>
+              <h6 class="product-title">${p.name}</h6>
+              <div class="product-footer">
+                <span class="product-price">R$&nbsp;${price.replace(',','<small>,').replace(/(<small>,[^<]*)$/, '$1</small>')}</span>
+                <span class="btn-add-cart">Ver</span>
               </div>
-              <div class="product-preview-body">
-                <p class="product-preview-tag">${it.cat}</p>
-                <h5 style="font-size:1rem;font-weight:700;color:var(--dark);margin-bottom:.5rem;">${it.name}</h5>
-                <p style="font-size:.9rem;color:var(--gray);margin-bottom:1rem;">
-                  Arquivo PDF de alta resolução + Canva editável com o nome da escola.
-                </p>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding-top:.75rem;border-top:1px solid var(--gray-light);">
-                  <span style="font-size:1.3rem;font-weight:800;color:var(--primary-color);">R$ ${it.price}</span>
-                  <span style="font-size:.85rem;color:var(--secondary-color);font-weight:600;">
-                    Ver detalhes <i class="bi bi-arrow-right"></i>
-                  </span>
-                </div>
-              </div>
-            </a>
-          </div>
-        </div>`).join('');
-    }
-
-    function getCategoryIcon(cat) {
-      const map = { 'Formatura':'bi-mortarboard-fill','Festa Junina':'bi-star-fill','Volta às Aulas':'bi-book-fill','Dia das Mães':'bi-heart-fill','Gincana':'bi-trophy-fill' };
-      return map[cat] || 'bi-file-image-fill';
+            </div>
+          </a>
+        </div>
+      </div>`;
     }
   </script>
 </body>
