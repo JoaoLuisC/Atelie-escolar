@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Produtos â€” AteliÃª da Escola</title>
+  <title>Produtos — Ateliê da Escola</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -20,100 +20,98 @@
 </head>
 <body>
 
-  <!-- â•â•â•â• NAVBAR â•â•â•â• -->
+  <!-- NAVBAR -->
   <div id="navbar-placeholder"></div>
 
-  <!-- â•â•â•â• PAGE HEADER â•â•â•â• -->
-  <section class="products-page-header">
-    <div class="container" style="position:relative;z-index:1;">
-      <div class="row justify-content-center text-center">
-        <div class="col-lg-6">
-          <p class="section-label" style="color:var(--secondary-color);">CatÃ¡logo completo</p>
-          <h1 style="font-family:var(--font-heading);font-size:clamp(2rem,4vw,3rem);font-weight:900;color:#fff;margin-bottom:.75rem;">
-            Banners para toda<br>ocasiÃ£o escolar
+  <!-- PAGE HEADER -->
+  <section class="hero-animated products-page-header">
+    <div class="hero-bg-gradient"></div>
+    <div class="hero-blob hero-blob-1"></div>
+    <div class="hero-blob hero-blob-2"></div>
+    <div class="hero-blob hero-blob-3"></div>
+    <div class="hero-blob hero-blob-4"></div>
+    <div class="hero-grid"></div>
+
+    <div class="hero-school-icons" aria-hidden="true">
+      <span class="school-icon school-icon-1">✏️</span>
+      <span class="school-icon school-icon-2">📚</span>
+      <span class="school-icon school-icon-3">🎨</span>
+      <span class="school-icon school-icon-4">⭐</span>
+      <span class="school-icon school-icon-5">📐</span>
+      <span class="school-icon school-icon-6">🖍️</span>
+      <span class="school-icon school-icon-7">📏</span>
+      <span class="school-icon school-icon-8">🔢</span>
+      <span class="school-icon school-icon-9">🌈</span>
+      <span class="school-icon school-icon-10">🎒</span>
+    </div>
+
+    <div class="container hero-content">
+      <div class="row align-items-center" style="min-height:30vh;padding:40px 0 44px;">
+        <div class="col-lg-8">
+          <p class="hero-eyebrow">🛍️ Catálogo completo · Ateliê da Escola</p>
+          <h1 class="hero-title" style="font-size:clamp(1.8rem,4vw,2.8rem);">
+            Banners para toda<br>
+            <span class="highlight">ocasião escolar</span>
           </h1>
-          <p style="color:rgba(255,255,255,.65);font-size:1rem;">
-            PDF alta resoluÃ§Ã£o + Canva editÃ¡vel. Download imediato.
+          <p class="hero-subtitle">
+            PDF alta resolução + Canva editável. Download imediato.
           </p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- â•â•â•â• MAIN CONTENT â•â•â•â• -->
-  <div class="products-layout container">
+  <!-- SIDEBAR OVERLAY (mobile only) -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-    <!-- â”€â”€ SIDEBAR FILTROS â”€â”€ -->
-    <aside class="products-sidebar">
-      <div class="sidebar-section">
-        <h6 class="sidebar-title">Ordenar por</h6>
-        <select id="sortSelect" class="sidebar-select">
+  <!-- LAYOUT -->
+  <div class="products-layout">
+
+    <!-- SIDEBAR estático (esquerda) -->
+    <aside class="products-sidebar" id="productsSidebar">
+
+      <!-- Categorias -->
+      <div class="sidebar-collapsible open">
+        <button class="sidebar-section-toggle">Categorias <i class="bi bi-chevron-down"></i></button>
+        <div class="sidebar-section-body" id="sidebarCatList">
+          <button class="cat-btn sidebar-cat active" data-cat="all">
+            <i class="bi bi-grid-fill"></i> Todos <span class="cat-count" id="cat-all">—</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Faixa de preço -->
+      <div class="sidebar-collapsible open">
+        <button class="sidebar-section-toggle">Faixa de preço <i class="bi bi-chevron-down"></i></button>
+        <div class="sidebar-section-body">
+          <label class="sidebar-radio"><input type="radio" name="price" value="all" checked> Todos</label>
+          <label class="sidebar-radio"><input type="radio" name="price" value="0-25"> Até R$ 25</label>
+          <label class="sidebar-radio"><input type="radio" name="price" value="25-50"> R$ 25 — R$ 50</label>
+          <label class="sidebar-radio"><input type="radio" name="price" value="50+"> Acima de R$ 50</label>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ÁREA PRINCIPAL -->
+    <div class="products-main">
+
+      <!-- Barra superior: btn Filtros (mobile) + chips categorias destaque + ordenar por -->
+      <div class="products-top-bar">
+        <button class="btn-toggle-filters" id="toggleFilters">
+          <i class="bi bi-sliders"></i> Filtros
+        </button>
+        <div class="cat-filter-bar" id="catFilterBar">
+          <!-- chips de categorias em destaque injetados por products.js -->
+        </div>
+        <select id="sortSelect" class="sort-select-inline">
           <option value="newest">Mais recentes</option>
-          <option value="price-asc">Menor preÃ§o</option>
-          <option value="price-desc">Maior preÃ§o</option>
+          <option value="price-asc">Menor preço</option>
+          <option value="price-desc">Maior preço</option>
           <option value="name">Nome A-Z</option>
         </select>
       </div>
 
-      <div class="sidebar-section">
-        <h6 class="sidebar-title">Faixa de preÃ§o</h6>
-        <label class="sidebar-radio">
-          <input type="radio" name="price" value="all" checked> Todos
-        </label>
-        <label class="sidebar-radio">
-          <input type="radio" name="price" value="0-25"> AtÃ© R$ 25
-        </label>
-        <label class="sidebar-radio">
-          <input type="radio" name="price" value="25-50"> R$ 25 â€“ R$ 50
-        </label>
-        <label class="sidebar-radio">
-          <input type="radio" name="price" value="50+"> Acima de R$ 50
-        </label>
-      </div>
-
-      <div class="sidebar-section">
-        <h6 class="sidebar-title">Formato</h6>
-        <label class="sidebar-check">
-          <input type="checkbox" value="pdf" checked> PDF
-        </label>
-        <label class="sidebar-check">
-          <input type="checkbox" value="canva" checked> Canva editÃ¡vel
-        </label>
-      </div>
-    </aside>
-
-    <!-- â”€â”€ GRID ÃREA â”€â”€ -->
-    <div class="products-main">
-
-      <!-- Barra de filtros de categoria -->
-      <div class="cat-filter-bar">
-        <button class="cat-btn active" data-cat="all">
-          <i class="bi bi-grid-fill"></i> Todos
-          <span class="cat-count" id="cat-all">â€”</span>
-        </button>
-        <button class="cat-btn" data-cat="Festa Junina">
-          <i class="bi bi-star-fill"></i> Festa Junina
-          <span class="cat-count" id="cat-festa">â€”</span>
-        </button>
-        <button class="cat-btn" data-cat="Formatura">
-          <i class="bi bi-mortarboard-fill"></i> Formatura
-          <span class="cat-count" id="cat-form">â€”</span>
-        </button>
-        <button class="cat-btn" data-cat="Volta Ã s Aulas">
-          <i class="bi bi-book-fill"></i> Volta Ã s Aulas
-          <span class="cat-count" id="cat-volta">â€”</span>
-        </button>
-        <button class="cat-btn" data-cat="Datas Comemorativas">
-          <i class="bi bi-calendar-heart-fill"></i> Datas Comemorativas
-          <span class="cat-count" id="cat-datas">â€”</span>
-        </button>
-        <button class="cat-btn" data-cat="DecoraÃ§Ã£o de Sala">
-          <i class="bi bi-easel-fill"></i> DecoraÃ§Ã£o de Sala
-          <span class="cat-count" id="cat-deco">â€”</span>
-        </button>
-      </div>
-
-      <!-- EstatÃ­stica resultados -->
       <p class="results-count" id="resultsCount"></p>
 
       <!-- Loading -->
@@ -139,7 +137,7 @@
     </div>
   </div>
 
-  <!-- â•â•â•â• FOOTER â•â•â•â• -->
+  <!-- FOOTER -->
   <div id="footer-placeholder"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

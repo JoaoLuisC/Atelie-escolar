@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="css/admin.css">
 </head>
 <body>
+
     <!-- Header Admin -->
     <header class="admin-header">
         <div class="container">
@@ -24,132 +25,92 @@
 
     <main class="admin-main">
         <div class="container">
-            <!-- Botão de Adicionar Produto -->
-            <div class="admin-actions">
-                <button id="btn-add-product" class="btn-primary">
-                    ➕ Adicionar Novo Produto
-                </button>
+
+            <!-- ABAS DE NAVEGAÇÃO -->
+            <div class="admin-tabs">
+                <button class="admin-tab active" data-tab="produtos">📦 Produtos</button>
+                <button class="admin-tab" data-tab="categorias">🏷️ Categorias</button>
             </div>
 
-            <!-- Lista de Produtos -->
-            <div class="products-grid" id="products-grid">
-                <div class="loading-state">
-                    <p>Carregando produtos...</p>
+            <!-- ══════════════ ABA PRODUTOS ══════════════ -->
+            <div id="tab-produtos" class="tab-panel active">
+                <div class="admin-actions">
+                    <button id="btn-add-product" class="btn-primary">➕ Adicionar Novo Produto</button>
+                </div>
+                <div class="products-grid" id="products-grid">
+                    <div class="loading-state"><p>Carregando produtos...</p></div>
                 </div>
             </div>
+
+            <!-- ══════════════ ABA CATEGORIAS ══════════════ -->
+            <div id="tab-categorias" class="tab-panel">
+                <div class="admin-actions">
+                    <button id="btn-add-category" class="btn-primary">➕ Adicionar Categoria</button>
+                </div>
+                <div class="categories-list" id="categories-list">
+                    <div class="loading-state"><p>Carregando categorias...</p></div>
+                </div>
+            </div>
+
         </div>
     </main>
 
-    <!-- Modal de Adicionar/Editar Produto -->
+    <!-- ══════════════ MODAL PRODUTO ══════════════ -->
     <div id="product-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content modal-large">
             <div class="modal-header">
                 <h2 id="modal-title">Adicionar Produto</h2>
                 <button class="modal-close" id="modal-close">&times;</button>
             </div>
-
             <form id="product-form">
                 <input type="hidden" id="product-id" name="id">
-
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="product-name">Nome do Produto *</label>
-                        <input 
-                            type="text" 
-                            id="product-name" 
-                            name="name"
-                            placeholder="Ex: Kit Criativo Completo"
-                            required
-                        >
+                        <input type="text" id="product-name" name="name" placeholder="Ex: Kit Criativo Completo" required>
                     </div>
-
                     <div class="form-group">
                         <label for="product-price">Preço (R$) *</label>
-                        <input 
-                            type="number" 
-                            id="product-price" 
-                            name="price"
-                            step="0.01"
-                            min="0"
-                            placeholder="Ex: 39.90"
-                            required
-                        >
+                        <input type="number" id="product-price" name="price" step="0.01" min="0" placeholder="Ex: 39.90" required>
                     </div>
-
                     <div class="form-group full-width">
                         <label for="product-description">Descrição *</label>
-                        <textarea 
-                            id="product-description" 
-                            name="description"
-                            rows="4"
-                            placeholder="Descrição detalhada do produto..."
-                            required
-                        ></textarea>
+                        <textarea id="product-description" name="description" rows="4" placeholder="Descrição detalhada do produto..." required></textarea>
                     </div>
-
                     <div class="form-group">
                         <label for="product-category">Categoria *</label>
-                        <input 
-                            type="text" 
-                            id="product-category" 
-                            name="category"
-                            placeholder="Ex: Arte e Educação"
-                            required
-                        >
+                        <select id="product-category" name="category" required>
+                            <option value="">Selecione uma categoria...</option>
+                        </select>
                     </div>
-
                     <div class="form-group full-width">
                         <label>Imagens do Produto *</label>
                         <div id="images-container">
                             <div class="image-input-group">
-                                <input 
-                                    type="url" 
-                                    class="product-image-url" 
-                                    placeholder="https://... (Imagem 1)"
-                                    required
-                                >
-                                <button type="button" class="btn-remove-image" style="display: none;">❌</button>
+                                <input type="url" class="product-image-url" placeholder="https://... (Imagem 1)" required>
+                                <button type="button" class="btn-remove-image" style="display:none;">❌</button>
                             </div>
                         </div>
-                        <button type="button" id="btn-add-image" class="btn-secondary" style="margin-top: 10px;">➕ Adicionar Mais Imagem</button>
+                        <button type="button" id="btn-add-image" class="btn-secondary" style="margin-top:10px;">➕ Adicionar Mais Imagem</button>
                     </div>
-
                     <div class="form-group full-width">
                         <label>Vídeos do Produto (opcional)</label>
                         <div id="videos-container">
                             <div class="video-input-group">
-                                <input 
-                                    type="url" 
-                                    class="product-video-url" 
-                                    placeholder="https://youtube.com/... ou https://vimeo.com/..."
-                                >
-                                <button type="button" class="btn-remove-video" style="display: none;">❌</button>
+                                <input type="url" class="product-video-url" placeholder="https://youtube.com/...">
+                                <button type="button" class="btn-remove-video" style="display:none;">❌</button>
                             </div>
                         </div>
-                        <button type="button" id="btn-add-video" class="btn-secondary" style="margin-top: 10px;">➕ Adicionar Mais Vídeo</button>
+                        <button type="button" id="btn-add-video" class="btn-secondary" style="margin-top:10px;">➕ Adicionar Mais Vídeo</button>
                     </div>
-
                     <div class="form-group full-width">
                         <label for="product-download">URL do Download *</label>
-                        <input 
-                            type="url" 
-                            id="product-download" 
-                            name="downloadUrl"
-                            placeholder="https://drive.google.com/..."
-                            required
-                        >
+                        <input type="url" id="product-download" name="downloadUrl" placeholder="https://drive.google.com/..." required>
                     </div>
-
                     <div class="form-group full-width">
                         <label for="product-tags">Tags (separadas por vírgula)</label>
-                        <input 
-                            type="text" 
-                            id="product-tags" 
-                            name="tags"
-                            placeholder="Ex: criança, arte, educação"
-                        >
+                        <input type="text" id="product-tags" name="tags" placeholder="Ex: criança, arte, educação">
                     </div>
-
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="product-active" name="active" checked>
@@ -157,7 +118,6 @@
                         </label>
                     </div>
                 </div>
-
                 <div class="modal-actions">
                     <button type="button" class="btn-secondary" id="btn-cancel">Cancelar</button>
                     <button type="submit" class="btn-primary" id="btn-save">Salvar Produto</button>
@@ -166,15 +126,56 @@
         </div>
     </div>
 
-    <!-- Modal de Confirmação de Exclusão -->
+    <!-- ══════════════ MODAL CATEGORIA ══════════════ -->
+    <div id="category-modal" class="modal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h2 id="cat-modal-title">Adicionar Categoria</h2>
+                <button class="modal-close" id="cat-modal-close">&times;</button>
+            </div>
+            <form id="category-form">
+                <input type="hidden" id="cat-id">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label for="cat-name">Nome da Categoria *</label>
+                        <input type="text" id="cat-name" placeholder="Ex: Festa Junina" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cat-color">Cor de destaque</label>
+                        <input type="color" id="cat-color" value="#9B5DE5">
+                    </div>
+                    <div class="form-group">
+                        <label for="cat-order">Ordem (menor = primeiro)</label>
+                        <input type="number" id="cat-order" min="0" value="0">
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="cat-badge-label">Badge de destaque (opcional)</label>
+                        <input type="text" id="cat-badge-label" placeholder="Ex: MAIS VENDIDO, LANÇAMENTO">
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="cat-featured">
+                            <span>⭐ Evidenciar na página de produtos</span>
+                        </label>
+                        <p class="form-hint">Categorias evidenciadas aparecem em destaque no topo da lista de produtos.</p>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="btn-cancel-cat">Cancelar</button>
+                    <button type="submit" class="btn-primary">Salvar Categoria</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ══════════════ MODAL DELETE ══════════════ -->
     <div id="delete-modal" class="modal">
         <div class="modal-content modal-small">
             <div class="modal-header">
                 <h2>Confirmar Exclusão</h2>
                 <button class="modal-close" id="delete-modal-close">&times;</button>
             </div>
-            <p>Tem certeza que deseja excluir este produto?</p>
-            <p><strong id="delete-product-name"></strong></p>
+            <p>Tem certeza que deseja excluir <strong id="delete-item-name"></strong>?</p>
             <div class="modal-actions">
                 <button type="button" class="btn-secondary" id="btn-cancel-delete">Cancelar</button>
                 <button type="button" class="btn-danger" id="btn-confirm-delete">Excluir</button>
@@ -182,7 +183,7 @@
         </div>
     </div>
 
-    <!-- Notificação Toast -->
+    <!-- Toast -->
     <div id="toast" class="toast"></div>
 
     <script type="module" src="js/admin.js"></script>

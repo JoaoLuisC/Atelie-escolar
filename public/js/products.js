@@ -30,9 +30,69 @@ const CAT_COUNT_IDS = {
 /* ══════ inicialização ══════ */
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof updateCartCount === 'function') updateCartCount();
-  loadProducts();
-  bindFilters();
+  loadCategories();   // renderiza botões no sidebar, depois chama loadProducts
+  bindStaticFilters(); // preco + sort (não dependem do Firestore)
+  initSidebar();       // toggle e seções colapsáveis
 });
+
+/* ══════ carrega categorias do Firestore e renderiza barra + destaques ══════ */
+async function loadCategories() {
+  try {
+    await waitForFirebase();
+
+    const { orderBy } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+    const q = window.firebaseQuery(
+      window.firebaseCollection(window.firebaseDb, 'categories'),
+      orderBy('order', 'asc')
+    );
+    const snap = await window.firebaseGetDocs(q);
+    const cats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    console.log('[loadCategories] dados do Firestore:', cats.map(c => ({ id: c.id, name: c.name, slug: c.slug })));
+
+    /* ─ todas as categorias no sidebar ─ */
+    const sidebarBar = document.getElementById('sidebarCatList');
+    /* ─ chips de destaque na barra superior ─ */
+    const chipBar = document.getElementById('catFilterBar');
+
+    cats.forEach(cat => {
+      const slug = cat.slug || cat.id;
+
+      /* botão sidebar */
+      const btn = document.createElement('button');
+      btn.className = 'cat-btn sidebar-cat';
+      btn.dataset.cat = cat.name;
+      btn.innerHTML = `${cat.name} <span class="cat-count" id="cat-dyn-${slug}">—</span>`;
+      sidebarBar.appendChild(btn);
+
+      /* chip de destaque no top bar (apenas categorias featured) */
+      if (cat.featured && chipBar) {
+        const chip = document.createElement('button');
+        chip.className = 'cat-btn';
+        chip.dataset.cat = cat.name;
+        chip.innerHTML = `${cat.name}`;
+        chip.style.setProperty('--chip-color', cat.color || 'var(--primary-color)');
+        chipBar.appendChild(chip);
+      }
+
+      /* alimenta CAT_COUNT_IDS dinamicamente */
+      CAT_COUNT_IDS[cat.name] = `cat-dyn-${slug}`;
+
+      /* alimenta BADGES a partir de campos opcionais da categoria */
+      if (cat.badgeLabel && !BADGES[cat.name]) {
+        BADGES[cat.name] = { label: cat.badgeLabel, cls: cat.badgeClass || 'badge-hot' };
+      }
+    });
+
+    /* ─ rebind cliques (inclui botões recém-criados) ─ */
+    bindCatButtons();
+
+  } catch (err) {
+    console.warn('Categorias não carregadas (Firestore vazio ou sem coleção):', err.message);
+  }
+
+  /* carrega produtos de qualquer forma */
+  loadProducts();
+}
 
 /* ══════ carrega produtos do Firestore ══════ */
 async function loadProducts() {
@@ -124,19 +184,8 @@ function sortProducts() {
   });
 }
 
-/* ══════ bind filtros ══════ */
-function bindFilters() {
-  /* categoria */
-  document.querySelectorAll('.cat-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeCategory = btn.dataset.cat;
-      renderProducts();
-    });
-  });
-
-  /* ordenação */
+/* ══════ bind filtros estáticos (preço + sort) ══════ */
+function bindStaticFilters() {
   const sortSel = document.getElementById('sortSelect');
   if (sortSel) {
     sortSel.addEventListener('change', () => {
@@ -145,14 +194,30 @@ function bindFilters() {
       renderProducts();
     });
   }
-
-  /* preço */
   document.querySelectorAll('input[name="price"]').forEach(radio => {
     radio.addEventListener('change', () => {
       activePriceRange = radio.value;
       renderProducts();
     });
   });
+}
+
+/* ══════ bind botões de categoria (chama após renderizá-los) ══════ */
+function bindCatButtons() {
+  document.querySelectorAll('.cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeCategory = btn.dataset.cat;
+      renderProducts();
+    });
+  });
+}
+
+/* ══════ bind filtros (legacy — mantido por compatibilidade) ══════ */
+function bindFilters() {
+  bindStaticFilters();
+  bindCatButtons();
 }
 
 /* ══════ aguarda Firebase ══════ */
@@ -217,7 +282,25 @@ function handleAddToCart(id, name, price, image) {
     addToCart({ id, name: decodeURIComponent(name), price, image });
   }
 }
+/* ══════ inicializa sidebar e seções colapsáveis ══════ */
+function initSidebar() {
+  const sidebar = document.getElementById('productsSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const btnOpen = document.getElementById('toggleFilters');
 
+  function openSidebar()  { sidebar.classList.add('open'); overlay.classList.add('open'); }
+  function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+
+  if (btnOpen)  btnOpen.addEventListener('click', openSidebar);
+  if (overlay)  overlay.addEventListener('click', closeSidebar);
+
+  /* seções colapsáveis */
+  document.querySelectorAll('.sidebar-section-toggle').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      toggle.closest('.sidebar-collapsible').classList.toggle('collapsed');
+    });
+  });
+}
 /* ══════ helpers ══════ (mantidos para compatibilidade) */
 function formatPrice(price) {
   return typeof price === 'number' ? 'R$ ' + price.toFixed(2).replace('.', ',') : '—';

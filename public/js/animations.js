@@ -1,33 +1,69 @@
 /**
  * ANIMATIONS.JS — Efeitos visuais avançados
- * Scroll reveal · Counters · Sticky horizontal scroll · Cursor glow
+ * Scroll reveal · Counters · Sticky horizontal scroll · Cursor trail
  */
 
 (function () {
   'use strict';
 
-  /* ─── Cursor glow (desktop) ─────────────────────────────── */
-  function initCursorGlow() {
+  /* ─── Cursor trail escolar (desktop, só no hero) ────── */
+  function initCursorTrail() {
     if (window.innerWidth < 1024) return;
-    const cursor = document.createElement('div');
-    cursor.classList.add('cursor-glow');
-    document.body.appendChild(cursor);
+    const hero = document.querySelector('.hero-animated');
+    if (!hero) return;
 
-    let mouseX = -999, mouseY = -999;
-    let rafId = null;
+    const SYMBOLS = ['⭐','📚','✏️','🎨','📐','✨','🌈','🎒','🖊️','🔢','📏','🌟'];
+    const COLORS = ['#5C2899','#921663','#9A7A00','#005C8A','#007A65'];
+    let lastSpawn = 0;
+    const THROTTLE = 45;
+    let insideHero = false;
+
+    hero.addEventListener('mouseenter', () => { insideHero = true;  });
+    hero.addEventListener('mouseleave', () => { insideHero = false; });
 
     document.addEventListener('mousemove', (e) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
-      if (!rafId) {
-        rafId = requestAnimationFrame(updateCursor);
-      }
+      if (!insideHero) return;
+      const now = Date.now();
+      if (now - lastSpawn < THROTTLE) return;
+      lastSpawn = now;
+      spawnParticle(e.clientX, e.clientY);
     }, { passive: true });
 
-    function updateCursor() {
-      cursor.style.left = mouseX + 'px';
-      cursor.style.top  = mouseY + 'px';
-      rafId = null;
+    function spawnParticle(x, y) {
+      const el = document.createElement('span');
+      el.textContent = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+
+      const size  = 13 + Math.random() * 12;
+      const angle = Math.random() * 360;
+      const dist  = 35 + Math.random() * 55;
+      const dx    = Math.cos(angle * Math.PI / 180) * dist;
+      const dy    = Math.sin(angle * Math.PI / 180) * dist - 28;
+      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+      const dur   = 650 + Math.random() * 450;
+
+      Object.assign(el.style, {
+        position:      'fixed',
+        left:          x + 'px',
+        top:           y + 'px',
+        fontSize:      size + 'px',
+        color:         color,
+        pointerEvents: 'none',
+        zIndex:        9999,
+        userSelect:    'none',
+        lineHeight:    1,
+        transform:     'translate(-50%, -50%)',
+        transition:    `transform ${dur}ms ease-out, opacity ${dur}ms ease-out`,
+        opacity:       0.6,
+        willChange:    'transform, opacity',
+      });
+
+      document.body.appendChild(el);
+      el.getBoundingClientRect();
+
+      el.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.2) rotate(${angle}deg)`;
+      el.style.opacity   = '0';
+
+      setTimeout(() => el.remove(), dur + 50);
     }
   }
 
@@ -166,7 +202,7 @@
 
   /* ─── Inicialização ──────────────────────────────────────── */
   document.addEventListener('DOMContentLoaded', () => {
-    initCursorGlow();
+    initCursorTrail();
     initScrollReveal();
     initCounters();
     initStickyHorizontalScroll();

@@ -7,224 +7,291 @@ const firebaseConfig = {
     authDomain: "atelie-da-escola.firebaseapp.com",
     projectId: "atelie-da-escola",
     storageBucket: "atelie-da-escola.firebasestorage.app",
-    messagingSenderId: "420111430525",
-    appId: "1:420111430525:web:f6bc509fd6a3e2cb835d62"
+    messagingSenderId: "325690647064",
+    appId: "1:325690647064:web:e1c3b4bfaaf921ab7cd96d"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Get product ID from URL
 const urlParams = new URLSearchParams(window.location.search);
 const productId = urlParams.get('id');
 
-// DOM elements
-const loading = document.getElementById('loading');
-const productSection = document.getElementById('productSection');
-const notFoundSection = document.getElementById('notFoundSection');
-const mediaGallery = document.getElementById('mediaGallery');
-const productCategory = document.getElementById('productCategory');
-const productTitle = document.getElementById('productTitle');
-const productPrice = document.getElementById('productPrice');
-const productDescription = document.getElementById('productDescription');
-const productTags = document.getElementById('productTags');
-const tagsList = document.getElementById('tagsList');
+// DOM refs
+const loading           = document.getElementById('loading');
+const productSection    = document.getElementById('productSection');
+const notFoundSection   = document.getElementById('notFoundSection');
+const mediaGallery      = document.getElementById('mediaGallery');
+const productCategory   = document.getElementById('productCategory');
+const productTitle      = document.getElementById('productTitle');
+const productPrice      = document.getElementById('productPrice');
+const productDescription= document.getElementById('productDescription');
+const productTags       = document.getElementById('productTags');
+const tagsList          = document.getElementById('tagsList');
 const breadcrumbProduct = document.getElementById('breadcrumbProduct');
-const pageTitle = document.getElementById('pageTitle');
-const btnAddToCart = document.getElementById('btnAddToCart');
+const pageTitle         = document.getElementById('pageTitle');
+const btnAddToCart      = document.getElementById('btnAddToCart');
+const btnBuyNow         = document.getElementById('pdBuyNow');
+const pdInstallments    = document.getElementById('pdInstallments');
+const pdPixText         = document.getElementById('pdPixText');
+const pdFormatBadges    = document.getElementById('pdFormatBadges');
 
-// Load product details
+// ─── Load ───────────────────────────────────────────
 async function loadProductDetails() {
-    if (!productId) {
-        showNotFound();
-        return;
-    }
-
+    if (!productId) { showNotFound(); return; }
     try {
-        const productRef = doc(db, 'products', productId);
-        const productSnap = await getDoc(productRef);
-
-        if (!productSnap.exists() || !productSnap.data().active) {
-            showNotFound();
-            return;
-        }
-
-        const product = { id: productSnap.id, ...productSnap.data() };
-        displayProduct(product);
-    } catch (error) {
-        console.error('Erro ao carregar produto:', error);
+        const snap = await getDoc(doc(db, 'products', productId));
+        if (!snap.exists() || !snap.data().active) { showNotFound(); return; }
+        displayProduct({ id: snap.id, ...snap.data() });
+    } catch (err) {
+        console.error('Erro ao carregar produto:', err);
         showNotFound();
     }
 }
 
-// Display product
+// ─── Display ────────────────────────────────────────
 function displayProduct(product) {
-    // Update page title and breadcrumb
-    pageTitle.textContent = `${product.name} - Ateliê da Escola`;
+    // Page meta
+    pageTitle.textContent       = `${product.name} - Ateliê da Escola`;
     breadcrumbProduct.textContent = product.name;
 
-    // Update product info
-    productCategory.textContent = product.category || 'PRODUTO';
-    productTitle.textContent = product.name;
-    productPrice.textContent = `R$ ${formatPrice(product.price)}`;
+    // Category & title
+    productCategory.textContent = (product.category || 'Produto').toUpperCase();
+    productTitle.textContent    = product.name;
+
+    // Price
+    const price = parseFloat(product.price) || 0;
+    productPrice.textContent    = `R$ ${formatPrice(price)}`;
+
+    // Pix discount (10%)
+    const pixPrice = price * 0.9;
+    if (pdPixText)      pdPixText.textContent = `R$ ${formatPrice(pixPrice)} à vista no Pix (10% off)`;
+    if (pdInstallments) pdInstallments.textContent = price >= 10
+        ? `ou em até 3x de R$ ${formatPrice(price / 3)} sem juros`
+        : '';
+
+    // Format badges (based on product.formats array or reasonable defaults)
+    buildFormatBadges(product);
+
+    // Description
     productDescription.textContent = product.description || 'Sem descrição disponível.';
 
     // Tags
-    if (product.tags && Array.isArray(product.tags) && product.tags.length > 0) {
+    if (product.tags && product.tags.length > 0) {
         productTags.style.display = 'flex';
         tagsList.textContent = product.tags.join(', ');
     } else {
         productTags.style.display = 'none';
     }
 
-    // Media gallery
-    createMediaGallery(product);
+    // Gallery
+    buildGallery(product);
 
-    // Add to cart button
+    // Buttons
     btnAddToCart.onclick = () => addToCart(product);
+    if (btnBuyNow) btnBuyNow.onclick = () => buyNow(product);
 
-    // Show product section
-    loading.style.display = 'none';
+    // Show
+    loading.style.display  = 'none';
     productSection.style.display = 'block';
 }
 
-// Create media gallery with carousel
-function createMediaGallery(product) {
-    const images = Array.isArray(product.images) && product.images.length > 0 
-        ? product.images 
-        : (product.image ? [product.image] : ['https://via.placeholder.com/800x500/667eea/ffffff?text=Sem+Imagem']);
+// ─── Format badges ──────────────────────────────────
+function buildFormatBadges(product) {
+    if (!pdFormatBadges) return;
+    const fmts = Array.isArray(product.formats) && product.formats.length
+        ? product.formats
+        : ['PDF', 'Canva'];
 
+    pdFormatBadges.innerHTML = fmts.map(f => {
+        const fl = f.toLowerCase();
+        if (fl.includes('pdf')) {
+            return `<span class="pd-fmt-tag pd-fmt-pdf"><i class="bi bi-filetype-pdf"></i> PDF Alta Resolução</span>`;
+        } else if (fl.includes('canva')) {
+            return `<span class="pd-fmt-tag pd-fmt-canva"><i class="bi bi-pencil-square"></i> Canva Editável</span>`;
+        } else {
+            return `<span class="pd-fmt-tag"><i class="bi bi-file-earmark"></i> ${f}</span>`;
+        }
+    }).join('');
+}
+
+// ─── Gallery ────────────────────────────────────────
+const NO_IMG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%239B5DE5' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='rgba(255,255,255,0.4)' font-size='24' font-family='sans-serif'%3ESem Imagem%3C/text%3E%3C/svg%3E`;
+
+function buildGallery(product) {
+    const images = Array.isArray(product.images) && product.images.length
+        ? product.images
+        : (product.imageUrl ? [product.imageUrl] : (product.image ? [product.image] : []));
     const videos = Array.isArray(product.videos) ? product.videos : [];
-    const allMedia = [...images.map(img => ({ type: 'image', url: img })), ...videos.map(vid => ({ type: 'video', url: vid }))];
 
-    if (allMedia.length === 1 && allMedia[0].type === 'image') {
-        // Single image - no carousel needed
-        mediaGallery.innerHTML = `
-            <img src="${allMedia[0].url}" alt="${product.name}" 
-                 style="width: 100%; height: 500px; object-fit: cover; border-radius: 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);"
-                 onerror="this.src='https://via.placeholder.com/800x500/667eea/ffffff?text=Erro+ao+Carregar+Imagem'">
-        `;
-    } else {
-        // Multiple media - create carousel
-        const carouselId = `carousel-${product.id}`;
-        const indicators = allMedia.map((_, index) => 
-            `<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" ${index === 0 ? 'class="active" aria-current="true"' : ''} aria-label="Slide ${index + 1}"></button>`
-        ).join('');
+    const allMedia = [
+        ...images.map(u => ({ type: 'image', url: u })),
+        ...videos.map(u => ({ type: 'video', url: u }))
+    ];
+    if (!allMedia.length) allMedia.push({ type: 'image', url: NO_IMG });
 
-        const slides = allMedia.map((media, index) => {
-            const mediaContent = media.type === 'image'
-                ? `<img src="${media.url}" class="d-block w-100" alt="${product.name}" onerror="this.src='https://via.placeholder.com/800x500/667eea/ffffff?text=Erro+ao+Carregar+Imagem'">`
-                : `<iframe src="${getEmbedUrl(media.url)}" allowfullscreen></iframe>`;
+    let current = 0;
 
-            return `
-                <div class="carousel-item ${index === 0 ? 'active' : ''}">
-                    ${mediaContent}
-                </div>
-            `;
-        }).join('');
+    const mainWrap = document.createElement('div');
+    mainWrap.className = 'pd-main-img-wrap';
 
-        mediaGallery.innerHTML = `
-            <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                <div class="carousel-indicators">
-                    ${indicators}
-                </div>
-                <div class="carousel-inner">
-                    ${slides}
-                </div>
-                ${allMedia.length > 1 ? `
-                    <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                        <span class="visually-hidden">Anterior</span>
-                    </button>
-                    <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                        <span class="visually-hidden">Próximo</span>
-                    </button>
-                ` : ''}
-            </div>
-        `;
+    const mainEl = allMedia[0].type === 'video'
+        ? makeVideoEl(allMedia[0].url)
+        : makeImgEl(allMedia[0].url, product.name);
+    mainWrap.appendChild(mainEl);
+
+    // Nav arrows (only if multiple)
+    if (allMedia.length > 1) {
+        const prev = document.createElement('button');
+        prev.className = 'pd-gallery-nav pd-gallery-nav-prev';
+        prev.innerHTML = '<i class="bi bi-chevron-left"></i>';
+        prev.onclick = () => { current = (current - 1 + allMedia.length) % allMedia.length; update(); };
+
+        const next = document.createElement('button');
+        next.className = 'pd-gallery-nav pd-gallery-nav-next';
+        next.innerHTML = '<i class="bi bi-chevron-right"></i>';
+        next.onclick = () => { current = (current + 1) % allMedia.length; update(); };
+
+        mainWrap.appendChild(prev);
+        mainWrap.appendChild(next);
+    }
+
+    // Thumbnail strip
+    const thumbsWrap = document.createElement('div');
+    thumbsWrap.className = 'pd-thumbs';
+
+    allMedia.forEach((m, i) => {
+        const t = document.createElement('div');
+        t.className = 'pd-thumb' + (i === 0 ? ' active' : '');
+        if (m.type === 'image') {
+            const img = document.createElement('img');
+            img.src = m.url;
+            img.alt = '';
+            img.onerror = () => { img.onerror = null; img.src = NO_IMG; };
+            t.appendChild(img);
+        } else {
+            t.innerHTML = `<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;"><i class="bi bi-play-circle-fill" style="color:#fff;font-size:1.5rem;"></i></div>`;
+        }
+        t.onclick = () => { current = i; update(); };
+        thumbsWrap.appendChild(t);
+    });
+
+    mediaGallery.innerHTML = '';
+    mediaGallery.appendChild(mainWrap);
+    if (allMedia.length > 1) mediaGallery.appendChild(thumbsWrap);
+
+    function update() {
+        const media = allMedia[current];
+        const el = media.type === 'video'
+            ? makeVideoEl(media.url)
+            : makeImgEl(media.url, product.name);
+
+        // keep nav arrows
+        const prevBtn = mainWrap.querySelector('.pd-gallery-nav-prev');
+        const nextBtn = mainWrap.querySelector('.pd-gallery-nav-next');
+        mainWrap.innerHTML = '';
+        mainWrap.appendChild(el);
+        if (prevBtn) mainWrap.appendChild(prevBtn);
+        if (nextBtn) mainWrap.appendChild(nextBtn);
+
+        // update thumb highlights
+        thumbsWrap.querySelectorAll('.pd-thumb').forEach((t, i) =>
+            t.classList.toggle('active', i === current)
+        );
     }
 }
 
-// Convert video URL to embed format
+function makeImgEl(url, alt) {
+    const img = document.createElement('img');
+    img.src  = url;
+    img.alt  = alt || '';
+    img.onerror = () => { img.onerror = null; img.src = NO_IMG; };
+    return img;
+}
+
+function makeVideoEl(url) {
+    const iframe = document.createElement('iframe');
+    iframe.src = getEmbedUrl(url);
+    iframe.allowFullscreen = true;
+    iframe.allow = 'autoplay; encrypted-media';
+    return iframe;
+}
+
 function getEmbedUrl(url) {
-    // YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
-        const videoId = url.includes('youtu.be') 
+        const vid = url.includes('youtu.be')
             ? url.split('youtu.be/')[1]?.split('?')[0]
             : url.split('v=')[1]?.split('&')[0];
-        return `https://www.youtube.com/embed/${videoId}`;
+        return `https://www.youtube.com/embed/${vid}`;
     }
-    
-    // Vimeo
     if (url.includes('vimeo.com')) {
-        const videoId = url.split('vimeo.com/')[1]?.split('?')[0];
-        return `https://player.vimeo.com/video/${videoId}`;
+        const vid = url.split('vimeo.com/')[1]?.split('?')[0];
+        return `https://player.vimeo.com/video/${vid}`;
     }
-    
     return url;
 }
 
-// Format price
-function formatPrice(price) {
-    return parseFloat(price).toFixed(2).replace('.', ',');
-}
-
-// Add to cart function
+// ─── Cart ────────────────────────────────────────────
 function addToCart(product) {
     let cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    
-    const existingItem = cart.find(item => item.id === product.id);
-    if (existingItem) {
-        existingItem.quantity += 1;
+    const existing = cart.find(i => i.id === product.id);
+    if (existing) {
+        existing.quantity += 1;
     } else {
+        const imgArr = Array.isArray(product.images) && product.images.length ? product.images : [];
         cart.push({
             id: product.id,
             name: product.name,
             price: product.price,
-            image: Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : product.image,
+            image: imgArr[0] || product.imageUrl || product.image || '',
             quantity: 1
         });
     }
-    
     localStorage.setItem('cart', JSON.stringify(cart));
     updateCartCount();
-    
-    // Show feedback
-    showAddToCartFeedback();
+    showCartFeedback();
 }
 
-// Update cart count
+function buyNow(product) {
+    addToCart(product);
+    window.location.href = '/checkout.html';
+}
+
+// ─── Cart count ──────────────────────────────────────
 function updateCartCount() {
     const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    const count = cart.reduce((total, item) => total + item.quantity, 0);
-    const cartBadge = document.getElementById('cartCount');
-    if (cartBadge) {
-        cartBadge.textContent = count;
-    }
+    const count = cart.reduce((t, i) => t + i.quantity, 0);
+    const badge = document.getElementById('cartCount');
+    if (badge) badge.textContent = count;
 }
 
-// Show add to cart feedback
-function showAddToCartFeedback() {
-    const originalText = btnAddToCart.innerHTML;
-    btnAddToCart.innerHTML = '<i class="bi bi-check-circle"></i> Adicionado!';
-    btnAddToCart.style.background = '#28a745';
+// ─── Cart feedback ───────────────────────────────────
+function showCartFeedback() {
+    const orig = btnAddToCart.innerHTML;
+    btnAddToCart.innerHTML = '<i class="bi bi-check-circle-fill"></i> Adicionado!';
+    btnAddToCart.style.background = 'rgba(0,196,106,.12)';
+    btnAddToCart.style.borderColor = '#00c46a';
+    btnAddToCart.style.color = '#00a857';
     btnAddToCart.disabled = true;
-
     setTimeout(() => {
-        btnAddToCart.innerHTML = originalText;
+        btnAddToCart.innerHTML = orig;
         btnAddToCart.style.background = '';
+        btnAddToCart.style.borderColor = '';
+        btnAddToCart.style.color = '';
         btnAddToCart.disabled = false;
-    }, 2000);
+    }, 2200);
 }
 
-// Show not found
+// ─── Helpers ─────────────────────────────────────────
+function formatPrice(n) {
+    return parseFloat(n).toFixed(2).replace('.', ',');
+}
+
 function showNotFound() {
-    loading.style.display = 'none';
+    loading.style.display      = 'none';
     notFoundSection.style.display = 'block';
 }
 
-// Initialize
+// ─── Init ─────────────────────────────────────────────
 loadProductDetails();
 updateCartCount();
