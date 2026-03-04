@@ -195,7 +195,10 @@ async function handleSubmit(e) {
 
         localStorage.setItem('lastOrderId', data.orderId || '');
 
-        const dest = data.initPoint || data.sandboxInitPoint;
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const dest = isLocal
+            ? (data.sandboxInitPoint || data.initPoint)
+            : (data.initPoint || data.sandboxInitPoint);
         if (!dest) throw new Error('URL de pagamento não retornada');
         window.location.href = dest;
 
