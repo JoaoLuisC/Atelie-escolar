@@ -31,7 +31,11 @@ function adaptResponse(res) {
     end(data) {
       res.writeHead(statusCode);
       res.end(data || '');
-    }
+    },
+    redirect(url) {
+      res.writeHead(302, { Location: url });
+      res.end();
+    },
   };
   return adapted;
 }
@@ -43,7 +47,9 @@ async function handleApiRequest(reqPath, req, res) {
     return res.end(JSON.stringify({ error: 'API route not found' }));
   }
 
-  // Parse JSON body
+  // Parse query string
+  const urlObj = new URL(req.url, `http://localhost:${PORT}`);
+  req.query = Object.fromEntries(urlObj.searchParams.entries());
   let body = {};
   await new Promise(resolve => {
     let raw = '';

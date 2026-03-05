@@ -1,3 +1,4 @@
+const admin = require('firebase-admin');
 const { getFirestore } = require('../lib/firebase-admin');
 const { getPaymentInfo, validateWebhookSignature } = require('../lib/mercadopago-config');
 const { createDownloadToken } = require('../lib/firebase-admin');
@@ -65,7 +66,7 @@ module.exports = async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    // Se pagamento aprovado, criar tokens de download
+    // Se pagamento aprovado, criar tokens de download e registrar produtos do usuário
     if (payment.status === 'approved') {
       updateData.status = 'completed';
       updateData.completedAt = new Date().toISOString();
@@ -75,16 +76,40 @@ module.exports = async (req, res) => {
 
       // Criar um token para cada produto
       for (const item of orderData.items) {
-        const token = await createDownloadToken(orderId, item.id, 72); // 72 horas
+        const token = await createDownloadToken(orderId, item.id);
         downloadTokens.push({
           productId: item.id,
           productName: item.title,
           token,
-          expiresIn: '72 horas',
         });
       }
 
       updateData.downloadTokens = downloadTokens;
+
+      // Registrar produtos comprados na conta do usuário (por e-mail)
+      const customerEmail = orderData.customer?.email;
+      if (customerEmail) {
+        const productIds = orderData.items.map(item => item.id);
+        const productEntries = orderData.items.map(item => ({
+          productId: item.id,
+          productName: item.title,
+          purchasedAt: new Date().toISOString(),
+          orderId,
+        }));
+
+        const userProductsRef = db.collection('userProducts').doc(customerEmail);
+        await userProductsRef.set(
+          {
+            email: customerEmail,
+            productIds: admin.firestore.FieldValue.arrayUnion(...productIds),
+            purchases: admin.firestore.FieldValue.arrayUnion(...productEntries),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        console.log(`Produtos registrados para ${customerEmail}:`, productIds);
+      }
     } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
       updateData.status = 'failed';
     }

@@ -26,22 +26,22 @@ function saveCart(cart) {
 function addToCart(product) {
   const cart = getCart();
   
-  // Verificar se produto já está no carrinho
+  // Verificar se produto já está no carrinho (produto digital = 1 unidade apenas)
   const existingIndex = cart.findIndex(item => item.id === product.id);
   
   if (existingIndex >= 0) {
-    // Incrementar quantidade
-    cart[existingIndex].quantity = (cart[existingIndex].quantity || 1) + 1;
-  } else {
-    // Adicionar novo produto
-    cart.push({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.image,
-      quantity: 1
-    });
+    showNotification('Este produto já está no seu carrinho!', 'info');
+    return;
   }
+
+  // Adicionar novo produto com quantidade fixa 1
+  cart.push({
+    id: product.id,
+    name: product.name,
+    price: product.price,
+    image: product.image,
+    quantity: 1
+  });
   
   saveCart(cart);
   

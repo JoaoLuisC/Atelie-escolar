@@ -2137,6 +2137,41 @@ html {
   color: var(--gray); text-align: center;
 }
 
+/* ── Faixa "Comprado" no card ── */
+.pc-badge-purchased {
+  position: absolute; top: 10px; left: 10px;
+  background: linear-gradient(135deg, #1a7a4a 0%, #22a05e 100%);
+  color: #fff;
+  padding: .28rem .7rem;
+  border-radius: 20px;
+  font-size: .68rem; font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  z-index: 2;
+  display: flex; align-items: center; gap: .3rem;
+  box-shadow: 0 2px 8px rgba(34,160,94,.4);
+}
+.pc-card-purchased {
+  outline: 2px solid rgba(34,160,94,.35);
+}
+.pc-card-purchased .pc-img-wrap::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(34,160,94,.06);
+  pointer-events: none;
+}
+.pc-btn-purchased {
+  flex: 1;
+  background: linear-gradient(135deg, #1a7a4a 0%, #22a05e 100%);
+  color: #fff; border: none;
+  border-radius: 8px; padding: .45rem .5rem;
+  font-size: .72rem; font-weight: 700;
+  cursor: pointer; transition: opacity .2s, transform .15s;
+  display: flex; align-items: center; justify-content: center; gap: .3rem;
+  text-decoration: none; white-space: nowrap;
+}
+.pc-btn-purchased:hover { opacity: .88; color: #fff; transform: translateY(-1px); }
+
 /* ── Responsivo ── */
 @media (max-width: 1200px) {
   .products-grid-new { grid-template-columns: repeat(4, 1fr); }

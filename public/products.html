@@ -141,7 +141,8 @@
   <!-- Firebase -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getFirestore, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { getFirestore, collection, getDocs, query, where, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
     const firebaseConfig = {
       apiKey: "AIzaSyCqbiSJXD02F0q9wFqrDAEKJtd6VHBjAOk",
       authDomain: "atelie-da-escola.firebaseapp.com",
@@ -152,11 +153,46 @@
     };
     const app = initializeApp(firebaseConfig);
     const db  = getFirestore(app);
+    const auth = getAuth(app);
     window.firebaseDb         = db;
     window.firebaseQuery      = query;
     window.firebaseCollection = collection;
     window.firebaseGetDocs    = getDocs;
     window.firebaseWhere      = where;
+
+    // Carregar produtos comprados pelo usuário logado
+    // Guard: lê o Firestore apenas UMA vez por sessão de página
+    // (onAuthStateChanged pode disparar várias vezes: login inicial, renovação de token, etc.)
+    window.purchasedProductIds = new Set();
+    let _userProductsLoaded = false;
+
+    onAuthStateChanged(auth, async user => {
+      // Usuário deslogou → limpa badges sem nova leitura
+      if (!user) {
+        if (_userProductsLoaded) {
+          window.purchasedProductIds = new Set();
+          _userProductsLoaded = false;
+          if (typeof renderProducts === 'function') renderProducts();
+        }
+        return;
+      }
+
+      // Já carregou para este usuário nesta sessão → ignora
+      if (_userProductsLoaded) return;
+      _userProductsLoaded = true;
+
+      try {
+        const snap = await getDoc(doc(db, 'userProducts', user.email));
+        if (snap.exists()) {
+          const ids = snap.data().productIds || [];
+          window.purchasedProductIds = new Set(ids);
+          // Só re-renderiza se os produtos já foram carregados (evita render vazio)
+          if (typeof renderProducts === 'function' && typeof allProducts !== 'undefined' && allProducts.length > 0) {
+            renderProducts();
+          }
+        }
+      } catch (e) { console.warn('userProducts:', e.message); }
+    });
   </script>
 
   <script src="/js/components.js"></script>

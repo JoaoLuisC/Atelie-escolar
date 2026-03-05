@@ -7,7 +7,7 @@ import {
     getAuth, onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import {
-    getFirestore, collection, query, where, orderBy, getDocs
+    getFirestore, collection, query, where, getDocs
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -37,13 +37,25 @@ function formatDate(ts) {
 }
 
 /* ── Auth guard ── */
-onAuthStateChanged(auth, async user => {
+// authStateReady() espera o Firebase confirmar o estado REAL antes de agir,
+// evitando redirect para login quando o usuário ainda está sendo restaurado
+// (situação comum após redirect de pagamento externo).
+let _downloadsInitialized = false;
+
+async function initDownloads() {
+    // Aguarda Firebase confirmar estado de autenticação inicial
+    await auth.authStateReady();
+
+    const user = auth.currentUser;
     document.getElementById('loading-auth').style.display = 'none';
 
     if (!user) {
-        window.location.href = `/login.html?redirect=${encodeURIComponent('/downloads.html')}`;
+        window.location.href = `/login.html?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
         return;
     }
+
+    if (_downloadsInitialized) return;
+    _downloadsInitialized = true;
 
     /* User chip */
     const chipWrap = document.getElementById('user-chip-wrap');
@@ -67,7 +79,14 @@ onAuthStateChanged(auth, async user => {
 
     /* All orders for this user */
     await loadUserOrders(user.uid, user.email);
-});
+
+    // Mantém listener para logout em tempo real
+    onAuthStateChanged(auth, u => {
+        if (!u) window.location.href = `/login.html?redirect=${encodeURIComponent('/downloads.html')}`;
+    });
+}
+
+initDownloads();
 
 /* ── Single order (post-checkout) ── */
 async function checkSingleOrder(orderId) {
@@ -81,6 +100,15 @@ async function checkSingleOrder(orderId) {
             if (data.order.paymentStatus === 'approved') {
                 localStorage.removeItem('lastOrderId');
                 clearCart();
+
+                // Mostrar banner de sucesso se vindo do checkout
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('success') === '1') {
+                    showSuccessBanner(data.order);
+                    // Limpar param da URL sem recarregar
+                    const cleanUrl = `${window.location.pathname}?order=${orderId}`;
+                    history.replaceState(null, '', cleanUrl);
+                }
             }
         } else {
             wrap.innerHTML = '';
@@ -88,6 +116,23 @@ async function checkSingleOrder(orderId) {
     } catch {
         wrap.innerHTML = '';
     }
+}
+
+function showSuccessBanner(order) {
+    const banner = document.createElement('div');
+    banner.id = 'success-banner';
+    banner.innerHTML = `
+        <div class="success-banner-icon">🎉</div>
+        <div class="success-banner-text">
+            <strong>Pagamento aprovado!</strong>
+            Seus produtos estão prontos para download abaixo.
+        </div>
+        <button class="success-banner-close" onclick="this.closest('#success-banner').remove()" title="Fechar">
+            <i class="bi bi-x-lg"></i>
+        </button>`;
+    document.getElementById('order-status-wrap').insertAdjacentElement('beforebegin', banner);
+    // Auto-fechar após 8s
+    setTimeout(() => { if (banner.parentNode) banner.remove(); }, 8000);
 }
 
 function renderSingleOrderCard(order) {
@@ -147,20 +192,23 @@ async function loadUserOrders(uid, email) {
         try {
             const q = query(
                 collection(db, 'orders'),
-                where('userId', '==', uid),
-                orderBy('createdAt', 'desc')
+                where('userId', '==', uid)
             );
             snap = await getDocs(q);
         } catch {
             const q = query(
                 collection(db, 'orders'),
-                where('customerEmail', '==', email),
-                orderBy('createdAt', 'desc')
+                where('customerEmail', '==', email)
             );
             snap = await getDocs(q);
         }
 
-        if (snap.empty) {
+        // Ordenar por data decrescente no cliente (evita necessidade de índice composto)
+        const docs = [];
+        snap.forEach(d => docs.push({ ...d.data(), id: d.id }));
+        docs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+        if (docs.length === 0) {
             wrap.innerHTML = `
             <div class="empty-dl">
                 <i class="bi bi-bag-x d-block"></i>
@@ -176,10 +224,7 @@ async function loadUserOrders(uid, email) {
         let html = `<h5 style="color:#7A3DC0;font-weight:700;margin-bottom:16px;">
             <i class="bi bi-clock-history"></i> Histórico de Compras
         </h5>`;
-        snap.forEach(docSnap => {
-            const order = { ...docSnap.data(), id: docSnap.id };
-            html += renderHistoryCard(order);
-        });
+        docs.forEach(order => { html += renderHistoryCard(order); });
         wrap.innerHTML = html;
 
     } catch (err) {

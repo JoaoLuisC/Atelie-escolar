@@ -1,4 +1,4 @@
-const { validateDownloadToken, markTokenAsUsed, getFirestore } = require('../lib/firebase-admin');
+const { validateDownloadToken, getFirestore } = require('../lib/firebase-admin');
 
 /**
  * API: Download de arquivo
@@ -41,9 +41,6 @@ module.exports = async (req, res) => {
     if (!product.downloadUrl) {
       return res.status(404).json({ error: 'Link de download não encontrado' });
     }
-
-    // Marcar token como usado
-    await markTokenAsUsed(token);
 
     // Registrar log de download
     await db.collection('downloadLogs').add({

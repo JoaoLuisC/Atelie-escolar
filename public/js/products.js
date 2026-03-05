@@ -96,6 +96,12 @@ async function loadCategories() {
 
 /* ══════ carrega produtos do Firestore ══════ */
 async function loadProducts() {
+  // Guard: se os produtos já foram carregados nesta sessão, apenas re-renderiza
+  if (allProducts.length > 0) {
+    renderProducts();
+    return;
+  }
+
   try {
     await waitForFirebase();
 
@@ -242,21 +248,30 @@ function gdrive(url) {
 
 /* ══════ constrói card ══════ */
 function buildCard(p) {
-  const price  = typeof p.price === 'number' ? 'R$ ' + p.price.toFixed(2).replace('.', ',') : '—';
-  const badge  = BADGES[p.category];
-  const rawImg = (Array.isArray(p.images) && p.images.length ? p.images[0] : '') || p.imageUrl || p.image || '';
-  const img    = gdrive(rawImg);
-  const imgTag = img
+  const price     = typeof p.price === 'number' ? 'R$ ' + p.price.toFixed(2).replace('.', ',') : '—';
+  const badge     = BADGES[p.category];
+  const rawImg    = (Array.isArray(p.images) && p.images.length ? p.images[0] : '') || p.imageUrl || p.image || '';
+  const img       = gdrive(rawImg);
+  const purchased = (window.purchasedProductIds || new Set()).has(p.id);
+  const imgTag    = img
     ? `<img src="${img}" alt="${p.name}" class="pc-img" loading="lazy" onerror="this.onerror=null;this.style.visibility='hidden'">`
     : `<div class="pc-img-placeholder"><i class="bi bi-image" style="font-size:2.5rem;color:rgba(255,255,255,.3);"></i></div>`;
 
+  const cartBtn = purchased
+    ? `<a href="/downloads.html" class="pc-btn-purchased">
+         <i class="bi bi-check-circle-fill"></i> Já Comprado — Ver Downloads
+       </a>`
+    : `<button class="pc-btn-cart" onclick="handleAddToCart('${p.id}','${encodeURIComponent(p.name)}',${p.price || 0},'${img}')">
+         <i class="bi bi-cart-plus"></i> Adicionar ao Carrinho
+       </button>`;
+
   return `
-    <div class="pc-card">
+    <div class="pc-card${purchased ? ' pc-card-purchased' : ''}">
 
       <!-- imagem -->
       <a href="/product-details.html?id=${p.id}" class="pc-img-wrap">
         ${imgTag}
-        ${badge ? `<span class="pc-badge ${badge.cls}">${badge.label}</span>` : ''}
+        ${purchased ? `<span class="pc-badge-purchased"><i class="bi bi-check-circle-fill"></i> Comprado</span>` : (badge ? `<span class="pc-badge ${badge.cls}">${badge.label}</span>` : '')}
         <div class="pc-img-hover">Ver detalhes →</div>
       </a>
 
@@ -277,9 +292,7 @@ function buildCard(p) {
         </div>
 
         <div class="pc-actions">
-          <button class="pc-btn-cart" onclick="handleAddToCart('${p.id}','${encodeURIComponent(p.name)}',${p.price || 0},'${img}')">
-            <i class="bi bi-cart-plus"></i> Adicionar ao Carrinho
-          </button>
+          ${cartBtn}
           <a href="/product-details.html?id=${p.id}" class="pc-btn-details">Detalhes</a>
         </div>
       </div>

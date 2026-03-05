@@ -2,23 +2,25 @@
   "name": "atelie-da-escola",
   "version": "1.0.0",
   "description": "Plataforma de vendas de materiais educativos - Ateliê da Escola",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "dev": "node server.js",
-    "build": "echo 'Build completed'",
     "start": "node server.js",
     "setup-db": "node scripts/setup-database.js",
     "add-product": "node scripts/add-product.js",
     "create-admin": "node scripts/create-admin-user.js"
   },
-  "keywords": ["banners", "e-commerce", "mercado-pago"],
+  "keywords": [
+    "banners",
+    "e-commerce",
+    "mercado-pago"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "dotenv": "^16.3.1",
     "firebase-admin": "^12.0.0",
-    "mercadopago": "^2.0.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
+    "mercadopago": "^2.0.0"
   },
   "devDependencies": {
     "vercel": "^33.0.0"
