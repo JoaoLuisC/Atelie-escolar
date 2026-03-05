@@ -29,9 +29,37 @@ const db   = getFirestore(app);
 let currentUser       = null;
 let products          = [];
 let categories        = [];
+let allOrders         = [];
+let ordersLoaded      = false;
 let editingProductId  = null;
 let editingCategoryId = null;
 let deleteTarget      = null; // { type: 'product'|'category', id, name }
+
+/* ── MercadoPago fee rates ── */
+const MP_FEES = {
+    pix:         { pct: 0.0099, fixed: 0,    label: 'PIX'                      },
+    bolbradesco: { pct: 0,      fixed: 3.49, label: 'Boleto'                   },
+    visa:        { pct: 0.0379, fixed: 0,    label: 'Visa Cr\u00e9dito'        },
+    master:      { pct: 0.0379, fixed: 0,    label: 'Mastercard Cr\u00e9dito'  },
+    amex:        { pct: 0.0469, fixed: 0,    label: 'Amex'                     },
+    elo:         { pct: 0.0379, fixed: 0,    label: 'Elo Cr\u00e9dito'         },
+    hipercard:   { pct: 0.0379, fixed: 0,    label: 'Hipercard'                },
+    debvisa:     { pct: 0.0199, fixed: 0,    label: 'Visa D\u00e9bito'         },
+    debmaster:   { pct: 0.0199, fixed: 0,    label: 'Mastercard D\u00e9bito'   },
+    debelo:      { pct: 0.0199, fixed: 0,    label: 'Elo D\u00e9bito'          },
+};
+
+function calcOrderFee(order) {
+    const gross = order.totalAmount || 0;
+    const pm    = (order.mercadoPagoData?.paymentInfo?.paymentMethod || '').toLowerCase();
+    const fee   = MP_FEES[pm];
+    if (!fee) {
+        const defaultPct = 0.0379; // crédito como fallback
+        return { gross, fee: gross * defaultPct, net: gross * (1 - defaultPct) };
+    }
+    const feeAmt = gross * fee.pct + fee.fixed;
+    return { gross, fee: feeAmt, net: gross - feeAmt };
+}
 
 /* ─── elementos ─── */
 const userEmailEl      = document.getElementById('user-email');
@@ -80,27 +108,65 @@ overlayEl?.addEventListener('click', closeSidebar);
 
 /* Nav item clicks */
 const PAGE_TITLES = {
-    dashboard: 'Dashboard',
-    produtos:  'Produtos',
-    categorias:'Categorias',
-    usuarios:  'Usu\u00e1rios',
-    vitrine:   'Vitrine da P\u00e1gina Inicial',
-    seguranca: 'Seguran\u00e7a',
+    dashboard:      'Dashboard',
+    produtos:       'Todos os Produtos',
+    categorias:     'Categorias',
+    usuarios:       'Usu\u00e1rios',
+    pedidos:        'Pedidos',
+    vitrine:        'Vitrine',
+    seguranca:      'Seguran\u00e7a',
+    faturamento:    'Faturamento',
+    'prod-config':  'Configura\u00e7\u00e3o de Produtos',
+    'prod-saida':   'Sa\u00edda \u0026 Desempenho',
+    'comparativo':  'Comparativo de Per\u00edodos',
 };
-document.querySelectorAll('.adm-nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-        document.querySelectorAll('.adm-nav-item').forEach(i => i.classList.remove('active'));
-        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-        item.classList.add('active');
-        const tab = item.dataset.tab;
-        document.getElementById(`tab-${tab}`)?.classList.add('active');
-        const titleEl = document.getElementById('adm-page-title');
-        if (titleEl) titleEl.textContent = PAGE_TITLES[tab] || tab;
-        if (tab === 'dashboard') loadDashboard();
-        if (tab === 'usuarios')  loadUsers();
-        if (tab === 'vitrine')   loadVitrine();
-        if (tab === 'seguranca') loadSeguranca();
-        closeSidebar();
+
+function activateTab(tab) {
+    document.querySelectorAll('.adm-nav-item, .adm-nav-sub-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+    const navEl = document.querySelector(`[data-tab="${tab}"]`);
+    if (navEl) navEl.classList.add('active');
+
+    // If it's a sub-item, keep the parent group open
+    if (navEl?.classList.contains('adm-nav-sub-item')) {
+        const sub = navEl.closest('.adm-nav-sub');
+        if (sub) {
+            sub.classList.add('open');
+            const chev = sub.previousElementSibling?.querySelector('.adm-grp-chevron');
+            if (chev) chev.classList.add('open');
+        }
+    }
+
+    document.getElementById(`tab-${tab}`)?.classList.add('active');
+    const titleEl = document.getElementById('adm-page-title');
+    if (titleEl) titleEl.textContent = PAGE_TITLES[tab] || tab;
+
+    if (tab === 'dashboard')   loadDashboard();
+    if (tab === 'usuarios')    loadUsers();
+    if (tab === 'pedidos')     loadOrders();
+    if (tab === 'vitrine')     loadVitrine();
+    if (tab === 'seguranca')   loadSeguranca();
+    if (tab === 'faturamento') loadFaturamento();
+    if (tab === 'prod-saida')   loadProdSaida();
+    if (tab === 'prod-config')  loadProdConfig();
+    if (tab === 'comparativo')  loadComparativo();
+
+    closeSidebar();
+}
+
+document.querySelectorAll('.adm-nav-item, .adm-nav-sub-item').forEach(item => {
+    item.addEventListener('click', () => activateTab(item.dataset.tab));
+});
+
+// Group head toggles sub-menu
+document.querySelectorAll('.adm-nav-group-head').forEach(head => {
+    head.addEventListener('click', () => {
+        const group = head.dataset.group;
+        const sub   = document.getElementById(`nav-sub-${group}`);
+        const chev  = head.querySelector('.adm-grp-chevron');
+        if (sub)  sub.classList.toggle('open');
+        if (chev) chev.classList.toggle('open');
     });
 });
 
@@ -408,31 +474,33 @@ function renderCategories() {
         return;
     }
     categoriesList.innerHTML = `
-        <div class="cat-admin-table">
-            <div class="cat-table-header">
-                <span>Categoria</span>
-                <span>Cor</span>
-                <span>Ordem</span>
-                <span>Destaque</span>
-                <span>Badge</span>
-                <span>Ações</span>
-            </div>
-            ${categories.map(cat => `
-            <div class="cat-table-row">
-                <span class="cat-name-cell">
-                    <span class="color-dot" style="background:${cat.color || '#9B5DE5'};display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:8px;"></span>
-                    ${cat.name}
-                </span>
-                <span><span class="color-dot" style="background:${cat.color || '#9B5DE5'};"></span></span>
-                <span>${cat.order ?? 0}</span>
-                <span>${cat.featured ? '⭐ Sim' : '—'}</span>
-                <span>${cat.badgeLabel || '—'}</span>
-                <span class="cat-actions">
-                    <button class="btn-edit" onclick="editCategory('${cat.id}')">✏️ Editar</button>
-                    <button class="btn-delete" onclick="confirmDelete('category','${cat.id}','${cat.name.replace(/'/g,"\\'")}')">🗑️ Excluir</button>
-                </span>
-            </div>`).join('')}
-        </div>`;
+    <div class="dash-card" style="margin-top:0;">
+        <div style="overflow-x:auto;">
+        <table class="orders-table" style="width:100%;">
+            <thead><tr>
+                <th>Categoria</th>
+                <th>Cor</th>
+                <th>Ordem</th>
+                <th>Destaque</th>
+                <th>Badge</th>
+                <th>A&ccedil;&otilde;es</th>
+            </tr></thead>
+            <tbody>
+            ${categories.map(cat => `<tr>
+                <td style="font-weight:600;">${cat.name}</td>
+                <td><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${cat.color || '#9B5DE5'};border:2px solid #e0e4ea;"></span></td>
+                <td>${cat.order ?? 0}</td>
+                <td>${cat.featured ? 'Sim' : '—'}</td>
+                <td>${cat.badgeLabel || '—'}</td>
+                <td class="pc-actions-cell">
+                    <button class="pc-action-btn" onclick="editCategory('${cat.id}')">Editar</button>
+                    <button class="pc-action-btn pc-btn-del" onclick="confirmDelete('category','${cat.id}','${cat.name.replaceAll("'","\\'")}')">Excluir</button>
+                </td>
+            </tr>`).join('')}
+            </tbody>
+        </table>
+        </div>
+    </div>`;
 }
 
 /* ─── abrir modal adicionar categoria ─── */
@@ -534,28 +602,51 @@ let allUsers = [];
 let usersLoaded = false;
 
 async function loadUsers() {
-    if (usersLoaded) return;
+    if (usersLoaded && allUsers.length > 0) return;
     const container = document.getElementById('users-table-container');
     const countEl   = document.getElementById('users-count');
     container.innerHTML = '<div class="loading-state"><p>Carregando usuários…</p></div>';
     try {
-        const snap = await getDocs(query(collection(db, 'users'), orderBy('createdAt', 'desc')));
-        allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        usersLoaded = true;
-        renderUsers(allUsers);
-        countEl.textContent = `${allUsers.length} usuário${allUsers.length !== 1 ? 's' : ''}`;
-    } catch (err) {
-        // fallback: sem orderBy
-        try {
-            const snap2 = await getDocs(collection(db, 'users'));
-            allUsers = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
-            allUsers.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
-            usersLoaded = true;
-            renderUsers(allUsers);
-            countEl.textContent = `${allUsers.length} usuário${allUsers.length !== 1 ? 's' : ''}`;
-        } catch (err2) {
-            container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar usuários</h3><p>${err2.message}</p></div>`;
+        // Load users and orders in parallel to cross-reference real purchase data
+        const [usersSnap, ordersSnap] = await Promise.all([
+            getDocs(collection(db, 'users')),
+            getDocs(collection(db, 'orders')).catch(() => null),
+        ]);
+
+        allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        allUsers.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+
+        // Build email → purchase stats from approved orders
+        const emailStats = {};
+        if (ordersSnap) {
+            ordersSnap.docs.forEach(d => {
+                const o = d.data();
+                if (o.paymentStatus !== 'approved') return;
+                const email = (o.customer?.email || o.customerEmail || '').toLowerCase();
+                if (!email) return;
+                if (!emailStats[email]) emailStats[email] = { qty: 0, total: 0, lastDate: null };
+                emailStats[email].qty++;
+                emailStats[email].total += o.totalAmount || 0;
+                const dt = new Date(o.completedAt || o.createdAt || 0);
+                if (!emailStats[email].lastDate || dt > emailStats[email].lastDate) {
+                    emailStats[email].lastDate = dt;
+                }
+            });
         }
+
+        // Attach stats to users
+        allUsers = allUsers.map(u => {
+            const stats = emailStats[(u.email || '').toLowerCase()] || { qty: 0, total: 0, lastDate: null };
+            return { ...u, _purchases: stats.qty, _totalSpent: stats.total, _lastPurchase: stats.lastDate };
+        });
+
+        usersLoaded = true;
+        // Exclui contas admin da lista de clientes
+        const customers = allUsers.filter(u => u.role !== 'admin' && u.email !== 'admin@ateliedaescola.com');
+        renderUsers(customers);
+        countEl.textContent = `${customers.length} usuário${customers.length !== 1 ? 's' : ''}`;
+    } catch (err) {
+        container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar usuários</h3><p>${err.message}</p></div>`;
     }
 }
 
@@ -574,6 +665,8 @@ function renderUsers(users) {
                 <th>E-mail</th>
                 <th>Provedor</th>
                 <th>Compras</th>
+                <th>Total Gasto</th>
+                <th>Última Compra</th>
                 <th>Cadastro</th>
             </tr>
         </thead>
@@ -590,11 +683,18 @@ function renderUsers(users) {
                     ? (u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt))
                         .toLocaleDateString('pt-BR')
                     : '—';
+                const lastPurchase = u._lastPurchase
+                    ? u._lastPurchase.toLocaleDateString('pt-BR')
+                    : '—';
                 return `<tr>
                     <td><div class="user-name-cell">${avatar}<span>${u.name || '—'}</span></div></td>
                     <td style="font-size:13px;">${u.email}</td>
                     <td>${provider}</td>
-                    <td><span class="purchases-badge">${u.purchases ?? 0}</span></td>
+                    <td><span class="purchases-badge${u._purchases > 0 ? ' has-purchases' : ''}">${u._purchases}</span></td>
+                    <td style="font-weight:${u._totalSpent > 0 ? '700' : '400'};color:${u._totalSpent > 0 ? '#1B263B' : '#aab0ba'};white-space:nowrap;">
+                        ${u._totalSpent > 0 ? `R$&nbsp;${fmtMoney(u._totalSpent)}` : '—'}
+                    </td>
+                    <td style="font-size:12px;color:#778DA9;">${lastPurchase}</td>
                     <td style="font-size:13px;">${date}</td>
                 </tr>`;
             }).join('')}
@@ -607,12 +707,888 @@ function renderUsers(users) {
 document.getElementById('user-search')?.addEventListener('input', function() {
     const q = this.value.toLowerCase().trim();
     const countEl = document.getElementById('users-count');
+    const customers = allUsers.filter(u => u.role !== 'admin' && u.email !== 'admin@ateliedaescola.com');
     const filtered = q
-        ? allUsers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q))
-        : allUsers;
+        ? customers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q))
+        : customers;
     renderUsers(filtered);
     countEl.textContent = `${filtered.length} usuário${filtered.length !== 1 ? 's' : ''}${q ? ' (filtrado)' : ''}`;
 });
+
+/* ═══════════════════════════════════════
+   PEDIDOS
+═══════════════════════════════════════ */
+let allOrdersFull = [];
+
+const ORDER_STATUS = {
+    approved:  { label: 'Aprovado',  cls: 'st-approved' },
+    pending:   { label: 'Pendente',  cls: 'st-pending'  },
+    rejected:  { label: 'Recusado',  cls: 'st-rejected' },
+    cancelled: { label: 'Cancelado', cls: 'st-rejected' },
+    failed:    { label: 'Falhou',    cls: 'st-rejected' },
+};
+
+async function loadOrders() {
+    if (ordersLoaded) return;
+    const container = document.getElementById('orders-full-table-container');
+    const countEl   = document.getElementById('orders-count');
+    container.innerHTML = '<div class="loading-state"><p>Carregando pedidos…</p></div>';
+    try {
+        const snap = await getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')));
+        allOrdersFull = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        ordersLoaded = true;
+        renderOrdersTable(allOrdersFull);
+        countEl.textContent = `${allOrdersFull.length} pedido${allOrdersFull.length !== 1 ? 's' : ''}`;
+    } catch (err) {
+        try {
+            const snap2 = await getDocs(collection(db, 'orders'));
+            allOrdersFull = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
+            allOrdersFull.sort((a, b) => {
+                const da = a.createdAt ? new Date(a.createdAt) : 0;
+                const db_ = b.createdAt ? new Date(b.createdAt) : 0;
+                return db_ - da;
+            });
+            ordersLoaded = true;
+            renderOrdersTable(allOrdersFull);
+            countEl.textContent = `${allOrdersFull.length} pedido${allOrdersFull.length !== 1 ? 's' : ''}`;
+        } catch (err2) {
+            container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar pedidos</h3><p>${err2.message}</p></div>`;
+        }
+    }
+}
+
+function renderOrdersTable(orders) {
+    const container = document.getElementById('orders-full-table-container');
+    if (!orders.length) {
+        container.innerHTML = '<div class="empty-state"><h3>Nenhum pedido encontrado</h3></div>';
+        return;
+    }
+    container.innerHTML = `
+    <div style="overflow-x:auto;">
+    <table class="orders-table" style="width:100%;">
+        <thead>
+            <tr>
+                <th>E-mail</th>
+                <th style="text-align:center;">Itens</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Data</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${orders.map(o => {
+                const st    = ORDER_STATUS[o.paymentStatus] || { label: o.paymentStatus || '—', cls: 'st-pending' };
+                const email = o.customer?.email || o.customerEmail || '—';
+                const itemCount = Array.isArray(o.items) ? o.items.reduce((s, it) => s + (it.quantity || 1), 0) : 0;
+                const date  = o.createdAt
+                    ? new Date(o.createdAt).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' })
+                    : '—';
+                return `<tr>
+                    <td class="order-email-cell">${email}</td>
+                    <td style="text-align:center;font-size:13px;color:#415A77;font-weight:600;">${itemCount || '—'}</td>
+                    <td style="font-weight:700;color:#1B263B;white-space:nowrap;">R$&nbsp;${fmtMoney(o.totalAmount)}</td>
+                    <td><span class="order-status ${st.cls}">${st.label}</span></td>
+                    <td style="white-space:nowrap;font-size:12px;color:#778DA9;">${date}</td>
+                    <td><button class="pc-action-btn" onclick="window.showOrderDetail('${o.id}')"><i class="bi bi-eye"></i> Detalhar</button></td>
+                </tr>`;
+            }).join('')}
+        </tbody>
+    </table>
+    </div>`;
+}
+
+/* ── Detalhar pedido ── */
+const orderDetailModal = document.getElementById('order-detail-modal');
+document.getElementById('order-detail-close')?.addEventListener('click', () => orderDetailModal?.classList.remove('show'));
+orderDetailModal?.addEventListener('click', e => { if (e.target === orderDetailModal) orderDetailModal.classList.remove('show'); });
+
+window.showOrderDetail = function(id) {
+    const o = allOrdersFull.find(x => x.id === id);
+    if (!o) return;
+    const st    = ORDER_STATUS[o.paymentStatus] || { label: o.paymentStatus || '\u2014', cls: 'st-pending' };
+    const name  = o.customer?.name  || o.customerName  || '\u2014';
+    const email = o.customer?.email || o.customerEmail || '\u2014';
+    const cpf   = o.customer?.cpf   || o.customerCpf   || null;
+    const phone = o.customer?.phone || o.customerPhone || null;
+    const date  = o.createdAt ? new Date(o.createdAt).toLocaleString('pt-BR') : '\u2014';
+    const items = Array.isArray(o.items) ? o.items : [];
+    const fullId = o.id.toUpperCase();
+
+    document.getElementById('order-detail-body').innerHTML = `
+    <div class="od-grid">
+        <div class="od-section">
+            <h4>Informa\u00e7\u00f5es do Pedido</h4>
+            <div class="od-field"><span>ID</span><code class="order-id">#${fullId}</code></div>
+            <div class="od-field"><span>Status</span><span class="order-status ${st.cls}">${st.label}</span></div>
+            <div class="od-field"><span>Data</span><span>${date}</span></div>
+            <div class="od-field"><span>Total</span><strong>R$\u00a0${fmtMoney(o.totalAmount)}</strong></div>
+            ${o.paymentMethod ? `<div class="od-field"><span>Pagamento</span><span>${o.paymentMethod}</span></div>` : ''}
+            ${o.mercadopagoId ? `<div class="od-field"><span>MP ID</span><span style="font-size:11px;">${o.mercadopagoId}</span></div>` : ''}
+        </div>
+        <div class="od-section">
+            <h4>Cliente</h4>
+            <div class="od-field"><span>Nome</span><span>${name}</span></div>
+            <div class="od-field"><span>E-mail</span><span>${email}</span></div>
+            ${cpf   ? `<div class="od-field"><span>CPF</span><span>${cpf}</span></div>`   : ''}
+            ${phone ? `<div class="od-field"><span>Telefone</span><span>${phone}</span></div>` : ''}
+        </div>
+    </div>
+    <div class="od-section" style="margin-top:18px;">
+        <h4>Produtos Comprados</h4>
+        ${items.length ? `
+        <table class="orders-table" style="width:100%;margin-top:8px;">
+            <thead><tr><th>Produto</th><th>Qtd</th><th>Pre\u00e7o unit.</th><th>Subtotal</th></tr></thead>
+            <tbody>
+                ${items.map(it => `<tr>
+                    <td style="font-weight:600;">${it.title || it.name || it.id || '\u2014'}</td>
+                    <td>${it.quantity || 1}</td>
+                    <td>R$\u00a0${fmtMoney(it.price || 0)}</td>
+                    <td style="font-weight:700;">R$\u00a0${fmtMoney((it.price || 0) * (it.quantity || 1))}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>` : '<p style="color:#aab0ba;font-size:13px;margin-top:8px;">Sem itens registrados</p>'}
+    </div>`;
+    orderDetailModal.classList.add('show');
+};
+
+/* ── Filtros de pedidos ── */
+function applyOrderFilters() {
+    const st      = (document.getElementById('orders-filter-status')?.value || '');
+    const countEl = document.getElementById('orders-count');
+    const filtered = st ? allOrdersFull.filter(o => o.paymentStatus === st) : allOrdersFull;
+    renderOrdersTable(filtered);
+    countEl.textContent = `${filtered.length} pedido${filtered.length !== 1 ? 's' : ''}${st ? ' (filtrado)' : ''}`;
+}
+document.getElementById('orders-filter-status')?.addEventListener('change', applyOrderFilters);
+
+/* ═══════════════════════════════════════
+   FATURAMENTO
+═══════════════════════════════════════ */
+let fatPeriod  = 'month';
+let fatOrders  = [];
+let fatLoaded  = false;
+
+async function loadFaturamento() {
+    const panel = document.getElementById('tab-faturamento');
+    if (!panel) return;
+    panel.innerHTML = `<div class="loading-state"><p>Carregando faturamento…</p></div>`;
+    try {
+        const snap = await getDocs(collection(db, 'orders'));
+        fatOrders  = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .filter(o => o.paymentStatus === 'approved');
+        fatLoaded  = true;
+        renderFaturamento(fatPeriod);
+    } catch (err) {
+        panel.innerHTML = `<div class="empty-state"><h3>Erro ao carregar</h3><p>${err.message}</p></div>`;
+    }
+}
+
+function renderFaturamento(period) {
+    fatPeriod = period;
+    const panel = document.getElementById('tab-faturamento');
+    if (!panel) return;
+
+    const now = new Date();
+    let orders  = fatOrders;
+    let buckets = {};
+    let bucketLabel = '';
+
+    if (period === 'week') {
+        const cutoff = new Date(now);
+        cutoff.setDate(now.getDate() - 6);
+        cutoff.setHours(0, 0, 0, 0);
+        orders = fatOrders.filter(o => new Date(o.completedAt || o.createdAt) >= cutoff);
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(now);
+            d.setDate(now.getDate() - i);
+            buckets[d.toISOString().slice(0, 10)] = { gross: 0, fee: 0, qty: 0 };
+        }
+        orders.forEach(o => {
+            const k = new Date(o.completedAt || o.createdAt).toISOString().slice(0, 10);
+            if (buckets[k]) {
+                const { gross, fee } = calcOrderFee(o);
+                buckets[k].gross += gross;
+                buckets[k].fee   += fee;
+                buckets[k].qty++;
+            }
+        });
+        bucketLabel = 'últimos 7 dias';
+
+    } else if (period === 'month') {
+        const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        orders = fatOrders.filter(o => new Date(o.completedAt || o.createdAt) >= mStart);
+        const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        for (let i = 1; i <= days; i++) {
+            buckets[String(i).padStart(2, '0')] = { gross: 0, fee: 0, qty: 0 };
+        }
+        orders.forEach(o => {
+            const d = new Date(o.completedAt || o.createdAt);
+            if (d >= mStart) {
+                const k = String(d.getDate()).padStart(2, '0');
+                if (buckets[k]) {
+                    const { gross, fee } = calcOrderFee(o);
+                    buckets[k].gross += gross;
+                    buckets[k].fee   += fee;
+                    buckets[k].qty++;
+                }
+            }
+        });
+        bucketLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+    } else {
+        // year — by month
+        const yStart = new Date(now.getFullYear(), 0, 1);
+        orders = fatOrders.filter(o => new Date(o.completedAt || o.createdAt) >= yStart);
+        const mNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        mNames.forEach((m, i) => {
+            buckets[String(i).padStart(2, '0')] = { gross: 0, fee: 0, qty: 0, label: m };
+        });
+        orders.forEach(o => {
+            const d = new Date(o.completedAt || o.createdAt);
+            if (d >= yStart) {
+                const k = String(d.getMonth()).padStart(2, '0');
+                const { gross, fee } = calcOrderFee(o);
+                buckets[k].gross += gross;
+                buckets[k].fee   += fee;
+                buckets[k].qty++;
+            }
+        });
+        bucketLabel = String(now.getFullYear());
+    }
+
+    const totalGross = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+    const totalFee   = orders.reduce((s, o) => s + calcOrderFee(o).fee, 0);
+    const totalNet   = totalGross - totalFee;
+    const totalQty   = orders.length;
+
+    // Payment method breakdown
+    const pmBreakdown = {};
+    orders.forEach(o => {
+        const pmKey   = (o.mercadoPagoData?.paymentInfo?.paymentMethod || 'desconhecido').toLowerCase();
+        const feeInfo = MP_FEES[pmKey];
+        const label   = feeInfo ? feeInfo.label : pmKey;
+        if (!pmBreakdown[label]) pmBreakdown[label] = { gross: 0, fee: 0, qty: 0 };
+        const { gross, fee } = calcOrderFee(o);
+        pmBreakdown[label].gross += gross;
+        pmBreakdown[label].fee   += fee;
+        pmBreakdown[label].qty++;
+    });
+
+    const bKeys   = Object.keys(buckets);
+    const bGross  = bKeys.map(k => buckets[k].gross);
+    const bNet    = bKeys.map(k => buckets[k].gross - buckets[k].fee);
+    const bLabels = period === 'year' ? bKeys.map(k => buckets[k].label) : bKeys;
+
+    panel.innerHTML = `
+    <div class="fat-period-bar">
+        <button class="fat-period-btn${period === 'week'  ? ' active' : ''}" data-period="week">Semana</button>
+        <button class="fat-period-btn${period === 'month' ? ' active' : ''}" data-period="month">M&ecirc;s</button>
+        <button class="fat-period-btn${period === 'year'  ? ' active' : ''}" data-period="year">Ano</button>
+        <span style="margin-left:auto;font-size:12px;color:#778DA9;">${bucketLabel}</span>
+    </div>
+
+    <div class="kpi-grid kpi-grid-4" style="margin-bottom:20px;">
+        <div class="kpi-card kpi-green">
+            <div class="kpi-header"><span class="kpi-label">Bruto</span><span class="kpi-icon"><i class="bi bi-cash-stack"></i></span></div>
+            <div class="kpi-value">R$&nbsp;${fmtMoney(totalGross)}</div>
+            <div class="kpi-sub">${totalQty} venda${totalQty !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="kpi-card kpi-blue">
+            <div class="kpi-header"><span class="kpi-label">Taxas MP</span><span class="kpi-icon"><i class="bi bi-dash-circle"></i></span></div>
+            <div class="kpi-value" style="color:#c0392b;">&#8722;&nbsp;R$&nbsp;${fmtMoney(totalFee)}</div>
+            <div class="kpi-sub">${totalGross > 0 ? Math.round(totalFee / totalGross * 100) : 0}% do bruto</div>
+        </div>
+        <div class="kpi-card kpi-purple">
+            <div class="kpi-header"><span class="kpi-label">L&iacute;quido</span><span class="kpi-icon"><i class="bi bi-wallet2"></i></span></div>
+            <div class="kpi-value">R$&nbsp;${fmtMoney(totalNet)}</div>
+            <div class="kpi-sub">ap&oacute;s taxas</div>
+        </div>
+        <div class="kpi-card kpi-yellow">
+            <div class="kpi-header"><span class="kpi-label">Ticket M&eacute;dio Liq.</span><span class="kpi-icon"><i class="bi bi-receipt"></i></span></div>
+            <div class="kpi-value">R$&nbsp;${fmtMoney(totalQty > 0 ? totalNet / totalQty : 0)}</div>
+            <div class="kpi-sub">l&iacute;quido por venda</div>
+        </div>
+    </div>
+
+    <div class="dash-row dash-charts-row">
+        <div class="dash-card dash-chart-main">
+            <div class="dash-card-header">
+                <h3><i class="bi bi-bar-chart-fill" style="color:#415A77;margin-right:6px;"></i> Receita por per&iacute;odo &mdash; ${bucketLabel}</h3>
+            </div>
+            <canvas id="fat-chart" style="max-height:220px;"></canvas>
+        </div>
+        <div class="dash-card" style="flex:1;min-width:220px;">
+            <div class="dash-card-header">
+                <h3><i class="bi bi-credit-card" style="color:#2980b9;margin-right:6px;"></i> Por Meio de Pagamento</h3>
+            </div>
+            <div id="fat-pm-list"></div>
+        </div>
+    </div>
+
+    <div class="dash-card" style="margin-top:0;">
+        <div class="dash-card-header">
+            <h3><i class="bi bi-table" style="color:#27ae60;margin-right:6px;"></i> Detalhe por Per&iacute;odo</h3>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="orders-table" style="width:100%;">
+                <thead><tr>
+                    <th>Per&iacute;odo</th><th>Vendas</th><th>Bruto</th><th>Taxas Est.</th><th>L&iacute;quido</th>
+                </tr></thead>
+                <tbody>
+                ${bKeys.map((k, i) => {
+                    const b    = buckets[k];
+                    const bfee = b.gross - bNet[i];
+                    return b.qty > 0
+                        ? `<tr>
+                            <td style="font-weight:600;">${bLabels[i]}</td>
+                            <td>${b.qty}</td>
+                            <td>R$&nbsp;${fmtMoney(b.gross)}</td>
+                            <td style="color:#c0392b;">&#8722;&nbsp;R$&nbsp;${fmtMoney(bfee)}</td>
+                            <td style="font-weight:700;color:#1B263B;">R$&nbsp;${fmtMoney(bNet[i])}</td>
+                           </tr>`
+                        : '';
+                }).join('')}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <p class="fat-fee-note"><i class="bi bi-info-circle"></i> Taxas estimadas com base nas tarifas padr&atilde;o do MercadoPago. Consulte o painel MP para o valor exato.</p>`;
+
+    // Period button handlers
+    panel.querySelectorAll('.fat-period-btn').forEach(btn => {
+        btn.addEventListener('click', () => renderFaturamento(btn.dataset.period));
+    });
+
+    // Chart
+    const ctx = document.getElementById('fat-chart');
+    if (ctx && typeof Chart !== 'undefined') {
+        if (window._fatChart) { window._fatChart.destroy(); window._fatChart = null; }
+        window._fatChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: bLabels,
+                datasets: [
+                    { label: 'Bruto',    data: bGross, backgroundColor: 'rgba(65,90,119,.7)',  borderRadius: 4, borderSkipped: false },
+                    { label: 'Líquido',  data: bNet,   backgroundColor: 'rgba(39,174,96,.8)',  borderRadius: 4, borderSkipped: false },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
+                    tooltip: { callbacks: { label: c => `${c.dataset.label}: R$ ${fmtMoney(c.parsed.y)}` } },
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0 } },
+                    y: { beginAtZero: true, grid: { color: '#f0f2f5' },
+                         ticks: { font: { size: 11 }, callback: v => 'R$\u00a0' + fmtMoney(v) } },
+                },
+            },
+        });
+    }
+
+    // PM breakdown list
+    const pmEl   = document.getElementById('fat-pm-list');
+    if (pmEl) {
+        const pmEntries = Object.entries(pmBreakdown).sort((a, b) => b[1].gross - a[1].gross);
+        if (!pmEntries.length) {
+            pmEl.innerHTML = '<div class="dash-empty" style="padding:20px;"><p>Sem dados</p></div>';
+        } else {
+            pmEl.innerHTML = pmEntries.map(([label, d]) => `
+            <div class="prod-rank-item">
+                <div class="prod-rank-info">
+                    <div class="prod-rank-name">${label}</div>
+                    <div class="prod-rank-meta">${d.qty} venda${d.qty !== 1 ? 's' : ''} &middot; bruto R$&nbsp;${fmtMoney(d.gross)}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-weight:700;font-size:13px;color:#1B263B;">R$&nbsp;${fmtMoney(d.gross - d.fee)}</div>
+                    <div style="font-size:11px;color:#c0392b;">&#8722;&nbsp;R$&nbsp;${fmtMoney(d.fee)}</div>
+                </div>
+            </div>`).join('');
+        }
+    }
+}
+
+/* ═══════════════════════════════════════
+   COMPARATIVO DE PERÍODOS
+═══════════════════════════════════════ */
+function loadComparativo() {
+    const panel = document.getElementById('tab-comparativo');
+    if (!panel) return;
+
+    const opts = [];
+    const now  = new Date();
+    for (let i = 0; i < 24; i++) {
+        const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const val = d.toISOString().slice(0, 7);
+        const lbl = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        opts.push({ val, lbl });
+    }
+    window._cmpOpts       = opts;
+    window._cmpMonthCount = 2;
+
+    const catOpts = [...new Set(products.map(p => p.category).filter(Boolean))].sort()
+        .map(c => `<option value="${c}">${c}</option>`).join('');
+
+    panel.innerHTML = `
+    <div class="dash-card" style="margin-top:0;">
+        <div class="dash-card-header">
+            <h3><i class="bi bi-bar-chart-steps" style="color:#415A77;margin-right:6px;"></i> Comparativo de Per\u00edodos</h3>
+        </div>
+        <div class="cmp-filters">
+            <div class="cmp-months-wrap" id="cmp-months">
+                ${[0, 1].map(i => cmpMonthHTML(opts, i)).join('')}
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;">
+                <button class="pc-action-btn pc-btn-add" id="cmp-add-btn" onclick="window.cmpAddMonth()">
+                    <i class="bi bi-plus-lg"></i> Adicionar m\u00eas
+                </button>
+                <select id="cmp-cat" class="orders-filter-select" style="min-width:180px;">
+                    <option value="">Todas as categorias</option>
+                    ${catOpts}
+                </select>
+                <button class="btn-primary" style="font-size:13px;padding:7px 20px;" onclick="window.cmpCompare()">
+                    <i class="bi bi-play-fill"></i> Comparar
+                </button>
+            </div>
+        </div>
+        <div id="cmp-results"></div>
+    </div>`;
+}
+
+function cmpMonthHTML(opts, idx) {
+    const sel = opts.map((o, i) => `<option value="${o.val}" ${i === idx ? 'selected' : ''}>${o.lbl}</option>`).join('');
+    return `<div class="cmp-month-item" id="cmp-m-${idx}">
+        <label class="cmp-month-label">M\u00eas ${idx + 1}</label>
+        <select class="cmp-month-sel orders-filter-select" data-idx="${idx}">${sel}</select>
+        ${idx >= 2 ? `<button class="pc-action-btn pc-btn-del" style="padding:4px 9px;" onclick="window.cmpRemoveMonth(${idx})"><i class="bi bi-x"></i></button>` : ''}
+    </div>`;
+}
+
+window.cmpAddMonth = function() {
+    if (window._cmpMonthCount >= 4) { showToast('M\u00e1ximo de 4 meses', 'info'); return; }
+    const idx  = window._cmpMonthCount;
+    window._cmpMonthCount++;
+    const wrap = document.getElementById('cmp-months');
+    const tmp  = document.createElement('div');
+    tmp.innerHTML = cmpMonthHTML(window._cmpOpts, idx);
+    wrap.appendChild(tmp.firstElementChild);
+    if (window._cmpMonthCount >= 4)
+        document.getElementById('cmp-add-btn').disabled = true;
+};
+
+window.cmpRemoveMonth = function(idx) {
+    document.getElementById(`cmp-m-${idx}`)?.remove();
+    window._cmpMonthCount--;
+    const btn = document.getElementById('cmp-add-btn');
+    if (btn) btn.disabled = false;
+};
+
+window.cmpCompare = async function() {
+    const months = [...document.querySelectorAll('.cmp-month-sel')].map(s => s.value).filter(Boolean);
+    if (months.length < 2) { showToast('Selecione ao menos 2 meses', 'info'); return; }
+    const cat     = document.getElementById('cmp-cat')?.value || '';
+    const results = document.getElementById('cmp-results');
+    results.innerHTML = `<div class="loading-state"><p>Calculando\u2026</p></div>`;
+    try {
+        let ordersData = allOrdersFull.length ? allOrdersFull : (await getDocs(collection(db, 'orders'))).docs.map(d => ({ id: d.id, ...d.data() }));
+        const approved = ordersData.filter(o => o.paymentStatus === 'approved');
+
+        const stats = months.map(m => {
+            const [y, mo] = m.split('-').map(Number);
+            const start   = new Date(y, mo - 1, 1);
+            const end     = new Date(y, mo, 1);
+            const label   = start.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+            let mo_orders = approved.filter(o => {
+                const d = new Date(o.completedAt || o.createdAt || 0);
+                return d >= start && d < end;
+            });
+            if (cat) {
+                mo_orders = mo_orders.filter(o =>
+                    Array.isArray(o.items) && o.items.some(it => {
+                        const p = products.find(x => x.id === (it.id || it.productId));
+                        return p?.category === cat || it.category === cat;
+                    })
+                );
+            }
+            const gross = mo_orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+            const qty   = mo_orders.length;
+            const avg   = qty ? gross / qty : 0;
+
+            const pqty = {};
+            mo_orders.forEach(o => (o.items || []).forEach(it => {
+                const id = it.id || it.productId;
+                if (id) pqty[id] = (pqty[id] || 0) + (it.quantity || 1);
+            }));
+            const topProds = Object.entries(pqty).sort((a, b) => b[1] - a[1]).slice(0, 3)
+                .map(([id, n]) => ({ name: products.find(p => p.id === id)?.name || id, qty: n }));
+
+            return { label, gross, qty, avg, topProds };
+        });
+
+        const maxGross = Math.max(...stats.map(s => s.gross));
+        const maxQty   = Math.max(...stats.map(s => s.qty));
+
+        results.innerHTML = `
+        <div class="cmp-grid" style="grid-template-columns:repeat(${stats.length},1fr);">
+            ${stats.map(s => `
+            <div class="cmp-col">
+                <div class="cmp-col-head">${s.label}</div>
+                <div class="cmp-kpi${s.gross === maxGross && maxGross > 0 ? ' cmp-best' : ''}">
+                    <div class="cmp-kpi-label">Receita Bruta</div>
+                    <div class="cmp-kpi-val">R$\u00a0${fmtMoney(s.gross)}</div>
+                </div>
+                <div class="cmp-kpi${s.qty === maxQty && maxQty > 0 ? ' cmp-best' : ''}">
+                    <div class="cmp-kpi-label">Vendas</div>
+                    <div class="cmp-kpi-val">${s.qty}</div>
+                </div>
+                <div class="cmp-kpi">
+                    <div class="cmp-kpi-label">Ticket M\u00e9dio</div>
+                    <div class="cmp-kpi-val">R$\u00a0${fmtMoney(s.avg)}</div>
+                </div>
+                <div class="cmp-kpi" style="border-bottom:none;">
+                    <div class="cmp-kpi-label">Top Produtos</div>
+                    ${s.topProds.length
+                        ? s.topProds.map((p, i) => `<div class="cmp-prod-item"><span class="cmp-prod-rank">${i + 1}\u00b0</span>${p.name}<span class="cmp-prod-qty">\u00d7${p.qty}</span></div>`).join('')
+                        : '<div style="color:#aab0ba;font-size:12px;padding-top:4px;">Sem vendas</div>'}
+                </div>
+            </div>`).join('')}
+        </div>`;
+    } catch (err) {
+        results.innerHTML = `<div class="empty-state"><h3>Erro ao calcular</h3><p>${err.message}</p></div>`;
+    }
+};
+
+/* ═══════════════════════════════════════
+   SAÍDA & DESEMPENHO DE PRODUTOS
+═══════════════════════════════════════ */
+async function loadProdSaida() {
+    const panel = document.getElementById('tab-prod-saida');
+    if (!panel) return;
+    panel.innerHTML = `<div class="loading-state"><p>Carregando dados…</p></div>`;
+    try {
+        const [ordSnap, prodSnap, dlSnap] = await Promise.all([
+            getDocs(collection(db, 'orders')),
+            getDocs(collection(db, 'products')),
+            getDocs(collection(db, 'downloadLogs')).catch(() => null),
+        ]);
+
+        const approvedOrd = ordSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .filter(o => o.paymentStatus === 'approved');
+
+        const prods = {};
+        prodSnap.docs.forEach(d => {
+            prods[d.id] = { id: d.id, ...d.data(), qty: 0, rev: 0, downloads: 0 };
+        });
+
+        if (dlSnap) {
+            dlSnap.docs.forEach(d => {
+                const pid = d.data().productId || d.data().itemId;
+                if (pid && prods[pid]) prods[pid].downloads++;
+            });
+        }
+
+        approvedOrd.forEach(o => {
+            (o.items || []).forEach(item => {
+                const id = item.id || item.productId;
+                if (id && prods[id]) {
+                    prods[id].qty   += item.quantity || 1;
+                    prods[id].rev   += (item.price || 0) * (item.quantity || 1);
+                }
+            });
+        });
+
+        const prodList = Object.values(prods).sort((a, b) => b.qty - a.qty);
+
+        panel.innerHTML = `
+        <div class="dash-card" style="margin-top:0;">
+            <div class="dash-card-header">
+                <h3><i class="bi bi-bar-chart-steps" style="color:#415A77;margin-right:6px;"></i> Desempenho por Produto</h3>
+                <span style="font-size:12px;color:#778DA9;">${prodList.length} produto${prodList.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div style="overflow-x:auto;">
+            <table class="orders-table" style="width:100%;">
+                <thead><tr>
+                    <th>Produto</th><th>Categoria</th><th>Pre&ccedil;o</th>
+                    <th>Vendas</th><th>Receita</th><th>Downloads</th><th>Status</th>
+                </tr></thead>
+                <tbody>
+                ${prodList.map(p => `<tr>
+                    <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name || p.id}</td>
+                    <td><span style="font-size:12px;color:#778DA9;">${p.category || '—'}</span></td>
+                    <td style="white-space:nowrap;">R$&nbsp;${fmtMoney(p.price)}</td>
+                    <td style="font-weight:700;color:${p.qty > 0 ? '#27ae60' : '#c0392b'};">${p.qty}</td>
+                    <td style="white-space:nowrap;">R$&nbsp;${fmtMoney(p.rev)}</td>
+                    <td>${p.downloads}</td>
+                    <td><span class="product-status ${p.active !== false ? 'active' : 'inactive'}">${p.active !== false ? 'Ativo' : 'Inativo'}</span></td>
+                </tr>`).join('')}
+                </tbody>
+            </table>
+            </div>
+        </div>`;
+    } catch (err) {
+        panel.innerHTML = `<div class="empty-state"><h3>Erro ao carregar</h3><p>${err.message}</p></div>`;
+    }
+}
+
+/* ═══════════════════════════════════════
+   CONFIGURAÇÃO DE PRODUTOS
+═══════════════════════════════════════ */
+async function loadProdConfig() {
+    const panel = document.getElementById('tab-prod-config');
+    if (!panel) return;
+    panel.innerHTML = `<div class="loading-state"><p>Carregando…</p></div>`;
+    try {
+        if (!products.length) {
+            const snap = await getDocs(collection(db, 'products'));
+            products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            products.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        }
+        renderProdConfig();
+    } catch (err) {
+        panel.innerHTML = `<div class="empty-state"><h3>Erro ao carregar</h3><p>${err.message}</p></div>`;
+    }
+}
+
+let pcFilter = '';
+
+window.setPcFilter = function(cat) {
+    pcFilter = cat;
+    renderProdConfig();
+};
+
+function renderProdConfig() {
+    const panel = document.getElementById('tab-prod-config');
+    if (!panel) return;
+
+    const cats     = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+    const filtered = pcFilter ? products.filter(p => p.category === pcFilter) : products;
+
+    panel.innerHTML = `
+    <div class="dash-card" style="margin-top:0;">
+        <div class="pc-toolbar">
+            <div class="pc-cat-filter">
+                <button class="pc-cat-btn${!pcFilter ? ' active' : ''}" onclick="window.setPcFilter('')">Todos</button>
+                ${cats.map(c => `<button class="pc-cat-btn${pcFilter === c ? ' active' : ''}" onclick="window.setPcFilter('${c.replaceAll("'", "\\'")}')">${c}</button>`).join('')}
+            </div>
+            <div class="pc-toolbar-right">
+                <button class="pc-action-btn" onclick="window.bulkToggle(true)">Ativar sel.</button>
+                <button class="pc-action-btn" onclick="window.bulkToggle(false)">Desativar sel.</button>
+                <button class="pc-action-btn pc-btn-add" onclick="document.getElementById('btn-add-product').click()"><i class="bi bi-plus-lg"></i> Adicionar Produto</button>
+            </div>
+        </div>
+        <div style="overflow-x:auto;">
+        <table class="orders-table" style="width:100%;">
+            <thead><tr>
+                <th><input type="checkbox" id="pc-check-all" onchange="window.selectAllProdConfig(this.checked)" style="cursor:pointer;"></th>
+                <th>Produto</th><th>Categoria</th><th>Pre&ccedil;o</th><th>Status</th><th>A&ccedil;&otilde;es</th>
+            </tr></thead>
+            <tbody>
+            ${filtered.map(p => `<tr data-pid="${p.id}">
+                <td><input type="checkbox" class="pc-row-check" data-pid="${p.id}" style="cursor:pointer;"></td>
+                <td style="font-weight:600;">${p.name}</td>
+                <td style="font-weight:600;">${p.category || '\u2014'}</td>
+                <td style="white-space:nowrap;">R$&nbsp;${fmtMoney(p.price)}</td>
+                <td><span class="pc-status-text ${p.active !== false ? 'active' : 'inactive'}">${p.active !== false ? 'Ativo' : 'Inativo'}</span></td>
+                <td class="pc-actions-cell">
+                    <button class="pc-action-btn" onclick="editProduct('${p.id}')">Editar</button>
+                    <button class="pc-action-btn" onclick="window.toggleProductActive('${p.id}', ${!(p.active !== false)})">${p.active !== false ? 'Desativar' : 'Ativar'}</button>
+                    <button class="pc-action-btn pc-btn-view" onclick="window.previewProduct('${p.id}')">Visualizar</button>
+                    <button class="pc-action-btn pc-btn-del" onclick="window.confirmDelete('product','${p.id}','${p.name.replaceAll("'", "\\'")}')">Excluir</button>
+                </td>
+            </tr>`).join('')}
+            </tbody>
+        </table>
+        </div>
+    </div>`;
+}
+
+window.toggleProductActive = async function(id, active) {
+    try {
+        await updateDoc(doc(db, 'products', id), { active });
+        const p = products.find(x => x.id === id);
+        if (p) p.active = active;
+        renderProdConfig();
+        showToast(`Produto ${active ? 'ativado' : 'desativado'}!`, 'success');
+    } catch (e) {
+        showToast('Erro: ' + e.message, 'error');
+    }
+};
+
+window.bulkToggle = async function(active) {
+    const checked = [...document.querySelectorAll('.pc-row-check:checked')].map(c => c.dataset.pid);
+    if (!checked.length) { showToast('Selecione ao menos um produto.', 'info'); return; }
+    try {
+        await Promise.all(checked.map(id => updateDoc(doc(db, 'products', id), { active })));
+        checked.forEach(id => { const p = products.find(x => x.id === id); if (p) p.active = active; });
+        renderProdConfig();
+        showToast(`${checked.length} produto(s) ${active ? 'ativado(s)' : 'desativado(s)'}!`, 'success');
+    } catch (e) {
+        showToast('Erro: ' + e.message, 'error');
+    }
+};
+
+window.selectAllProdConfig = function(checked) {
+    document.querySelectorAll('.pc-row-check').forEach(c => { c.checked = checked; });
+};
+
+/* ─── Preview modal ─── */
+const prodPreviewModal = document.getElementById('prod-preview-modal');
+document.getElementById('prod-preview-close')?.addEventListener('click', () => {
+    prodPreviewModal?.classList.remove('show');
+});
+prodPreviewModal?.addEventListener('click', e => {
+    if (e.target === prodPreviewModal) prodPreviewModal.classList.remove('show');
+});
+
+window.previewProduct = function(id) {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+
+    const body = document.getElementById('prod-preview-body');
+    const price    = parseFloat(p.price) || 0;
+    const pixPrice = (price * 0.9).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const priceStr = price.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const installStr = price >= 10
+        ? `ou em até 3x de R$ ${(price / 3).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} sem juros`
+        : '';
+
+    body.innerHTML = `
+    <div class="ppv-layout">
+        <div class="ppv-gallery-col">
+            <div id="ppv-gallery"></div>
+        </div>
+        <div class="ppv-info-col">
+            <div class="ppv-category">${(p.category || 'Produto').toUpperCase()}</div>
+            <h2 class="ppv-title">${p.name}</h2>
+            <div class="ppv-price-block">
+                <div class="ppv-price">R$ ${priceStr}</div>
+                <div class="ppv-pix"><i class="bi bi-lightning-charge-fill" style="color:#FEE440;"></i> R$ ${pixPrice} à vista no Pix (10% off)</div>
+                ${installStr ? `<div class="ppv-installments">${installStr}</div>` : ''}
+            </div>
+            <div class="ppv-desc">${(p.description || 'Sem descrição disponível.').replace(/\n/g, '<br>')}</div>
+            <div class="ppv-status-row">
+                <span class="pc-status-text ${p.active !== false ? 'active' : 'inactive'}" style="font-size:14px;">${p.active !== false ? '● Produto Ativo' : '● Produto Inativo'}</span>
+            </div>
+        </div>
+    </div>`;
+
+    buildPpvGallery(p, document.getElementById('ppv-gallery'));
+    prodPreviewModal.classList.add('show');
+};
+
+function buildPpvGallery(product, container) {
+    function gdrive(url) {
+        if (!url || !url.includes('drive.google.com')) return url;
+        const m = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+        if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w800`;
+        const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+        if (m2) return `https://drive.google.com/thumbnail?id=${m2[1]}&sz=w800`;
+        return url;
+    }
+    const NO_IMG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%239B5DE5' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='rgba(255,255,255,0.4)' font-size='24' font-family='sans-serif'%3ESem Imagem%3C/text%3E%3C/svg%3E`;
+
+    const images = (Array.isArray(product.images) && product.images.length
+        ? product.images
+        : (product.imageUrl ? [product.imageUrl] : (product.image ? [product.image] : []))).map(gdrive);
+    const videos = Array.isArray(product.videos) ? product.videos : [];
+    const allMedia = [
+        ...images.map(u => ({ type: 'image', url: u })),
+        ...videos.map(u => ({ type: 'video', url: u }))
+    ];
+    if (!allMedia.length) allMedia.push({ type: 'image', url: NO_IMG });
+
+    let current = 0;
+
+    function getEmbedUrl(url) {
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            const vid = url.includes('youtu.be')
+                ? url.split('youtu.be/')[1]?.split('?')[0]
+                : url.split('v=')[1]?.split('&')[0];
+            return `https://www.youtube.com/embed/${vid}`;
+        }
+        if (url.includes('vimeo.com')) {
+            const vid = url.split('vimeo.com/')[1]?.split('?')[0];
+            return `https://player.vimeo.com/video/${vid}`;
+        }
+        if (url.includes('drive.google.com')) {
+            const m = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+            if (m) return `https://drive.google.com/file/d/${m[1]}/preview`;
+            const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+            if (m2) return `https://drive.google.com/file/d/${m2[1]}/preview`;
+        }
+        return url;
+    }
+    function makeImgEl(url) {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = product.name || '';
+        img.onerror = () => { img.onerror = null; img.src = NO_IMG; };
+        return img;
+    }
+    function makeVideoEl(url) {
+        const iframe = document.createElement('iframe');
+        iframe.src = getEmbedUrl(url);
+        iframe.allowFullscreen = true;
+        iframe.allow = 'autoplay; encrypted-media';
+        return iframe;
+    }
+
+    const mainWrap = document.createElement('div');
+    mainWrap.className = 'pd-main-img-wrap';
+    const first = allMedia[0];
+    mainWrap.appendChild(first.type === 'video' ? makeVideoEl(first.url) : makeImgEl(first.url));
+
+    if (allMedia.length > 1) {
+        const prev = document.createElement('button');
+        prev.className = 'pd-gallery-nav pd-gallery-nav-prev';
+        prev.innerHTML = '<i class="bi bi-chevron-left"></i>';
+        prev.onclick = () => { current = (current - 1 + allMedia.length) % allMedia.length; update(); };
+        const next = document.createElement('button');
+        next.className = 'pd-gallery-nav pd-gallery-nav-next';
+        next.innerHTML = '<i class="bi bi-chevron-right"></i>';
+        next.onclick = () => { current = (current + 1) % allMedia.length; update(); };
+        mainWrap.appendChild(prev);
+        mainWrap.appendChild(next);
+    }
+
+    const thumbsWrap = document.createElement('div');
+    thumbsWrap.className = 'pd-thumbs';
+    allMedia.forEach((m, i) => {
+        const t = document.createElement('div');
+        t.className = 'pd-thumb' + (i === 0 ? ' active' : '');
+        if (m.type === 'image') {
+            const img = document.createElement('img');
+            img.src = m.url; img.alt = '';
+            img.onerror = () => { img.onerror = null; img.src = NO_IMG; };
+            t.appendChild(img);
+        } else {
+            t.innerHTML = `<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;"><i class="bi bi-play-circle-fill" style="color:#fff;font-size:1.5rem;"></i></div>`;
+        }
+        t.onclick = () => { current = i; update(); };
+        thumbsWrap.appendChild(t);
+    });
+
+    container.innerHTML = '';
+    container.appendChild(mainWrap);
+    if (allMedia.length > 1) container.appendChild(thumbsWrap);
+
+    function update() {
+        const media = allMedia[current];
+        const el = media.type === 'video' ? makeVideoEl(media.url) : makeImgEl(media.url);
+        const prevBtn = mainWrap.querySelector('.pd-gallery-nav-prev');
+        const nextBtn = mainWrap.querySelector('.pd-gallery-nav-next');
+        mainWrap.innerHTML = '';
+        mainWrap.appendChild(el);
+        if (prevBtn) mainWrap.appendChild(prevBtn);
+        if (nextBtn) mainWrap.appendChild(nextBtn);
+        thumbsWrap.querySelectorAll('.pd-thumb').forEach((t, i) => t.classList.toggle('active', i === current));
+    }
+}
 
 /* ═══════════════════════════════════════
    UTILITIES
@@ -746,7 +1722,7 @@ async function loadDashboard() {
             .sort((a, b) => a.qty - b.qty).slice(0, 5);
 
         /* ── Pedidos recentes (últimos 20, todos os status) ── */
-        const recentOrders = [...allOrders].sort((a, b) => getDate(b) - getDate(a)).slice(0, 20);
+        // (usado anteriormente para tabela no dashboard — removido)
 
         /* ── Comprou mas não baixou ── */
         let notDownloaded = null;
@@ -772,14 +1748,7 @@ async function loadDashboard() {
         dashRenderTopProds(topProds);
         dashRenderBottomProds(bottomProds);
 
-        /* ── Tabela pedidos ── */
-        dashRenderOrdersTable(recentOrders);
-
-        /* ── Badge download ── */
-        if (notDownloaded !== null) {
-            const el = document.getElementById('kpi-not-dl-val');
-            if (el) el.textContent = String(notDownloaded);
-        }
+        /* ── Badge download removido (tabela de pedidos não exibida no dashboard) ── */
 
     } catch (err) {
         console.error('Dashboard:', err);
@@ -851,21 +1820,7 @@ function dashHTML() {
         </div>
     </div>
 
-    <!-- Tabela pedidos -->
-    <div class="dash-card" style="margin-top:0;">
-        <div class="dash-card-header">
-            <h3><i class="bi bi-list-check" style="color:#415A77;margin-right:6px;"></i> &Uacute;ltimos Pedidos</h3>
-            <span id="kpi-not-dl-val" class="dash-dl-badge" title="Pedidos aprovados sem download registrado" style="display:none;"></span>
-        </div>
-        <div style="overflow-x:auto;">
-            <table class="orders-table" id="orders-table">
-                <thead><tr>
-                    <th>ID</th><th>Cliente</th><th>Data</th><th>Valor</th><th>Status</th>
-                </tr></thead>
-                <tbody id="orders-tbody"></tbody>
-            </table>
-        </div>
-    </div>`;
+    `;  // (últimos pedidos removidos do dashboard)
 }
 
 /* ── KPI setter ── */

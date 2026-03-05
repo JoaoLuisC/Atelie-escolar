@@ -450,7 +450,8 @@ document.getElementById('form-login').addEventListener('submit', async e => {
 
     setLoading(btn, true);
     try {
-        await signInWithEmailAndPassword(auth, email, pw);
+        const cred = await signInWithEmailAndPassword(auth, email, pw);
+        await saveUserProfile(cred.user, null);
         redirectAfterLogin();
     } catch (err) {
         handleAuthError(err);
@@ -477,6 +478,7 @@ document.getElementById('form-register').addEventListener('submit', async e => {
     try {
         const cred = await createUserWithEmailAndPassword(auth, email, pw);
         await updateProfile(cred.user, { displayName: name });
+        await cred.user.reload();
         await saveUserProfile(cred.user, name);
         showAlert('Cadastro realizado com sucesso! Redirecionando…', 'success');
         setTimeout(redirectAfterLogin, 1200);

@@ -137,19 +137,23 @@ async function loadProducts() {
 
 /* ══════ preenche contadores ══════ */
 function fillCategoryCounts() {
+  const purchased = window.purchasedProductIds || new Set();
+  const visible = allProducts.filter(p => !purchased.has(p.id));
+
   /* total */
   const totalEl = document.getElementById('cat-all');
-  if (totalEl) totalEl.textContent = allProducts.length;
+  if (totalEl) totalEl.textContent = visible.length;
 
   for (const [cat, elId] of Object.entries(CAT_COUNT_IDS)) {
     const el = document.getElementById(elId);
-    if (el) el.textContent = allProducts.filter(p => p.category === cat).length;
+    if (el) el.textContent = visible.filter(p => p.category === cat).length;
   }
 }
 
 /* ══════ filtra + renderiza ══════ */
 function renderProducts() {
-  let list = [...allProducts];
+  const purchased = window.purchasedProductIds || new Set();
+  let list = allProducts.filter(p => !purchased.has(p.id));
 
   /* filtro categoria */
   if (activeCategory !== 'all') {

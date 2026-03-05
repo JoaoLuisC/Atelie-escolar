@@ -24,22 +24,66 @@
     </div>
 
     <nav class="adm-nav">
-        <button class="adm-nav-item active" data-tab="dashboard" data-title="Dashboard">
+        <button class="adm-nav-item active" data-tab="dashboard">
             <i class="bi bi-grid-1x2-fill"></i> Dashboard
         </button>
-        <button class="adm-nav-item" data-tab="produtos" data-title="Produtos">
-            <i class="bi bi-box-seam-fill"></i> Produtos
-        </button>
-        <button class="adm-nav-item" data-tab="categorias" data-title="Categorias">
-            <i class="bi bi-tags-fill"></i> Categorias
-        </button>
-        <button class="adm-nav-item" data-tab="usuarios" data-title="Usu&aacute;rios">
+
+        <!-- Grupo: Produtos -->
+        <div class="adm-nav-group">
+            <button class="adm-nav-group-head" data-group="produtos">
+                <span><i class="bi bi-box-seam-fill"></i> Produtos</span>
+                <i class="bi bi-chevron-down adm-grp-chevron"></i>
+            </button>
+            <div class="adm-nav-sub" id="nav-sub-produtos">
+                <button class="adm-nav-sub-item" data-tab="prod-config">
+                    <i class="bi bi-sliders"></i> Configura&ccedil;&atilde;o
+                </button>
+                <button class="adm-nav-sub-item" data-tab="prod-saida">
+                    <i class="bi bi-graph-up"></i> Sa&iacute;da &amp; Desempenho
+                </button>
+                <button class="adm-nav-sub-item" data-tab="categorias">
+                    <i class="bi bi-tags-fill"></i> Categorias
+                </button>
+                <button class="adm-nav-sub-item" data-tab="pedidos">
+                    <i class="bi bi-receipt"></i> Pedidos
+                </button>
+            </div>
+        </div>
+
+        <!-- Grupo: Financeiro -->
+        <div class="adm-nav-group">
+            <button class="adm-nav-group-head" data-group="financeiro">
+                <span><i class="bi bi-cash-coin"></i> Financeiro</span>
+                <i class="bi bi-chevron-down adm-grp-chevron"></i>
+            </button>
+            <div class="adm-nav-sub" id="nav-sub-financeiro">
+                <button class="adm-nav-sub-item" data-tab="faturamento">
+                    <i class="bi bi-bar-chart-line-fill"></i> Faturamento
+                </button>
+                <button class="adm-nav-sub-item" data-tab="comparativo">
+                    <i class="bi bi-bar-chart-steps"></i> Comparativo
+                </button>
+            </div>
+        </div>
+
+        <button class="adm-nav-item" data-tab="usuarios">
             <i class="bi bi-people-fill"></i> Usu&aacute;rios
         </button>
-        <button class="adm-nav-item" data-tab="vitrine" data-title="Vitrine">
-            <i class="bi bi-layout-text-window-reverse"></i> Vitrine
-        </button>
-        <button class="adm-nav-item" data-tab="seguranca" data-title="Seguran&ccedil;a">
+
+        <!-- Grupo: Configurações do Site -->
+        <div class="adm-nav-group">
+            <button class="adm-nav-group-head" data-group="config-site">
+                <span><i class="bi bi-gear-fill"></i> Configura&ccedil;&otilde;es do Site</span>
+                <i class="bi bi-chevron-down adm-grp-chevron"></i>
+            </button>
+            <div class="adm-nav-sub" id="nav-sub-config-site">
+                <button class="adm-nav-sub-item" data-tab="vitrine">
+                    <i class="bi bi-layout-text-window-reverse"></i> Vitrine
+                </button>
+            </div>
+        </div>
+
+        <button class="adm-nav-item" data-tab="seguranca">
             <i class="bi bi-shield-lock-fill"></i> Seguran&ccedil;a
         </button>
     </nav>
@@ -117,8 +161,48 @@
             </div>
         </div>
 
+        <!-- ══ PEDIDOS ══ -->
+        <div id="tab-pedidos" class="tab-panel">
+            <div class="orders-full-wrap">
+                <div class="orders-full-toolbar">
+                    <select id="orders-filter-status" class="orders-filter-select">
+                        <option value="">Todos os status</option>
+                        <option value="approved">Aprovado</option>
+                        <option value="pending">Pendente</option>
+                        <option value="rejected">Recusado</option>
+                        <option value="cancelled">Cancelado</option>
+                        <option value="failed">Falhou</option>
+                    </select>
+                    <span class="users-count" id="orders-count">&mdash;</span>
+                </div>
+                <div id="orders-full-table-container">
+                    <div class="loading-state"><p>Carregando pedidos&hellip;</p></div>
+                </div>
+            </div>
+        </div>
+
         <!-- ══ VITRINE ══ -->
         <div id="tab-vitrine" class="tab-panel">
+            <div class="loading-state"><p>Carregando&hellip;</p></div>
+        </div>
+
+        <!-- ══ FATURAMENTO ══ -->
+        <div id="tab-faturamento" class="tab-panel">
+            <div class="loading-state"><p>Carregando faturamento&hellip;</p></div>
+        </div>
+
+        <!-- ══ COMPARATIVO ══ -->
+        <div id="tab-comparativo" class="tab-panel">
+            <div class="loading-state"><p>Carregando&hellip;</p></div>
+        </div>
+
+        <!-- ══ PROD-CONFIG ══ -->
+        <div id="tab-prod-config" class="tab-panel">
+            <div class="loading-state"><p>Carregando&hellip;</p></div>
+        </div>
+
+        <!-- ══ PROD-SAIDA ══ -->
+        <div id="tab-prod-saida" class="tab-panel">
             <div class="loading-state"><p>Carregando&hellip;</p></div>
         </div>
 
@@ -251,6 +335,28 @@
             <button type="button" class="btn-secondary" id="btn-cancel-delete">Cancelar</button>
             <button type="button" class="btn-danger" id="btn-confirm-delete">Excluir</button>
         </div>
+    </div>
+</div>
+
+<!-- ══════════════ MODAL DETALHES PEDIDO ══════════════ -->
+<div id="order-detail-modal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h2>Detalhes do Pedido</h2>
+            <button class="modal-close" id="order-detail-close">&times;</button>
+        </div>
+        <div id="order-detail-body" style="padding:20px 24px;overflow-y:auto;max-height:calc(90vh - 70px);"></div>
+    </div>
+</div>
+
+<!-- ══════════════ MODAL VISUALIZAÇÃO PRODUTO ══════════════ -->
+<div id="prod-preview-modal" class="modal">
+    <div class="modal-content" style="max-width:940px;padding:0;overflow:hidden;">
+        <div class="modal-header" style="padding:14px 20px;border-bottom:1px solid #eee;">
+            <h2>Visualiza&ccedil;&atilde;o do Produto</h2>
+            <button class="modal-close" id="prod-preview-close">&times;</button>
+        </div>
+        <div id="prod-preview-body" style="overflow-y:auto;max-height:calc(90vh - 70px);"></div>
     </div>
 </div>
 

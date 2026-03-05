@@ -221,9 +221,16 @@ function startPaymentPolling(orderId) {
             if (!data.success) return;
 
             const status = data.order?.paymentStatus;
+            console.log(`[POLLING] tentativa ${attempts} — status: ${status} | _currentUser: ${_currentUser?.email ?? 'null'}`);
             if (status === 'approved') {
                 clearInterval(interval);
-                window.location.href = `/downloads.html?order=${orderId}&success=1`;
+                const downloadsUrl = `/downloads.html?order=${orderId}&success=1`;
+                if (_currentUser) {
+                    window.location.href = downloadsUrl;
+                } else {
+                    // Usuário não logado (guest checkout) — pede login e redireciona para os downloads
+                    window.location.href = `/login.html?redirect=${encodeURIComponent(downloadsUrl)}`;
+                }
             } else if (status === 'rejected' || status === 'cancelled') {
                 clearInterval(interval);
                 hideWaitingOverlay();

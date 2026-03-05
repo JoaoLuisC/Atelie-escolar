@@ -37,20 +37,33 @@ function formatDate(ts) {
 }
 
 /* ── Auth guard ── */
-// authStateReady() espera o Firebase confirmar o estado REAL antes de agir,
-// evitando redirect para login quando o usuário ainda está sendo restaurado
-// (situação comum após redirect de pagamento externo).
 let _downloadsInitialized = false;
 
-async function initDownloads() {
-    // Aguarda Firebase confirmar estado de autenticação inicial
-    await auth.authStateReady();
+// onAuthStateChanged dispara exatamente UMA vez após o Firebase ler
+// o estado persistido (IndexedDB), passando o usuário como argumento —
+// mais confiável que authStateReady().then(() => auth.currentUser) que
+// pode resolver antes de currentUser ser preenchido.
+function waitForAuth() {
+    console.log('[AUTH] waitForAuth: registrando onAuthStateChanged...');
+    return new Promise(resolve => {
+        const unsub = onAuthStateChanged(auth, user => {
+            unsub();
+            console.log('[AUTH] waitForAuth: estado recebido →', user ? `logado como ${user.email}` : 'NÃO logado (null)');
+            resolve(user);
+        });
+    });
+}
 
-    const user = auth.currentUser;
+async function initDownloads() {
+    console.log('[INIT] initDownloads iniciado. URL:', window.location.href);
+    const user = await waitForAuth();
     document.getElementById('loading-auth').style.display = 'none';
+    console.log('[INIT] auth resolvida. user:', user ? user.email : 'null');
 
     if (!user) {
-        window.location.href = `/login.html?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+        const dest = `/login.html?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+        console.warn('[INIT] Sem usuário — redirecionando para login:', dest);
+        window.location.href = dest;
         return;
     }
 
@@ -73,15 +86,18 @@ async function initDownloads() {
     /* Single order from URL param */
     const urlParams = new URLSearchParams(window.location.search);
     const orderId = urlParams.get('order') || localStorage.getItem('lastOrderId');
+    console.log('[INIT] orderId da URL/localStorage:', orderId);
     if (orderId) {
         await checkSingleOrder(orderId);
     }
 
     /* All orders for this user */
+    console.log('[INIT] carregando pedidos para uid:', user.uid, '/ email:', user.email);
     await loadUserOrders(user.uid, user.email);
 
     // Mantém listener para logout em tempo real
     onAuthStateChanged(auth, u => {
+        console.log('[AUTH] listener pós-init:', u ? `logado ${u.email}` : 'deslogado — redirecionando');
         if (!u) window.location.href = `/login.html?redirect=${encodeURIComponent('/downloads.html')}`;
     });
 }
@@ -188,24 +204,18 @@ async function loadUserOrders(uid, email) {
     wrap.innerHTML = `<div class="text-center py-3"><div class="spinner-border" style="color:#9B5DE5;"></div><p class="mt-2 text-muted">Carregando seu histórico…</p></div>`;
 
     try {
-        let snap;
-        try {
-            const q = query(
-                collection(db, 'orders'),
-                where('userId', '==', uid)
-            );
-            snap = await getDocs(q);
-        } catch {
-            const q = query(
-                collection(db, 'orders'),
-                where('customerEmail', '==', email)
-            );
-            snap = await getDocs(q);
-        }
+        // Campos reais do pedido: customer.email (objeto aninhado)
+        console.log('[ORDERS] consultando Firestore: customer.email ==', email);
+        const q = query(
+            collection(db, 'orders'),
+            where('customer.email', '==', email)
+        );
+        const snap = await getDocs(q);
+        console.log('[ORDERS] documentos retornados:', snap.size);
 
         // Ordenar por data decrescente no cliente (evita necessidade de índice composto)
         const docs = [];
-        snap.forEach(d => docs.push({ ...d.data(), id: d.id }));
+        snap.forEach(d => { const data = d.data(); console.log('[ORDERS] doc:', d.id, '| status:', data.paymentStatus, '| customer.email:', data.customer?.email); docs.push({ ...data, id: d.id }); });
         docs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
         if (docs.length === 0) {
