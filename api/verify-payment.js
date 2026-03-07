@@ -50,10 +50,13 @@ module.exports = async (req, res) => {
 
         // Buscar por external_reference = orderId
         const searchResult = await paymentApi.search({
-          qs: { external_reference: orderId, sort: 'date_created', criteria: 'desc', limit: 5 },
+          options: { external_reference: orderId, sort: 'date_created', criteria: 'desc', limit: 5 },
         });
 
-        const approvedPayment = (searchResult.results || []).find(p => p.status === 'approved');
+        // Verificação dupla: garante que o pagamento realmente pertence a este pedido
+        const approvedPayment = (searchResult.results || []).find(
+          p => p.status === 'approved' && p.external_reference === orderId
+        );
 
         if (approvedPayment) {
           console.log(`[verify-payment] Pagamento aprovado encontrado no MP para ordem ${orderId}:`, approvedPayment.id);

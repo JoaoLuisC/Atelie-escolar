@@ -56,11 +56,24 @@ function waitForAuth() {
 
 async function initDownloads() {
     console.log('[INIT] initDownloads iniciado. URL:', window.location.href);
+
+    /* Extrai orderId antes do await para ter disponível no branch de convidado */
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('order') || localStorage.getItem('lastOrderId');
+
     const user = await waitForAuth();
     document.getElementById('loading-auth').style.display = 'none';
     console.log('[INIT] auth resolvida. user:', user ? user.email : 'null');
 
     if (!user) {
+        if (orderId) {
+            // Acesso de convidado: mostra o pedido específico sem exigir login
+            // (o orderId na URL funciona como token de acesso para esse pedido)
+            console.log('[INIT] Acesso de convidado com orderId:', orderId);
+            document.getElementById('dl-content').style.display = 'block';
+            await checkSingleOrder(orderId, true);
+            return;
+        }
         const dest = `/login.html?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
         console.warn('[INIT] Sem usuário — redirecionando para login:', dest);
         window.location.href = dest;
@@ -83,9 +96,6 @@ async function initDownloads() {
 
     document.getElementById('dl-content').style.display = 'block';
 
-    /* Single order from URL param */
-    const urlParams = new URLSearchParams(window.location.search);
-    const orderId = urlParams.get('order') || localStorage.getItem('lastOrderId');
     console.log('[INIT] orderId da URL/localStorage:', orderId);
     if (orderId) {
         await checkSingleOrder(orderId);
@@ -101,7 +111,7 @@ async function initDownloads() {
 initDownloads();
 
 /* ── Single order (post-checkout) ── */
-async function checkSingleOrder(orderId) {
+async function checkSingleOrder(orderId, isGuest = false) {
     const wrap = document.getElementById('order-status-wrap');
     wrap.innerHTML = `<div class="text-center py-3"><div class="spinner-border" style="color:#9B5DE5;"></div><p class="mt-2">Verificando pedido…</p></div>`;
     try {
@@ -116,10 +126,14 @@ async function checkSingleOrder(orderId) {
                 // Mostrar banner de sucesso se vindo do checkout
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('success') === '1') {
-                    showSuccessBanner(data.order);
+                    showSuccessBanner(data.order, data.order?.customer?.email);
                     // Limpar param da URL sem recarregar
                     const cleanUrl = `${window.location.pathname}?order=${orderId}`;
                     history.replaceState(null, '', cleanUrl);
+                }
+                // Banner para convidado logar e salvar o acesso
+                if (isGuest && data.order.customer?.email) {
+                    showGuestLoginBanner(data.order.customer.email);
                 }
             }
         } else {
@@ -130,21 +144,59 @@ async function checkSingleOrder(orderId) {
     }
 }
 
-function showSuccessBanner(order) {
+function showGuestLoginBanner(email) {
+    if (document.getElementById('guest-login-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'guest-login-banner';
+    banner.innerHTML = `
+        <div style="font-size:1.6rem;flex-shrink:0;">🔑</div>
+        <div style="flex:1;line-height:1.5;">
+            <strong style="display:block;margin-bottom:3px;">Salve o acesso aos seus downloads</strong>
+            <span style="font-size:13px;opacity:.9;">Entre com <strong>${email}</strong> para acessar este pedido a qualquer momento.</span>
+        </div>
+        <a href="/login.html" style="
+            background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.45);
+            color:#fff;border-radius:8px;padding:9px 18px;text-decoration:none;
+            font-size:13px;font-weight:700;white-space:nowrap;flex-shrink:0;
+            display:inline-flex;align-items:center;gap:6px;
+        "><i class="bi bi-person-circle"></i> Entrar →</a>`;
+    banner.style.cssText = `
+        display:flex;align-items:center;gap:14px;
+        background:linear-gradient(135deg,#5B2D8E 0%,#7A3DC0 100%);
+        color:#fff;border-radius:12px;padding:18px 20px;
+        margin-bottom:24px;box-shadow:0 4px 20px rgba(91,45,142,.35);`;
+    document.getElementById('order-status-wrap').insertAdjacentElement('afterend', banner);
+}
+
+function showSuccessBanner(order, email) {
     const banner = document.createElement('div');
     banner.id = 'success-banner';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const isNewAccount = urlParams.get('newAccount') === '1';
+    const credsHtml = isNewAccount ? `
+        <div style="margin-top:10px;padding:10px 14px;background:rgba(255,255,255,.15);border-radius:8px;font-size:13px;">
+            <strong>🔑 Seus dados de acesso ao site:</strong><br>
+            Login: <strong>${email || order?.customer?.email || ''}</strong><br>
+            Senha: <strong>123456</strong>
+            <span style="font-size:11px;opacity:.75;display:block;margin-top:4px;">
+                Recomendamos alterar a senha após entrar nas configurações.
+            </span>
+        </div>` : '';
+
     banner.innerHTML = `
         <div class="success-banner-icon">🎉</div>
         <div class="success-banner-text">
             <strong>Pagamento aprovado!</strong>
             Seus produtos estão prontos para download abaixo.
+            ${credsHtml}
         </div>
         <button class="success-banner-close" onclick="this.closest('#success-banner').remove()" title="Fechar">
             <i class="bi bi-x-lg"></i>
         </button>`;
     document.getElementById('order-status-wrap').insertAdjacentElement('beforebegin', banner);
-    // Auto-fechar após 8s
-    setTimeout(() => { if (banner.parentNode) banner.remove(); }, 8000);
+    // Auto-fechar após 12s (mais tempo para ler as credenciais)
+    setTimeout(() => { if (banner.parentNode) banner.remove(); }, 12000);
 }
 
 function renderSingleOrderCard(order) {

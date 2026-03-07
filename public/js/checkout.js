@@ -85,7 +85,10 @@ window.ckRemove = function (id) {
 };
 
 // ─── auth state ───────────────────────────────────────────────────────────
-let _currentUser = null;
+let _currentUser    = null;
+let _checkoutName   = '';
+let _checkoutEmail  = '';
+let _accountCreated = false;
 
 function setAuthNotice(user) {
     const el = document.getElementById('ck-auth-notice');
@@ -113,7 +116,7 @@ function setAuthNotice(user) {
         el.innerHTML = `
           <div class="ck-notice info">
             <i class="bi bi-info-circle-fill" style="font-size:15px;flex-shrink:0;margin-top:1px;"></i>
-            <div>Sem conta? Não tem problema! Criamos uma para você acessar seus downloads.</div>
+            <div>Sem conta? Não tem problema! Criamos uma para você acessar seus produtos.</div>
           </div>`;
         // Reexibe os campos para usuários não logados
         if (nameWrap)  { nameWrap.style.display  = ''; document.getElementById('ck-name').required  = true; }
@@ -147,6 +150,11 @@ async function handleSubmit(e) {
     if (!name) { document.getElementById('ck-name').focus(); return; }
     if (!email || !email.includes('@')) { document.getElementById('ck-email').focus(); return; }
 
+    // Guarda para usar após confirmacão do pagamento
+    _checkoutName  = name;
+    _checkoutEmail = email;
+    _accountCreated = false;
+
     const btn = document.getElementById('ck-pay-btn');
     const label = document.getElementById('ck-pay-label');
     btn.disabled = true;
@@ -156,12 +164,29 @@ async function handleSubmit(e) {
         // Guest: create Firebase account automatically
         if (!_currentUser && typeof firebase !== 'undefined') {
             try {
-                const cred = await firebase.auth().createUserWithEmailAndPassword(email, 'Atelie@' + Math.random().toString(36).slice(2, 8));
+                const cred = await firebase.auth().createUserWithEmailAndPassword(email, '123456');
                 await cred.user.updateProfile({ displayName: name });
                 _currentUser = cred.user;
+                _accountCreated = true;
+
+                // Salva perfil na colecão users do Firestore
+                try {
+                    const db = firebase.firestore();
+                    await db.collection('users').doc(cred.user.uid).set({
+                        uid:       cred.user.uid,
+                        name:      name,
+                        email:     email,
+                        photoURL:  '',
+                        provider:  'email',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        purchases: 0
+                    });
+                } catch (fsErr) {
+                    console.warn('[checkout] Erro ao salvar perfil no Firestore:', fsErr.message);
+                }
             } catch (authErr) {
                 if (authErr.code === 'auth/email-already-in-use') {
-                    // silently continue — user already has account, let them log in later
+                    // usuário já tem conta — continua sem criar nova
                 } else {
                     console.warn('Auth warning:', authErr.message);
                 }
@@ -224,13 +249,12 @@ function startPaymentPolling(orderId) {
             console.log(`[POLLING] tentativa ${attempts} — status: ${status} | _currentUser: ${_currentUser?.email ?? 'null'}`);
             if (status === 'approved') {
                 clearInterval(interval);
-                const downloadsUrl = `/downloads.html?order=${orderId}&success=1`;
-                if (_currentUser) {
-                    window.location.href = downloadsUrl;
-                } else {
-                    // Usuário não logado (guest checkout) — redireciona para a página inicial
-                    window.location.href = '/index.html';
-                }
+                hideWaitingOverlay();
+                // Envia e-mail de confirmacão em background
+                sendConfirmationEmail(orderId, _checkoutName, _checkoutEmail, _accountCreated);
+                // Redireciona para downloads — usuário já está logado (compat SDK persiste no IndexedDB)
+                const newParam = _accountCreated ? '&newAccount=1' : '';
+                window.location.href = `/downloads.html?order=${orderId}&success=1${newParam}`;
             } else if (status === 'rejected' || status === 'cancelled') {
                 clearInterval(interval);
                 hideWaitingOverlay();
@@ -286,6 +310,35 @@ function showPaymentError() {
     if (btn) btn.disabled = false;
     if (label) label.textContent = 'Ir para Pagamento';
     alert('Pagamento não aprovado. Tente novamente.');
+}
+
+// ─── enviar e-mail de confirmação ─────────────────────────────────────────
+async function sendConfirmationEmail(orderId, name, email, isNewAccount) {
+    try {
+        await fetch(`${API_BASE_URL}/send-confirmation-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId, customerName: name, customerEmail: email, isNewAccount })
+        });
+    } catch (err) {
+        console.warn('[checkout] Falha ao enviar e-mail:', err.message);
+    }
+}
+
+// ─── modal de sucesso ────────────────────────────────────────────────
+function showPaymentSuccessModal(orderId, email, isNewAccount) {
+    const modal   = document.getElementById('ck-success-modal');
+    const emailEl = document.getElementById('ck-success-email');
+    const dlBtn   = document.getElementById('ck-success-dl-btn');
+    const creds   = document.getElementById('ck-success-creds');
+    const loginEl = document.getElementById('ck-success-login');
+
+    if (emailEl)  emailEl.textContent  = email;
+    if (dlBtn)    dlBtn.href = `/downloads.html?order=${orderId}&success=1`;
+    if (creds)    creds.style.display  = isNewAccount ? 'block' : 'none';
+    if (loginEl)  loginEl.textContent  = email;
+
+    if (modal)    modal.style.display  = 'flex';
 }
 
 // ─── DOMContentLoaded ─────────────────────────────────────────────────────
