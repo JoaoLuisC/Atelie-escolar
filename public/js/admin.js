@@ -478,18 +478,23 @@ function renderCategories() {
         <div style="overflow-x:auto;">
         <table class="orders-table" style="width:100%;">
             <thead><tr>
+                <th style="width:80px;">Ordem</th>
                 <th>Categoria</th>
                 <th>Cor</th>
-                <th>Ordem</th>
                 <th>Destaque</th>
                 <th>Badge</th>
                 <th>A&ccedil;&otilde;es</th>
             </tr></thead>
             <tbody>
-            ${categories.map(cat => `<tr>
+            ${categories.map((cat, idx) => `<tr>
+                <td>
+                    <div style="display:flex;gap:4px;align-items:center;">
+                        <button class="pc-action-btn" style="padding:2px 8px;font-size:14px;line-height:1;" title="Mover para cima" ${idx === 0 ? 'disabled' : ''} onclick="window.moveCategoryUp('${cat.id}')">&#8593;</button>
+                        <button class="pc-action-btn" style="padding:2px 8px;font-size:14px;line-height:1;" title="Mover para baixo" ${idx === categories.length - 1 ? 'disabled' : ''} onclick="window.moveCategoryDown('${cat.id}')">&#8595;</button>
+                    </div>
+                </td>
                 <td style="font-weight:600;">${cat.name}</td>
                 <td><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${cat.color || '#9B5DE5'};border:2px solid #e0e4ea;"></span></td>
-                <td>${cat.order ?? 0}</td>
                 <td>${cat.featured ? 'Sim' : '—'}</td>
                 <td>${cat.badgeLabel || '—'}</td>
                 <td class="pc-actions-cell">
@@ -501,6 +506,33 @@ function renderCategories() {
         </table>
         </div>
     </div>`;
+}
+
+window.moveCategoryUp = function(catId) {
+    const idx = categories.findIndex(c => c.id === catId);
+    if (idx <= 0) return;
+    swapCategoryOrder(idx, idx - 1);
+};
+
+window.moveCategoryDown = function(catId) {
+    const idx = categories.findIndex(c => c.id === catId);
+    if (idx < 0 || idx >= categories.length - 1) return;
+    swapCategoryOrder(idx, idx + 1);
+};
+
+async function swapCategoryOrder(idxA, idxB) {
+    [categories[idxA], categories[idxB]] = [categories[idxB], categories[idxA]];
+    categories[idxA].order = idxA;
+    categories[idxB].order = idxB;
+    renderCategories();
+    try {
+        await Promise.all([
+            updateDoc(doc(db, 'categories', categories[idxA].id), { order: idxA }),
+            updateDoc(doc(db, 'categories', categories[idxB].id), { order: idxB }),
+        ]);
+    } catch (e) {
+        showToast('Erro ao reordenar: ' + e.message, 'error');
+    }
 }
 
 /* ─── abrir modal adicionar categoria ─── */
@@ -1266,6 +1298,8 @@ window.cmpCompare = async function() {
 /* ═══════════════════════════════════════
    SAÍDA & DESEMPENHO DE PRODUTOS
 ═══════════════════════════════════════ */
+let _saidaProdList = [];
+
 async function loadProdSaida() {
     const panel = document.getElementById('tab-prod-saida');
     if (!panel) return;
@@ -1302,37 +1336,81 @@ async function loadProdSaida() {
             });
         });
 
-        const prodList = Object.values(prods).sort((a, b) => b.qty - a.qty);
+        _saidaProdList = Object.values(prods).sort((a, b) => b.qty - a.qty);
+        const cats = [...new Set(_saidaProdList.map(p => p.category).filter(Boolean))].sort();
 
         panel.innerHTML = `
         <div class="dash-card" style="margin-top:0;">
             <div class="dash-card-header">
                 <h3><i class="bi bi-bar-chart-steps" style="color:#415A77;margin-right:6px;"></i> Desempenho por Produto</h3>
-                <span style="font-size:12px;color:#778DA9;">${prodList.length} produto${prodList.length !== 1 ? 's' : ''}</span>
+                <span id="saida-count" style="font-size:12px;color:#778DA9;">${_saidaProdList.length} produto${_saidaProdList.length !== 1 ? 's' : ''}</span>
             </div>
-            <div style="overflow-x:auto;">
-            <table class="orders-table" style="width:100%;">
-                <thead><tr>
-                    <th>Produto</th><th>Categoria</th><th>Pre&ccedil;o</th>
-                    <th>Vendas</th><th>Receita</th><th>Downloads</th><th>Status</th>
-                </tr></thead>
-                <tbody>
-                ${prodList.map(p => `<tr>
-                    <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name || p.id}</td>
-                    <td><span style="font-size:12px;color:#778DA9;">${p.category || '—'}</span></td>
-                    <td style="white-space:nowrap;">R$&nbsp;${fmtMoney(p.price)}</td>
-                    <td style="font-weight:700;color:${p.qty > 0 ? '#27ae60' : '#c0392b'};">${p.qty}</td>
-                    <td style="white-space:nowrap;">R$&nbsp;${fmtMoney(p.rev)}</td>
-                    <td>${p.downloads}</td>
-                    <td><span class="product-status ${p.active !== false ? 'active' : 'inactive'}">${p.active !== false ? 'Ativo' : 'Inativo'}</span></td>
-                </tr>`).join('')}
-                </tbody>
-            </table>
+            <div class="pc-toolbar" style="margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+                <div class="pc-cat-filter" id="saida-cat-filter">
+                    <button class="pc-cat-btn active" data-saida-cat="">Todas</button>
+                    ${cats.map(c => `<button class="pc-cat-btn" data-saida-cat="${c.replaceAll('"','&quot;')}">${c}</button>`).join('')}
+                </div>
+                <select id="saida-status-filter" class="form-control" style="max-width:170px;font-size:13px;">
+                    <option value="">Todos os status</option>
+                    <option value="active">Ativos</option>
+                    <option value="inactive">Inativos</option>
+                </select>
             </div>
+            <div id="saida-table-wrap"></div>
         </div>`;
+
+        renderSaidaTable();
+
+        document.getElementById('saida-cat-filter').addEventListener('click', e => {
+            const btn = e.target.closest('[data-saida-cat]');
+            if (!btn) return;
+            document.querySelectorAll('#saida-cat-filter .pc-cat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderSaidaTable();
+        });
+        document.getElementById('saida-status-filter').addEventListener('change', renderSaidaTable);
+
     } catch (err) {
         panel.innerHTML = `<div class="empty-state"><h3>Erro ao carregar</h3><p>${err.message}</p></div>`;
     }
+}
+
+function renderSaidaTable() {
+    const catBtn = document.querySelector('#saida-cat-filter .pc-cat-btn.active');
+    const cat    = catBtn ? catBtn.dataset.saidaCat : '';
+    const status = document.getElementById('saida-status-filter')?.value || '';
+
+    let list = _saidaProdList;
+    if (cat)               list = list.filter(p => p.category === cat);
+    if (status === 'active')   list = list.filter(p => p.active !== false);
+    if (status === 'inactive') list = list.filter(p => p.active === false);
+
+    const countEl = document.getElementById('saida-count');
+    if (countEl) countEl.textContent = `${list.length} produto${list.length !== 1 ? 's' : ''}`;
+
+    const wrap = document.getElementById('saida-table-wrap');
+    if (!wrap) return;
+    wrap.innerHTML = `
+    <div style="overflow-x:auto;">
+    <table class="orders-table" style="width:100%;">
+        <thead><tr>
+            <th>Produto</th><th>Categoria</th><th>Pre&ccedil;o</th>
+            <th>Vendas</th><th>Receita</th><th>Downloads</th><th>Status</th>
+        </tr></thead>
+        <tbody>
+        ${list.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#778DA9;">Nenhum produto encontrado.</td></tr>` :
+          list.map(p => `<tr>
+            <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name || p.id}</td>
+            <td><span style="font-size:12px;color:#778DA9;">${p.category || '—'}</span></td>
+            <td style="white-space:nowrap;">R$&nbsp;${fmtMoney(p.price)}</td>
+            <td style="font-weight:700;color:${p.qty > 0 ? '#27ae60' : '#c0392b'};">${p.qty}</td>
+            <td style="white-space:nowrap;">R$&nbsp;${fmtMoney(p.rev)}</td>
+            <td>${p.downloads}</td>
+            <td><span class="product-status ${p.active !== false ? 'active' : 'inactive'}">${p.active !== false ? 'Ativo' : 'Inativo'}</span></td>
+        </tr>`).join('')}
+        </tbody>
+    </table>
+    </div>`;
 }
 
 /* ═══════════════════════════════════════
@@ -2085,6 +2163,37 @@ function renderVitrineEditor(panel, sections, allProds) {
 
     /* Salvar */
     document.getElementById('btn-save-vitrine').addEventListener('click', saveVitrine);
+
+    /* Reordenar linhas com setas */
+    function updateVitrineRowNums() {
+        const allRows = document.querySelectorAll('#vit-rows .vit-row');
+        allRows.forEach((row, i) => {
+            row.dataset.idx = i;
+            const numEl = row.querySelector('.vit-row-num');
+            if (numEl) numEl.textContent = `Linha ${i + 1}`;
+            const up   = row.querySelector('.vit-move-up');
+            const down = row.querySelector('.vit-move-down');
+            if (up)   up.disabled   = (i === 0);
+            if (down) down.disabled = (i === allRows.length - 1);
+        });
+    }
+    updateVitrineRowNums();
+
+    document.getElementById('vit-rows').addEventListener('click', e => {
+        const up   = e.target.closest('.vit-move-up');
+        const down = e.target.closest('.vit-move-down');
+        if (!up && !down) return;
+        e.stopPropagation();
+        const row  = (up || down).closest('.vit-row');
+        if (up) {
+            const prev = row.previousElementSibling;
+            if (prev) row.parentNode.insertBefore(row, prev);
+        } else {
+            const next = row.nextElementSibling;
+            if (next) row.parentNode.insertBefore(next, row);
+        }
+        updateVitrineRowNums();
+    });
 }
 
 function renderVitrineRow(s, idx, allProds) {
@@ -2103,6 +2212,10 @@ function renderVitrineRow(s, idx, allProds) {
             </label>
             <span class="vit-row-num">Linha ${idx + 1}</span>
             <span class="vit-row-title-preview">${s.title || '—'}</span>
+            <div class="vit-reorder" style="display:flex;gap:4px;margin-left:auto;padding-right:8px;" onclick="event.stopPropagation()">
+                <button class="vit-move-btn vit-move-up" title="Mover para cima" style="background:#e8eaf6;border:none;border-radius:5px;padding:2px 8px;font-size:14px;cursor:pointer;line-height:1;">&#8593;</button>
+                <button class="vit-move-btn vit-move-down" title="Mover para baixo" style="background:#e8eaf6;border:none;border-radius:5px;padding:2px 8px;font-size:14px;cursor:pointer;line-height:1;">&#8595;</button>
+            </div>
             <i class="bi bi-chevron-down vit-chevron"></i>
         </div>
 

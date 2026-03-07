@@ -91,10 +91,6 @@ async function initDownloads() {
         await checkSingleOrder(orderId);
     }
 
-    /* All orders for this user */
-    console.log('[INIT] carregando pedidos para uid:', user.uid, '/ email:', user.email);
-    await loadUserOrders(user.uid, user.email);
-
     // Mantém listener para logout em tempo real
     onAuthStateChanged(auth, u => {
         console.log('[AUTH] listener pós-init:', u ? `logado ${u.email}` : 'deslogado — redirecionando');

@@ -228,8 +228,8 @@ function startPaymentPolling(orderId) {
                 if (_currentUser) {
                     window.location.href = downloadsUrl;
                 } else {
-                    // Usuário não logado (guest checkout) — pede login e redireciona para os downloads
-                    window.location.href = `/login.html?redirect=${encodeURIComponent(downloadsUrl)}`;
+                    // Usuário não logado (guest checkout) — redireciona para a página inicial
+                    window.location.href = '/index.html';
                 }
             } else if (status === 'rejected' || status === 'cancelled') {
                 clearInterval(interval);
