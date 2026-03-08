@@ -40,6 +40,7 @@ module.exports = async (req, res) => {
         category: data.category,
         tags: data.tags || [],
         productType: data.productType || 'individual',
+        isKit: data.isKit === true,
         pageSize: data.pageSize || '',
         paperType: data.paperType || '',
         kitItems: data.kitItems || [],

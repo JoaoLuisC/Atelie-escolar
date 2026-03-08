@@ -216,90 +216,141 @@
 
 <!-- ══════════════ MODAL PRODUTO ══════════════ -->
 <div id="product-modal" class="modal">
-    <div class="modal-content modal-large">
-        <div class="modal-header">
-            <h2 id="modal-title">Adicionar Produto</h2>
-            <button class="modal-close" id="modal-close">&times;</button>
+    <div class="modal-content modal-large prd-modal">
+
+        <!-- ── Cabeçalho + Stepper ── -->
+        <div class="prd-modal-hd">
+            <div class="prd-modal-title-row">
+                <h2 id="modal-title">Adicionar Produto</h2>
+                <span id="prd-kit-badge" class="prd-kit-badge" style="display:none;">&#x1F4E6; KIT</span>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="prd-stepper" role="tablist">
+                <button type="button" class="prd-step active" data-goto="1">
+                    <span class="prd-step-num">1</span>
+                    <span class="prd-step-lbl">B&aacute;sico</span>
+                </button>
+                <div class="prd-step-bar"></div>
+                <button type="button" class="prd-step" data-goto="2">
+                    <span class="prd-step-num">2</span>
+                    <span class="prd-step-lbl">M&iacute;dia</span>
+                </button>
+                <div class="prd-step-bar"></div>
+                <button type="button" class="prd-step" data-goto="3">
+                    <span class="prd-step-num">3</span>
+                    <span class="prd-step-lbl">Pre&ccedil;o &amp; Varia&ccedil;&otilde;es</span>
+                </button>
+            </div>
         </div>
-        <form id="product-form">
+
+        <form id="product-form" novalidate>
             <input type="hidden" id="product-id" name="id">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label for="product-name">Nome do Produto *</label>
-                    <input type="text" id="product-name" name="name" placeholder="Ex: Kit Criativo Completo" required>
-                </div>
-                <div class="form-group">
-                    <label for="product-price">Pre&ccedil;o (R$) *</label>
-                    <input type="number" id="product-price" name="price" step="0.01" min="0" placeholder="Ex: 39.90" required>
-                </div>
-                <div class="form-group full-width">
-                    <label for="product-description">Descri&ccedil;&atilde;o *</label>
-                    <textarea id="product-description" name="description" rows="4" placeholder="Descri&ccedil;&atilde;o detalhada do produto..." required></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="product-category">Categoria *</label>
-                    <select id="product-category" name="category" required>
-                        <option value="">Selecione uma categoria...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Tipo de Produto</label>
-                    <input type="hidden" id="product-type" name="productType" value="individual">
-                    <div id="product-type-badge" style="display:inline-flex;align-items:center;gap:7px;padding:7px 16px;border-radius:8px;font-weight:700;font-size:14px;background:#e8f5e9;color:#2e7d32;border:1.5px solid #c8e6c9;">&#x1F4C4; Individual</div>
-                </div>
-                <div class="form-group" id="original-price-group" style="display:none;">
-                    <label for="product-original-price">Pre&ccedil;o Original (sem desconto)</label>
-                    <input type="number" id="product-original-price" name="originalPrice" step="0.01" min="0" placeholder="Ex: 45.00">
-                    <p class="form-hint">Exibe o "de R$..." riscado para destacar a economia do Kit.</p>
-                </div>
-                <div class="form-group full-width">
-                    <label>Imagens do Produto *</label>
-                    <div id="images-container">
-                        <div class="image-input-group">
-                            <input type="url" class="product-image-url" placeholder="https://... (Imagem 1)" required>
-                            <button type="button" class="btn-remove-image" style="display:none;">&times;</button>
-                        </div>
+            <input type="hidden" id="product-type" name="productType" value="individual">
+            <div id="product-type-badge" style="display:none;"></div>
+
+            <!-- ══ STEP 1 — Básico ══ -->
+            <div class="prd-panel" id="prd-panel-1">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label for="product-name">Nome do Produto *</label>
+                        <input type="text" id="product-name" name="name" placeholder="Ex: Kit Festa Junina Completo">
                     </div>
-                    <button type="button" id="btn-add-image" class="btn-secondary" style="margin-top:10px;">+ Adicionar Imagem</button>
-                </div>
-                <div class="form-group full-width">
-                    <label>V&iacute;deos do Produto (opcional)</label>
-                    <div id="videos-container">
-                        <div class="video-input-group">
-                            <input type="url" class="product-video-url" placeholder="https://youtube.com/...">
-                            <button type="button" class="btn-remove-video" style="display:none;">&times;</button>
-                        </div>
-                    </div>
-                    <button type="button" id="btn-add-video" class="btn-secondary" style="margin-top:10px;">+ Adicionar V&iacute;deo</button>
-                </div>
-                <div class="form-group full-width">
-                    <label for="product-download">URL do Download *</label>
-                    <input type="url" id="product-download" name="downloadUrl" placeholder="https://drive.google.com/..." required>
-                </div>
-                <!-- Tamanhos de painel -->
-                <div class="form-group full-width" id="panel-sizes-section">
-                    <label><strong>Tamanhos de Painel</strong> <span style="font-weight:400;font-size:12px;color:#778DA9;">(opcional &mdash; para banners em m&uacute;ltiplos tamanhos)</span></label>
-                    <div id="panel-sizes-container"></div>
-                    <button type="button" id="btn-add-panel-size" class="btn-secondary" style="margin-top:8px;font-size:13px;">+ Adicionar Tamanho de Painel</button>
-                </div>
-                <!-- Produtos do Kit -->
-                <div class="form-group full-width" id="kit-items-section" style="display:none;">
-                    <label><strong>Produtos do Kit</strong></label>
-                    <p class="form-hint">Selecione os produtos existentes que comp&otilde;em este kit.</p>
-                    <div id="kit-filter-bar" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-                        <select id="kit-cat-filter" style="font-size:13px;padding:6px 10px;border-radius:7px;border:1.5px solid #dde4ee;background:#fff;flex:1;min-width:140px;cursor:pointer;">
-                            <option value="">Todas as categorias</option>
+                    <div class="form-group">
+                        <label for="product-category">Categoria *</label>
+                        <select id="product-category" name="category">
+                            <option value="">Selecione uma categoria...</option>
                         </select>
-                        <input type="text" id="kit-search" placeholder="&#x1F50D; Buscar por nome&hellip;" style="font-size:13px;padding:6px 10px;border-radius:7px;border:1.5px solid #dde4ee;flex:2;min-width:180px;">
                     </div>
-                    <div id="kit-product-picker" style="max-height:260px;overflow-y:auto;border:1.5px solid #e6e9f0;border-radius:8px;padding:8px;">
-                        <p style="color:#778DA9;text-align:center;padding:10px 0;">Carregando produtos&hellip;</p>
+                    <div class="form-group full-width">
+                        <label for="product-description">Descri&ccedil;&atilde;o *</label>
+                        <textarea id="product-description" name="description" rows="5" placeholder="Descreva o produto: o que est&aacute; incluso, formatos de arquivo, para qual ocasi&atilde;o serve..."></textarea>
                     </div>
                 </div>
             </div>
-            <div class="modal-actions">
+
+            <!-- ══ STEP 2 — Mídia ══ -->
+            <div class="prd-panel" id="prd-panel-2" style="display:none;">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label>Imagens do Produto *</label>
+                        <p class="form-hint">Cole a URL de cada imagem (Google Drive, Imgur, etc.).</p>
+                        <div id="images-container">
+                            <div class="image-input-group">
+                                <input type="url" class="product-image-url" placeholder="https://... (Imagem 1)">
+                                <button type="button" class="btn-remove-image" style="display:none;">&times;</button>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-add-image" class="btn-secondary" style="margin-top:10px;">+ Adicionar Imagem</button>
+                    </div>
+                    <div class="form-group full-width">
+                        <label>V&iacute;deos <span class="prd-optional">(opcional)</span></label>
+                        <div id="videos-container">
+                            <div class="video-input-group">
+                                <input type="url" class="product-video-url" placeholder="https://youtube.com/...">
+                                <button type="button" class="btn-remove-video" style="display:none;">&times;</button>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-add-video" class="btn-secondary" style="margin-top:10px;">+ Adicionar V&iacute;deo</button>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="product-download">URL do Arquivo para Download *</label>
+                        <p class="form-hint">Link direto do Google Drive, Dropbox ou similar.</p>
+                        <input type="url" id="product-download" name="downloadUrl" placeholder="https://drive.google.com/file/d/...">
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ STEP 3 — Preço & Variações ══ -->
+            <div class="prd-panel" id="prd-panel-3" style="display:none;">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="product-price">Pre&ccedil;o (R$) *</label>
+                        <input type="number" id="product-price" name="price" step="0.01" min="0" placeholder="Ex: 39.90">
+                    </div>
+                    <div class="form-group" id="original-price-group" style="display:none;">
+                        <label for="product-original-price">Pre&ccedil;o Original <span class="prd-optional">(sem desconto)</span></label>
+                        <input type="number" id="product-original-price" name="originalPrice" step="0.01" min="0" placeholder="Ex: 65.00">
+                        <p class="form-hint">Exibe o &ldquo;de R$&hellip;&rdquo; riscado para destacar a economia do Kit.</p>
+                    </div>
+
+                    <!-- Tamanhos de painel -->
+                    <div class="form-group full-width" id="panel-sizes-section">
+                        <label>
+                            <strong>Tamanhos de Painel</strong>
+                            <span class="prd-optional">&mdash; para banners em m&uacute;ltiplos tamanhos</span>
+                        </label>
+                        <div id="panel-sizes-container"></div>
+                        <button type="button" id="btn-add-panel-size" class="btn-secondary" style="margin-top:8px;font-size:13px;">+ Adicionar Tamanho de Painel</button>
+                    </div>
+
+                    <!-- Produtos do Kit -->
+                    <div class="form-group full-width" id="kit-items-section" style="display:none;">
+                        <div class="prd-kit-section-head">
+                            <strong>&#x1F4E6; Produtos do Kit</strong>
+                            <span id="prd-kit-total-badge" class="prd-kit-total-badge"></span>
+                        </div>
+                        <p class="form-hint" style="margin-bottom:10px;">Selecione os produtos individuais. Outros kits n&atilde;o aparecem nesta lista.</p>
+                        <div id="kit-filter-bar" class="prd-kit-filters">
+                            <select id="kit-cat-filter" class="prd-kit-filter-sel">
+                                <option value="">Todas as categorias</option>
+                            </select>
+                            <input type="text" id="kit-search" class="prd-kit-filter-inp" placeholder="&#x1F50D; Buscar por nome&hellip;">
+                        </div>
+                        <div id="kit-product-picker" class="prd-kit-picker">
+                            <p style="color:#778DA9;text-align:center;padding:10px 0;">Carregando produtos&hellip;</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Rodapé fixo ── -->
+            <div class="prd-footer">
                 <button type="button" class="btn-secondary" id="btn-cancel">Cancelar</button>
-                <button type="submit" class="btn-primary" id="btn-save">Salvar Produto</button>
+                <div class="prd-nav-grp">
+                    <button type="button" id="prd-btn-prev" class="btn-secondary prd-nav-btn" style="display:none;">&#8592; Voltar</button>
+                    <button type="button" id="prd-btn-next" class="btn-primary prd-nav-btn">Avan&ccedil;ar &#8594;</button>
+                    <button type="submit"  id="btn-save"     class="btn-primary prd-save-btn" style="display:none;">&#10003; Salvar Produto</button>
+                </div>
             </div>
         </form>
     </div>

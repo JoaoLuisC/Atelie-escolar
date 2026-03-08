@@ -100,7 +100,12 @@ async function populateKitPicker(selectedIds = []) {
             const snap = await getDocs(collection(db, 'products'));
             allProds = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         }
-        _kitAllProds = editingProductId ? allProds.filter(p => p.id !== editingProductId) : allProds;
+        // Exclui o próprio produto sendo editado e outros kits (kit não pode compor outro kit)
+        _kitAllProds = allProds.filter(p =>
+            p.id !== editingProductId &&
+            p.productType !== 'kit' &&
+            p.isKit !== true
+        );
         if (!_kitAllProds.length) {
             picker.innerHTML = '<p style="color:#778DA9;text-align:center;padding:10px 0;">Nenhum produto encontrado.</p>';
             return;
@@ -153,17 +158,23 @@ function renderKitPickerItems() {
 }
 
 function updateKitTotalPrice() {
-    const total = _kitAllProds
-        .filter(p => _kitCheckedIds.has(p.id))
-        .reduce((sum, p) => sum + (parseFloat(p.price) || 0), 0);
+    const selected = _kitAllProds.filter(p => _kitCheckedIds.has(p.id));
+    const total    = selected.reduce((sum, p) => sum + (Number.parseFloat(p.price) || 0), 0);
     const priceInput = document.getElementById('product-price');
     if (priceInput) priceInput.value = total.toFixed(2);
+    const badge = document.getElementById('prd-kit-total-badge');
+    if (badge) {
+        const plural = selected.length > 1 ? 's' : '';
+        badge.textContent = selected.length
+            ? `${selected.length} selecionado${plural} · R$ ${total.toFixed(2).replace('.', ',')}`
+            : '';
+    }
 }
 
 function collectKitProducts() {
     return _kitAllProds
         .filter(p => _kitCheckedIds.has(p.id))
-        .map(p => ({ id: p.id, name: p.name, price: parseFloat(p.price) || 0 }));
+        .map(p => ({ id: p.id, name: p.name, price: parseFloat(p.price) || 0, description: p.description || '' }));
 }
 
 /* ─── helpers: panel sizes ─── */
@@ -211,22 +222,93 @@ function toggleKitSections(isKit, selectedIds = []) {
 }
 
 function setProductTypeBadge(type) {
-    const input = document.getElementById('product-type');
-    const badge = document.getElementById('product-type-badge');
+    const input   = document.getElementById('product-type');
+    const kitBadge = document.getElementById('prd-kit-badge');
     if (input) input.value = type;
-    if (!badge) return;
-    if (type === 'kit') {
-        badge.textContent = '\u{1F4E6} KIT';
-        badge.style.background   = '#ede9fe';
-        badge.style.color        = '#6d28d9';
-        badge.style.borderColor  = '#ddd6fe';
-    } else {
-        badge.textContent = '\u{1F4C4} Individual';
-        badge.style.background   = '#e8f5e9';
-        badge.style.color        = '#2e7d32';
-        badge.style.borderColor  = '#c8e6c9';
-    }
+    if (kitBadge) kitBadge.style.display = (type === 'kit') ? 'inline-flex' : 'none';
 }
+
+/* ═══════════════════════════════════════
+   STEPPER DO MODAL DE PRODUTO
+═══════════════════════════════════════ */
+let _currentStep = 1;
+const TOTAL_STEPS = 3;
+
+function goToStep(n) {
+    // Validação ao avançar
+    if (n > _currentStep && !validateStep(_currentStep)) return;
+
+    _currentStep = n;
+
+    // Mostrar/ocultar painéis
+    for (let i = 1; i <= TOTAL_STEPS; i++) {
+        const panel = document.getElementById(`prd-panel-${i}`);
+        if (panel) panel.style.display = (i === n) ? 'block' : 'none';
+    }
+
+    // Atualizar stepper visual
+    document.querySelectorAll('.prd-step').forEach(btn => {
+        const s = Number(btn.dataset.goto);
+        btn.classList.remove('active', 'done');
+        if (s === n)  btn.classList.add('active');
+        if (s < n)    btn.classList.add('done');
+    });
+
+    // Botões de navegação
+    const prev = document.getElementById('prd-btn-prev');
+    const next = document.getElementById('prd-btn-next');
+    const save = document.getElementById('btn-save');
+    if (prev) prev.style.display = (n > 1)            ? 'inline-flex' : 'none';
+    if (next) next.style.display = (n < TOTAL_STEPS)  ? 'inline-flex' : 'none';
+    if (save) save.style.display = (n === TOTAL_STEPS) ? 'inline-flex' : 'none';
+}
+
+function validateStep(step) {
+    // Limpa erros anteriores
+    document.querySelectorAll('.prd-field-err').forEach(el => el.classList.remove('prd-field-err'));
+    document.querySelectorAll('.prd-err-msg').forEach(el => el.remove());
+
+    function markErr(el, msg) {
+        const parent = el.closest('.form-group');
+        if (parent) parent.classList.add('prd-field-err');
+        const span = document.createElement('span');
+        span.className = 'prd-err-msg';
+        span.textContent = '⚠ ' + msg;
+        el.insertAdjacentElement('afterend', span);
+        el.focus();
+    }
+
+    if (step === 1) {
+        const name = document.getElementById('product-name');
+        const cat  = document.getElementById('product-category');
+        const desc = document.getElementById('product-description');
+        if (!name.value.trim()) { markErr(name, 'Informe o nome do produto.'); return false; }
+        if (!cat.value)         { markErr(cat,  'Selecione uma categoria.');    return false; }
+        if (!desc.value.trim()) { markErr(desc, 'Adicione uma descrição.');     return false; }
+    }
+    if (step === 2) {
+        const firstImg = document.querySelector('.product-image-url');
+        const dl       = document.getElementById('product-download');
+        if (firstImg && !firstImg.value.trim()) { markErr(firstImg, 'Adicione ao menos uma imagem.'); return false; }
+        if (dl && !dl.value.trim())             { markErr(dl, 'Informe a URL do arquivo para download.'); return false; }
+    }
+    return true;
+}
+
+// Wire stepper buttons
+document.getElementById('prd-btn-next')?.addEventListener('click', () => {
+    if (validateStep(_currentStep)) goToStep(_currentStep + 1);
+});
+document.getElementById('prd-btn-prev')?.addEventListener('click', () => goToStep(_currentStep - 1));
+
+// Clique nos próprios dots do stepper (só avança para steps já visitados ou step atual)
+document.querySelectorAll('.prd-step[data-goto]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const target = Number(btn.dataset.goto);
+        if (target < _currentStep) goToStep(target);
+        else if (target === _currentStep + 1 && validateStep(_currentStep)) goToStep(target);
+    });
+});
 
 /* ═══════════════════════════════════════
    NAVEGAÇÃO — SIDEBAR
@@ -451,6 +533,7 @@ btnAddProduct.addEventListener('click', () => {
     resetImageInputs();
     resetVideoInputs();
     refreshCategorySelect();
+    goToStep(1);
     productModal.classList.add('show');
 });
 
@@ -500,6 +583,7 @@ window.editProduct = function(productId) {
         addVideoInput('', true);
     }
 
+    goToStep(1);
     productModal.classList.add('show');
 };
 
@@ -508,6 +592,10 @@ function closeProductModal() {
     productModal.classList.remove('show');
     productForm.reset();
     editingProductId = null;
+    goToStep(1);
+    // Limpa erros visuais
+    document.querySelectorAll('.prd-field-err').forEach(el => el.classList.remove('prd-field-err'));
+    document.querySelectorAll('.prd-err-msg').forEach(el => el.remove());
 }
 document.getElementById('modal-close').addEventListener('click', closeProductModal);
 document.getElementById('btn-cancel').addEventListener('click', closeProductModal);
@@ -521,19 +609,36 @@ productForm.addEventListener('submit', async (e) => {
     const videos = Array.from(videosContainer.querySelectorAll('.product-video-url')).map(i => i.value.trim()).filter(Boolean);
     const pType  = formData.get('productType') || 'individual';
     const origPriceRaw = formData.get('originalPrice');
+    const kitItemsList = pType === 'kit' ? collectKitProducts() : [];
+
+    // Herdar fotos dos produtos do kit (mantendo as do próprio kit na frente)
+    let finalImages = images;
+    if (pType === 'kit' && kitItemsList.length) {
+        const inherited = kitItemsList.flatMap(item => {
+            const prod = _kitAllProds.find(p => p.id === item.id);
+            if (!prod) return [];
+            return Array.isArray(prod.images) && prod.images.length
+                ? prod.images
+                : (prod.image ? [prod.image] : []);
+        });
+        // Deduplica mantendo ordem: fotos manuais primeiro, depois herdadas
+        const seen = new Set(finalImages);
+        inherited.forEach(url => { if (url && !seen.has(url)) { seen.add(url); finalImages = [...finalImages, url]; } });
+    }
 
     const productData = {
         name:          formData.get('name'),
         description:   formData.get('description'),
         price:         Number.parseFloat(formData.get('price')),
-        images,
-        image:         images[0] || '',
+        images:        finalImages,
+        image:         finalImages[0] || '',
         videos,
         downloadUrl:   formData.get('downloadUrl'),
         category:      formData.get('category'),
         productType:   pType,
+        isKit:         pType === 'kit',
         originalPrice: origPriceRaw ? Number.parseFloat(origPriceRaw) : null,
-        kitItems:      pType === 'kit' ? collectKitProducts() : [],
+        kitItems:      kitItemsList,
         panelSizes:    collectPanelSizes(),
         updatedAt:     new Date().toISOString()
     };
@@ -1630,6 +1735,7 @@ function renderProdConfig() {
         </select>
         <button class="pc-action-btn pc-btn-add" onclick="document.getElementById('btn-add-product').click()" style="height:38px;padding:0 16px;"><i class="bi bi-plus-lg"></i> Adicionar Produto</button>
         <button class="pc-action-btn" onclick="window.openAddKitModal()" style="height:38px;padding:0 16px;background:#7B2D8B;border-color:#7B2D8B;color:#fff;border-radius:8px;font-weight:600;cursor:pointer;border:none;"><i class="bi bi-collection-fill"></i> Adicionar KIT</button>
+        <button class="pc-action-btn" onclick="loadProducts().then(()=>{renderProdConfig();showToast('Lista atualizada!','success');})" title="Recarregar produtos do banco" style="height:38px;padding:0 14px;margin-left:auto;"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
     </div>
     <div class="dash-card" style="margin-top:0;">
         <div class="pc-toolbar">
@@ -1675,6 +1781,7 @@ window.openAddKitModal = function() {
     resetImageInputs();
     resetVideoInputs();
     refreshCategorySelect();
+    goToStep(1);
     productModal.classList.add('show');
 };
 

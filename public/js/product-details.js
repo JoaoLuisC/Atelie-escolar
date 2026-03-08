@@ -155,28 +155,43 @@ function buildKitContents(product) {
         return;
     }
     el.style.display = 'block';
+
+    const itemsHTML = product.kitItems.map((item, idx) => {
+        const meta = [
+            item.quantity ? `${item.quantity} folha${item.quantity > 1 ? 's' : ''}` : '',
+            item.pageSize || '',
+            item.dimensions || ''
+        ].filter(Boolean).join(' · ');
+        const hasDesc = Boolean(item.description && item.description.trim());
+        const descId  = `kit-item-desc-${idx}`;
+        return `<li style="border-bottom:1px solid #eef1f6;padding:10px 0;">
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+                <i class="bi bi-check-circle-fill" style="color:#27ae60;flex-shrink:0;margin-top:3px;"></i>
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
+                        <strong style="color:#1B263B;font-size:0.9rem;">${item.name}</strong>
+                        ${meta ? `<span style="color:#778DA9;font-size:0.8rem;">${meta}</span>` : ''}
+                        ${hasDesc ? `<button onclick="(function(btn,id){
+                            var d=document.getElementById(id);
+                            if(!d)return;
+                            var open=d.style.display!=='none';
+                            d.style.display=open?'none':'block';
+                            btn.innerHTML=open?'<i class=\'bi bi-chevron-down\'></i> Ver descrição':'<i class=\'bi bi-chevron-up\'></i> Ocultar';
+                        })(this,'${descId}')" style="font-size:11px;padding:2px 8px;border:1px solid #c7d2fe;border-radius:12px;background:#f0f4ff;color:#4f46e5;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;"><i class="bi bi-chevron-down"></i> Ver descrição</button>` : ''}
+                    </div>
+                    ${item.notes ? `<div style="font-size:0.78rem;color:#9AA5B5;margin-top:2px;">${item.notes}</div>` : ''}
+                    ${hasDesc ? `<div id="${descId}" style="display:none;margin-top:8px;font-size:0.83rem;color:#415A77;line-height:1.6;background:#f8faff;border-left:3px solid #818cf8;padding:8px 12px;border-radius:0 8px 8px 0;">${item.description.replace(/\n/g, '<br>')}</div>` : ''}
+                </div>
+            </div>
+        </li>`;
+    }).join('');
+
     el.innerHTML = `
         <div style="background:#f9fafb;border:1px solid #e6e9f0;border-radius:12px;padding:16px 20px;margin:14px 0;">
             <h4 style="font-size:0.95rem;font-weight:700;color:#1B263B;margin:0 0 10px;display:flex;align-items:center;gap:8px;">
-                <i class="bi bi-gift-fill" style="color:#e65100;"></i> O que vem no Kit:
+                <i class="bi bi-gift-fill" style="color:#e65100;"></i> O que vem no Kit (${product.kitItems.length} ${product.kitItems.length === 1 ? 'item' : 'itens'}):
             </h4>
-            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
-                ${product.kitItems.map(item => {
-                    const meta = [
-                        item.quantity ? `${item.quantity} folha${item.quantity > 1 ? 's' : ''}` : '',
-                        item.pageSize || '',
-                        item.dimensions || ''
-                    ].filter(Boolean).join(' · ');
-                    return `<li style="display:flex;align-items:flex-start;gap:8px;font-size:0.87rem;color:#415A77;">
-                        <i class="bi bi-check-circle-fill" style="color:#27ae60;flex-shrink:0;margin-top:2px;"></i>
-                        <span>
-                            <strong style="color:#1B263B;">${item.name}</strong>
-                            ${meta ? `<span style="color:#778DA9;margin-left:4px;">${meta}</span>` : ''}
-                            ${item.notes ? `<br><span style="font-size:0.8rem;color:#9AA5B5;">${item.notes}</span>` : ''}
-                        </span>
-                    </li>`;
-                }).join('')}
-            </ul>
+            <ul style="list-style:none;padding:0;margin:0;">${itemsHTML}</ul>
         </div>`;
 }
 
