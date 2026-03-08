@@ -51,6 +51,20 @@
 | `color` | String | Cor associada à categoria |
 | `videos` | Array\<String\> | Vídeos demonstrativos do produto |
 | `createdAt` | Timestamp/String | Data de criação |
+| `productType` | String | Tipo: `individual` (padrão) ou `kit` |
+| `originalPrice` | Number | Preço original sem desconto (para exibir "de R$ X por R$ Y") |
+| `pageSize` | String | Tamanho de folha padrão (ex: `A4`, `A3`) |
+| `paperType` | String | Tipo de papel recomendado (ex: `Fotográfico Glossy 180g`) |
+| `kitItems` | Array\<Object\> | Itens que compõem o kit (somente para `productType: 'kit'`) |
+| `kitItems[].name` | String | Nome/descrição do item |
+| `kitItems[].pageSize` | String | Tamanho de folha do item (ex: `A4`) |
+| `kitItems[].quantity` | Number | Quantidade de folhas/páginas |
+| `kitItems[].dimensions` | String | Dimensões físicas (ex: `76x53cm`, `1,07x0,76m`) |
+| `kitItems[].notes` | String | Observações (ex: `Papel Glossy 180g`) |
+| `panelSizes` | Array\<Object\> | Tamanhos disponíveis para banners/painéis |
+| `panelSizes[].label` | String | Etiqueta do tamanho (ex: `Menor`, `Maior`) |
+| `panelSizes[].dimensions` | String | Dimensões do painel (ex: `0,76x0,53m`) |
+| `panelSizes[].sheets` | Number | Número de folhas A4 necessárias |
 
 ---
 

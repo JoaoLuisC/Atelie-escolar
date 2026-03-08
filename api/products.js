@@ -34,9 +34,16 @@ module.exports = async (req, res) => {
         name: data.name,
         description: data.description,
         price: data.price,
+        originalPrice: data.originalPrice || null,
         image: data.image,
+        images: data.images || [],
         category: data.category,
         tags: data.tags || [],
+        productType: data.productType || 'individual',
+        pageSize: data.pageSize || '',
+        paperType: data.paperType || '',
+        kitItems: data.kitItems || [],
+        panelSizes: data.panelSizes || [],
       });
     });
 

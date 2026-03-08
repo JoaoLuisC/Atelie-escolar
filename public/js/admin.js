@@ -80,6 +80,154 @@ const categoriesList   = document.getElementById('categories-list');
 const categoryModal    = document.getElementById('category-modal');
 const categoryForm     = document.getElementById('category-form');
 
+// kit / painel
+const panelSizesContainer = document.getElementById('panel-sizes-container');
+
+/* ─── helpers: kit product picker ─── */
+let _kitAllProds   = [];
+let _kitCheckedIds = new Set();
+
+async function populateKitPicker(selectedIds = []) {
+    _kitCheckedIds = new Set(selectedIds);
+    const picker    = document.getElementById('kit-product-picker');
+    const catFilter = document.getElementById('kit-cat-filter');
+    const searchInp = document.getElementById('kit-search');
+    if (!picker) return;
+    picker.innerHTML = '<p style="color:#778DA9;text-align:center;padding:10px 0;">Carregando produtos…</p>';
+    try {
+        let allProds = products.length ? products : [];
+        if (!allProds.length) {
+            const snap = await getDocs(collection(db, 'products'));
+            allProds = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+        _kitAllProds = editingProductId ? allProds.filter(p => p.id !== editingProductId) : allProds;
+        if (!_kitAllProds.length) {
+            picker.innerHTML = '<p style="color:#778DA9;text-align:center;padding:10px 0;">Nenhum produto encontrado.</p>';
+            return;
+        }
+        if (catFilter) {
+            const cats = [...new Set(_kitAllProds.map(p => p.category).filter(Boolean))].sort();
+            catFilter.innerHTML = '<option value="">Todas as categorias</option>' +
+                cats.map(c => `<option value="${c}">${c}</option>`).join('');
+            catFilter.value = '';
+        }
+        if (searchInp) searchInp.value = '';
+        renderKitPickerItems();
+        updateKitTotalPrice();
+    } catch (err) {
+        picker.innerHTML = `<p style="color:#c0392b;text-align:center;padding:10px 0;">Erro: ${err.message}</p>`;
+    }
+}
+
+function renderKitPickerItems() {
+    const picker = document.getElementById('kit-product-picker');
+    if (!picker) return;
+    const cat    = document.getElementById('kit-cat-filter')?.value || '';
+    const search = (document.getElementById('kit-search')?.value || '').toLowerCase().trim();
+    let filtered = _kitAllProds;
+    if (cat)    filtered = filtered.filter(p => p.category === cat);
+    if (search) filtered = filtered.filter(p => (p.name || '').toLowerCase().includes(search));
+    if (!filtered.length) {
+        picker.innerHTML = '<p style="color:#778DA9;text-align:center;padding:20px 0;">Nenhum produto encontrado para este filtro.</p>';
+        return;
+    }
+    picker.innerHTML = filtered.map(p => `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;cursor:pointer;transition:background .15s;${p.active === false ? 'opacity:.6;' : ''}" onmouseover="this.style.background='#f5f7ff'" onmouseout="this.style.background=''">
+            <input type="checkbox" class="kit-product-check" value="${p.id}"
+                data-name="${(p.name || '').replaceAll('"', '&quot;')}"
+                data-price="${p.price || 0}"
+                ${_kitCheckedIds.has(p.id) ? 'checked' : ''}>
+            <span style="flex:1;font-weight:500;">${p.name}</span>
+            <span style="font-size:12px;color:#778DA9;margin-right:4px;">${p.category || ''}</span>
+            <span style="font-size:13px;font-weight:600;white-space:nowrap;color:#415A77;">R$&nbsp;${fmtMoney(p.price)}</span>
+            ${p.active === false ? '<span style="font-size:11px;background:#fde8e8;color:#b91c1c;border-radius:4px;padding:1px 5px;flex-shrink:0;">inativo</span>' : ''}
+            ${(p.productType === 'kit') ? '<span style="font-size:11px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 5px;flex-shrink:0;">KIT</span>' : ''}
+        </label>`).join('');
+    picker.querySelectorAll('.kit-product-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+            if (cb.checked) _kitCheckedIds.add(cb.value);
+            else _kitCheckedIds.delete(cb.value);
+            updateKitTotalPrice();
+        });
+    });
+}
+
+function updateKitTotalPrice() {
+    const total = _kitAllProds
+        .filter(p => _kitCheckedIds.has(p.id))
+        .reduce((sum, p) => sum + (parseFloat(p.price) || 0), 0);
+    const priceInput = document.getElementById('product-price');
+    if (priceInput) priceInput.value = total.toFixed(2);
+}
+
+function collectKitProducts() {
+    return _kitAllProds
+        .filter(p => _kitCheckedIds.has(p.id))
+        .map(p => ({ id: p.id, name: p.name, price: parseFloat(p.price) || 0 }));
+}
+
+/* ─── helpers: panel sizes ─── */
+function addPanelSizeRow(ps = {}) {
+    const row = document.createElement('div');
+    row.className = 'panel-size-row';
+    row.style.cssText = 'border:1px solid #e6e9f0;border-radius:8px;padding:10px;margin-bottom:8px;';
+    row.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;">
+            <div>
+                <label style="font-size:12px;color:#778DA9;display:block;margin-bottom:4px;">Etiqueta</label>
+                <input type="text" class="panel-size-label" placeholder="Ex: Menor" value="${(ps.label||'').replaceAll('"','&quot;')}" style="width:100%;">
+            </div>
+            <div>
+                <label style="font-size:12px;color:#778DA9;display:block;margin-bottom:4px;">Dimensões</label>
+                <input type="text" class="panel-size-dimensions" placeholder="Ex: 0,76x0,53m" value="${(ps.dimensions||'').replaceAll('"','&quot;')}" style="width:100%;">
+            </div>
+            <div>
+                <label style="font-size:12px;color:#778DA9;display:block;margin-bottom:4px;">Nº de folhas A4</label>
+                <input type="number" class="panel-size-sheets" min="1" placeholder="8" value="${ps.sheets||''}" style="width:100%;">
+            </div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:0;">
+                <button type="button" class="btn-remove-image btn-remove-panel-size" title="Remover">&times;</button>
+            </div>
+        </div>`;
+    row.querySelector('.btn-remove-panel-size').addEventListener('click', () => row.remove());
+    panelSizesContainer.appendChild(row);
+}
+
+function resetPanelSizes() { panelSizesContainer.innerHTML = ''; }
+
+function collectPanelSizes() {
+    return Array.from(panelSizesContainer.querySelectorAll('.panel-size-row')).map(row => ({
+        label:      row.querySelector('.panel-size-label').value.trim(),
+        dimensions: row.querySelector('.panel-size-dimensions').value.trim(),
+        sheets:     Number.parseInt(row.querySelector('.panel-size-sheets').value, 10) || null,
+    })).filter(ps => ps.dimensions || ps.label);
+}
+
+/* ─── toggle kit sections ─── */
+function toggleKitSections(isKit, selectedIds = []) {
+    document.getElementById('kit-items-section').style.display    = isKit ? 'block' : 'none';
+    document.getElementById('original-price-group').style.display = isKit ? 'block' : 'none';
+    if (isKit) populateKitPicker(selectedIds);
+}
+
+function setProductTypeBadge(type) {
+    const input = document.getElementById('product-type');
+    const badge = document.getElementById('product-type-badge');
+    if (input) input.value = type;
+    if (!badge) return;
+    if (type === 'kit') {
+        badge.textContent = '\u{1F4E6} KIT';
+        badge.style.background   = '#ede9fe';
+        badge.style.color        = '#6d28d9';
+        badge.style.borderColor  = '#ddd6fe';
+    } else {
+        badge.textContent = '\u{1F4C4} Individual';
+        badge.style.background   = '#e8f5e9';
+        badge.style.color        = '#2e7d32';
+        badge.style.borderColor  = '#c8e6c9';
+    }
+}
+
 /* ═══════════════════════════════════════
    NAVEGAÇÃO — SIDEBAR
 ═══════════════════════════════════════ */
@@ -263,12 +411,13 @@ function renderProducts() {
             <div class="prod-list-item" data-id="${product.id}">
                 ${imgHTML}
                 <div class="prod-list-info">
-                    <div class="prod-list-name">${product.name}</div>
+                    <div class="prod-list-name">${product.name}${product.productType === 'kit' ? ' <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;vertical-align:middle;">KIT</span>' : ''}</div>
                     <div class="prod-list-desc">${product.description || '—'}</div>
                     <div class="prod-list-meta">
                         <span class="prod-list-cat">${product.category || '—'}</span>
                         ${imgCount > 1 ? `<span class="prod-list-chip">🖼️ ${imgCount}</span>` : ''}
                         ${videoCount > 0 ? `<span class="prod-list-chip">🎬 ${videoCount}</span>` : ''}
+                        ${product.kitItems?.length > 0 ? `<span class="prod-list-chip">📦 ${product.kitItems.length} itens</span>` : ''}
                     </div>
                 </div>
                 <div class="prod-list-price">R$ ${formatPrice(product.price)}</div>
@@ -295,7 +444,10 @@ btnAddProduct.addEventListener('click', () => {
     editingProductId = null;
     document.getElementById('modal-title').textContent = 'Adicionar Produto';
     productForm.reset();
-    document.getElementById('product-active').checked = true;
+    setProductTypeBadge('individual');
+    document.getElementById('product-original-price').value = '';
+    toggleKitSections(false);
+    resetPanelSizes();
     resetImageInputs();
     resetVideoInputs();
     refreshCategorySelect();
@@ -313,7 +465,24 @@ window.editProduct = function(productId) {
     document.getElementById('product-price').value = product.price;
     document.getElementById('product-description').value = product.description;
     document.getElementById('product-download').value = product.downloadUrl;
-    document.getElementById('product-active').checked = product.active;
+
+    // Tipo e campos kit
+    const pType = product.productType || 'individual';
+    const isKit = pType === 'kit';
+    setProductTypeBadge(pType);
+    document.getElementById('product-original-price').value = product.originalPrice || '';
+
+    // kit items → extract productIds from new format ({ id, name, price }) or legacy
+    const kitItemIds = Array.isArray(product.kitItems)
+        ? product.kitItems.filter(item => item.id).map(item => item.id)
+        : [];
+    toggleKitSections(isKit, kitItemIds);
+
+    // Panel sizes
+    resetPanelSizes();
+    if (Array.isArray(product.panelSizes)) {
+        product.panelSizes.forEach(ps => addPanelSizeRow(ps));
+    }
 
     refreshCategorySelect(product.category);
 
@@ -348,22 +517,25 @@ document.getElementById('btn-cancel').addEventListener('click', closeProductModa
 productForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(productForm);
-    const tagsValue = formData.get('tags');
     const images = Array.from(imagesContainer.querySelectorAll('.product-image-url')).map(i => i.value.trim()).filter(Boolean);
     const videos = Array.from(videosContainer.querySelectorAll('.product-video-url')).map(i => i.value.trim()).filter(Boolean);
+    const pType  = formData.get('productType') || 'individual';
+    const origPriceRaw = formData.get('originalPrice');
 
     const productData = {
-        name: formData.get('name'),
-        description: formData.get('description'),
-        price: parseFloat(formData.get('price')),
+        name:          formData.get('name'),
+        description:   formData.get('description'),
+        price:         Number.parseFloat(formData.get('price')),
         images,
-        image: images[0] || '',
+        image:         images[0] || '',
         videos,
-        downloadUrl: formData.get('downloadUrl'),
-        category: formData.get('category'),
-        tags: tagsValue ? tagsValue.split(',').map(t => t.trim()).filter(Boolean) : [],
-        active: formData.get('active') === 'on',
-        updatedAt: new Date().toISOString()
+        downloadUrl:   formData.get('downloadUrl'),
+        category:      formData.get('category'),
+        productType:   pType,
+        originalPrice: origPriceRaw ? Number.parseFloat(origPriceRaw) : null,
+        kitItems:      pType === 'kit' ? collectKitProducts() : [],
+        panelSizes:    collectPanelSizes(),
+        updatedAt:     new Date().toISOString()
     };
 
     try {
@@ -371,6 +543,7 @@ productForm.addEventListener('submit', async (e) => {
             await updateDoc(doc(db, 'products', editingProductId), productData);
             showToast('Produto atualizado!', 'success');
         } else {
+            productData.active    = true;
             productData.createdAt = new Date().toISOString();
             await addDoc(collection(db, 'products'), productData);
             showToast('Produto adicionado!', 'success');
@@ -385,6 +558,9 @@ productForm.addEventListener('submit', async (e) => {
 /* ─── imagens helpers ─── */
 document.getElementById('btn-add-image').addEventListener('click', () => addImageInput());
 document.getElementById('btn-add-video').addEventListener('click', () => addVideoInput());
+document.getElementById('btn-add-panel-size')?.addEventListener('click', () => addPanelSizeRow());
+document.getElementById('kit-cat-filter')?.addEventListener('change', () => renderKitPickerItems());
+document.getElementById('kit-search')?.addEventListener('input', () => renderKitPickerItems());
 
 function addImageInput(value = '', hideRemove = false) {
     const g = document.createElement('div');
@@ -1447,16 +1623,19 @@ function renderProdConfig() {
     const filtered = pcFilter ? products.filter(p => p.category === pcFilter) : products;
 
     panel.innerHTML = `
+    <div class="pc-top-toolbar" style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+        <select id="pc-cat-select" onchange="window.setPcFilter(this.value)" style="font-size:14px;padding:7px 12px;border-radius:8px;border:1.5px solid #dde4ee;background:#fff;height:38px;min-width:180px;cursor:pointer;">
+            <option value="">Todas as categorias</option>
+            ${cats.map(c => `<option value="${c}" ${pcFilter === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+        <button class="pc-action-btn pc-btn-add" onclick="document.getElementById('btn-add-product').click()" style="height:38px;padding:0 16px;"><i class="bi bi-plus-lg"></i> Adicionar Produto</button>
+        <button class="pc-action-btn" onclick="window.openAddKitModal()" style="height:38px;padding:0 16px;background:#7B2D8B;border-color:#7B2D8B;color:#fff;border-radius:8px;font-weight:600;cursor:pointer;border:none;"><i class="bi bi-collection-fill"></i> Adicionar KIT</button>
+    </div>
     <div class="dash-card" style="margin-top:0;">
         <div class="pc-toolbar">
-            <div class="pc-cat-filter">
-                <button class="pc-cat-btn${!pcFilter ? ' active' : ''}" onclick="window.setPcFilter('')">Todos</button>
-                ${cats.map(c => `<button class="pc-cat-btn${pcFilter === c ? ' active' : ''}" onclick="window.setPcFilter('${c.replaceAll("'", "\\'")}')">${c}</button>`).join('')}
-            </div>
             <div class="pc-toolbar-right">
                 <button class="pc-action-btn" onclick="window.bulkToggle(true)">Ativar sel.</button>
                 <button class="pc-action-btn" onclick="window.bulkToggle(false)">Desativar sel.</button>
-                <button class="pc-action-btn pc-btn-add" onclick="document.getElementById('btn-add-product').click()"><i class="bi bi-plus-lg"></i> Adicionar Produto</button>
             </div>
         </div>
         <div style="overflow-x:auto;">
@@ -1468,7 +1647,7 @@ function renderProdConfig() {
             <tbody>
             ${filtered.map(p => `<tr data-pid="${p.id}">
                 <td><input type="checkbox" class="pc-row-check" data-pid="${p.id}" style="cursor:pointer;"></td>
-                <td style="font-weight:600;">${p.name}</td>
+                <td style="font-weight:600;">${p.name}${p.productType === 'kit' ? ' <span style="background:#7B2D8B;color:#fff;border-radius:4px;font-size:11px;padding:1px 6px;margin-left:4px;vertical-align:middle;">KIT</span>' : ''}</td>
                 <td style="font-weight:600;">${p.category || '\u2014'}</td>
                 <td style="white-space:nowrap;">R$&nbsp;${fmtMoney(p.price)}</td>
                 <td><span class="pc-status-text ${p.active !== false ? 'active' : 'inactive'}">${p.active !== false ? 'Ativo' : 'Inativo'}</span></td>
@@ -1484,6 +1663,20 @@ function renderProdConfig() {
         </div>
     </div>`;
 }
+
+window.openAddKitModal = function() {
+    editingProductId = null;
+    document.getElementById('modal-title').textContent = 'Adicionar KIT';
+    productForm.reset();
+    setProductTypeBadge('kit');
+    document.getElementById('product-original-price').value = '';
+    toggleKitSections(true);
+    resetPanelSizes();
+    resetImageInputs();
+    resetVideoInputs();
+    refreshCategorySelect();
+    productModal.classList.add('show');
+};
 
 window.toggleProductActive = async function(id, active) {
     try {
@@ -2212,7 +2405,7 @@ function renderVitrineRow(s, idx, allProds) {
             </label>
             <span class="vit-row-num">Linha ${idx + 1}</span>
             <span class="vit-row-title-preview">${s.title || '—'}</span>
-            <div class="vit-reorder" style="display:flex;gap:4px;margin-left:auto;padding-right:8px;" onclick="event.stopPropagation()">
+            <div class="vit-reorder" style="display:flex;gap:4px;margin-left:auto;padding-right:8px;">
                 <button class="vit-move-btn vit-move-up" title="Mover para cima" style="background:#e8eaf6;border:none;border-radius:5px;padding:2px 8px;font-size:14px;cursor:pointer;line-height:1;">&#8593;</button>
                 <button class="vit-move-btn vit-move-down" title="Mover para baixo" style="background:#e8eaf6;border:none;border-radius:5px;padding:2px 8px;font-size:14px;cursor:pointer;line-height:1;">&#8595;</button>
             </div>

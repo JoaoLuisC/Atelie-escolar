@@ -63,6 +63,15 @@ function displayProduct(product) {
     const price = parseFloat(product.price) || 0;
     productPrice.textContent    = `R$ ${formatPrice(price)}`;
 
+    // Original price (for kits with discount)
+    const origEl = document.getElementById('pdOriginalPrice');
+    if (origEl && product.originalPrice && product.originalPrice > price) {
+        origEl.style.display = 'block';
+        origEl.innerHTML = `De <del>R$ ${formatPrice(product.originalPrice)}</del> por`;
+    } else if (origEl) {
+        origEl.style.display = 'none';
+    }
+
     // Pix discount (10%)
     const pixPrice = price * 0.9;
     if (pdPixText)      pdPixText.textContent = `R$ ${formatPrice(pixPrice)} à vista no Pix (10% off)`;
@@ -72,6 +81,12 @@ function displayProduct(product) {
 
     // Format badges (based on product.formats array or reasonable defaults)
     buildFormatBadges(product);
+
+    // Kit contents
+    buildKitContents(product);
+
+    // Panel sizes (for formats tab)
+    buildPanelSizes(product);
 
     // Description
     productDescription.textContent = product.description || 'Sem descrição disponível.';
@@ -99,20 +114,95 @@ function displayProduct(product) {
 // ─── Format badges ──────────────────────────────────
 function buildFormatBadges(product) {
     if (!pdFormatBadges) return;
+    const badges = [];
+
+    if ((product.productType || 'individual') === 'kit') {
+        badges.push(`<span class="pd-fmt-tag" style="background:#fff3e0;color:#e65100;border-color:#ffe0b2;"><i class="bi bi-gift-fill"></i> KIT Completo</span>`);
+    }
+
     const fmts = Array.isArray(product.formats) && product.formats.length
         ? product.formats
-        : ['PDF', 'Canva'];
+        : ['PDF'];
 
-    pdFormatBadges.innerHTML = fmts.map(f => {
+    fmts.forEach(f => {
         const fl = f.toLowerCase();
         if (fl.includes('pdf')) {
-            return `<span class="pd-fmt-tag pd-fmt-pdf"><i class="bi bi-filetype-pdf"></i> PDF Alta Resolução</span>`;
+            badges.push(`<span class="pd-fmt-tag pd-fmt-pdf"><i class="bi bi-filetype-pdf"></i> PDF Alta Resolução</span>`);
         } else if (fl.includes('canva')) {
-            return `<span class="pd-fmt-tag pd-fmt-canva"><i class="bi bi-pencil-square"></i> Canva Editável</span>`;
+            badges.push(`<span class="pd-fmt-tag pd-fmt-canva"><i class="bi bi-pencil-square"></i> Canva Editável</span>`);
         } else {
-            return `<span class="pd-fmt-tag"><i class="bi bi-file-earmark"></i> ${f}</span>`;
+            badges.push(`<span class="pd-fmt-tag"><i class="bi bi-file-earmark"></i> ${f}</span>`);
         }
-    }).join('');
+    });
+
+    if (product.pageSize) {
+        badges.push(`<span class="pd-fmt-tag"><i class="bi bi-file-earmark-text"></i> Folha ${product.pageSize}</span>`);
+    }
+    if (product.paperType) {
+        badges.push(`<span class="pd-fmt-tag"><i class="bi bi-printer"></i> ${product.paperType}</span>`);
+    }
+
+    pdFormatBadges.innerHTML = badges.join('');
+}
+
+// ─── Kit contents ────────────────────────────────────
+function buildKitContents(product) {
+    const el = document.getElementById('pdKitContents');
+    if (!el) return;
+    const isKit = (product.productType || 'individual') === 'kit';
+    if (!isKit || !Array.isArray(product.kitItems) || !product.kitItems.length) {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = 'block';
+    el.innerHTML = `
+        <div style="background:#f9fafb;border:1px solid #e6e9f0;border-radius:12px;padding:16px 20px;margin:14px 0;">
+            <h4 style="font-size:0.95rem;font-weight:700;color:#1B263B;margin:0 0 10px;display:flex;align-items:center;gap:8px;">
+                <i class="bi bi-gift-fill" style="color:#e65100;"></i> O que vem no Kit:
+            </h4>
+            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
+                ${product.kitItems.map(item => {
+                    const meta = [
+                        item.quantity ? `${item.quantity} folha${item.quantity > 1 ? 's' : ''}` : '',
+                        item.pageSize || '',
+                        item.dimensions || ''
+                    ].filter(Boolean).join(' · ');
+                    return `<li style="display:flex;align-items:flex-start;gap:8px;font-size:0.87rem;color:#415A77;">
+                        <i class="bi bi-check-circle-fill" style="color:#27ae60;flex-shrink:0;margin-top:2px;"></i>
+                        <span>
+                            <strong style="color:#1B263B;">${item.name}</strong>
+                            ${meta ? `<span style="color:#778DA9;margin-left:4px;">${meta}</span>` : ''}
+                            ${item.notes ? `<br><span style="font-size:0.8rem;color:#9AA5B5;">${item.notes}</span>` : ''}
+                        </span>
+                    </li>`;
+                }).join('')}
+            </ul>
+        </div>`;
+}
+
+// ─── Panel sizes (for formats tab) ───────────────────
+function buildPanelSizes(product) {
+    const el = document.getElementById('pdPanelSizes');
+    if (!el) return;
+    if (!Array.isArray(product.panelSizes) || !product.panelSizes.length) {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = 'block';
+    el.innerHTML = `
+        <div style="margin-bottom:18px;">
+            <h4 style="font-size:0.95rem;font-weight:700;color:#1B263B;margin:0 0 10px;display:flex;align-items:center;gap:6px;">
+                <i class="bi bi-rulers" style="color:var(--secondary-color);"></i> Tamanhos de Painel disponíveis:
+            </h4>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                ${product.panelSizes.map(ps => `
+                    <div style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:10px;padding:10px 16px;min-width:130px;text-align:center;">
+                        ${ps.label ? `<div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.04em;color:#6366F1;font-weight:700;margin-bottom:4px;">${ps.label}</div>` : ''}
+                        ${ps.dimensions ? `<div style="font-size:1rem;font-weight:700;color:#1B263B;">${ps.dimensions}</div>` : ''}
+                        ${ps.sheets ? `<div style="font-size:0.78rem;color:#778DA9;margin-top:2px;">${ps.sheets} folhas A4</div>` : ''}
+                    </div>`).join('')}
+            </div>
+        </div>`;
 }
 
 // ─── Gallery ────────────────────────────────────────

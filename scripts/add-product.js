@@ -14,14 +14,31 @@ async function addProduct() {
 
     // Dados do produto - EDITE AQUI!
     const productData = {
-      name: "Kit Criativo Completo",
-      description: "50 atividades artísticas prontas para imprimir. Inclui: desenhos para colorir, recorte e colagem, coordenação motora e muito mais!",
-      price: 39.90,
-      image: "https://via.placeholder.com/400x300/FF6B6B/FFFFFF?text=Kit+Criativo",
+      name: "Kit Dia do Circo",
+      description: "Kit completo com painel decorativo, cone para guloseimas, pulseirinhas e folhas de atividades com tema circo.",
+      price: 5.00,
+      originalPrice: null,       // null = sem desconto, ou ex: 15.00 para mostrar "de R$15 por R$5"
+      image: "https://via.placeholder.com/400x300/FF6B6B/FFFFFF?text=Kit+Circo",
       downloadUrl: "https://drive.google.com/uc?export=download&id=COLOQUE_SEU_ID_AQUI",
-      category: "Arte e Educação",
-      tags: ["criança", "arte", "educação", "atividades"],
+      category: "Kits Temáticos",
+      tags: ["circo", "festa", "decoração", "atividades"],
       active: true,
+      productType: "kit",        // "individual" ou "kit"
+      pageSize: "A4",            // tamanho padrão de folha
+      paperType: "Fotográfico Glossy 180g / Sulfit comum",
+      kitItems: [
+        { name: "Painel banner decorativo tema circo — Menor", pageSize: "A4", quantity: 8,  dimensions: "0,76x0,53m",  notes: "Papel glossy 180g" },
+        { name: "Painel banner decorativo tema circo — Maior", pageSize: "A4", quantity: 16, dimensions: "1,07x0,76m",  notes: "Papel glossy 180g" },
+        { name: "Cone para guloseimas",                        pageSize: "A4", quantity: 1,  dimensions: "",             notes: "Papel glossy 180g" },
+        { name: "Pulseirinhas",                                pageSize: "A4", quantity: 1,  dimensions: "",             notes: "Papel glossy 180g" },
+        { name: "Tag para pirulito",                           pageSize: "A4", quantity: 1,  dimensions: "",             notes: "Papel glossy 180g" },
+        { name: "Folha de atividades — vogais",                pageSize: "A4", quantity: 1,  dimensions: "",             notes: "Sulfit comum" },
+        { name: "Folha de atividades — numerais ordem crescente", pageSize: "A4", quantity: 1, dimensions: "",           notes: "Sulfit comum" },
+      ],
+      panelSizes: [
+        { label: "Menor", dimensions: "0,76x0,53m", sheets: 8  },
+        { label: "Maior", dimensions: "1,07x0,76m", sheets: 16 },
+      ],
       createdAt: new Date().toISOString()
     };
 

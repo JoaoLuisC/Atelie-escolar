@@ -242,6 +242,16 @@
                         <option value="">Selecione uma categoria...</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Tipo de Produto</label>
+                    <input type="hidden" id="product-type" name="productType" value="individual">
+                    <div id="product-type-badge" style="display:inline-flex;align-items:center;gap:7px;padding:7px 16px;border-radius:8px;font-weight:700;font-size:14px;background:#e8f5e9;color:#2e7d32;border:1.5px solid #c8e6c9;">&#x1F4C4; Individual</div>
+                </div>
+                <div class="form-group" id="original-price-group" style="display:none;">
+                    <label for="product-original-price">Pre&ccedil;o Original (sem desconto)</label>
+                    <input type="number" id="product-original-price" name="originalPrice" step="0.01" min="0" placeholder="Ex: 45.00">
+                    <p class="form-hint">Exibe o "de R$..." riscado para destacar a economia do Kit.</p>
+                </div>
                 <div class="form-group full-width">
                     <label>Imagens do Produto *</label>
                     <div id="images-container">
@@ -266,11 +276,25 @@
                     <label for="product-download">URL do Download *</label>
                     <input type="url" id="product-download" name="downloadUrl" placeholder="https://drive.google.com/..." required>
                 </div>
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="product-active" name="active" checked>
-                        <span>Produto ativo</span>
-                    </label>
+                <!-- Tamanhos de painel -->
+                <div class="form-group full-width" id="panel-sizes-section">
+                    <label><strong>Tamanhos de Painel</strong> <span style="font-weight:400;font-size:12px;color:#778DA9;">(opcional &mdash; para banners em m&uacute;ltiplos tamanhos)</span></label>
+                    <div id="panel-sizes-container"></div>
+                    <button type="button" id="btn-add-panel-size" class="btn-secondary" style="margin-top:8px;font-size:13px;">+ Adicionar Tamanho de Painel</button>
+                </div>
+                <!-- Produtos do Kit -->
+                <div class="form-group full-width" id="kit-items-section" style="display:none;">
+                    <label><strong>Produtos do Kit</strong></label>
+                    <p class="form-hint">Selecione os produtos existentes que comp&otilde;em este kit.</p>
+                    <div id="kit-filter-bar" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+                        <select id="kit-cat-filter" style="font-size:13px;padding:6px 10px;border-radius:7px;border:1.5px solid #dde4ee;background:#fff;flex:1;min-width:140px;cursor:pointer;">
+                            <option value="">Todas as categorias</option>
+                        </select>
+                        <input type="text" id="kit-search" placeholder="&#x1F50D; Buscar por nome&hellip;" style="font-size:13px;padding:6px 10px;border-radius:7px;border:1.5px solid #dde4ee;flex:2;min-width:180px;">
+                    </div>
+                    <div id="kit-product-picker" style="max-height:260px;overflow-y:auto;border:1.5px solid #e6e9f0;border-radius:8px;padding:8px;">
+                        <p style="color:#778DA9;text-align:center;padding:10px 0;">Carregando produtos&hellip;</p>
+                    </div>
                 </div>
             </div>
             <div class="modal-actions">

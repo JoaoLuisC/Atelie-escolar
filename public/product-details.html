@@ -77,18 +77,22 @@
 
           <!-- Price block -->
           <div class="pd-price-block">
+            <div class="pd-original-price" id="pdOriginalPrice" style="display:none;font-size:0.82rem;color:#999;margin-bottom:2px;"></div>
             <div class="pd-price" id="productPrice">R$ 0,00</div>
             <div class="pd-pix-row">
               <span class="pd-pix-badge"><i class="bi bi-lightning-charge-fill"></i> PIX</span>
-              <span class="pd-pix-text" id="pdPixText">10% de desconto — à vista no Pix</span>
+              <span class="pd-pix-text" id="pdPixText">10% de desconto &mdash; &agrave; vista no Pix</span>
             </div>
-            <div class="pd-installments" id="pdInstallments">ou em até 3x sem juros</div>
+            <div class="pd-installments" id="pdInstallments">ou em at&eacute; 3x sem juros</div>
           </div>
 
           <!-- Format badges -->
           <div class="pd-formats" id="pdFormatBadges">
             <!-- injected by JS based on product data -->
           </div>
+
+          <!-- Kit contents (injected by JS for KIT-type products) -->
+          <div id="pdKitContents" style="display:none;"></div>
 
           <!-- CTAs -->
           <div class="pd-actions">
@@ -165,33 +169,34 @@
         </div>
 
         <div class="pd-tab-content" id="tabFormats" style="display:none;">
+          <div id="pdPanelSizes"></div>
           <div class="pd-formats-grid">
             <div class="pd-fmt-item">
               <i class="bi bi-filetype-pdf"></i>
               <div>
-                <strong>PDF Alta Resolução</strong>
-                <span>300 DPI · CMYK · Pronto para gráfica</span>
+                <strong>PDF Alta Resolu&ccedil;&atilde;o</strong>
+                <span>300 DPI &middot; CMYK &middot; Pronto para gr&aacute;fica</span>
               </div>
             </div>
             <div class="pd-fmt-item">
               <i class="bi bi-pencil-square" style="color:var(--accent-blue);"></i>
               <div>
-                <strong>Canva Editável</strong>
-                <span>Template editável · Personalize nome, data e detalhes</span>
+                <strong>Canva Edit&aacute;vel</strong>
+                <span>Template edit&aacute;vel &middot; Personalize nome, data e detalhes</span>
               </div>
             </div>
             <div class="pd-fmt-item">
               <i class="bi bi-rulers" style="color:var(--secondary-color);"></i>
               <div>
-                <strong>Múltiplos Tamanhos</strong>
-                <span>A0, A1, A2, A3 · Proporções para banners e faixas</span>
+                <strong>M&uacute;ltiplos Tamanhos</strong>
+                <span>A0, A1, A2, A3 &middot; Propor&ccedil;&otilde;es para banners e faixas</span>
               </div>
             </div>
             <div class="pd-fmt-item">
               <i class="bi bi-palette-fill" style="color:var(--accent-pink);"></i>
               <div>
                 <strong>Alta Qualidade</strong>
-                <span>Design profissional · Cores vibrantes e precisas</span>
+                <span>Design profissional &middot; Cores vibrantes e precisas</span>
               </div>
             </div>
           </div>
