@@ -8,6 +8,7 @@
   position: sticky;
   top: 0;
   z-index: 1000;
+  overflow: hidden;
   transition: background .4s, box-shadow .4s;
   /* background/blur defined in animations.css for .navbar-transparent / .navbar.scrolled */
 }
@@ -52,7 +53,7 @@
 .navbar-menu {
   display: flex;
   list-style: none;
-  gap: .15rem;
+  gap: .08rem;
   align-items: center;
   margin: 0; padding: 0;
   flex-wrap: nowrap;
@@ -60,7 +61,7 @@
 .navbar-menu a,
 .navbar-menu .nav-link-item {
   position: relative;
-  padding: .55rem 1rem;
+  padding: .55rem .82rem;
   border-radius: 8px;
   font-size: .95rem;
   font-weight: 600;
@@ -136,8 +137,13 @@
   .navbar-menu li:not(:last-child) { display: none; }
 }
 
-/* ── Rainbow gradient line below navbar ── */
-.nav-rainbow {
+/* ── Rainbow gradient line integrated with navbar ── */
+.navbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   height: 4px;
   background: linear-gradient(90deg,
     #9B5DE5 0%,
@@ -148,6 +154,7 @@
   );
   background-size: 200% 100%;
   animation: rainbowShift 6s linear infinite;
+  pointer-events: none;
 }
 
 @keyframes rainbowShift {
