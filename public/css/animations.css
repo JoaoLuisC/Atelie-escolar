@@ -142,8 +142,14 @@ html {
   animation: fadeSlideUp 0.9s ease forwards 0.55s;
 }
 
-.hero-title .highlight {
-  color: #6b5f4b;
+.hero-title .highlight-royal {
+  color: #4169e1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.hero-title .highlight-emerald {
+  color: #2e8b57;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .hero-subtitle {

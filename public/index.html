@@ -57,8 +57,8 @@
         <div class="col-lg-8">
           <h1 class="hero-title">
             Painéis e recursos pedagógicos<br>
-            feitos com <span class="highlight">cuidado</span><br>
-            e criatividade
+            feitos com <span class="highlight-royal">cuidado</span><br>
+            e <span class="highlight-emerald">criatividade</span>
           </h1>
           <div class="hero-cta-group">
             <a href="/products.html" class="btn-hero-primary">
@@ -556,15 +556,26 @@
         const isLast = (si === activeSections.length - 1);
         const bg  = sec.badgeColor || legacyBadgeColor(sec.badgeStyle);
           const fg  = badgeTextColor(bg);
+          const sectionId = sec.id || `sec-${si}`;
           return `
         <div class="catalog-row-header reveal">
           <span class="catalog-row-badge" style="background:${bg};color:${fg};">${sec.badge || sec.title}</span>
           <a href="/products.html" class="catalog-row-link">Ver todos <i class="bi bi-chevron-right"></i></a>
         </div>
-        <div class="row g-3 ${isLast ? 'mb-2' : 'mb-5'}">
-          ${prods.map((p, pi) => buildProdCard(p, pi)).join('')}
+        <div class="home-vitrine ${isLast ? 'mb-2' : 'mb-5'}" data-vitrine-id="${sectionId}">
+          <button class="home-vitrine-arrow prev" type="button" data-dir="prev" aria-label="Ver produtos anteriores">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <div class="home-vitrine-track">
+            ${prods.map((p, pi) => buildProdCard(p, pi)).join('')}
+          </div>
+          <button class="home-vitrine-arrow next" type="button" data-dir="next" aria-label="Ver mais produtos">
+            <i class="bi bi-chevron-right"></i>
+          </button>
         </div>`;
       }).join('');
+
+      initHomeVitrineArrows(wrap);
 
       /* Anima reveals */
       wrap.querySelectorAll('.reveal').forEach((el, i) => {
@@ -587,7 +598,7 @@
         : `<span style="font-size:2.5rem;">🎨</span>`;
       const grad = GRAD[idx % GRAD.length];
       return `
-      <div class="col-6 col-lg-3 reveal ${delays[idx % 4]}">
+      <div class="home-vitrine-item reveal ${delays[idx % 4]}">
         <div class="product-card">
           <a href="/product-details.html?id=${p.id}" style="text-decoration:none;color:inherit;display:block;">
             <div class="pcard-thumb" style="background:${img ? 'transparent' : grad};overflow:hidden;">${thumb}</div>
@@ -602,6 +613,44 @@
           </a>
         </div>
       </div>`;
+    }
+
+    function initHomeVitrineArrows(wrap) {
+      const carousels = Array.from(wrap.querySelectorAll('.home-vitrine'));
+
+      carousels.forEach((carousel) => {
+        const track = carousel.querySelector('.home-vitrine-track');
+        const prevBtn = carousel.querySelector('[data-dir="prev"]');
+        const nextBtn = carousel.querySelector('[data-dir="next"]');
+        if (!track || !prevBtn || !nextBtn) return;
+
+        const scrollStep = () => {
+          const card = track.querySelector('.home-vitrine-item');
+          if (!card) return track.clientWidth;
+          const gap = parseFloat(getComputedStyle(track).gap || '12') || 12;
+          return card.getBoundingClientRect().width + gap;
+        };
+
+        const refreshArrows = () => {
+          const maxScrollLeft = track.scrollWidth - track.clientWidth;
+          const hasOverflow = maxScrollLeft > 4;
+          carousel.classList.toggle('has-overflow', hasOverflow);
+          prevBtn.disabled = !hasOverflow || track.scrollLeft <= 2;
+          nextBtn.disabled = !hasOverflow || track.scrollLeft >= (maxScrollLeft - 2);
+        };
+
+        prevBtn.addEventListener('click', () => {
+          track.scrollBy({ left: -scrollStep(), behavior: 'smooth' });
+        });
+
+        nextBtn.addEventListener('click', () => {
+          track.scrollBy({ left: scrollStep(), behavior: 'smooth' });
+        });
+
+        track.addEventListener('scroll', refreshArrows, { passive: true });
+        window.addEventListener('resize', refreshArrows);
+        setTimeout(refreshArrows, 50);
+      });
     }
   </script>
 </body>
