@@ -28,7 +28,7 @@ const firebaseConfig = {
 };
 
 /* ── Email do único admin ── */
-const ADMIN_EMAIL = 'admin@ateliedaescola.com';
+const ADMIN_EMAIL = 'admin@profamarciarcardoso.com';
 
 /* ── Chave do cache no localStorage ── */
 const CACHE_KEY = 'atelie_nav_user';

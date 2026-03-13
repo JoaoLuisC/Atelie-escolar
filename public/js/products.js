@@ -1,5 +1,5 @@
 ﻿/* ═══════════════════════════════════════════════
-   products.js — Ateliê da Escola
+  products.js — Profa. Marciar Cardoso
    Carrega produtos do Firestore, filtros de
    categoria, ordenação e cards de conversão.
 ═══════════════════════════════════════════════ */

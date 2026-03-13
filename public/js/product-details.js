@@ -52,7 +52,7 @@ async function loadProductDetails() {
 // ─── Display ────────────────────────────────────────
 function displayProduct(product) {
     // Page meta
-    pageTitle.textContent       = `${product.name} - Ateliê da Escola`;
+    pageTitle.textContent       = `${product.name} - Profa. Marciar Cardoso`;
     breadcrumbProduct.textContent = product.name;
 
     // Category & title

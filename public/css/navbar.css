@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════
-   NAVBAR — Ateliê da Escola
+  NAVBAR — Profa. Marciar Cardoso
 ════════════════════════════════════════ */
 
 /* ── Layout base ── */
@@ -134,7 +134,7 @@
 }
 @media (max-width: 600px) {
   .brand-text { display: none; }
-  .navbar-menu li:not(:last-child) { display: none; }
+  .navbar-menu li:not(:first-child):not(:nth-last-child(-n+2)) { display: none; }
 }
 
 /* ── Rainbow gradient line integrated with navbar ── */

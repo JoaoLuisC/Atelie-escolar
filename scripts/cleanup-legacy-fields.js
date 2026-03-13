@@ -1,7 +1,7 @@
 /**
  * cleanup-legacy-fields.js
  *
- * Remove campos legados de `products` e `orders` e apaga a coleção `customers`.
+ * Remove campos legados de `products` e `orders`.
  *
  * Campos removidos de `products`:
  *   - imageUrl   (substituído por `image` / `images[]`)
@@ -12,9 +12,6 @@
  *   - amount      (substituído por `totalAmount`)
  *   - productId   (substituído por `items[]`)
  *
- * Coleção deletada:
- *   - customers   (substituída por `userProducts`)
- *
  * NOTA — userProducts como UID vs E-mail:
  *   A migração de userProducts/{email} → userProducts/{uid} foi ADIADA
  *   intencionalmente. O motivo: o checkout permite compra sem conta (guest),
@@ -23,21 +20,27 @@
  *   obrigatório, a migração pode ser feita com segurança.
  *
  * USO:
- *   node scripts/cleanup-legacy-fields.js
- *   node scripts/cleanup-legacy-fields.js --dry-run   (simula sem alterar)
+ *   node scripts/cleanup-legacy-fields.js --env .env.local
+ *   node scripts/cleanup-legacy-fields.js --dry-run --env .env.local   (simula sem alterar)
  */
 
-require('dotenv').config({ path: '.env.local' });
+function getArgValue(flag) {
+    const i = process.argv.indexOf(flag);
+    return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+const envPath = getArgValue('--env') || '.env.local';
+require('dotenv').config({ path: envPath });
 const admin = require('firebase-admin');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const privateKey = process.env.FIREBASE_PRIVATE_KEY
-    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+    ? process.env.FIREBASE_PRIVATE_KEY.replaceAll(String.raw`\n`, '\n')
     : undefined;
 
 if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKey) {
-    console.error('❌ Credenciais Firebase não configuradas. Verifique .env.local');
+    console.error(`❌ Credenciais Firebase não configuradas. Verifique ${envPath}`);
     process.exit(1);
 }
 
@@ -97,47 +100,12 @@ async function cleanCollection(collName, legacyFields) {
     return updated;
 }
 
-async function deleteCollection(collName) {
-    console.log(`\n🗑  Deletando coleção: ${collName}`);
-
-    const snap = await db.collection(collName).get();
-    if (snap.empty) {
-        console.log('   → Coleção já está vazia ou não existe');
-        return 0;
-    }
-
-    const BATCH_SIZE = 400;
-    let batch = db.batch();
-    let count = 0;
-    let batchCount = 0;
-
-    for (const doc of snap.docs) {
-        if (!DRY_RUN) {
-            batch.delete(doc.ref);
-            batchCount++;
-            if (batchCount >= BATCH_SIZE) {
-                await batch.commit();
-                batch = db.batch();
-                batchCount = 0;
-            }
-        }
-        console.log(`  ${DRY_RUN ? '[dry]' : '🗑 '} Deletaria: ${collName}/${doc.id}`);
-        count++;
-    }
-
-    if (!DRY_RUN && batchCount > 0) await batch.commit();
-
-    console.log(`   → ${count} doc(s) ${DRY_RUN ? 'seriam deletados' : 'deletados'}`);
-    return count;
-}
-
 /* ─── main ────────────────────────────────────────────── */
 
 async function main() {
     console.log('🧹 Iniciando limpeza de campos legados\n');
 
     let totalUpdated = 0;
-    let totalDeleted = 0;
 
     // 1. Limpar products
     totalUpdated += await cleanCollection('products', ['imageUrl', 'fileUrl']);
@@ -145,18 +113,13 @@ async function main() {
     // 2. Limpar orders
     totalUpdated += await cleanCollection('orders', ['buyerEmail', 'amount', 'productId']);
 
-    // 3. Deletar coleção customers (substituída por userProducts)
-    totalDeleted += await deleteCollection('customers');
-
     console.log('\n─────────────────────────────────────────────────');
     if (DRY_RUN) {
         console.log('⚠️  DRY-RUN concluído. Nada foi alterado.');
         console.log(`   Seriam atualizados: ${totalUpdated} doc(s)`);
-        console.log(`   Seriam deletados:   ${totalDeleted} doc(s)`);
     } else {
         console.log('✔  Limpeza concluída.');
         console.log(`   Atualizados: ${totalUpdated} doc(s)`);
-        console.log(`   Deletados:   ${totalDeleted} doc(s)`);
     }
     console.log('─────────────────────────────────────────────────\n');
 

@@ -5,18 +5,24 @@
  * faltantes na coleção `users` do Firestore.
  * 
  * USO:
- *   node scripts/seed-users-collection.js
+ *   node scripts/seed-users-collection.js --env .env.local
  */
 
-require('dotenv').config({ path: '.env.local' });
+function getArgValue(flag) {
+    const i = process.argv.indexOf(flag);
+    return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+const envPath = getArgValue('--env') || '.env.local';
+require('dotenv').config({ path: envPath });
 const admin = require('firebase-admin');
 
 const privateKey = process.env.FIREBASE_PRIVATE_KEY
-    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+    ? process.env.FIREBASE_PRIVATE_KEY.replaceAll(String.raw`\n`, '\n')
     : undefined;
 
 if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKey) {
-    console.error('❌ Credenciais Firebase não configuradas. Verifique .env.local');
+    console.error(`❌ Credenciais Firebase não configuradas. Verifique ${envPath}`);
     process.exit(1);
 }
 

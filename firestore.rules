@@ -26,11 +26,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     
-    // Clientes - Histórico de compras por email
-    match /customers/{email} {
-      allow read, write: if false; // Apenas via Admin SDK
-    }
-
     // Produtos comprados por usuário — usuário lê o próprio documento
     match /userProducts/{email} {
       allow read: if request.auth != null && request.auth.token.email == email;
@@ -70,11 +65,5 @@ service cloud.firestore {
                          && request.auth.token.email == 'admin@ateliedaescola.com';
     }
 
-    // Visualizações de página — admin lê para métricas; escrita apenas via Admin SDK
-    match /pageViews/{docId} {
-      allow read:  if request.auth != null
-                   && request.auth.token.email == 'admin@ateliedaescola.com';
-      allow write: if false; // Admin SDK bypasses rules
-    }
   }
 }

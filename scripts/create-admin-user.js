@@ -2,19 +2,26 @@
  * Script para criar usuário administrador no Firebase
  * 
  * USO:
- * node scripts/create-admin-user.js
+ * node scripts/create-admin-user.js --env .env.local
  */
 
-require('dotenv').config({ path: '.env.local' });
+function getArgValue(flag) {
+  const i = process.argv.indexOf(flag);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+const envPath = getArgValue('--env') || '.env.local';
+require('dotenv').config({ path: envPath });
+
 const admin = require('firebase-admin');
 
 // Inicializar Firebase Admin
 const privateKey = process.env.FIREBASE_PRIVATE_KEY
-  ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+  ? process.env.FIREBASE_PRIVATE_KEY.replaceAll(String.raw`\n`, '\n')
   : undefined;
 
 if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKey) {
-  console.error('❌ Firebase credentials not configured. Check .env.local file.');
+  console.error(`❌ Firebase credentials not configured. Check ${envPath}.`);
   process.exit(1);
 }
 
@@ -28,12 +35,27 @@ admin.initializeApp({
 
 const auth = admin.auth();
 
-// ====================================
-// CONFIGURE AQUI O USUÁRIO ADMIN
-// ====================================
-const ADMIN_EMAIL = 'admin@ateliedaescola.com';
-const ADMIN_PASSWORD = '123456';
-// ====================================
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+function isStrongPassword(password) {
+  if (!password || password.length < 8) return false;
+  const hasLetter = /[A-Za-z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  return hasLetter && hasNumber;
+}
+
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  console.error('❌ Defina ADMIN_EMAIL e ADMIN_PASSWORD no arquivo de ambiente.');
+  console.log('💡 Exemplo: ADMIN_EMAIL=admin@seu-dominio.com');
+  console.log('💡 Defina ADMIN_PASSWORD no ambiente antes de executar.');
+  process.exit(1);
+}
+
+if (!isStrongPassword(ADMIN_PASSWORD)) {
+  console.error('❌ ADMIN_PASSWORD fraca. Use no mínimo 8 caracteres com letras e números.');
+  process.exit(1);
+}
 
 async function createAdminUser() {
   try {
@@ -60,7 +82,6 @@ async function createAdminUser() {
         console.log('✅ Usuário administrador criado com sucesso!\n');
         console.log('📧 Email:', user.email);
         console.log('🆔 UID:', user.uid);
-        console.log('🔑 Senha:', ADMIN_PASSWORD);
         console.log('\n⚠️ IMPORTANTE: Anote estas credenciais em local seguro!');
         console.log('💡 Recomendamos alterar a senha após o primeiro login.\n');
       } else {

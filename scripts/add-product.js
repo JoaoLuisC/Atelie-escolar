@@ -2,10 +2,17 @@
  * Script para adicionar produtos no Firestore
  * 
  * USO:
- * node scripts/add-product.js
+ * node scripts/add-product.js --env .env.local
  */
 
-require('dotenv').config({ path: '.env.local' });
+function getArgValue(flag) {
+  const i = process.argv.indexOf(flag);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+const envPath = getArgValue('--env') || '.env.local';
+require('dotenv').config({ path: envPath });
+
 const { getFirestore } = require('../lib/firebase-admin');
 
 async function addProduct() {
@@ -41,6 +48,11 @@ async function addProduct() {
       ],
       createdAt: new Date().toISOString()
     };
+
+    if ((productData.downloadUrl || '').includes('COLOQUE_SEU_ID_AQUI')) {
+      console.error('❌ Defina um downloadUrl real antes de adicionar o produto.');
+      process.exit(1);
+    }
 
     // Adicionar produto
     const docRef = await db.collection('products').add(productData);

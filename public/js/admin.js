@@ -10,7 +10,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 /* ══ Email do único admin ══ altere para o email real */
-const ADMIN_EMAIL = 'admin@ateliedaescola.com';
+const ADMIN_EMAIL = 'admin@profamarciarcardoso.com';
 
 const firebaseConfig = {
     apiKey: "AIzaSyCqbiSJXD02F0q9wFqrDAEKJtd6VHBjAOk",
@@ -954,10 +954,10 @@ async function loadUsers() {
         });
 
         usersLoaded = true;
-        // Exclui contas admin da lista de clientes
-        const customers = allUsers.filter(u => u.role !== 'admin' && u.email !== 'admin@ateliedaescola.com');
-        renderUsers(customers);
-        countEl.textContent = `${customers.length} usuário${customers.length !== 1 ? 's' : ''}`;
+        // Exclui contas admin da lista de usuários
+        const users = allUsers.filter(u => u.role !== 'admin' && u.email !== 'admin@profamarciarcardoso.com');
+        renderUsers(users);
+        countEl.textContent = `${users.length} usuário${users.length !== 1 ? 's' : ''}`;
     } catch (err) {
         container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar usuários</h3><p>${err.message}</p></div>`;
     }
@@ -1020,10 +1020,10 @@ function renderUsers(users) {
 document.getElementById('user-search')?.addEventListener('input', function() {
     const q = this.value.toLowerCase().trim();
     const countEl = document.getElementById('users-count');
-    const customers = allUsers.filter(u => u.role !== 'admin' && u.email !== 'admin@ateliedaescola.com');
+    const users = allUsers.filter(u => u.role !== 'admin' && u.email !== 'admin@profamarciarcardoso.com');
     const filtered = q
-        ? customers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q))
-        : customers;
+        ? users.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q))
+        : users;
     renderUsers(filtered);
     countEl.textContent = `${filtered.length} usuário${filtered.length !== 1 ? 's' : ''}${q ? ' (filtrado)' : ''}`;
 });
@@ -2765,8 +2765,8 @@ async function loadSeguranca() {
         const secretBase32 = pendingSecret.base32;
 
         const totp = new OTPAuth.TOTP({
-            issuer:    'Atelie da Escola',
-            label:     'admin@ateliedaescola.com',
+            issuer:    'Profa. Marciar Cardoso',
+            label:     'admin@profamarciarcardoso.com',
             secret:    pendingSecret,
             algorithm: 'SHA1',
             digits:    6,

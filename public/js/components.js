@@ -69,14 +69,6 @@
       updateCartCount();
     }
 
-    // Rastreia visita (páginas públicas apenas — ignora admin)
-    if (!window.location.pathname.includes('admin')) {
-      try {
-        const _p = (window.location.pathname.split('/').pop() || 'home').replace('.html', '') || 'home';
-        fetch('/api/track-visit?page=' + encodeURIComponent(_p)).catch(() => {});
-      } catch (_e) { /* silencioso */ }
-    }
-
     // Dispara evento para que outros scripts saibam que os componentes estão prontos
     document.dispatchEvent(new CustomEvent('components:loaded'));
   });
