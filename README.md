@@ -9,6 +9,33 @@ Frontend legado removido. O projeto agora roda com:
 - React (Vite) para interface
 - Node API server para endpoints em `/api`
 
+## Fluxo Profissional (recomendado)
+
+### Bootstrap inicial
+
+1. Instalar dependencias:
+	- `npm run bootstrap`
+2. Rodar validacao base (testes + build):
+	- `npm run check`
+
+### Desenvolvimento diario
+
+- Rodar frontend + API em paralelo:
+	- `npm run dev:all`
+- Rodar stack completa (Supabase + frontend + API):
+	- `npm run dev:full`
+
+### Scripts de qualidade e manutencao
+
+- Limpar build:
+	- `npm run clean`
+- Rebuild limpo:
+	- `npm run rebuild`
+- Testes:
+	- `npm run test`
+- Build:
+	- `npm run build`
+
 ### Como rodar localmente
 
 1. Suba a API em um terminal:
@@ -44,6 +71,10 @@ Este repositorio esta configurado para usar o Supabase CLI como fluxo principal 
 	- `npm run supabase:start`
 - Ver status local:
 	- `npm run supabase:status`
+- Reiniciar stack local:
+	- `npm run supabase:restart`
+- Diagnosticar ambiente local (Docker + Supabase):
+	- `npm run supabase:doctor`
 - Parar stack local:
 	- `npm run supabase:stop`
 - Criar migration nova:

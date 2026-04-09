@@ -73,10 +73,62 @@ async function createTokensForOrder(order, items, paymentId) {
   return downloadTokens;
 }
 
-module.exports = async function verifyPaymentHandler(req, res) {
+function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+function mapTokenRows(rows) {
+  return rows.map((token) => ({
+    productId: String(token.product_id),
+    productName: token.product_name,
+    token: token.token,
+  }));
+}
+
+function mapOrderItems(rows) {
+  return rows.map((item) => ({
+    id: String(item.product_id),
+    title: item.product_name,
+    quantity: item.quantity,
+    price: item.unit_price,
+  }));
+}
+
+async function refreshApprovedOrderData(order, orderId) {
+  if (order.payment_status === 'approved' || order.status === 'completed') {
+    return order;
+  }
+
+  try {
+    const approvedPayment = await fetchPaymentByOrderId(orderId);
+    if (!approvedPayment) {
+      return order;
+    }
+
+    const orderItems = await loadOrderItems(order.id);
+    const existingTokens = await loadDownloadTokens(order.id);
+    const downloadTokens = existingTokens.length
+      ? mapTokenRows(existingTokens)
+      : await createTokensForOrder(order, orderItems, approvedPayment.id);
+
+    return {
+      ...order,
+      payment_status: 'approved',
+      status: 'completed',
+      payment_id: approvedPayment.id,
+      completed_at: new Date().toISOString(),
+      downloadTokens,
+    };
+  } catch (mpErr) {
+    console.error('[verify-payment] Erro ao consultar MercadoPago:', mpErr.message);
+    return order;
+  }
+}
+
+module.exports = async function verifyPaymentHandler(req, res) {
+  setCorsHeaders(res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -101,41 +153,8 @@ module.exports = async function verifyPaymentHandler(req, res) {
       return res.status(404).json({ error: 'Pedido não encontrado' });
     }
 
-    let orderData = order;
-
-    if (order.payment_status !== 'approved' && order.status !== 'completed') {
-      try {
-        const approvedPayment = await fetchPaymentByOrderId(orderId);
-        if (approvedPayment) {
-          const orderItems = await loadOrderItems(order.id);
-          const existingTokens = await loadDownloadTokens(order.id);
-          const downloadTokens = existingTokens.length
-            ? existingTokens.map((token) => ({
-                productId: String(token.product_id),
-                productName: token.product_name,
-                token: token.token,
-              }))
-            : await createTokensForOrder(order, orderItems, approvedPayment.id);
-
-          orderData = {
-            ...orderData,
-            payment_status: 'approved',
-            status: 'completed',
-            payment_id: approvedPayment.id,
-            completed_at: new Date().toISOString(),
-            downloadTokens,
-          };
-        }
-      } catch (mpErr) {
-        console.error('[verify-payment] Erro ao consultar MercadoPago:', mpErr.message);
-      }
-    }
-
-    const downloadTokens = orderData.downloadTokens || (await loadDownloadTokens(order.id)).map((token) => ({
-      productId: String(token.product_id),
-      productName: token.product_name,
-      token: token.token,
-    }));
+    const orderData = await refreshApprovedOrderData(order, orderId);
+    const downloadTokens = orderData.downloadTokens || mapTokenRows(await loadDownloadTokens(order.id));
 
     const items = await loadOrderItems(order.id);
 
@@ -148,12 +167,7 @@ module.exports = async function verifyPaymentHandler(req, res) {
         totalAmount: orderData.total_amount,
         downloadTokens,
         createdAt: orderData.created_at,
-        items: items.map((item) => ({
-          id: String(item.product_id),
-          title: item.product_name,
-          quantity: item.quantity,
-          price: item.unit_price,
-        })),
+        items: mapOrderItems(items),
       },
     });
   } catch (error) {
