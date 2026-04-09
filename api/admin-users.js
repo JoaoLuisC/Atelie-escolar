@@ -1,5 +1,5 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { getSupabaseConfig, listTableRows } = require('../lib/supabase');
+const { deleteFromTable, getSupabaseConfig, getTableRow, listTableRows, updateTable } = require('../lib/supabase');
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -58,15 +58,65 @@ async function listUsers() {
   return formatUsers(profilesRows, statsByEmail).filter((user) => user.email !== 'admin@profamarciarcardoso.com');
 }
 
+async function updateUser(body) {
+  const id = String(body.id || '').trim();
+  if (!id) {
+    return { status: 400, body: { success: false, error: 'id é obrigatório.' } };
+  }
+
+  const existing = await getTableRow('profiles', {
+    select: 'id,email,role',
+    filters: [{ column: 'id', value: id }],
+  });
+
+  if (!existing) {
+    return { status: 404, body: { success: false, error: 'Usuário não encontrado.' } };
+  }
+
+  if (String(existing.role || '').toLowerCase() === 'admin') {
+    return { status: 403, body: { success: false, error: 'Não é permitido editar usuário admin por este endpoint.' } };
+  }
+
+  const payload = {};
+  if (body.name !== undefined) payload.display_name = String(body.name || '').trim();
+  if (body.role !== undefined) payload.role = String(body.role || '').trim().toLowerCase();
+  if (body.provider !== undefined) payload.provider = String(body.provider || '').trim().toLowerCase();
+
+  if (Object.keys(payload).length === 0) {
+    return { status: 400, body: { success: false, error: 'Nenhum campo válido para atualização.' } };
+  }
+
+  await updateTable('profiles', { id: `eq.${id}` }, payload);
+  return { status: 200, body: { success: true } };
+}
+
+async function deleteUser(id) {
+  if (!id) {
+    return { status: 400, body: { success: false, error: 'id é obrigatório.' } };
+  }
+
+  const existing = await getTableRow('profiles', {
+    select: 'id,email,role',
+    filters: [{ column: 'id', value: id }],
+  });
+
+  if (!existing) {
+    return { status: 404, body: { success: false, error: 'Usuário não encontrado.' } };
+  }
+
+  if (String(existing.role || '').toLowerCase() === 'admin') {
+    return { status: 403, body: { success: false, error: 'Não é permitido excluir usuário admin por este endpoint.' } };
+  }
+
+  await deleteFromTable('profiles', { id: `eq.${id}` });
+  return { status: 200, body: { success: true } };
+}
+
 module.exports = async function adminUsersHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
-  }
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
   if (!ensureAdminSession(req, res)) {
@@ -78,8 +128,19 @@ module.exports = async function adminUsersHandler(req, res) {
       return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
     }
 
-    const users = await listUsers();
-    return res.status(200).json({ success: true, users });
+    const handlers = {
+      GET: async () => ({ status: 200, body: { success: true, users: await listUsers() } }),
+      PUT: async () => updateUser(req.body || {}),
+      DELETE: async () => deleteUser(String(req.query?.id || req.body?.id || '').trim()),
+    };
+
+    const handler = handlers[req.method];
+    if (!handler) {
+      return res.status(405).json({ success: false, error: 'Method not allowed' });
+    }
+
+    const result = await handler();
+    return res.status(result.status).json(result.body);
   } catch (error) {
     console.error('Admin users error:', error);
     return res.status(500).json({

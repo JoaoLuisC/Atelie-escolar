@@ -51,9 +51,37 @@ export async function fetchAdminUsers() {
   return request('/admin-users');
 }
 
+export async function updateAdminUser(payload) {
+  return request('/admin-users', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAdminUser(id) {
+  return request(`/admin-users?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function fetchAdminOrders(status = '') {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
   return request(`/admin-orders${query}`);
+}
+
+export async function updateAdminOrder(payload) {
+  return request('/admin-orders', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAdminOrder(id) {
+  return request(`/admin-orders?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function patchAdminProduct(payload) {

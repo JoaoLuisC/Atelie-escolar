@@ -1,5 +1,5 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { getSupabaseConfig, listTableRows } = require('../lib/supabase');
+const { deleteFromTable, getSupabaseConfig, getTableRow, listTableRows, updateTable } = require('../lib/supabase');
 
 function sortByDateDesc(items) {
   return [...items].sort((a, b) => {
@@ -57,15 +57,66 @@ async function listOrders(statusFilter) {
   return sortByDateDesc(orders);
 }
 
+async function updateOrder(body) {
+  const id = String(body.id || '').trim();
+  if (!id) {
+    return { status: 400, body: { success: false, error: 'id é obrigatório.' } };
+  }
+
+  const existing = await getTableRow('orders', {
+    select: 'id,status,payment_status,completed_at',
+    filters: [{ column: 'id', value: id }],
+  });
+
+  if (!existing) {
+    return { status: 404, body: { success: false, error: 'Pedido não encontrado.' } };
+  }
+
+  const payload = {};
+  if (body.status !== undefined) payload.status = String(body.status || '').trim();
+  if (body.paymentStatus !== undefined) payload.payment_status = String(body.paymentStatus || '').trim();
+  if (body.customerName !== undefined) payload.customer_name = String(body.customerName || '').trim();
+  if (body.customerEmail !== undefined) payload.customer_email = String(body.customerEmail || '').trim().toLowerCase();
+  if (body.totalAmount !== undefined) payload.total_amount = Number(body.totalAmount || 0);
+
+  if (
+    payload.status === 'completed'
+    || payload.payment_status === 'approved'
+  ) {
+    payload.completed_at = existing.completed_at || new Date().toISOString();
+  }
+
+  if (Object.keys(payload).length === 0) {
+    return { status: 400, body: { success: false, error: 'Nenhum campo válido para atualização.' } };
+  }
+
+  await updateTable('orders', { id: `eq.${id}` }, payload);
+  return { status: 200, body: { success: true } };
+}
+
+async function deleteOrder(id) {
+  if (!id) {
+    return { status: 400, body: { success: false, error: 'id é obrigatório.' } };
+  }
+
+  const existing = await getTableRow('orders', {
+    select: 'id',
+    filters: [{ column: 'id', value: id }],
+  });
+
+  if (!existing) {
+    return { status: 404, body: { success: false, error: 'Pedido não encontrado.' } };
+  }
+
+  await deleteFromTable('orders', { id: `eq.${id}` });
+  return { status: 200, body: { success: true } };
+}
+
 module.exports = async function adminOrdersHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
-  }
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
   if (!ensureAdminSession(req, res)) {
@@ -77,9 +128,23 @@ module.exports = async function adminOrdersHandler(req, res) {
       return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
     }
 
-    const statusFilter = String(req.query?.status || '').trim();
-    const orders = await listOrders(statusFilter);
-    return res.status(200).json({ success: true, orders });
+    const handlers = {
+      GET: async () => {
+        const statusFilter = String(req.query?.status || '').trim();
+        const orders = await listOrders(statusFilter);
+        return { status: 200, body: { success: true, orders } };
+      },
+      PUT: async () => updateOrder(req.body || {}),
+      DELETE: async () => deleteOrder(String(req.query?.id || req.body?.id || '').trim()),
+    };
+
+    const handler = handlers[req.method];
+    if (!handler) {
+      return res.status(405).json({ success: false, error: 'Method not allowed' });
+    }
+
+    const result = await handler();
+    return res.status(result.status).json(result.body);
   } catch (error) {
     console.error('Admin orders error:', error);
     return res.status(500).json({

@@ -167,6 +167,10 @@ async function readAdminConfig() {
     return {};
   }
 
+  if (row.setting_value && typeof row.setting_value === 'object') {
+    return row.setting_value;
+  }
+
   try {
     return JSON.parse(String(row.setting_value || '{}'));
   } catch {

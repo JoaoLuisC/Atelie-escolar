@@ -9,8 +9,16 @@ const {
 const ALLOWED_KEYS = new Set(['homeSections', 'adminConfig']);
 
 function safeJsonParse(value, fallback) {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
   try {
-    return JSON.parse(String(value || ''));
+    return JSON.parse(String(value));
   } catch {
     return fallback;
   }

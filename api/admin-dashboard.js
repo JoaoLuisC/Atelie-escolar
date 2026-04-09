@@ -2,8 +2,16 @@ const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-sessio
 const { getSupabaseConfig, listTableRows } = require('../lib/supabase');
 
 function safeJsonParse(value, fallback) {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
   try {
-    return JSON.parse(String(value || ''));
+    return JSON.parse(String(value));
   } catch {
     return fallback;
   }
