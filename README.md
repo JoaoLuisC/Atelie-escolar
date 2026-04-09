@@ -1,104 +1,74 @@
 # Ateliê da Escola
 
-Plataforma de e-commerce para venda de materiais educativos digitais (banners, atividades, máscaras, etc.) com pagamento integrado e download automático após a compra.
+Base em migração para Supabase.
 
----
+## Estado Atual
 
-## Tecnologias Utilizadas
+Frontend legado removido. O projeto agora roda com:
 
-### Backend
-| Tecnologia | Versão | Função |
-|---|---|---|
-| **Node.js** | LTS | Servidor HTTP e lógica da aplicação |
-| **dotenv** | ^16.3.1 | Gerenciamento de variáveis de ambiente |
-| **cors** | ^2.8.5 | Controle de acesso entre origens |
+- React (Vite) para interface
+- Node API server para endpoints em `/api`
 
-### Frontend
-| Tecnologia | Versão | Função |
-|---|---|---|
-| **HTML5 / CSS3 / JS** | — | Interface do usuário |
-| **Bootstrap Icons** | CDN | Ícones da interface |
-| **Firebase JS SDK** | CDN | Autenticação no navegador |
+### Como rodar localmente
 
-### Banco de Dados e Autenticação
-| Tecnologia | Versão | Função |
-|---|---|---|
-| **Firebase Firestore** | — | Banco de dados NoSQL (pedidos, produtos, usuários) |
-| **Firebase Authentication** | — | Login e cadastro de usuários |
-| **firebase-admin** | ^12.0.0 | Acesso ao Firebase pelo servidor |
+1. Suba a API em um terminal:
+	- `npm run dev:api`
+2. Suba o frontend React em outro terminal:
+	- `npm run dev`
 
-### Pagamentos
-| Tecnologia | Versão | Função |
-|---|---|---|
-| **MercadoPago SDK** | ^2.0.0 | Checkout Pro (cartão, boleto, PIX) |
+Frontend: http://localhost:5173
+API: http://localhost:3000
 
-### Infraestrutura e Deploy
-| Tecnologia | Função |
-|---|---|
-| **Vercel** | Hospedagem e deploy em produção |
-| **ngrok** | Túnel para testes locais do webhook |
+### Variaveis de ambiente (Vite + API)
 
----
+- Use `APP_ENV` para controlar ambiente da API local (`development`, `test`, `production`).
+- Evite `NODE_ENV` em arquivos `.env*` do projeto para nao gerar warning no Vite.
+- O `server.js` faz fallback automatico para `development` quando `APP_ENV` nao estiver definido.
 
-## Fluxo de Funcionamento
+## Supabase CLI (workflow recomendado)
 
-```
-1. Usuário navega pelos produtos
-2. Adiciona ao carrinho e vai ao checkout
-3. Sistema cria um pedido no Firestore
-4. MercadoPago gera a tela de pagamento
-5. Usuário realiza o pagamento
-6. MercadoPago notifica via Webhook (/api/webhook)
-7. Sistema confirma o pagamento e libera os downloads
-8. Usuário acessa os arquivos comprados em "Meus Produtos"
-```
+Este repositorio esta configurado para usar o Supabase CLI como fluxo principal de banco.
 
----
+### Primeira configuracao
 
-## Estrutura do Projeto
+1. Fazer login no Supabase CLI:
+	 - `npm run supabase:login`
+2. Inicializar estrutura local (ja executado neste projeto):
+	 - `npm run supabase:init`
+3. Vincular ao projeto remoto:
+	 - `npm run supabase:link -- --project-ref SEU_PROJECT_REF`
 
-```
-├── server.js               # Servidor HTTP local
-├── api/
-│   ├── create-payment.js   # Cria pedido + preferência no MercadoPago
-│   ├── webhook.js          # Recebe notificações do MercadoPago
-│   ├── verify-payment.js   # Verifica status do pagamento
-│   ├── products.js         # Lista produtos
-│   └── download.js         # Gera links de download seguros
-├── lib/
-│   ├── firebase-admin.js   # Conexão com Firebase (backend)
-│   └── mercadopago-config.js # Configuração do MercadoPago
-├── public/                 # Frontend (HTML, CSS, JS)
-└── scripts/                # Scripts utilitários (setup, add-product...)
-```
+### Comandos do dia a dia
 
----
+- Subir stack local do Supabase (Docker):
+	- `npm run supabase:start`
+- Ver status local:
+	- `npm run supabase:status`
+- Parar stack local:
+	- `npm run supabase:stop`
+- Criar migration nova:
+	- `npm run supabase:migration:new -- nome_da_migration`
+- Puxar mudancas do remoto para migration:
+	- `npm run supabase:db:pull`
+- Enviar migrations/schema para remoto:
+	- `npm run supabase:db:push`
+- Gerar tipos para React:
+	- `npm run supabase:types`
 
-## Como Rodar Localmente
+### Fluxo seguro de banco
 
-**Modo Teste** (credenciais de sandbox):
-```powershell
-.\start-test.ps1
-```
+1. Criar migration.
+2. Aplicar localmente.
+3. Testar API/frontend.
+4. Fazer push para remoto.
+5. Gerar tipos e commitar junto.
 
-**Modo Produção** (credenciais reais):
-```powershell
-.\start-prod.ps1
-```
+## Próximos passos
 
-Acesse: `http://localhost:3000`
+1. Executar o schema do Supabase em [supabase/schema.sql](supabase/schema.sql).
+2. Configurar as variáveis em [.env.local](.env.local).
+3. Evoluir o app React e manter apenas o fluxo Supabase como fonte de dados.
 
----
+## Release
 
-## Variáveis de Ambiente
-
-| Variável | Descrição |
-|---|---|
-| `FIREBASE_PROJECT_ID` | ID do projeto Firebase |
-| `FIREBASE_CLIENT_EMAIL` | Email do service account |
-| `FIREBASE_PRIVATE_KEY` | Chave privada do Firebase |
-| `MERCADOPAGO_ACCESS_TOKEN` | Token de acesso MercadoPago |
-| `MERCADOPAGO_PUBLIC_KEY` | Chave pública MercadoPago |
-| `APP_URL` | URL base da aplicação |
-| `WEBHOOK_SECRET` | Assinatura secreta do webhook |
-| `DOWNLOAD_TOKEN_SECRET` | Segredo para tokens de download |
+Antes de publicar, siga o checklist em [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md).

@@ -1,22 +1,12 @@
 require('dotenv').config({ path: '.env.local' });
 require('dotenv').config(); // fallback to .env for any missing vars
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const http = require('node:http');
+const path = require('node:path');
+
+const RUNTIME_ENV = String(process.env.APP_ENV || process.env.NODE_ENV || 'development').trim().toLowerCase();
+process.env.NODE_ENV = RUNTIME_ENV;
 
 const PORT = 3000;
-
-const mimeTypes = {
-  '.html': 'text/html',
-  '.css': 'text/css',
-  '.js': 'application/javascript',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon'
-};
 
 // Adapts plain Node.js req/res to Express-like interface expected by API handlers
 function adaptResponse(res) {
@@ -42,7 +32,9 @@ function adaptResponse(res) {
 
 async function handleApiRequest(reqPath, req, res) {
   const handlerPath = path.join(__dirname, 'api', reqPath.replace(/^\/api\//, '') + '.js');
-  if (!fs.existsSync(handlerPath)) {
+  try {
+    require.resolve(handlerPath);
+  } catch {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ error: 'API route not found' }));
   }
@@ -80,31 +72,21 @@ const server = http.createServer(async (req, res) => {
     return handleApiRequest(urlPath, req, res);
   }
 
-  let filePath = path.join(__dirname, 'public', urlPath === '/' ? 'index.html' : urlPath);
-  
-  const extname = String(path.extname(filePath)).toLowerCase();
-  const contentType = mimeTypes[extname] || 'application/octet-stream';
+  if (urlPath === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, service: 'api', port: PORT }));
+  }
 
-  fs.readFile(filePath, (error, content) => {
-    if (error) {
-      if (error.code === 'ENOENT') {
-        res.writeHead(404, { 'Content-Type': 'text/html' });
-        res.end('<h1>404 - Página não encontrada</h1>', 'utf-8');
-      } else {
-        res.writeHead(500);
-        res.end('Erro no servidor: ' + error.code, 'utf-8');
-      }
-    } else {
-      res.writeHead(200, { 'Content-Type': contentType });
-      res.end(content, 'utf-8');
-    }
-  });
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  return res.end(JSON.stringify({
+    error: 'Frontend legado removido. Use o app React em http://localhost:5173.',
+  }));
 });
 
 server.listen(PORT, () => {
-  console.log('🚀 Servidor rodando em http://localhost:' + PORT);
-  console.log('📱 Site principal: http://localhost:' + PORT + '/index.html');
-  console.log('🔐 Login Admin: http://localhost:' + PORT + '/admin-login.html');
+  console.log('🚀 API server rodando em http://localhost:' + PORT);
+  console.log('🩺 Healthcheck: http://localhost:' + PORT + '/health');
+  console.log('⚛️ Frontend React (Vite): http://localhost:5173');
   console.log('');
   console.log('Pressione Ctrl+C para parar o servidor');
 });

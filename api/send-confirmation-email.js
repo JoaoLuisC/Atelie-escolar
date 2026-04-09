@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer');
-const { getFirestore } = require('../lib/firebase-admin');
+const { getSupabaseConfig, getTableRow, listTableRows } = require('../lib/supabase');
 
 /**
  * API: Enviar e-mail de confirmação após pagamento aprovado
@@ -21,27 +21,41 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'orderId e customerEmail são obrigatórios' });
     }
 
-    // Busca o pedido no Firestore para pegar os itens
-    const db = getFirestore();
-    const orderDoc = await db.collection('orders').doc(orderId).get();
-    const order = orderDoc.exists ? orderDoc.data() : null;
+    if (!getSupabaseConfig()) {
+      return res.status(500).json({ success: true, sent: false, reason: 'supabase_not_configured' });
+    }
+
+    // Busca o pedido no Supabase para pegar os itens
+    const order = await getTableRow('orders', {
+      select: 'id,order_code,total_amount,customer_email',
+      filters: [{ column: 'order_code', value: orderId }],
+    });
+
+    const orderItems = order
+      ? await listTableRows('order_items', {
+          select: 'order_id,product_name,unit_price,quantity',
+          filters: [{ column: 'order_id', value: order.id }],
+          orderBy: 'id',
+          ascending: true,
+        })
+      : [];
 
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
-    const downloadsUrl = `${appUrl}/downloads.html?order=${orderId}`;
-    const loginUrl = `${appUrl}/login.html`;
+    const downloadsUrl = `${appUrl}/downloads?order=${orderId}`;
+    const loginUrl = `${appUrl}/login`;
 
     // Monta lista de produtos
     const itemsHtml = order
-      ? (order.items || []).map(item =>
+      ? orderItems.map(item =>
           `<li style="padding:6px 0;border-bottom:1px solid #f0e8ff;font-size:15px;">
-             <strong>${item.title || item.name}</strong>
-             &nbsp;–&nbsp; R$ ${Number(item.price || 0).toFixed(2).replace('.', ',')}
+             <strong>${item.product_name}</strong>
+             &nbsp;–&nbsp; R$ ${Number(item.unit_price || 0).toFixed(2).replace('.', ',')}
            </li>`
         ).join('')
       : '<li>Produtos indisponíveis no momento</li>';
 
     const totalAmount = order
-      ? `R$ ${Number(order.totalAmount || 0).toFixed(2).replace('.', ',')}`
+      ? `R$ ${Number(order.total_amount || 0).toFixed(2).replace('.', ',')}`
       : '';
 
     // Bloco de credenciais (só para contas novas)
@@ -85,7 +99,7 @@ module.exports = async (req, res) => {
     <div style="background:#fff;padding:32px 36px;border-radius:0 0 16px 16px;box-shadow:0 4px 20px rgba(0,0,0,.08);">
 
       <p style="font-size:15px;color:#2d3748;margin:0 0 20px;">
-        Seu pedido <strong style="color:#7A3DC0;">#${orderId}</strong> foi aprovado com sucesso.
+      Seu pedido <strong style="color:#7A3DC0;">#${orderId}</strong> foi aprovado com sucesso.
         Clique no botão abaixo para acessar seus downloads imediatamente:
       </p>
 

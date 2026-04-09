@@ -1,12 +1,8 @@
-const { getFirestore } = require('../lib/firebase-admin');
+const crypto = require('node:crypto');
 const { createPaymentPreference } = require('../lib/mercadopago-config');
+const { getSupabaseConfig, getTableRow, insertIntoTable, listTableRows, updateTable } = require('../lib/supabase');
 
-/**
- * API: Criar pedido e preferência de pagamento
- * POST /api/create-payment
- */
-module.exports = async (req, res) => {
-  // CORS
+module.exports = async function createPaymentHandler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -22,98 +18,93 @@ module.exports = async (req, res) => {
   try {
     const { items, customer } = req.body;
 
-    // Validações
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Items são obrigatórios' });
     }
 
-    if (!customer || !customer.email) {
+    if (!customer?.email) {
       return res.status(400).json({ error: 'Email do cliente é obrigatório' });
     }
 
-    const db = getFirestore();
+    if (!getSupabaseConfig()) {
+      return res.status(500).json({ error: 'Supabase não configurado' });
+    }
 
-    // Validar produtos e calcular total
-    let totalAmount = 0;
     const validatedItems = [];
+    let totalAmount = 0;
 
     for (const item of items) {
-      const productDoc = await db.collection('products').doc(item.productId).get();
-      
-      if (!productDoc.exists) {
+      const product = await getTableRow('products', {
+        select: 'id,name,description,price,download_url,active',
+        filters: [{ column: 'id', value: item.productId }],
+      });
+
+      if (!product) {
         return res.status(404).json({ error: `Produto ${item.productId} não encontrado` });
       }
 
-      const product = productDoc.data();
-      
-      if (!product.active) {
+      if (product.active === false) {
         return res.status(400).json({ error: `Produto ${product.name} não está disponível` });
       }
 
-      const quantity = item.quantity || 1;
-      totalAmount += product.price * quantity;
+      const quantity = Number(item.quantity || 1);
+      const price = Number(product.price || 0);
+      totalAmount += price * quantity;
 
       validatedItems.push({
-        id: item.productId,
+        id: String(product.id),
         title: product.name,
         description: product.description || '',
-        price: product.price,
-        quantity: quantity,
-        fileUrl: product.fileUrl || product.downloadUrl || null,
+        price,
+        quantity,
+        fileUrl: product.download_url || null,
       });
     }
 
-    // Criar pedido no Firestore
-    const orderRef = db.collection('orders').doc();
-    const orderId = orderRef.id;
-
-    const orderData = {
-      orderId,
-      items: validatedItems,
-      customer: {
-        email: customer.email,
-        name: customer.name || '',
-      },
-      totalAmount,
+    const orderCode = `ORD-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const [createdOrder] = await insertIntoTable('orders', {
+      order_code: orderCode,
+      customer_name: customer.name || '',
+      customer_email: customer.email,
+      customer_cpf: customer.cpf || null,
+      customer_phone: customer.phone || null,
+      total_amount: totalAmount,
       status: 'pending',
-      paymentStatus: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await orderRef.set(orderData);
-
-    // Criar preferência de pagamento no Mercado Pago
-    const preference = await createPaymentPreference(
-      validatedItems,
-      orderId,
-      customer.email
-    );
-
-    // Atualizar pedido com ID da preferência
-    await orderRef.update({
-      preferenceId: preference.id,
-      mercadoPagoData: {
-        preferenceId: preference.id,
-        initPoint: preference.init_point,
-        sandboxInitPoint: preference.sandbox_init_point,
-      },
+      payment_status: 'pending',
     });
 
-    // Retornar dados para o frontend
+    for (const item of validatedItems) {
+      await insertIntoTable('order_items', {
+        order_id: createdOrder.id,
+        product_id: item.id,
+        product_name: item.title,
+        unit_price: item.price,
+        quantity: item.quantity,
+        total_price: item.price * item.quantity,
+      });
+    }
+
+    const preference = await createPaymentPreference(validatedItems, orderCode, customer.email);
+
+    await updateTable('orders', { id: `eq.${createdOrder.id}` }, {
+      preference_id: preference.id,
+      payment_status: 'pending',
+      status: 'pending',
+    });
+
     return res.status(200).json({
       success: true,
-      orderId,
+      orderId: orderCode,
+      orderInternalId: createdOrder.id,
       preferenceId: preference.id,
       initPoint: preference.init_point,
       sandboxInitPoint: preference.sandbox_init_point,
     });
-
   } catch (error) {
     console.error('Error creating payment:', error);
-    return res.status(500).json({ 
+    return res.status(error.statusCode || 500).json({
       error: 'Erro ao criar pagamento',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

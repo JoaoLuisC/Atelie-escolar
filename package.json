@@ -4,11 +4,23 @@
   "description": "Plataforma de vendas de materiais educativos - Ateliê da Escola",
   "main": "server.js",
   "scripts": {
-    "dev": "node server.js",
+    "dev": "vite",
+    "dev:api": "node server.js",
     "start": "node server.js",
-    "setup-db": "node scripts/setup-database.js",
-    "add-product": "node scripts/add-product.js",
-    "create-admin": "node scripts/create-admin-user.js"
+    "dev:web": "vite",
+    "build:web": "vite build",
+    "test:web": "vitest run",
+    "preview:web": "vite preview",
+    "supabase:start": "npx supabase start",
+    "supabase:stop": "npx supabase stop",
+    "supabase:status": "npx supabase status",
+    "supabase:login": "npx supabase login",
+    "supabase:init": "npx supabase init",
+    "supabase:link": "npx supabase link",
+    "supabase:db:pull": "npx supabase db pull",
+    "supabase:db:push": "npx supabase db push",
+    "supabase:migration:new": "npx supabase migration new",
+    "supabase:types": "npx supabase gen types typescript --linked --schema public > src/types/supabase.ts"
   },
   "keywords": [
     "banners",
@@ -19,11 +31,21 @@
   "license": "MIT",
   "dependencies": {
     "dotenv": "^16.3.1",
-    "firebase-admin": "^12.0.0",
     "mercadopago": "^2.0.0",
-    "nodemailer": "^8.0.1"
+    "nodemailer": "^8.0.1",
+    "prop-types": "^15.8.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.14.0"
   },
   "devDependencies": {
-    "vercel": "^33.0.0"
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@vitejs/plugin-react": "^6.0.1",
+    "jsdom": "^29.0.1",
+    "supabase": "^2.88.1",
+    "vercel": "^33.0.0",
+    "vite": "^8.0.3",
+    "vitest": "^4.1.2"
   }
 }

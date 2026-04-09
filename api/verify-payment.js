@@ -1,18 +1,79 @@
-const admin = require('firebase-admin');
+const crypto = require('node:crypto');
 const mercadopago = require('mercadopago');
-const { getFirestore, createDownloadToken } = require('../lib/firebase-admin');
 const { initializeMercadoPago } = require('../lib/mercadopago-config');
+const { getSupabaseConfig, getTableRow, insertIntoTable, listTableRows, updateTable } = require('../lib/supabase');
 
-/**
- * API: Verificar status do pagamento
- * GET /api/verify-payment?orderId=xxx
- *
- * Se o pedido ainda estiver "pending" no Firestore, consulta o MercadoPago
- * diretamente e, se o pagamento já foi aprovado, atualiza o Firestore na hora
- * (funciona mesmo quando o webhook não chegou por falta de ngrok).
- */
-module.exports = async (req, res) => {
-  // CORS
+async function fetchPaymentByOrderId(orderId) {
+  const mpClient = initializeMercadoPago();
+  const paymentApi = new mercadopago.Payment(mpClient);
+
+  const searchResult = await paymentApi.search({
+    options: { external_reference: orderId, sort: 'date_created', criteria: 'desc', limit: 5 },
+  });
+
+  return (searchResult.results || []).find(
+    (payment) => payment.status === 'approved' && payment.external_reference === orderId
+  ) || null;
+}
+
+async function loadOrder(orderId) {
+  return getTableRow('orders', {
+    select: 'id,order_code,status,payment_status,total_amount,created_at,completed_at',
+    filters: [{ column: 'order_code', value: orderId }],
+  });
+}
+
+async function loadOrderItems(orderInternalId) {
+  return listTableRows('order_items', {
+    select: 'order_id,product_id,product_name,unit_price,quantity',
+    filters: [{ column: 'order_id', value: orderInternalId }],
+    orderBy: 'id',
+    ascending: true,
+  });
+}
+
+async function loadDownloadTokens(orderInternalId) {
+  return listTableRows('download_tokens', {
+    select: 'order_id,product_id,product_name,token,used,expires_at',
+    filters: [{ column: 'order_id', value: orderInternalId }],
+    orderBy: 'created_at',
+    ascending: true,
+  });
+}
+
+async function createTokensForOrder(order, items, paymentId) {
+  const downloadTokens = [];
+
+  for (const item of items) {
+    const token = crypto.randomBytes(32).toString('hex');
+    await insertIntoTable('download_tokens', {
+      token,
+      order_id: order.id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      used: false,
+      expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+      created_at: new Date().toISOString(),
+    });
+
+    downloadTokens.push({
+      productId: String(item.product_id),
+      productName: item.product_name,
+      token,
+    });
+  }
+
+  await updateTable('orders', { id: `eq.${order.id}` }, {
+    payment_status: 'approved',
+    status: 'completed',
+    payment_id: paymentId,
+    completed_at: new Date().toISOString(),
+  });
+
+  return downloadTokens;
+}
+
+module.exports = async function verifyPaymentHandler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -27,122 +88,79 @@ module.exports = async (req, res) => {
 
   try {
     const { orderId } = req.query;
-
     if (!orderId) {
       return res.status(400).json({ error: 'orderId é obrigatório' });
     }
 
-    const db = getFirestore();
-    const orderRef = db.collection('orders').doc(orderId);
-    const orderDoc = await orderRef.get();
+    if (!getSupabaseConfig()) {
+      return res.status(500).json({ error: 'Supabase não configurado' });
+    }
 
-    if (!orderDoc.exists) {
+    const order = await loadOrder(orderId);
+    if (!order) {
       return res.status(404).json({ error: 'Pedido não encontrado' });
     }
 
-    let orderData = orderDoc.data();
+    let orderData = order;
 
-    // ── Se ainda pendente, consultar MercadoPago diretamente ──────────────────
-    if (orderData.paymentStatus !== 'approved' && orderData.status !== 'completed') {
+    if (order.payment_status !== 'approved' && order.status !== 'completed') {
       try {
-        const mpClient = initializeMercadoPago();
-        const paymentApi = new mercadopago.Payment(mpClient);
-
-        // Buscar por external_reference = orderId
-        const searchResult = await paymentApi.search({
-          options: { external_reference: orderId, sort: 'date_created', criteria: 'desc', limit: 5 },
-        });
-
-        // Verificação dupla: garante que o pagamento realmente pertence a este pedido
-        const approvedPayment = (searchResult.results || []).find(
-          p => p.status === 'approved' && p.external_reference === orderId
-        );
-
+        const approvedPayment = await fetchPaymentByOrderId(orderId);
         if (approvedPayment) {
-          console.log(`[verify-payment] Pagamento aprovado encontrado no MP para ordem ${orderId}:`, approvedPayment.id);
+          const orderItems = await loadOrderItems(order.id);
+          const existingTokens = await loadDownloadTokens(order.id);
+          const downloadTokens = existingTokens.length
+            ? existingTokens.map((token) => ({
+                productId: String(token.product_id),
+                productName: token.product_name,
+                token: token.token,
+              }))
+            : await createTokensForOrder(order, orderItems, approvedPayment.id);
 
-          // Criar tokens de download
-          const downloadTokens = [];
-          for (const item of orderData.items) {
-            const token = await createDownloadToken(orderId, item.id, 72);
-            downloadTokens.push({ productId: item.id, productName: item.title, token });
-          }
-
-          const updateData = {
-            paymentStatus: 'approved',
-            paymentId: approvedPayment.id,
+          orderData = {
+            ...orderData,
+            payment_status: 'approved',
             status: 'completed',
-            completedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            payment_id: approvedPayment.id,
+            completed_at: new Date().toISOString(),
             downloadTokens,
-            'mercadoPagoData.paymentInfo': {
-              id: approvedPayment.id,
-              status: approvedPayment.status,
-              statusDetail: approvedPayment.status_detail,
-              paymentMethod: approvedPayment.payment_method_id,
-              transactionAmount: approvedPayment.transaction_amount,
-              dateApproved: approvedPayment.date_approved,
-            },
           };
-
-          await orderRef.update(updateData);
-
-          // Registrar produtos comprados na conta do cliente
-          const customerEmail = orderData.customer?.email;
-          if (customerEmail) {
-            const productIds = orderData.items.map(i => i.id);
-            const productEntries = orderData.items.map(i => ({
-              productId: i.id,
-              productName: i.title,
-              purchasedAt: new Date().toISOString(),
-              orderId,
-            }));
-            const userProductsRef = db.collection('userProducts').doc(customerEmail);
-            await userProductsRef.set(
-              {
-                email: customerEmail,
-                productIds: admin.firestore.FieldValue.arrayUnion(...productIds),
-                purchases: admin.firestore.FieldValue.arrayUnion(...productEntries),
-                updatedAt: new Date().toISOString(),
-              },
-              { merge: true }
-            );
-            console.log(`[verify-payment] Produtos registrados para ${customerEmail}:`, productIds);
-          }
-
-          // Reler dados atualizados
-          orderData = { ...orderData, ...updateData };
         }
       } catch (mpErr) {
-        // Falha na consulta ao MP não deve derrubar o endpoint — retorna o que tiver
         console.error('[verify-payment] Erro ao consultar MercadoPago:', mpErr.message);
       }
     }
 
-    // Retornar status atual
+    const downloadTokens = orderData.downloadTokens || (await loadDownloadTokens(order.id)).map((token) => ({
+      productId: String(token.product_id),
+      productName: token.product_name,
+      token: token.token,
+    }));
+
+    const items = await loadOrderItems(order.id);
+
     return res.status(200).json({
       success: true,
       order: {
-        orderId: orderData.orderId,
+        orderId: orderData.order_code,
         status: orderData.status,
-        paymentStatus: orderData.paymentStatus,
-        totalAmount: orderData.totalAmount,
-        downloadTokens: orderData.downloadTokens || [],
-        createdAt: orderData.createdAt,
-        items: (orderData.items || []).map(item => ({
-          id: item.id,
-          title: item.title,
+        paymentStatus: orderData.payment_status,
+        totalAmount: orderData.total_amount,
+        downloadTokens,
+        createdAt: orderData.created_at,
+        items: items.map((item) => ({
+          id: String(item.product_id),
+          title: item.product_name,
           quantity: item.quantity,
-          price: item.price,
+          price: item.unit_price,
         })),
       },
     });
-
   } catch (error) {
     console.error('Error verifying payment:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Erro ao verificar pagamento',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

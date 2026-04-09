@@ -1,129 +1,128 @@
-const admin = require('firebase-admin');
-const { getFirestore } = require('../lib/firebase-admin');
+const crypto = require('node:crypto');
 const { getPaymentInfo, validateWebhookSignature } = require('../lib/mercadopago-config');
-const { createDownloadToken } = require('../lib/firebase-admin');
+const { getSupabaseConfig, getTableRow, insertIntoTable, listTableRows, updateTable } = require('../lib/supabase');
 
-/**
- * API: Webhook do Mercado Pago
- * POST /api/webhook
- */
-module.exports = async (req, res) => {
+async function loadOrder(orderId) {
+  return getTableRow('orders', {
+    select: 'id,order_code,status,payment_status,total_amount,created_at,completed_at',
+    filters: [{ column: 'order_code', value: orderId }],
+  });
+}
+
+async function loadOrderItems(orderInternalId) {
+  return listTableRows('order_items', {
+    select: 'order_id,product_id,product_name,unit_price,quantity',
+    filters: [{ column: 'order_id', value: orderInternalId }],
+    orderBy: 'id',
+    ascending: true,
+  });
+}
+
+async function loadExistingTokens(orderInternalId) {
+  return listTableRows('download_tokens', {
+    select: 'order_id,product_id,product_name,token',
+    filters: [{ column: 'order_id', value: orderInternalId }],
+    orderBy: 'created_at',
+    ascending: true,
+  });
+}
+
+async function createDownloadTokens(order, items) {
+  const downloadTokens = [];
+
+  for (const item of items) {
+    const token = crypto.randomBytes(32).toString('hex');
+    await insertIntoTable('download_tokens', {
+      token,
+      order_id: order.id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      used: false,
+      expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+      created_at: new Date().toISOString(),
+    });
+
+    downloadTokens.push({
+      productId: String(item.product_id),
+      productName: item.product_name,
+      token,
+    });
+  }
+
+  return downloadTokens;
+}
+
+module.exports = async function webhookHandler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    console.log('Webhook received:', req.body);
+    if (!getSupabaseConfig()) {
+      return res.status(500).json({ error: 'Supabase não configurado' });
+    }
 
-    // Validar assinatura do webhook (segurança)
     const isValid = validateWebhookSignature(req);
     if (!isValid && process.env.NODE_ENV === 'production') {
-      console.error('Invalid webhook signature');
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
     const { type, data } = req.body;
-
-    // Processar apenas notificações de pagamento
     if (type !== 'payment') {
       return res.status(200).json({ message: 'Event type not handled' });
     }
 
     const paymentId = data.id;
-    
-    // Buscar informações do pagamento
     const payment = await getPaymentInfo(paymentId);
-    console.log('Payment info:', payment);
-
     const orderId = payment.external_reference;
-    
+
     if (!orderId) {
-      console.error('No external_reference found');
       return res.status(400).json({ error: 'Invalid payment data' });
     }
 
-    const db = getFirestore();
-    const orderRef = db.collection('orders').doc(orderId);
-    const orderDoc = await orderRef.get();
-
-    if (!orderDoc.exists) {
-      console.error('Order not found:', orderId);
+    const order = await loadOrder(orderId);
+    if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Atualizar status do pedido
-    const updateData = {
-      paymentStatus: payment.status,
-      paymentId: payment.id,
-      'mercadoPagoData.paymentInfo': {
-        id: payment.id,
-        status: payment.status,
-        statusDetail: payment.status_detail,
-        paymentMethod: payment.payment_method_id,
-        transactionAmount: payment.transaction_amount,
-        dateApproved: payment.date_approved,
-      },
-      updatedAt: new Date().toISOString(),
-    };
-
-    // Se pagamento aprovado, criar tokens de download e registrar produtos do usuário
     if (payment.status === 'approved') {
-      updateData.status = 'completed';
-      updateData.completedAt = new Date().toISOString();
+      const orderItems = await loadOrderItems(order.id);
+      const existingTokens = await loadExistingTokens(order.id);
+      const downloadTokens = existingTokens.length
+        ? existingTokens.map((token) => ({
+            productId: String(token.product_id),
+            productName: token.product_name,
+            token: token.token,
+          }))
+        : await createDownloadTokens(order, orderItems);
 
-      const orderData = orderDoc.data();
-      const downloadTokens = [];
+      await updateTable('orders', { id: `eq.${order.id}` }, {
+        payment_status: 'approved',
+        payment_id: payment.id,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      });
 
-      // Criar um token para cada produto
-      for (const item of orderData.items) {
-        const token = await createDownloadToken(orderId, item.id);
-        downloadTokens.push({
-          productId: item.id,
-          productName: item.title,
-          token,
-        });
-      }
-
-      updateData.downloadTokens = downloadTokens;
-
-      // Registrar produtos comprados na conta do usuário (por e-mail)
-      const customerEmail = orderData.customer?.email;
-      if (customerEmail) {
-        const productIds = orderData.items.map(item => item.id);
-        const productEntries = orderData.items.map(item => ({
-          productId: item.id,
-          productName: item.title,
-          purchasedAt: new Date().toISOString(),
-          orderId,
-        }));
-
-        const userProductsRef = db.collection('userProducts').doc(customerEmail);
-        await userProductsRef.set(
-          {
-            email: customerEmail,
-            productIds: admin.firestore.FieldValue.arrayUnion(...productIds),
-            purchases: admin.firestore.FieldValue.arrayUnion(...productEntries),
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-
-        console.log(`Produtos registrados para ${customerEmail}:`, productIds);
-      }
-    } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
-      updateData.status = 'failed';
+      return res.status(200).json({
+        message: 'Webhook processed successfully',
+        downloadTokens,
+      });
     }
 
-    await orderRef.update(updateData);
+    if (payment.status === 'rejected' || payment.status === 'cancelled') {
+      await updateTable('orders', { id: `eq.${order.id}` }, {
+        payment_status: payment.status,
+        payment_id: payment.id,
+        status: 'failed',
+      });
+    }
 
-    console.log('Order updated successfully:', orderId);
     return res.status(200).json({ message: 'Webhook processed successfully' });
-
   } catch (error) {
     console.error('Webhook error:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Webhook processing failed',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };
