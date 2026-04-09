@@ -10,12 +10,6 @@ yarn.lock
 .env.production
 .env.*.local
 
-# Firebase
-firebase-adminsdk.json
-serviceAccountKey.json
-*firebase-adminsdk*.json
-atelie-da-escola-*.json
-
 # Vercel
 .vercel
 

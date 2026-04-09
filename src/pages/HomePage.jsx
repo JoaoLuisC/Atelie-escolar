@@ -1,13 +1,61 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Shell } from '../components/Shell';
+import { fetchHomeSections } from '../services/products';
+import { formatPrice } from '../utils/currency';
 
 export function HomePage() {
   const [visibleTestimonials, setVisibleTestimonials] = useState(false);
+  const [homeSections, setHomeSections] = useState([]);
+  const [homeSectionsStatus, setHomeSectionsStatus] = useState('');
+  const laneRefs = useRef({});
 
   useEffect(() => {
     setVisibleTestimonials(true);
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadHomeSections() {
+      try {
+        setHomeSectionsStatus('Carregando vitrine...');
+        const data = await fetchHomeSections();
+        if (!mounted) {
+          return;
+        }
+        setHomeSections(data);
+        setHomeSectionsStatus('');
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        setHomeSections([]);
+        setHomeSectionsStatus(error.message || 'Erro ao carregar vitrine.');
+      }
+    }
+
+    loadHomeSections();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const hasHomeSections = useMemo(() => homeSections.length > 0, [homeSections]);
+
+  function scrollLane(laneKey, direction) {
+    const laneElement = laneRefs.current[laneKey];
+    if (!laneElement) {
+      return;
+    }
+
+    const distance = Math.max(240, Math.round(laneElement.clientWidth * 0.8));
+    laneElement.scrollBy({
+      left: direction === 'left' ? -distance : distance,
+      behavior: 'smooth',
+    });
+  }
 
   return (
     <Shell>
@@ -95,36 +143,59 @@ export function HomePage() {
           </div>
 
           <div id="home-sections-wrap">
-            <div style={{ marginBottom: '60px' }}>
-              <h3 style={{ fontSize: '1.3rem', marginBottom: '24px', fontWeight: 600 }}>Vitrines em Destaque</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '18px' }}>
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} style={{
-                    padding: '24px',
-                    borderRadius: '14px',
-                    border: '1px solid rgba(155, 93, 229, 0.1)',
-                    backgroundColor: '#f9f9f9',
-                    minHeight: '200px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    transition: 'all 0.28s ease'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = '0 18px 34px rgba(122, 61, 192, 0.16)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-                  >
-                    <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>
-                      {['🎨', '📚', '🎉', '✨'][i - 1]}
-                    </div>
-                    <strong>{['Festival de Cores', 'Aprendizado Prático', 'Festas Escolares', 'Designs Exclusivos'][i - 1]}</strong>
-                    <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '8px' }}>Explore nossa coleção</p>
+            {homeSectionsStatus ? <p className="home-vitrine-status">{homeSectionsStatus}</p> : null}
+
+            {hasHomeSections
+              ? homeSections.map((section) => (
+                <div key={section.key} className="home-vitrine-row">
+                  <div className="home-vitrine-row-head">
+                    <h3>{section.title}</h3>
+                    <Link to={section.link || '/produtos'} className="home-vitrine-more-btn">
+                      Mais produtos
+                    </Link>
                   </div>
-                ))}
-              </div>
-            </div>
+
+                  <div className="home-vitrine-lane-shell">
+                    <button
+                      type="button"
+                      className="home-vitrine-arrow"
+                      aria-label={`Rolar ${section.title} para esquerda`}
+                      onClick={() => scrollLane(section.key, 'left')}
+                    >
+                      ←
+                    </button>
+
+                    <div
+                      className="home-vitrine-lane"
+                      ref={(element) => {
+                        laneRefs.current[section.key] = element;
+                      }}
+                    >
+                      {(section.products || []).map((product) => (
+                        <Link key={product.id} to={`/produtos/${product.id}`} className="home-vitrine-item">
+                          <div className="home-vitrine-item-media">
+                            {product.image ? <img src={product.image} alt={product.name} /> : <span>Produto</span>}
+                          </div>
+                          <div className="home-vitrine-item-body">
+                            <strong>{product.name}</strong>
+                            <span>{formatPrice(product.price || 0)}</span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="home-vitrine-arrow"
+                      aria-label={`Rolar ${section.title} para direita`}
+                      onClick={() => scrollLane(section.key, 'right')}
+                    >
+                      →
+                    </button>
+                  </div>
+                </div>
+              ))
+              : null}
           </div>
         </div>
       </section>

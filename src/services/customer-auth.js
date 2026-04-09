@@ -1,63 +1,174 @@
-const FIREBASE_WEB_API_KEY =
-  import.meta?.env?.VITE_FIREBASE_API_KEY ||
-  'AIzaSyCqbiSJXD02F0q9wFqrDAEKJtd6VHBjAOk';
+const SUPABASE_URL = String(import.meta?.env?.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+const SUPABASE_ANON_KEY = String(import.meta?.env?.VITE_SUPABASE_ANON_KEY || '').trim();
 
-const AUTH_BASE_URL = 'https://identitytoolkit.googleapis.com/v1/accounts';
+function assertSupabaseAuthConfig() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Supabase Auth nao configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
+  }
+}
 
-async function requestFirebaseAuth(endpoint, payload) {
-  const response = await fetch(`${AUTH_BASE_URL}:${endpoint}?key=${FIREBASE_WEB_API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+function mapAuthErrorMessage(data = {}) {
+  const code = String(data?.error_code || data?.code || '').trim().toLowerCase();
+  const text = String(data?.msg || data?.message || data?.error_description || data?.error || '').trim();
+  const full = `${code} ${text}`.toLowerCase();
+
+  if (full.includes('invalid login credentials')) return 'E-mail ou senha invalidos.';
+  if (full.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+  if (full.includes('user already registered')) return 'Este e-mail ja esta cadastrado.';
+  if (full.includes('password should be at least')) return 'Senha fraca. Use pelo menos 6 caracteres.';
+  if (full.includes('provider is not enabled')) return 'Login com Google nao esta habilitado no Supabase.';
+  if (full.includes('signup is disabled')) return 'Cadastro desabilitado no momento.';
+
+  return text || 'Nao foi possivel autenticar agora.';
+}
+
+function toCustomerSession(payload = {}, fallbackName = '') {
+  const user = payload?.user || {};
+  const metadata = user?.user_metadata || {};
+  return {
+    uid: String(user.id || '').trim(),
+    email: String(user.email || '').trim(),
+    name: String(metadata.full_name || metadata.name || fallbackName || '').trim(),
+    idToken: String(payload.access_token || '').trim(),
+    refreshToken: String(payload.refresh_token || '').trim(),
+  };
+}
+
+async function requestSupabaseAuth(pathname, options = {}) {
+  assertSupabaseAuthConfig();
+
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/${String(pathname || '').replace(/^\/+/, '')}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
   });
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('application/json') ? await response.json() : { message: await response.text() };
 
   if (!response.ok) {
-    const code = data?.error?.message || 'AUTH_ERROR';
-    const humanMap = {
-      EMAIL_EXISTS: 'Este e-mail ja esta cadastrado.',
-      INVALID_PASSWORD: 'Senha incorreta.',
-      EMAIL_NOT_FOUND: 'Conta nao encontrada para este e-mail.',
-      WEAK_PASSWORD: 'Senha fraca. Use pelo menos 6 caracteres.',
-      TOO_MANY_ATTEMPTS_TRY_LATER: 'Muitas tentativas. Tente novamente em alguns minutos.',
-      USER_DISABLED: 'Conta desativada.',
-    };
-
-    throw new Error(humanMap[code] || 'Nao foi possivel autenticar agora.');
+    throw new Error(mapAuthErrorMessage(data));
   }
 
   return data;
 }
 
+function persistCallbackSessionFromUrl() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const hash = String(window.location.hash || '').replace(/^#/, '');
+  if (!hash) {
+    return null;
+  }
+
+  const params = new URLSearchParams(hash);
+  const accessToken = String(params.get('access_token') || '').trim();
+  const refreshToken = String(params.get('refresh_token') || '').trim();
+  const tokenType = String(params.get('token_type') || '').trim().toLowerCase();
+
+  if (!accessToken || !refreshToken || tokenType !== 'bearer') {
+    return null;
+  }
+
+  const cleanUrl = `${window.location.pathname}${window.location.search}`;
+  window.history.replaceState({}, document.title, cleanUrl);
+
+  return { accessToken, refreshToken };
+}
+
 export async function loginCustomerWithEmail(email, password) {
-  const data = await requestFirebaseAuth('signInWithPassword', {
-    email,
-    password,
-    returnSecureToken: true,
+  const data = await requestSupabaseAuth('token?grant_type=password', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
   });
 
-  return {
-    uid: data.localId,
-    email: data.email,
-    name: data.displayName || '',
-    idToken: data.idToken,
-    refreshToken: data.refreshToken,
-  };
+  return toCustomerSession(data);
 }
 
 export async function registerCustomerWithEmail(name, email, password) {
-  const data = await requestFirebaseAuth('signUp', {
-    email,
-    password,
-    returnSecureToken: true,
+  const data = await requestSupabaseAuth('signup', {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      password,
+      data: { name, full_name: name },
+    }),
   });
 
-  return {
-    uid: data.localId,
-    email: data.email,
-    name: name || '',
-    idToken: data.idToken,
-    refreshToken: data.refreshToken,
-  };
+  if (!data?.access_token) {
+    // Supabase can require e-mail confirmation and not return immediate session.
+    return {
+      uid: String(data?.user?.id || '').trim(),
+      email: String(data?.user?.email || email || '').trim(),
+      name: String(name || '').trim(),
+      idToken: '',
+      refreshToken: '',
+    };
+  }
+
+  return toCustomerSession(data, name || '');
+}
+
+export async function loginCustomerWithGoogle(postLoginRedirect = '/checkout') {
+  assertSupabaseAuthConfig();
+
+  if (typeof window === 'undefined') {
+    throw new Error('Login com Google disponivel apenas no navegador.');
+  }
+
+  const callbackUrl = new URL('/login', window.location.origin);
+  callbackUrl.searchParams.set('redirect', postLoginRedirect || '/checkout');
+
+  const authorizeUrl = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
+  authorizeUrl.searchParams.set('provider', 'google');
+  authorizeUrl.searchParams.set('redirect_to', callbackUrl.toString());
+
+  window.location.assign(authorizeUrl.toString());
+}
+
+export async function consumeCustomerSessionFromAuthCallback() {
+  const tokenData = persistCallbackSessionFromUrl();
+  if (!tokenData) {
+    return null;
+  }
+
+  const data = await requestSupabaseAuth('user', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${tokenData.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return toCustomerSession(
+    {
+      user: data,
+      access_token: tokenData.accessToken,
+      refresh_token: tokenData.refreshToken,
+    },
+  );
+}
+
+export async function logoutCustomerFromSupabase(accessToken) {
+  const token = String(accessToken || '').trim();
+  if (!token) {
+    return;
+  }
+
+  try {
+    await requestSupabaseAuth('logout', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({}),
+    });
+  } catch {
+    // Logout local always continues even if remote token is expired/revoked.
+  }
 }

@@ -15,8 +15,6 @@ export function CategoryWizard({
     id: '',
     name: '',
     color: '#9B5DE5',
-    order: 0,
-    badgeLabel: '',
     featured: false,
     active: true,
   });
@@ -27,8 +25,6 @@ export function CategoryWizard({
         id: initialCategory.id || '',
         name: initialCategory.name || '',
         color: initialCategory.color || '#9B5DE5',
-        order: initialCategory.order || 0,
-        badgeLabel: initialCategory.badgeLabel || '',
         featured: initialCategory.featured || false,
         active: initialCategory.active !== false,
       });
@@ -43,8 +39,6 @@ export function CategoryWizard({
       id: '',
       name: '',
       color: '#9B5DE5',
-      order: 0,
-      badgeLabel: '',
       featured: false,
       active: true,
     });
@@ -56,8 +50,6 @@ export function CategoryWizard({
     let newValue = value;
     if (type === 'checkbox') {
       newValue = checked;
-    } else if (name === 'order') {
-      newValue = Number.parseInt(value, 10);
     }
     setFormData((prev) => ({
       ...prev,
@@ -123,30 +115,14 @@ export function CategoryWizard({
               value={formData.color}
               onChange={handleInputChange}
             />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="cat-order">Ordem (menor = primeiro)</label>
-            <input
-              type="number"
-              id="cat-order"
-              name="order"
-              value={formData.order}
-              onChange={handleInputChange}
-              min="0"
-            />
-          </div>
-
-          <div className="form-group full-width">
-            <label htmlFor="cat-badge-label">Badge de destaque (opcional)</label>
-            <input
-              type="text"
-              id="cat-badge-label"
-              name="badgeLabel"
-              value={formData.badgeLabel}
-              onChange={handleInputChange}
-              placeholder="Ex: MAIS VENDIDO, LANÇAMENTO"
-            />
+            <div className="category-color-preview" aria-live="polite">
+              <span
+                className="category-color-swatch"
+                style={{ backgroundColor: formData.color }}
+                aria-hidden="true"
+              />
+              <span className="category-color-code">Cor selecionada: {String(formData.color || '').toUpperCase()}</span>
+            </div>
           </div>
 
           <div className="form-group full-width">
@@ -192,8 +168,6 @@ CategoryWizard.propTypes = {
     id: PropTypes.string,
     name: PropTypes.string,
     color: PropTypes.string,
-    order: PropTypes.number,
-    badgeLabel: PropTypes.string,
     featured: PropTypes.bool,
     active: PropTypes.bool,
   }),

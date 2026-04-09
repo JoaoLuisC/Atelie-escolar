@@ -9,7 +9,7 @@ function getMode(search) {
   return mode === 'register' ? 'register' : 'login';
 }
 
-function useCustomerAuthHandlers({ loginCustomer, registerCustomer, pushToast, navigate, redirectTo }) {
+function useCustomerAuthHandlers({ loginCustomer, loginCustomerGoogle, registerCustomer, pushToast, navigate, redirectTo }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -53,15 +53,38 @@ function useCustomerAuthHandlers({ loginCustomer, registerCustomer, pushToast, n
     setStatus('Criando conta...');
 
     try {
-      await registerCustomer({
+      const session = await registerCustomer({
         name: registerForm.name.trim(),
         email: registerForm.email.trim(),
         password: registerForm.password,
       });
+
+      if (!session?.idToken) {
+        const msg = 'Conta criada. Verifique seu e-mail para confirmar o cadastro.';
+        setStatus(msg);
+        pushToast(msg, 'success');
+        return;
+      }
+
       pushToast('Conta criada com sucesso.', 'success');
       navigate(redirectTo);
     } catch (error) {
       const message = error.message || 'Falha ao cadastrar.';
+      setStatus(message);
+      pushToast(message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitGoogleLogin() {
+    setLoading(true);
+    setStatus('Redirecionando para login Google...');
+
+    try {
+      await loginCustomerGoogle(redirectTo);
+    } catch (error) {
+      const message = error.message || 'Falha ao entrar com Google.';
       setStatus(message);
       pushToast(message, 'error');
     } finally {
@@ -74,6 +97,7 @@ function useCustomerAuthHandlers({ loginCustomer, registerCustomer, pushToast, n
     status,
     setStatus,
     submitLogin,
+    submitGoogleLogin,
     submitRegister,
   };
 }
@@ -82,7 +106,7 @@ function useCustomerAuthHandlers({ loginCustomer, registerCustomer, pushToast, n
 export function CustomerAuthPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { customerSession, loginCustomer, registerCustomer } = useAuth();
+  const { customerSession, loginCustomer, loginCustomerGoogle, registerCustomer } = useAuth();
   const { pushToast } = useToast();
 
   const redirectTo = new URLSearchParams(location.search).get('redirect') || '/checkout';
@@ -93,8 +117,16 @@ export function CustomerAuthPage() {
     status,
     setStatus,
     submitLogin,
+    submitGoogleLogin,
     submitRegister,
-  } = useCustomerAuthHandlers({ loginCustomer, registerCustomer, pushToast, navigate, redirectTo });
+  } = useCustomerAuthHandlers({
+    loginCustomer,
+    loginCustomerGoogle,
+    registerCustomer,
+    pushToast,
+    navigate,
+    redirectTo,
+  });
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ name: '', email: '', password: '' });
@@ -158,31 +190,49 @@ export function CustomerAuthPage() {
             </div>
 
             {mode === 'login' ? (
-              <form className="customer-auth-form" onSubmit={submitLoginForm}>
-                <label htmlFor="customer-login-email">E-mail</label>
-                <input
-                  id="customer-login-email"
-                  type="email"
-                  value={loginForm.email}
-                  onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))}
-                  placeholder="seu@email.com"
-                  disabled={loading}
-                />
+              <>
+                <div className="customer-social-auth">
+                  <button
+                    type="button"
+                    className="button secondary customer-google-button"
+                    onClick={submitGoogleLogin}
+                    disabled={loading}
+                  >
+                    <span className="customer-google-icon" aria-hidden="true">G</span>
+                    {loading ? 'Conectando...' : 'Entrar com Google'}
+                  </button>
+                </div>
 
-                <label htmlFor="customer-login-password">Senha</label>
-                <input
-                  id="customer-login-password"
-                  type="password"
-                  value={loginForm.password}
-                  onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
-                  placeholder="Sua senha"
-                  disabled={loading}
-                />
+                <div className="customer-auth-divider" role="separator" aria-label="ou">
+                  <span>ou</span>
+                </div>
 
-                <button type="submit" className="button primary" disabled={loading}>
-                  {loading ? 'Entrando...' : 'Entrar'}
-                </button>
-              </form>
+                <form className="customer-auth-form" onSubmit={submitLoginForm}>
+                  <label htmlFor="customer-login-email">E-mail</label>
+                  <input
+                    id="customer-login-email"
+                    type="email"
+                    value={loginForm.email}
+                    onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))}
+                    placeholder="seu@email.com"
+                    disabled={loading}
+                  />
+
+                  <label htmlFor="customer-login-password">Senha</label>
+                  <input
+                    id="customer-login-password"
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
+                    placeholder="Sua senha"
+                    disabled={loading}
+                  />
+
+                  <button type="submit" className="button primary" disabled={loading}>
+                    {loading ? 'Entrando...' : 'Entrar'}
+                  </button>
+                </form>
+              </>
             ) : (
               <form className="customer-auth-form" onSubmit={submitRegisterForm}>
                 <label htmlFor="customer-register-name">Nome</label>

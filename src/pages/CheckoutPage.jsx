@@ -125,12 +125,6 @@ export function CheckoutPage() {
 
   return (
     <Shell>
-      <section className="page-section">
-        <p className="eyebrow">Checkout</p>
-        <h1>Checkout</h1>
-        <p>Fluxo de compra moderno, com a mesma linguagem visual da loja legado.</p>
-      </section>
-
       <section className="checkout-wrap products-preview-section">
         <div className="container">
         <div className="checkout-grid">

@@ -66,6 +66,73 @@ function createEmptyDashboardData() {
   };
 }
 
+function createLocalSectionId() {
+  return `section-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function parseHomeSectionsSetting(raw, categories) {
+  const categoryById = new Map((categories || []).map((category) => [String(category.id), category]));
+  const sections = Array.isArray(raw?.sections) ? raw.sections : [];
+
+  const parsed = sections
+    .map((section) => {
+      const type = String(section?.type || '').trim();
+      if (!['category', 'best_sellers', 'new_arrivals'].includes(type)) {
+        return null;
+      }
+
+      if (type === 'category') {
+        const categoryId = String(section?.categoryId || '').trim();
+        const category = categoryById.get(categoryId);
+        if (!category) {
+          return null;
+        }
+
+        return {
+          localId: createLocalSectionId(),
+          type,
+          title: String(section?.title || category.name).trim() || category.name,
+          categoryId,
+          limit: Number.isFinite(Number(section?.limit)) ? Math.max(4, Math.min(20, Number(section.limit))) : 8,
+          enabled: section?.enabled !== false,
+        };
+      }
+
+      return {
+        localId: createLocalSectionId(),
+        type,
+        title: String(section?.title || (type === 'best_sellers' ? 'Mais vendidos' : 'Novidades')).trim()
+          || (type === 'best_sellers' ? 'Mais vendidos' : 'Novidades'),
+        limit: Number.isFinite(Number(section?.limit)) ? Math.max(4, Math.min(20, Number(section.limit))) : 8,
+        enabled: section?.enabled !== false,
+      };
+    })
+    .filter(Boolean);
+
+  if (parsed.length) {
+    return parsed;
+  }
+
+  const defaults = (categories || [])
+    .filter((category) => category.active !== false)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }))
+    .slice(0, 3)
+    .map((category) => ({
+      localId: createLocalSectionId(),
+      type: 'category',
+      title: category.name,
+      categoryId: String(category.id),
+      limit: 8,
+      enabled: true,
+    }));
+
+  return [
+    ...defaults,
+    { localId: createLocalSectionId(), type: 'best_sellers', title: 'Mais vendidos', limit: 8, enabled: true },
+    { localId: createLocalSectionId(), type: 'new_arrivals', title: 'Novidades', limit: 8, enabled: true },
+  ];
+}
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function AdminPage() {
   const { logoutAdmin, setAdminAuthenticated } = useAuth();
@@ -82,7 +149,8 @@ export function AdminPage() {
   const [categories, setCategories] = useState([]);
   const [ordersFilter, setOrdersFilter] = useState('');
   const [usersFilter, setUsersFilter] = useState('');
-  const [vitrineJson, setVitrineJson] = useState('');
+  const [vitrineSections, setVitrineSections] = useState([]);
+  const [categoryToAddToVitrine, setCategoryToAddToVitrine] = useState('');
   const [securityJson, setSecurityJson] = useState('');
   const [tabStatus, setTabStatus] = useState('');
   const [tabLoading, setTabLoading] = useState(false);
@@ -146,7 +214,9 @@ export function AdminPage() {
           setDashboardData(data);
           setCategories(data.categories || []);
           if (activeTab === 'vitrine') {
-            setVitrineJson(JSON.stringify(data.settings?.homeSections || { sections: [] }, null, 2));
+            const parsedSections = parseHomeSectionsSetting(data.settings?.homeSections || { sections: [] }, data.categories || []);
+            setVitrineSections(parsedSections);
+            setCategoryToAddToVitrine('');
           }
         }
 
@@ -180,7 +250,8 @@ export function AdminPage() {
           setUsers([]);
           setOrders([]);
           if (activeTab === 'vitrine') {
-            setVitrineJson(JSON.stringify({ sections: [] }, null, 2));
+            setVitrineSections([]);
+            setCategoryToAddToVitrine('');
           }
           if (activeTab === 'seguranca') {
             setSecurityJson(JSON.stringify({}, null, 2));
@@ -392,13 +463,94 @@ export function AdminPage() {
     }
   }
 
+  function moveVitrineSection(index, direction) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= vitrineSections.length) {
+      return;
+    }
+
+    const next = [...vitrineSections];
+    const [current] = next.splice(index, 1);
+    next.splice(targetIndex, 0, current);
+    setVitrineSections(next);
+  }
+
+  function updateVitrineSection(localId, patch) {
+    setVitrineSections((previous) =>
+      previous.map((section) => (section.localId === localId ? { ...section, ...patch } : section)),
+    );
+  }
+
+  function removeVitrineSection(localId) {
+    setVitrineSections((previous) => previous.filter((section) => section.localId !== localId));
+  }
+
+  function addCategoryToVitrine() {
+    if (!categoryToAddToVitrine) {
+      return;
+    }
+
+    const category = categories.find((item) => String(item.id) === String(categoryToAddToVitrine));
+    if (!category) {
+      return;
+    }
+
+    setVitrineSections((previous) => [
+      ...previous,
+      {
+        localId: createLocalSectionId(),
+        type: 'category',
+        title: category.name,
+        categoryId: String(category.id),
+        limit: 8,
+        enabled: true,
+      },
+    ]);
+    setCategoryToAddToVitrine('');
+  }
+
+  function addSpecialSection(type) {
+    if (!['best_sellers', 'new_arrivals'].includes(type)) {
+      return;
+    }
+
+    const alreadyExists = vitrineSections.some((section) => section.type === type);
+    if (alreadyExists) {
+      pushToast('Essa secao especial ja existe na vitrine.', 'warning');
+      return;
+    }
+
+    setVitrineSections((previous) => [
+      ...previous,
+      {
+        localId: createLocalSectionId(),
+        type,
+        title: type === 'best_sellers' ? 'Mais vendidos' : 'Novidades',
+        limit: 8,
+        enabled: true,
+      },
+    ]);
+  }
+
   async function saveVitrine() {
     try {
-      const parsed = JSON.parse(vitrineJson || '{}');
-      await saveAdminSetting({ key: 'homeSections', value: parsed });
+      const payload = {
+        sections: vitrineSections
+          .filter((section) => section.enabled !== false)
+          .map((section) => ({
+            type: section.type,
+            title: String(section.title || '').trim() || (section.type === 'best_sellers' ? 'Mais vendidos' : section.type === 'new_arrivals' ? 'Novidades' : 'Categoria'),
+            categoryId: section.type === 'category' ? String(section.categoryId || '') : undefined,
+            limit: Math.max(4, Math.min(20, Number(section.limit || 8))),
+            enabled: true,
+          }))
+          .filter((section) => section.type !== 'category' || section.categoryId),
+      };
+
+      await saveAdminSetting({ key: 'homeSections', value: payload });
       pushToast('Configuracao da vitrine salva.', 'success');
     } catch (error) {
-      pushToast(error.message || 'JSON invalido para vitrine.', 'error');
+      pushToast(error.message || 'Erro ao salvar configuracao da vitrine.', 'error');
     }
   }
 
@@ -482,6 +634,16 @@ export function AdminPage() {
       (user) => String(user.name || '').toLowerCase().includes(q) || String(user.email || '').toLowerCase().includes(q),
     );
   }, [users, usersFilter]);
+
+  const availableCategoriesForVitrine = useMemo(() => {
+    const selected = new Set(
+      vitrineSections
+        .filter((section) => section.type === 'category' && section.categoryId)
+        .map((section) => String(section.categoryId)),
+    );
+
+    return categories.filter((category) => !selected.has(String(category.id)));
+  }, [categories, vitrineSections]);
 
   return (
     <>
@@ -824,8 +986,101 @@ export function AdminPage() {
               <section className="admin-wrap">
                 <article className="card admin-form-card">
                   <h3>Configuracao da vitrine</h3>
-                  <p>Edite o JSON das secoes da pagina inicial.</p>
-                  <textarea rows="16" value={vitrineJson} onChange={(event) => setVitrineJson(event.target.value)} />
+                  <p>Defina quais secoes aparecem na home, a ordem delas e quantos produtos por faixa.</p>
+
+                  <div className="admin-actions vitrine-toolbar">
+                    <select
+                      value={categoryToAddToVitrine}
+                      onChange={(event) => setCategoryToAddToVitrine(event.target.value)}
+                    >
+                      <option value="">Selecionar categoria para vitrine</option>
+                      {availableCategoriesForVitrine.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="button secondary small" onClick={addCategoryToVitrine}>
+                      Adicionar categoria
+                    </button>
+                    <button type="button" className="button secondary small" onClick={() => addSpecialSection('best_sellers')}>
+                      Adicionar Mais vendidos
+                    </button>
+                    <button type="button" className="button secondary small" onClick={() => addSpecialSection('new_arrivals')}>
+                      Adicionar Novidades
+                    </button>
+                  </div>
+
+                  <div className="admin-products-list">
+                    {vitrineSections.length === 0 ? <p className="empty-text">Nenhuma secao configurada.</p> : null}
+
+                    {vitrineSections.map((section, index) => (
+                      <article key={section.localId} className="admin-product-item vitrine-item">
+                        <div className="vitrine-item-main">
+                          <div className="vitrine-item-head">
+                            <strong>
+                              {section.type === 'category'
+                                ? `Categoria: ${categories.find((cat) => String(cat.id) === String(section.categoryId))?.name || 'Sem categoria'}`
+                                : section.type === 'best_sellers'
+                                  ? 'Especial: Mais vendidos'
+                                  : 'Especial: Novidades'}
+                            </strong>
+                            <span className="vitrine-order-badge">Ordem {index + 1}</span>
+                          </div>
+
+                          <div className="admin-form-grid vitrine-item-grid">
+                            <div>
+                              <label>Titulo da secao</label>
+                              <input
+                                value={section.title}
+                                onChange={(event) => updateVitrineSection(section.localId, { title: event.target.value })}
+                              />
+                            </div>
+
+                            <div>
+                              <label>Produtos na faixa</label>
+                              <input
+                                type="number"
+                                min="4"
+                                max="20"
+                                value={section.limit}
+                                onChange={(event) => updateVitrineSection(section.localId, { limit: event.target.value })}
+                              />
+                            </div>
+
+                            {section.type === 'category' ? (
+                              <div>
+                                <label>Categoria vinculada</label>
+                                <select
+                                  value={section.categoryId}
+                                  onChange={(event) => updateVitrineSection(section.localId, { categoryId: event.target.value })}
+                                >
+                                  {categories.map((category) => (
+                                    <option key={category.id} value={category.id}>
+                                      {category.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="admin-item-actions vitrine-item-actions">
+                          <button type="button" className="button secondary small" onClick={() => moveVitrineSection(index, -1)}>
+                            Subir
+                          </button>
+                          <button type="button" className="button secondary small" onClick={() => moveVitrineSection(index, 1)}>
+                            Descer
+                          </button>
+                          <button type="button" className="button secondary small" onClick={() => removeVitrineSection(section.localId)}>
+                            Remover
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+
                   <div className="admin-actions">
                     <button type="button" className="button primary small" onClick={saveVitrine}>Salvar vitrine</button>
                   </div>

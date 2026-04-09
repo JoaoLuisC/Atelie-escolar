@@ -51,6 +51,10 @@ API: http://localhost:3000
 - Use `APP_ENV` para controlar ambiente da API local (`development`, `test`, `production`).
 - Evite `NODE_ENV` em arquivos `.env*` do projeto para nao gerar warning no Vite.
 - O `server.js` faz fallback automatico para `development` quando `APP_ENV` nao estiver definido.
+- Para login de cliente (e-mail/senha + Google) via Supabase Auth no frontend, configure:
+	- `VITE_SUPABASE_URL`
+	- `VITE_SUPABASE_ANON_KEY`
+- No painel do Supabase, habilite o provedor Google em `Authentication > Providers`.
 
 ## Supabase CLI (workflow recomendado)
 

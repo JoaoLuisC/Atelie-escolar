@@ -6,6 +6,7 @@ import {
   fetchAdminProducts,
   updateAdminProduct,
 } from '../../services/admin-products';
+import { fetchAdminCategories } from '../../services/admin-panel';
 import { formatPrice } from '../../utils/currency';
 import { useToast } from '../../hooks/useToast';
 
@@ -13,6 +14,7 @@ export function AdminProductsManager({ onAuthExpired }) {
   const { pushToast } = useToast();
   const [status, setStatus] = useState('');
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState('');
   const [form, setForm] = useState({
@@ -45,8 +47,9 @@ export function AdminProductsManager({ onAuthExpired }) {
     setStatus('Carregando produtos...');
 
     try {
-      const list = await fetchAdminProducts();
+      const [list, categoriesData] = await Promise.all([fetchAdminProducts(), fetchAdminCategories()]);
       setProducts(list);
+      setCategories(categoriesData.categories || []);
       setStatus(`${list.length} produto(s) carregado(s).`);
     } catch (error) {
       if (String(error.message || '').toLowerCase().includes('sessao admin') && onAuthExpired) {
@@ -184,11 +187,21 @@ export function AdminProductsManager({ onAuthExpired }) {
               <label htmlFor="admin-category">Categoria</label>
               <input
                 id="admin-category"
+                list="admin-category-list"
                 value={form.category}
                 onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
               />
+              <datalist id="admin-category-list">
+                {categories.map((category) => (
+                  <option key={category.id} value={category.name} />
+                ))}
+              </datalist>
             </div>
           </div>
+
+          <p className="admin-status">
+            Dica: use categorias existentes para os produtos aparecerem corretamente na vitrine horizontal da home.
+          </p>
 
           <label htmlFor="admin-image">URL da imagem</label>
           <input

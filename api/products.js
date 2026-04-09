@@ -23,7 +23,7 @@ module.exports = async function productsHandler(req, res) {
       return res.status(500).json({ error: 'Supabase não configurado' });
     }
 
-    const [productsRows, categoriesRows] = await Promise.all([
+    const [productsRows, categoriesRows, approvedOrdersRows, orderItemsRows] = await Promise.all([
       listTableRows('products', {
         select: 'id,name,description,price,original_price,image_url,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
         filters: [{ column: 'active', value: true }],
@@ -36,9 +36,34 @@ module.exports = async function productsHandler(req, res) {
         orderBy: 'name',
         ascending: true,
       }),
+      listTableRows('orders', {
+        select: 'id',
+        filters: [{ column: 'payment_status', value: 'approved' }],
+        orderBy: 'created_at',
+        ascending: false,
+      }),
+      listTableRows('order_items', {
+        select: 'order_id,product_id,quantity',
+        orderBy: 'order_id',
+        ascending: false,
+      }),
     ]);
 
     const categoryById = new Map(categoriesRows.map((category) => [String(category.id), category.name]));
+    const approvedOrderIds = new Set(approvedOrdersRows.map((row) => String(row.id)));
+    const soldCountByProduct = new Map();
+
+    for (const item of orderItemsRows) {
+      const orderId = String(item.order_id || '');
+      const productId = String(item.product_id || '');
+      if (!orderId || !productId || !approvedOrderIds.has(orderId)) {
+        continue;
+      }
+
+      const qty = Number(item.quantity || 0);
+      soldCountByProduct.set(productId, (soldCountByProduct.get(productId) || 0) + (Number.isFinite(qty) ? qty : 0));
+    }
+
     const products = productsRows.map((row) => ({
       id: String(row.id),
       name: row.name,
@@ -55,6 +80,9 @@ module.exports = async function productsHandler(req, res) {
       paperType: row.paper_type || '',
       kitItems: Array.isArray(row.kit_items) ? row.kit_items : [],
       panelSizes: Array.isArray(row.panel_sizes) ? row.panel_sizes : [],
+      soldCount: soldCountByProduct.get(String(row.id)) || 0,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     }));
 
     return res.status(200).json({

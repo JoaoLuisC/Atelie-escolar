@@ -11,6 +11,17 @@ export async function fetchProducts() {
   return payload.products || [];
 }
 
+export async function fetchHomeSections() {
+  const response = await fetch(`${getApiBaseUrl()}/home-sections`);
+
+  if (!response.ok) {
+    throw new Error(`Falha ao carregar vitrine: ${response.status}`);
+  }
+
+  const payload = await response.json();
+  return payload.sections || [];
+}
+
 export async function fetchProductById(productId) {
   const response = await fetch(`${getApiBaseUrl()}/product-details?id=${encodeURIComponent(productId)}`);
 

@@ -27,15 +27,15 @@ function toCategoryPayload(body = {}, existing = {}) {
     color,
     active: body.active !== undefined ? body.active !== false : existing.active !== false,
     featured: body.featured !== undefined ? body.featured === true : existing.featured === true,
-    badge_label: String(body.badgeLabel ?? existing.badge_label ?? '').trim(),
-    sort_order: Number.isFinite(Number(body.order)) ? Number(body.order) : Number(existing.sort_order || 0),
+    badge_label: String(existing.badge_label ?? '').trim(),
+    sort_order: Number.isFinite(Number(existing.sort_order)) ? Number(existing.sort_order) : 0,
   };
 }
 
 async function listCategories() {
   const rows = await listTableRows('categories', {
     select: 'id,name,slug,color,active,featured,badge_label,sort_order,created_at',
-    orderBy: 'sort_order',
+    orderBy: 'name',
     ascending: true,
   });
 

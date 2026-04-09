@@ -16,7 +16,7 @@ module.exports = async function downloadHandler(req, res) {
     }
 
     const tokenRecord = await getTableRow('download_tokens', {
-      select: 'id,token,order_id,product_id,used,expires_at',
+      select: 'token,order_id,product_id,used,expires_at',
       filters: [{ column: 'token', value: token }],
     });
 
@@ -45,7 +45,7 @@ module.exports = async function downloadHandler(req, res) {
       return res.status(404).json({ error: 'Link de download não encontrado' });
     }
 
-    await updateTable('download_tokens', { id: `eq.${tokenRecord.id}` }, {
+    await updateTable('download_tokens', { token: `eq.${tokenRecord.token}` }, {
       used: true,
       used_at: new Date().toISOString(),
     });

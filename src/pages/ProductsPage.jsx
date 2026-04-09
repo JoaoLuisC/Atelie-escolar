@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
@@ -14,11 +15,21 @@ const BADGES = {
   'Decoracao de Sala': { label: 'EXCLUSIVO', cls: 'badge-exclusive' },
 };
 
+function normalizeText(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export function ProductsPage() {
   const { addToCart } = useCart();
   const { pushToast } = useToast();
+  const [searchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [activePreset, setActivePreset] = useState('');
   const [activePriceRange, setActivePriceRange] = useState('all');
   const [activeSort, setActiveSort] = useState('newest');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -62,11 +73,34 @@ export function ProductsPage() {
     pushToast(result.message, result.ok ? 'success' : 'warning');
   }
 
-  const categories = Array.from(new Set(products.map((item) => item.category).filter(Boolean)));
+  const categories = useMemo(() => Array.from(new Set(products.map((item) => item.category).filter(Boolean))), [products]);
+
+  useEffect(() => {
+    const categoryFromQuery = searchParams.get('categoria');
+    const presetFromQuery = normalizeText(searchParams.get('preset'));
+
+    if (categoryFromQuery) {
+      const foundCategory = categories.find((category) => normalizeText(category) === normalizeText(categoryFromQuery));
+      if (foundCategory) {
+        setActiveCategory(foundCategory);
+      }
+    }
+
+    if (presetFromQuery === 'mais-vendidos') {
+      setActivePreset('mais-vendidos');
+      setActiveSort('sold-desc');
+    }
+
+    if (presetFromQuery === 'novidades') {
+      setActivePreset('novidades');
+      setActiveSort('newest');
+    }
+  }, [searchParams, categories]);
 
   const featuredCategories = categories.slice(0, 5);
 
   const sortedProducts = [...products].sort((a, b) => {
+    if (activeSort === 'sold-desc') return (b.soldCount || 0) - (a.soldCount || 0);
     if (activeSort === 'price-asc') return (a.price || 0) - (b.price || 0);
     if (activeSort === 'price-desc') return (b.price || 0) - (a.price || 0);
     if (activeSort === 'name') return (a.name || '').localeCompare(b.name || '');
@@ -74,6 +108,14 @@ export function ProductsPage() {
   });
 
   const filteredProducts = sortedProducts.filter((product) => {
+    if (activePreset === 'novidades') {
+      const createdAtMs = new Date(product.createdAt || 0).getTime();
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      if (!createdAtMs || createdAtMs < sevenDaysAgo) {
+        return false;
+      }
+    }
+
     const categoryMatch = activeCategory === 'all' || product.category === activeCategory;
 
     if (!categoryMatch) {
@@ -137,7 +179,14 @@ export function ProductsPage() {
               Categorias <i className="bi bi-chevron-down" />
             </button>
             <div className="sidebar-section-body">
-              <button type="button" className={`cat-btn sidebar-cat${activeCategory === 'all' ? ' active' : ''}`} onClick={() => setActiveCategory('all')}>
+              <button
+                type="button"
+                className={`cat-btn sidebar-cat${activeCategory === 'all' ? ' active' : ''}`}
+                onClick={() => {
+                  setActivePreset('');
+                  setActiveCategory('all');
+                }}
+              >
                 Todos <span className="cat-count">{totalByCategory('all')}</span>
               </button>
               {categories.map((category) => (
@@ -145,7 +194,10 @@ export function ProductsPage() {
                   type="button"
                   key={category}
                   className={`cat-btn sidebar-cat${activeCategory === category ? ' active' : ''}`}
-                  onClick={() => setActiveCategory(category)}
+                  onClick={() => {
+                    setActivePreset('');
+                    setActiveCategory(category);
+                  }}
                 >
                   {category} <span className="cat-count">{totalByCategory(category)}</span>
                 </button>
@@ -181,7 +233,14 @@ export function ProductsPage() {
             </button>
 
             <div className="cat-filter-bar">
-              <button type="button" className={`cat-btn${activeCategory === 'all' ? ' active' : ''}`} onClick={() => setActiveCategory('all')}>
+              <button
+                type="button"
+                className={`cat-btn${activeCategory === 'all' ? ' active' : ''}`}
+                onClick={() => {
+                  setActivePreset('');
+                  setActiveCategory('all');
+                }}
+              >
                 Todos
               </button>
               {featuredCategories.map((category) => (
@@ -189,7 +248,10 @@ export function ProductsPage() {
                   type="button"
                   key={category}
                   className={`cat-btn${activeCategory === category ? ' active' : ''}`}
-                  onClick={() => setActiveCategory(category)}
+                  onClick={() => {
+                    setActivePreset('');
+                    setActiveCategory(category);
+                  }}
                 >
                   {category}
                 </button>
@@ -197,6 +259,7 @@ export function ProductsPage() {
             </div>
 
             <select className="sort-select-inline" value={activeSort} onChange={(event) => setActiveSort(event.target.value)}>
+              <option value="sold-desc">Mais vendidos</option>
               <option value="newest">Mais recentes</option>
               <option value="price-asc">Menor preco</option>
               <option value="price-desc">Maior preco</option>

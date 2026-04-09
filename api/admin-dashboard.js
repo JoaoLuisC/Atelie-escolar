@@ -60,7 +60,7 @@ async function loadDashboard() {
     }),
     listTableRows('categories', {
       select: 'id,name,slug,color,active,featured,badge_label,sort_order,created_at',
-      orderBy: 'sort_order',
+      orderBy: 'name',
       ascending: true,
     }),
     listTableRows('profiles', {
