@@ -51,6 +51,7 @@ function buildSummary(payload) {
   };
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 async function loadDashboard() {
   const [productsRows, categoriesRows, profilesRows, ordersRows, orderItemsRows, downloadLogsRows, settingsRows] = await Promise.all([
     listTableRows('products', {

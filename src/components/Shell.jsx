@@ -29,42 +29,42 @@ export function Shell({ children }) {
 
           <ul className="navbar-menu">
             <li>
-              <NavLink to="/" end className={({ isActive }) => `nav-link-item${isActive ? ' nav-active' : ''}`}>
+              <NavLink to="/" end className={({ isActive }) => `nav-link-item shell-nav-link${isActive ? ' nav-active' : ''}`}>
                 Inicio
               </NavLink>
             </li>
             <li className="nav-hide-sm">
-              <a href="/#como-funciona" className="nav-link-item">Como Funciona</a>
+              <a href="/#como-funciona" className="nav-link-item shell-nav-link">Como Funciona</a>
             </li>
             <li className="nav-hide-sm">
-              <a href="/#contato" className="nav-link-item">Contato</a>
+              <a href="/#contato" className="nav-link-item shell-nav-link">Contato</a>
             </li>
             <li>
-              <NavLink to="/produtos" className={({ isActive }) => `nav-link-item${isActive ? ' nav-active' : ''}`}>
+              <NavLink to="/produtos" className={({ isActive }) => `nav-link-item shell-nav-link${isActive ? ' nav-active' : ''}`}>
                 Produtos
               </NavLink>
             </li>
             {customerSession?.email ? (
               <li>
-                <NavLink to="/downloads" className={({ isActive }) => `nav-link-item${isActive ? ' nav-active' : ''}`}>
+                <NavLink to="/downloads" className={({ isActive }) => `nav-link-item shell-nav-link${isActive ? ' nav-active' : ''}`}>
                   <i className="bi bi-bag-heart" /> Meus Produtos
                 </NavLink>
               </li>
             ) : null}
             <li>
-              <NavLink to="/checkout" className="cart-icon" aria-label="Carrinho">
+              <NavLink to="/checkout" className="cart-icon shell-icon-link" aria-label="Carrinho">
                 <i className="bi bi-cart3" />
                 <span className="cart-badge">{cartCount}</span>
               </NavLink>
             </li>
             <li id="nav-auth-item">
-              <NavLink to="/login" className={({ isActive }) => `nav-link-item nav-auth-link${isActive ? ' nav-active' : ''}`}>
+              <NavLink to="/login" className={({ isActive }) => `nav-link-item shell-nav-link nav-auth-link${isActive ? ' nav-active' : ''}`}>
                 <i className="bi bi-person-circle" /> {customerSession?.email ? 'Conta' : 'Entrar'}
               </NavLink>
             </li>
             {customerSession?.email ? (
               <li>
-                <button type="button" className="nav-link-item shell-logout-btn" onClick={handleCustomerLogout}>
+                <button type="button" className="nav-link-item shell-nav-link shell-logout-btn" onClick={handleCustomerLogout}>
                   Sair
                 </button>
               </li>
@@ -89,9 +89,9 @@ export function Shell({ children }) {
                 Download instantaneo no seu tempo.
               </p>
               <div className="footer-social">
-                <a href="https://instagram.com/profamarciarcardoso" target="_blank" rel="noopener noreferrer" className="social-btn social-ig" aria-label="Instagram"><i className="bi bi-instagram" /></a>
-                <a href="#" className="social-btn social-fb" aria-label="Facebook"><i className="bi bi-facebook" /></a>
-                <a href="#" className="social-btn social-pt" aria-label="Pinterest"><i className="bi bi-pinterest" /></a>
+                <a href="https://instagram.com/profamarciarcardoso" target="_blank" rel="noopener noreferrer" className="social-btn social-ig shell-social-link" aria-label="Instagram"><i className="bi bi-instagram" /></a>
+                <a href="https://www.facebook.com" className="social-btn social-fb shell-social-link" aria-label="Facebook"><i className="bi bi-facebook" /></a>
+                <a href="https://www.pinterest.com" className="social-btn social-pt shell-social-link" aria-label="Pinterest"><i className="bi bi-pinterest" /></a>
               </div>
             </div>
 
@@ -109,11 +109,11 @@ export function Shell({ children }) {
             <div className="footer-section">
               <h4 className="footer-title"><i className="bi bi-chat-heart-fill" style={{ color: 'var(--accent-pink)' }} /> Fale Conosco</h4>
               <p className="footer-contact-item">
-                <i className="bi bi-envelope-fill footer-contact-icon" style={{ color: 'var(--accent-blue)' }} />
+                <span aria-hidden="true"><i className="bi bi-envelope-fill footer-contact-icon" style={{ color: 'var(--accent-blue)' }} /></span>{' '}
                 contato@profamarciarcardoso.com.br
               </p>
               <p className="footer-contact-item">
-                <i className="bi bi-whatsapp footer-contact-icon" style={{ color: '#25D366' }} />
+                <span aria-hidden="true"><i className="bi bi-whatsapp footer-contact-icon" style={{ color: '#25D366' }} /></span>{' '}
                 (11) 99999-9999
               </p>
             </div>

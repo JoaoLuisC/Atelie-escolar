@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
 import { Shell } from '../components/Shell';
+import { StatusStepper } from '../components/StatusStepper';
 import { useToast } from '../hooks/useToast';
 import { getApiBaseUrl } from '../utils/api';
 import { formatPrice } from '../utils/currency';
@@ -69,11 +71,20 @@ export function DownloadsPage() {
   const [status, setStatus] = useState('');
   const [order, setOrder] = useState(null);
   const [orders, setOrders] = useState([]);
-  const [email, setEmail] = useState('');
   const [emailStatus, setEmailStatus] = useState('');
   const [searchingByEmail, setSearchingByEmail] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [pollingStatus, setPollingStatus] = useState('');
+  const {
+    formState: { errors },
+    handleSubmit,
+    register,
+  } = useForm({
+    defaultValues: {
+      email: '',
+    },
+    mode: 'onSubmit',
+  });
 
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order') || localStorage.getItem('lastOrderId') || '';
@@ -135,19 +146,13 @@ export function DownloadsPage() {
     pushToast,
   });
 
-  async function loadOrdersByEmail(event) {
-    event.preventDefault();
-
-    if (!email.trim() || !email.includes('@')) {
-      setEmailStatus('Informe um e-mail valido para buscar pedidos.');
-      return;
-    }
-
+  async function loadOrdersByEmail(formData) {
+    const email = formData.email.trim();
     setSearchingByEmail(true);
     setEmailStatus('Buscando historico...');
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/customer-orders?email=${encodeURIComponent(email.trim())}`);
+      const response = await fetch(`${getApiBaseUrl()}/customer-orders?email=${encodeURIComponent(email)}`);
       const data = await response.json();
 
       if (!response.ok || !data.success) {
@@ -173,6 +178,13 @@ export function DownloadsPage() {
     const id = orderCode || internalOrderId;
     if (!id) return;
     navigate(`/downloads?order=${encodeURIComponent(id)}`);
+  }
+
+  let statusStep = 0;
+  if (order?.paymentStatus === 'approved') {
+    statusStep = 2;
+  } else if (order?.paymentStatus === 'pending' || pollingStatus) {
+    statusStep = 1;
   }
 
   return (
@@ -204,22 +216,46 @@ export function DownloadsPage() {
             </button>
           </div>
 
+          <StatusStepper
+            activeStep={statusStep}
+            description={pollingStatus || status || 'Acompanhe a liberacao do pedido com feedback visual em tempo real.'}
+            steps={[
+              { label: 'Processando Pagamento', description: 'O sistema esta validando a cobranca.' },
+              { label: 'Preparando Arquivos', description: 'Os links estao sendo organizados.' },
+              { label: 'Download Liberado', description: 'Seu acesso ja pode ser aberto.' },
+            ]}
+          />
+
           {pollingStatus ? <p className="downloads-polling-status">{pollingStatus}</p> : null}
 
-          <form className="downloads-search" onSubmit={loadOrdersByEmail}>
-            <label htmlFor="downloads-email">Buscar pedidos por e-mail</label>
-            <div className="downloads-search-row">
-              <input
-                id="downloads-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="seu@email.com"
-                disabled={searchingByEmail}
-              />
-              <button type="submit" className="button secondary small" disabled={searchingByEmail}>
-                {searchingByEmail ? 'Buscando...' : 'Buscar'}
-              </button>
+          <form className="downloads-search" onSubmit={handleSubmit(loadOrdersByEmail)} noValidate>
+            <div className="form-field">
+              <label htmlFor="downloads-email">Buscar pedidos por e-mail</label>
+              <div className="downloads-search-row">
+                <input
+                  id="downloads-email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  disabled={searchingByEmail}
+                  aria-invalid={Boolean(errors.email)}
+                  aria-describedby={errors.email ? 'downloads-email-error' : undefined}
+                  {...register('email', {
+                    required: 'Informe o e-mail usado na compra.',
+                    pattern: {
+                      value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                      message: 'Digite um e-mail valido para localizar o pedido.',
+                    },
+                  })}
+                />
+                <button type="submit" className="button secondary small" disabled={searchingByEmail}>
+                  {searchingByEmail ? 'Buscando...' : 'Buscar'}
+                </button>
+              </div>
+              {errors.email ? (
+                <p className="form-error" id="downloads-email-error" role="alert">
+                  {errors.email.message}
+                </p>
+              ) : null}
             </div>
             {emailStatus ? <p className="downloads-search-status">{emailStatus}</p> : null}
           </form>

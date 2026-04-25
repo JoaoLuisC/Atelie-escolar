@@ -21,12 +21,17 @@ function normalizeSlug(value) {
 function toCategoryPayload(body = {}, existing = {}) {
   const name = String(body.name || existing.name || '').trim();
   const color = String(body.color || existing.color || '#9B5DE5').trim();
+  const hasActive = Object.hasOwn(body, 'active');
+  const hasFeatured = Object.hasOwn(body, 'featured');
+  const existingIsActive = existing.active !== false;
+  const existingIsFeatured = existing.featured === true;
+
   return {
     name,
     slug: normalizeSlug(name),
     color,
-    active: body.active !== undefined ? body.active !== false : existing.active !== false,
-    featured: body.featured !== undefined ? body.featured === true : existing.featured === true,
+    active: hasActive ? Boolean(body.active) : existingIsActive,
+    featured: hasFeatured ? Boolean(body.featured) : existingIsFeatured,
     badge_label: String(existing.badge_label ?? '').trim(),
     sort_order: Number.isFinite(Number(existing.sort_order)) ? Number(existing.sort_order) : 0,
   };

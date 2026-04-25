@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
 import { Shell } from '../components/Shell';
+import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
@@ -12,30 +14,63 @@ export function CheckoutPage() {
   const { customerSession, setCustomerSession } = useAuth();
   const { cart, total, removeFromCart, clearCart } = useCart();
   const { pushToast } = useToast();
-  const [name, setName] = useState(customerSession?.name || '');
-  const [email, setEmail] = useState(customerSession?.email || '');
   const [status, setStatus] = useState('');
   const [processing, setProcessing] = useState(false);
+  const {
+    formState: { errors },
+    handleSubmit,
+    register,
+    setValue,
+    watch,
+  } = useForm({
+    defaultValues: {
+      email: customerSession?.email || '',
+      name: customerSession?.name || '',
+    },
+    mode: 'onSubmit',
+  });
+
+  const currentName = watch('name');
+  const currentEmail = watch('email');
 
   useEffect(() => {
     if (customerSession?.email) {
-      setEmail(customerSession.email);
+      setValue('email', customerSession.email, { shouldValidate: true });
     }
     if (customerSession?.name) {
-      setName(customerSession.name);
+      setValue('name', customerSession.name, { shouldValidate: true });
     }
-  }, [customerSession]);
+  }, [customerSession, setValue]);
 
-  async function onSubmit(event) {
-    event.preventDefault();
+  const statusStep = useMemo(() => {
+    if (status.includes('aprovado')) return 2;
+    if (status.includes('Aguardando')) return 1;
+    if (processing) return 0;
+    return 0;
+  }, [processing, status]);
+
+  const stepperDescription = useMemo(() => {
+    if (processing) {
+      return 'Criando pagamento e abrindo a cobrança.';
+    }
+
+    if (status.includes('Aguardando')) {
+      return 'Acompanhando a confirmação do pagamento em tempo real.';
+    }
+
+    if (status.includes('aprovado')) {
+      return 'Pagamento confirmado. Os próximos passos já estão liberados.';
+    }
+
+    return 'Preencha seus dados e avance para o pagamento.';
+  }, [processing, status]);
+
+  async function onSubmit(formData) {
+    const name = formData.name.trim();
+    const email = formData.email.trim();
 
     if (!cart.length) {
       setStatus('Seu carrinho esta vazio.');
-      return;
-    }
-
-    if (!name.trim() || !email.trim()) {
-      setStatus('Preencha nome e e-mail para continuar.');
       return;
     }
 
@@ -45,13 +80,13 @@ export function CheckoutPage() {
     try {
       const payload = {
         items: cart.map((item) => ({ productId: item.id, quantity: item.quantity || 1 })),
-        customer: { name: name.trim(), email: email.trim() },
+        customer: { name, email },
       };
 
-      if (email.trim() && customerSession?.email !== email.trim()) {
+      if (email && customerSession?.email !== email) {
         setCustomerSession({
-          email: email.trim(),
-          name: name.trim(),
+          email,
+          name,
         });
       }
 
@@ -127,73 +162,141 @@ export function CheckoutPage() {
     <Shell>
       <section className="checkout-wrap products-preview-section">
         <div className="container">
-        <div className="checkout-grid">
-          <article className="card checkout-card">
-            <h3>Seu Carrinho</h3>
-
-            {cart.length === 0 ? <p className="empty-text">Seu carrinho esta vazio.</p> : null}
-
-            {cart.map((item) => (
-              <div key={item.id} className="checkout-item">
-                <div className="checkout-item-main">
-                  <strong>{item.name}</strong>
-                  <span>{formatPrice(item.price)}</span>
+          <div className="checkout-grid">
+            <article className="card checkout-card checkout-summary-card">
+              <div className="checkout-summary-head">
+                <div>
+                  <p className="checkout-kicker">Resumo do Pedido</p>
+                  <h3>Seu Carrinho</h3>
                 </div>
-                <button type="button" className="button secondary small" onClick={() => removeFromCart(item.id)}>
-                  Remover
-                </button>
+                <span className="checkout-summary-chip">Seguro e instantaneo</span>
               </div>
-            ))}
 
-            <div className="checkout-total">
-              <span>Total</span>
-              <strong>{formatPrice(total)}</strong>
-            </div>
-          </article>
+              {cart.length === 0 ? <p className="empty-text">Seu carrinho esta vazio.</p> : null}
 
-          <article className="card checkout-card">
-            <h3>Dados para Pagamento</h3>
+              <div className="checkout-summary-list">
+                {cart.map((item) => (
+                  <div key={item.id} className="checkout-item">
+                    <div className="checkout-item-main">
+                      <strong>{item.name}</strong>
+                      <span>{formatPrice(item.price)}</span>
+                    </div>
+                    <button type="button" className="button secondary small" onClick={() => removeFromCart(item.id)}>
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
 
-            {customerSession?.email ? (
-              <p className="checkout-inline-note">
-                Comprando como <strong>{customerSession.email}</strong>
-              </p>
-            ) : (
-              <p className="checkout-inline-note">
-                Entre na sua conta para preencher seus dados automaticamente.{' '}
-                <Link to="/login?mode=login&redirect=/checkout">Entrar agora</Link>
-              </p>
-            )}
+              <div className="checkout-total checkout-total-emphasis">
+                <span>Total</span>
+                <strong>{formatPrice(total)}</strong>
+              </div>
 
-            <form className="checkout-form" onSubmit={onSubmit}>
-              <label htmlFor="checkout-name">Nome completo</label>
-              <input
-                id="checkout-name"
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Seu nome"
-                disabled={processing}
+              <p className="checkout-summary-note">Apos a aprovacao, seus arquivos ficam disponiveis automaticamente na area de downloads.</p>
+            </article>
+
+            <article className="card checkout-card checkout-payment-card">
+              <div className="checkout-payment-head">
+                <div>
+                  <p className="checkout-kicker">Finalizacao segura</p>
+                  <h3>Dados para Pagamento</h3>
+                </div>
+              </div>
+
+              <StatusStepper
+                activeStep={statusStep}
+                description={stepperDescription}
+                steps={[
+                  { label: 'Processando Pagamento', description: 'Geracao e abertura da cobranca.' },
+                  { label: 'Preparando Arquivos', description: 'Aguardando confirmacao do pagamento.' },
+                  { label: 'Download Liberado', description: 'Acesso imediato aos arquivos.' },
+                ]}
               />
 
-              <label htmlFor="checkout-email">E-mail</label>
-              <input
-                id="checkout-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="seu@email.com"
-                disabled={processing}
-              />
+              {customerSession?.email ? (
+                <p className="checkout-inline-note">
+                  Comprando como <strong>{customerSession.email}</strong>
+                </p>
+              ) : (
+                <p className="checkout-inline-note">
+                  Entre na sua conta para preencher seus dados automaticamente.{' '}
+                  <Link to="/login?mode=login&redirect=/checkout">Entrar agora</Link>
+                </p>
+              )}
 
-              <button type="submit" className="button primary" disabled={processing || !cart.length}>
-                {processing ? 'Processando...' : 'Ir para pagamento'}
-              </button>
-            </form>
+              <form className="checkout-form checkout-form-elevated" onSubmit={handleSubmit(onSubmit)} noValidate>
+                <div className="form-field">
+                  <label htmlFor="checkout-name">Nome completo</label>
+                  <input
+                    id="checkout-name"
+                    type="text"
+                    placeholder="Seu nome"
+                    disabled={processing}
+                    aria-invalid={Boolean(errors.name)}
+                    aria-describedby={errors.name ? 'checkout-name-error' : undefined}
+                    {...register('name', {
+                      required: 'Informe o nome completo para continuar.',
+                      minLength: {
+                        value: 3,
+                        message: 'Informe pelo menos 3 caracteres no nome.',
+                      },
+                    })}
+                  />
+                  {errors.name ? (
+                    <p className="form-error" id="checkout-name-error" role="alert">
+                      {errors.name.message}
+                    </p>
+                  ) : null}
+                </div>
 
-            {status ? <p className="checkout-status">{status}</p> : null}
-          </article>
-        </div>
+                <div className="form-field">
+                  <label htmlFor="checkout-email">E-mail</label>
+                  <input
+                    id="checkout-email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    disabled={processing}
+                    aria-invalid={Boolean(errors.email)}
+                    aria-describedby={errors.email ? 'checkout-email-error' : undefined}
+                    {...register('email', {
+                      required: 'Informe um e-mail valido para receber a confirmacao.',
+                      pattern: {
+                        value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                        message: 'Digite um e-mail valido, como nome@dominio.com.',
+                      },
+                    })}
+                  />
+                  {errors.email ? (
+                    <p className="form-error" id="checkout-email-error" role="alert">
+                      {errors.email.message}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="checkout-cta-panel">
+                  <button type="submit" className="button primary checkout-cta" disabled={processing || !cart.length}>
+                    {processing ? 'Processando...' : 'Ir para pagamento'}
+                  </button>
+
+                  <div className="checkout-trust-badges" aria-label="Selos de confianca">
+                    <span className="checkout-trust-badge">
+                      <i className="bi bi-shield-lock-fill" /> Compra segura
+                    </span>
+                    <span className="checkout-trust-badge">
+                      <i className="bi bi-credit-card-2-front-fill" /> Pagamento verificado
+                    </span>
+                    <span className="checkout-trust-badge">
+                      <i className="bi bi-stars" /> Download garantido
+                    </span>
+                  </div>
+                </div>
+              </form>
+
+              {status ? <output className="checkout-status">{status}</output> : null}
+              {currentName || currentEmail ? <p className="checkout-inline-note checkout-inline-note-muted">Conferindo cadastro de <strong>{currentName || 'cliente'}</strong>.</p> : null}
+            </article>
+          </div>
         </div>
       </section>
     </Shell>

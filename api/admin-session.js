@@ -12,8 +12,8 @@ module.exports = async function adminSessionHandler(req, res) {
   }
 
   const authenticated = hasValidAdminSession(req);
-  return res.status(authenticated ? 200 : 401).json({
-    success: authenticated,
+  return res.status(200).json({
+    success: true,
     authenticated,
   });
 };

@@ -152,12 +152,7 @@
     #00BBF9 75%,
     #00F5D4 100%
   );
-  background-size: 200% 100%;
-  animation: rainbowShift 6s linear infinite;
+  background-size: 100% 100%;
+  background-position: center;
   pointer-events: none;
-}
-
-@keyframes rainbowShift {
-  0%   { background-position: 0% 0%; }
-  100% { background-position: 200% 0%; }
 }

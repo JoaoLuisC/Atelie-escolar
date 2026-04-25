@@ -1,9 +1,11 @@
-const SUPABASE_URL = String(import.meta?.env?.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
-const SUPABASE_ANON_KEY = String(import.meta?.env?.VITE_SUPABASE_ANON_KEY || '').trim();
+const SUPABASE_URL = String(import.meta?.env?.VITE_SUPABASE_URL || import.meta?.env?.SUPABASE_URL || '')
+  .trim()
+  .replace(/\/+$/, '');
+const SUPABASE_ANON_KEY = String(import.meta?.env?.VITE_SUPABASE_ANON_KEY || import.meta?.env?.SUPABASE_ANON_KEY || '').trim();
 
 function assertSupabaseAuthConfig() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error('Supabase Auth nao configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
+    throw new Error('Supabase Auth nao configurado. Defina VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY ou SUPABASE_URL/SUPABASE_ANON_KEY.');
   }
 }
 
@@ -37,13 +39,17 @@ function toCustomerSession(payload = {}, fallbackName = '') {
 async function requestSupabaseAuth(pathname, options = {}) {
   assertSupabaseAuthConfig();
 
+  const requestHeaders = {
+    apikey: SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json',
+  };
+  if (options.headers) {
+    Object.assign(requestHeaders, options.headers);
+  }
+
   const response = await fetch(`${SUPABASE_URL}/auth/v1/${String(pathname || '').replace(/^\/+/, '')}`, {
     ...options,
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
+    headers: requestHeaders,
   });
 
   const contentType = response.headers.get('content-type') || '';
@@ -57,11 +63,11 @@ async function requestSupabaseAuth(pathname, options = {}) {
 }
 
 function persistCallbackSessionFromUrl() {
-  if (typeof window === 'undefined') {
+  if (!globalThis.window) {
     return null;
   }
 
-  const hash = String(window.location.hash || '').replace(/^#/, '');
+  const hash = String(globalThis.window.location.hash || '').replace(/^#/, '');
   if (!hash) {
     return null;
   }
@@ -75,8 +81,8 @@ function persistCallbackSessionFromUrl() {
     return null;
   }
 
-  const cleanUrl = `${window.location.pathname}${window.location.search}`;
-  window.history.replaceState({}, document.title, cleanUrl);
+  const cleanUrl = `${globalThis.window.location.pathname}${globalThis.window.location.search}`;
+  globalThis.window.history.replaceState({}, document.title, cleanUrl);
 
   return { accessToken, refreshToken };
 }
@@ -117,18 +123,18 @@ export async function registerCustomerWithEmail(name, email, password) {
 export async function loginCustomerWithGoogle(postLoginRedirect = '/checkout') {
   assertSupabaseAuthConfig();
 
-  if (typeof window === 'undefined') {
-    throw new Error('Login com Google disponivel apenas no navegador.');
+  if (!globalThis.window) {
+    throw new TypeError('Login com Google disponivel apenas no navegador.');
   }
 
-  const callbackUrl = new URL('/login', window.location.origin);
+  const callbackUrl = new URL('/login', globalThis.window.location.origin);
   callbackUrl.searchParams.set('redirect', postLoginRedirect || '/checkout');
 
   const authorizeUrl = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
   authorizeUrl.searchParams.set('provider', 'google');
   authorizeUrl.searchParams.set('redirect_to', callbackUrl.toString());
 
-  window.location.assign(authorizeUrl.toString());
+  globalThis.window.location.assign(authorizeUrl.toString());
 }
 
 export async function consumeCustomerSessionFromAuthCallback() {

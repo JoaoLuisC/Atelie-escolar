@@ -70,6 +70,25 @@ function createLocalSectionId() {
   return `section-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getSectionDefaultTitle(type) {
+  if (type === 'best_sellers') return 'Mais vendidos';
+  if (type === 'new_arrivals') return 'Novidades';
+  return 'Categoria';
+}
+
+function getSectionHeadline(section, categories) {
+  if (section.type === 'category') {
+    const categoryName = categories.find((cat) => String(cat.id) === String(section.categoryId))?.name || 'Sem categoria';
+    return `Categoria: ${categoryName}`;
+  }
+
+  if (section.type === 'best_sellers') {
+    return 'Especial: Mais vendidos';
+  }
+
+  return 'Especial: Novidades';
+}
+
 function parseHomeSectionsSetting(raw, categories) {
   const categoryById = new Map((categories || []).map((category) => [String(category.id), category]));
   const sections = Array.isArray(raw?.sections) ? raw.sections : [];
@@ -539,7 +558,7 @@ export function AdminPage() {
           .filter((section) => section.enabled !== false)
           .map((section) => ({
             type: section.type,
-            title: String(section.title || '').trim() || (section.type === 'best_sellers' ? 'Mais vendidos' : section.type === 'new_arrivals' ? 'Novidades' : 'Categoria'),
+            title: String(section.title || '').trim() || getSectionDefaultTitle(section.type),
             categoryId: section.type === 'category' ? String(section.categoryId || '') : undefined,
             limit: Math.max(4, Math.min(20, Number(section.limit || 8))),
             enabled: true,
@@ -1018,28 +1037,24 @@ export function AdminPage() {
                       <article key={section.localId} className="admin-product-item vitrine-item">
                         <div className="vitrine-item-main">
                           <div className="vitrine-item-head">
-                            <strong>
-                              {section.type === 'category'
-                                ? `Categoria: ${categories.find((cat) => String(cat.id) === String(section.categoryId))?.name || 'Sem categoria'}`
-                                : section.type === 'best_sellers'
-                                  ? 'Especial: Mais vendidos'
-                                  : 'Especial: Novidades'}
-                            </strong>
+                            <strong>{getSectionHeadline(section, categories)}</strong>
                             <span className="vitrine-order-badge">Ordem {index + 1}</span>
                           </div>
 
                           <div className="admin-form-grid vitrine-item-grid">
                             <div>
-                              <label>Titulo da secao</label>
+                              <label htmlFor={`section-title-${section.localId}`}>Titulo da secao</label>
                               <input
+                                id={`section-title-${section.localId}`}
                                 value={section.title}
                                 onChange={(event) => updateVitrineSection(section.localId, { title: event.target.value })}
                               />
                             </div>
 
                             <div>
-                              <label>Produtos na faixa</label>
+                              <label htmlFor={`section-limit-${section.localId}`}>Produtos na faixa</label>
                               <input
+                                id={`section-limit-${section.localId}`}
                                 type="number"
                                 min="4"
                                 max="20"
@@ -1050,8 +1065,9 @@ export function AdminPage() {
 
                             {section.type === 'category' ? (
                               <div>
-                                <label>Categoria vinculada</label>
+                                <label htmlFor={`section-category-${section.localId}`}>Categoria vinculada</label>
                                 <select
+                                  id={`section-category-${section.localId}`}
                                   value={section.categoryId}
                                   onChange={(event) => updateVitrineSection(section.localId, { categoryId: event.target.value })}
                                 >

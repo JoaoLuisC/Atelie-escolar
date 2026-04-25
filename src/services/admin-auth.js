@@ -38,13 +38,9 @@ export async function getAdminSession() {
     credentials: 'include',
   });
 
-  if (response.status === 401) {
-    return { authenticated: false };
-  }
-
   if (!response.ok || data.success !== true) {
     throw new Error(data.error || 'Falha ao validar sessao admin.');
   }
 
-  return { authenticated: true };
+  return { authenticated: data.authenticated === true };
 }
