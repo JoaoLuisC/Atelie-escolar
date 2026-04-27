@@ -182,7 +182,7 @@ async function loadDashboard() {
         createdAt: row.created_at,
       };
     })
-    .filter((user) => user.role !== 'admin');
+    .filter((user) => !['admin', 'master'].includes(String(user.role || '').toLowerCase()));
 
   const settings = {};
   for (const row of settingsRows) {

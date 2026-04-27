@@ -5,7 +5,7 @@ export async function loginAdmin({ username, password, factorCode, challengeToke
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ username, password, factorCode, challengeToken }),
+    body: JSON.stringify({ email: username, password, factorCode, challengeToken }),
   });
 
   if (response.ok && data.requiresSecondFactor === true) {

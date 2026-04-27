@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const mercadopago = require('mercadopago');
 const { initializeMercadoPago } = require('../lib/mercadopago-config');
 const { getSupabaseConfig, getTableRow, insertIntoTable, listTableRows, updateTable } = require('../lib/supabase');
+const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
 
 async function fetchPaymentByOrderId(orderId) {
   const mpClient = initializeMercadoPago();
@@ -18,7 +19,7 @@ async function fetchPaymentByOrderId(orderId) {
 
 async function loadOrder(orderId) {
   return getTableRow('orders', {
-    select: 'id,order_code,status,payment_status,total_amount,created_at,completed_at',
+    select: 'id,order_code,customer_name,customer_email,status,payment_status,total_amount,created_at,completed_at',
     filters: [{ column: 'order_code', value: orderId }],
   });
 }
@@ -69,6 +70,15 @@ async function createTokensForOrder(order, items, paymentId) {
     payment_id: paymentId,
     completed_at: new Date().toISOString(),
   });
+
+  try {
+    await ensureCustomerAccountFromCheckout({
+      email: order.customer_email,
+      name: order.customer_name,
+    });
+  } catch (provisionErr) {
+    console.error('[verify-payment] Falha ao provisionar conta de cliente:', provisionErr.message);
+  }
 
   return downloadTokens;
 }

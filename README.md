@@ -22,7 +22,8 @@ Frontend legado removido. O projeto agora roda com:
 
 - Rodar frontend + API em paralelo:
 	- `npm run dev:all`
-- Rodar stack completa (Supabase + frontend + API):
+
+- Alias para fluxo de desenvolvimento (frontend + API):
 	- `npm run dev:full`
 
 ### Scripts de qualidade e manutencao
@@ -55,32 +56,24 @@ API: http://localhost:3000
 	- `VITE_SUPABASE_URL`
 	- `VITE_SUPABASE_ANON_KEY`
 - No painel do Supabase, habilite o provedor Google em `Authentication > Providers`.
+- O acesso administrativo agora vem do Supabase Auth e da tabela `profiles`.
+- Crie o perfil com `role = 'master'` ou `role = 'admin'` para liberar o painel.
 
 ## Supabase CLI (workflow recomendado)
 
-Este repositorio esta configurado para usar o Supabase CLI como fluxo principal de banco.
+Este repositorio esta configurado para usar o Supabase remoto como fluxo principal de banco.
 
 ### Primeira configuracao
 
 1. Fazer login no Supabase CLI:
 	 - `npm run supabase:login`
-2. Inicializar estrutura local (ja executado neste projeto):
+2. Inicializar estrutura do projeto (ja executado neste repositorio):
 	 - `npm run supabase:init`
 3. Vincular ao projeto remoto:
 	 - `npm run supabase:link -- --project-ref SEU_PROJECT_REF`
 
-### Comandos do dia a dia
+### Comandos do dia a dia (remoto)
 
-- Subir stack local do Supabase (Docker):
-	- `npm run supabase:start`
-- Ver status local:
-	- `npm run supabase:status`
-- Reiniciar stack local:
-	- `npm run supabase:restart`
-- Diagnosticar ambiente local (Docker + Supabase):
-	- `npm run supabase:doctor`
-- Parar stack local:
-	- `npm run supabase:stop`
 - Criar migration nova:
 	- `npm run supabase:migration:new -- nome_da_migration`
 - Puxar mudancas do remoto para migration:
@@ -93,7 +86,7 @@ Este repositorio esta configurado para usar o Supabase CLI como fluxo principal 
 ### Fluxo seguro de banco
 
 1. Criar migration.
-2. Aplicar localmente.
+2. Revisar e aplicar no projeto remoto.
 3. Testar API/frontend.
 4. Fazer push para remoto.
 5. Gerar tipos e commitar junto.

@@ -4,7 +4,7 @@ export function ToastViewport({ toasts, onDismiss }) {
   return (
     <div className="toast-viewport" aria-live="polite" aria-atomic="true">
       {toasts.map((toast) => (
-        <article key={toast.id} className={`toast toast-${toast.type}`}>
+        <article key={toast.id} className={`toast toast-${toast.type}`} data-type={toast.type}>
           <p>{toast.message}</p>
           <button type="button" onClick={() => onDismiss(toast.id)} aria-label="Fechar aviso">
             x

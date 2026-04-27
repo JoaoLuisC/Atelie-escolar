@@ -77,8 +77,33 @@ async function getProfileRoleByUserId(userId) {
   return null;
 }
 
+async function getProfileRoleByEmail(email) {
+  const admin = getAdminClient();
+  if (!admin) {
+    return null;
+  }
+
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const result = await admin
+    .from('profiles')
+    .select('role')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (!result.error && result.data?.role) {
+    return result.data.role;
+  }
+
+  return null;
+}
+
 module.exports = {
   getAnonClient,
   getAdminClient,
+  getProfileRoleByEmail,
   getProfileRoleByUserId,
 };

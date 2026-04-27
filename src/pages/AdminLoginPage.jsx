@@ -10,7 +10,7 @@ export function AdminLoginPage() {
   const { pushToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [factorCode, setFactorCode] = useState('');
   const [requiresSecondFactor, setRequiresSecondFactor] = useState(false);
@@ -33,8 +33,8 @@ export function AdminLoginPage() {
   async function onSubmit(event) {
     event.preventDefault();
 
-    if (!username.trim() || !password) {
-      setStatus('Informe usuario e senha para entrar.');
+    if (!email.trim() || !password) {
+      setStatus('Informe e-mail e senha para entrar.');
       return;
     }
 
@@ -48,7 +48,7 @@ export function AdminLoginPage() {
 
     try {
       const data = await loginAdmin({
-        username: username.trim(),
+        username: email.trim(),
         password,
         factorCode: requiresSecondFactor ? factorCode.trim() : undefined,
         challengeToken: requiresSecondFactor ? challengeToken : undefined,
@@ -79,15 +79,15 @@ export function AdminLoginPage() {
         <div className="auth-standalone-head">
           <p className="eyebrow">Admin</p>
           <h1>Login administrativo</h1>
-          <p>Area restrita. Use suas credenciais para acessar o painel.</p>
+          <p>Area restrita. Use o e-mail Supabase do perfil master/admin para acessar o painel.</p>
         </div>
 
         <form className="admin-access-form" onSubmit={onSubmit}>
           <input
-            type="text"
-            placeholder="Usuario admin"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            type="email"
+            placeholder="E-mail do admin"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             disabled={loading}
           />
           <input

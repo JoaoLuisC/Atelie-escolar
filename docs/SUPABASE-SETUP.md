@@ -15,9 +15,6 @@ Depois disso, use sempre migracoes versionadas em Git.
 
 ### Comandos principais
 
-- `npm run supabase:start`
-- `npm run supabase:status`
-- `npm run supabase:stop`
 - `npm run supabase:migration:new -- nome_da_migration`
 - `npm run supabase:db:pull`
 - `npm run supabase:db:push`

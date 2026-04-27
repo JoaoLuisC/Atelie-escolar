@@ -1,68 +1,8 @@
-const SUPABASE_URL = String(import.meta?.env?.VITE_SUPABASE_URL || import.meta?.env?.SUPABASE_URL || '')
-  .trim()
-  .replace(/\/+$/, '');
-const SUPABASE_ANON_KEY = String(import.meta?.env?.VITE_SUPABASE_ANON_KEY || import.meta?.env?.SUPABASE_ANON_KEY || '').trim();
+import { apiRequest, getApiBaseUrl } from '../utils/api';
 
-function assertSupabaseAuthConfig() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error('Supabase Auth nao configurado. Defina VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY ou SUPABASE_URL/SUPABASE_ANON_KEY.');
-  }
-}
+const INVALID_CREDENTIALS_MESSAGE = 'Credenciais invalidas.';
 
-function mapAuthErrorMessage(data = {}) {
-  const code = String(data?.error_code || data?.code || '').trim().toLowerCase();
-  const text = String(data?.msg || data?.message || data?.error_description || data?.error || '').trim();
-  const full = `${code} ${text}`.toLowerCase();
-
-  if (full.includes('invalid login credentials')) return 'E-mail ou senha invalidos.';
-  if (full.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
-  if (full.includes('user already registered')) return 'Este e-mail ja esta cadastrado.';
-  if (full.includes('password should be at least')) return 'Senha fraca. Use pelo menos 6 caracteres.';
-  if (full.includes('provider is not enabled')) return 'Login com Google nao esta habilitado no Supabase.';
-  if (full.includes('signup is disabled')) return 'Cadastro desabilitado no momento.';
-
-  return text || 'Nao foi possivel autenticar agora.';
-}
-
-function toCustomerSession(payload = {}, fallbackName = '') {
-  const user = payload?.user || {};
-  const metadata = user?.user_metadata || {};
-  return {
-    uid: String(user.id || '').trim(),
-    email: String(user.email || '').trim(),
-    name: String(metadata.full_name || metadata.name || fallbackName || '').trim(),
-    idToken: String(payload.access_token || '').trim(),
-    refreshToken: String(payload.refresh_token || '').trim(),
-  };
-}
-
-async function requestSupabaseAuth(pathname, options = {}) {
-  assertSupabaseAuthConfig();
-
-  const requestHeaders = {
-    apikey: SUPABASE_ANON_KEY,
-    'Content-Type': 'application/json',
-  };
-  if (options.headers) {
-    Object.assign(requestHeaders, options.headers);
-  }
-
-  const response = await fetch(`${SUPABASE_URL}/auth/v1/${String(pathname || '').replace(/^\/+/, '')}`, {
-    ...options,
-    headers: requestHeaders,
-  });
-
-  const contentType = response.headers.get('content-type') || '';
-  const data = contentType.includes('application/json') ? await response.json() : { message: await response.text() };
-
-  if (!response.ok) {
-    throw new Error(mapAuthErrorMessage(data));
-  }
-
-  return data;
-}
-
-function persistCallbackSessionFromUrl() {
+function parseOAuthTokensFromHash() {
   if (!globalThis.window) {
     return null;
   }
@@ -74,107 +14,130 @@ function persistCallbackSessionFromUrl() {
 
   const params = new URLSearchParams(hash);
   const accessToken = String(params.get('access_token') || '').trim();
-  const refreshToken = String(params.get('refresh_token') || '').trim();
   const tokenType = String(params.get('token_type') || '').trim().toLowerCase();
 
-  if (!accessToken || !refreshToken || tokenType !== 'bearer') {
+  if (!accessToken || tokenType !== 'bearer') {
     return null;
+  }
+
+  return { accessToken };
+}
+
+function clearOAuthHashFromUrl() {
+  if (!globalThis.window) {
+    return;
   }
 
   const cleanUrl = `${globalThis.window.location.pathname}${globalThis.window.location.search}`;
   globalThis.window.history.replaceState({}, document.title, cleanUrl);
+}
 
-  return { accessToken, refreshToken };
+function normalizeUser(user = {}) {
+  const uid = String(user.uid || user.id || '').trim();
+  const email = String(user.email || '').trim();
+  const name = String(user.name || '').trim();
+
+  if (!uid || !email) {
+    return null;
+  }
+
+  return { uid, email, name };
+}
+
+function ensureAuthSuccess(response, data, fallbackMessage = INVALID_CREDENTIALS_MESSAGE) {
+  if (!response.ok || data?.success !== true) {
+    throw new Error(fallbackMessage);
+  }
 }
 
 export async function loginCustomerWithEmail(email, password) {
-  const data = await requestSupabaseAuth('token?grant_type=password', {
+  const { response, data } = await apiRequest('/auth/customer/login', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ email, password }),
   });
 
-  return toCustomerSession(data);
+  ensureAuthSuccess(response, data, INVALID_CREDENTIALS_MESSAGE);
+
+  const user = normalizeUser(data.user);
+  if (!user) {
+    throw new Error(INVALID_CREDENTIALS_MESSAGE);
+  }
+
+  return user;
 }
 
 export async function registerCustomerWithEmail(name, email, password) {
-  const data = await requestSupabaseAuth('signup', {
+  const { response, data } = await apiRequest('/auth/customer/register', {
     method: 'POST',
-    body: JSON.stringify({
-      email,
-      password,
-      data: { name, full_name: name },
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ name, email, password }),
   });
 
-  if (!data?.access_token) {
-    // Supabase can require e-mail confirmation and not return immediate session.
+  ensureAuthSuccess(response, data, INVALID_CREDENTIALS_MESSAGE);
+
+  if (data.verificationRequired) {
     return {
-      uid: String(data?.user?.id || '').trim(),
-      email: String(data?.user?.email || email || '').trim(),
-      name: String(name || '').trim(),
-      idToken: '',
-      refreshToken: '',
+      verificationRequired: true,
+      user: null,
     };
   }
 
-  return toCustomerSession(data, name || '');
+  return {
+    verificationRequired: false,
+    user: normalizeUser(data.user),
+  };
 }
 
 export async function loginCustomerWithGoogle(postLoginRedirect = '/checkout') {
-  assertSupabaseAuthConfig();
-
   if (!globalThis.window) {
     throw new TypeError('Login com Google disponivel apenas no navegador.');
   }
 
-  const callbackUrl = new URL('/login', globalThis.window.location.origin);
-  callbackUrl.searchParams.set('redirect', postLoginRedirect || '/checkout');
+  const redirect = String(postLoginRedirect || '/checkout').trim() || '/checkout';
+  const baseUrl = getApiBaseUrl().replace(/\/+$/, '');
+  const target = `${baseUrl}/auth/customer/google/start?redirect=${encodeURIComponent(redirect)}`;
 
-  const authorizeUrl = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
-  authorizeUrl.searchParams.set('provider', 'google');
-  authorizeUrl.searchParams.set('redirect_to', callbackUrl.toString());
-
-  globalThis.window.location.assign(authorizeUrl.toString());
+  globalThis.window.location.assign(target);
 }
 
 export async function consumeCustomerSessionFromAuthCallback() {
-  const tokenData = persistCallbackSessionFromUrl();
+  const tokenData = parseOAuthTokensFromHash();
   if (!tokenData) {
     return null;
   }
 
-  const data = await requestSupabaseAuth('user', {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${tokenData.accessToken}`,
-      'Content-Type': 'application/json',
-    },
+  const { response, data } = await apiRequest('/auth/customer/google/callback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(tokenData),
   });
 
-  return toCustomerSession(
-    {
-      user: data,
-      access_token: tokenData.accessToken,
-      refresh_token: tokenData.refreshToken,
-    },
-  );
+  clearOAuthHashFromUrl();
+
+  ensureAuthSuccess(response, data, INVALID_CREDENTIALS_MESSAGE);
+  return normalizeUser(data.user);
 }
 
-export async function logoutCustomerFromSupabase(accessToken) {
-  const token = String(accessToken || '').trim();
-  if (!token) {
-    return;
+export async function fetchCustomerSession() {
+  const { response, data } = await apiRequest('/auth/customer/session', {
+    method: 'GET',
+    credentials: 'include',
+  });
+
+  if (!response.ok || data?.success !== true || data?.authenticated !== true) {
+    return null;
   }
 
-  try {
-    await requestSupabaseAuth('logout', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({}),
-    });
-  } catch {
-    // Logout local always continues even if remote token is expired/revoked.
-  }
+  return normalizeUser(data.user);
+}
+
+export async function logoutCustomerSession() {
+  await apiRequest('/auth/customer/logout', {
+    method: 'POST',
+    credentials: 'include',
+  });
 }

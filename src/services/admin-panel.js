@@ -48,11 +48,11 @@ export async function deleteAdminCategory(id) {
 }
 
 export async function fetchAdminUsers() {
-  return request('/admin-users');
+  return request('/admin/users');
 }
 
 export async function updateAdminUser(payload) {
-  return request('/admin-users', {
+  return request('/admin/users', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -60,7 +60,7 @@ export async function updateAdminUser(payload) {
 }
 
 export async function deleteAdminUser(id) {
-  return request(`/admin-users?id=${encodeURIComponent(id)}`, {
+  return request(`/admin/users?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }

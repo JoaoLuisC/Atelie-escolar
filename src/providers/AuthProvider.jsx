@@ -2,10 +2,11 @@ import { createContext, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { getAdminSession, loginAdmin, logoutAdmin } from '../services/admin-auth';
 import {
+  fetchCustomerSession,
   consumeCustomerSessionFromAuthCallback,
   loginCustomerWithEmail,
   loginCustomerWithGoogle,
-  logoutCustomerFromSupabase,
+  logoutCustomerSession,
   registerCustomerWithEmail,
 } from '../services/customer-auth';
 
@@ -14,25 +15,7 @@ export const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [authReady, setAuthReady] = useState(false);
-  const [customerSession, setCustomerSession] = useState(() => {
-    const email = localStorage.getItem('customer_email') || '';
-    const name = localStorage.getItem('customer_name') || '';
-    const uid = localStorage.getItem('customer_uid') || '';
-    const idToken = localStorage.getItem('customer_id_token') || '';
-    const refreshToken = localStorage.getItem('customer_refresh_token') || '';
-
-    if (!email) {
-      return null;
-    }
-
-    return {
-      uid,
-      email,
-      name,
-      idToken,
-      refreshToken,
-    };
-  });
+  const [customerSession, setCustomerSession] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,12 +23,15 @@ export function AuthProvider({ children }) {
     async function bootstrap() {
       try {
         const data = await getAdminSession();
+        const customer = await fetchCustomerSession();
         if (!cancelled) {
           setAdminAuthenticated(data.authenticated === true);
+          setCustomerSession(customer);
         }
       } catch {
         if (!cancelled) {
           setAdminAuthenticated(false);
+          setCustomerSession(null);
         }
       } finally {
         if (!cancelled) {
@@ -70,12 +56,6 @@ export function AuthProvider({ children }) {
         if (!callbackSession?.email || cancelled) {
           return;
         }
-
-        localStorage.setItem('customer_email', callbackSession.email || '');
-        localStorage.setItem('customer_name', callbackSession.name || '');
-        localStorage.setItem('customer_uid', callbackSession.uid || '');
-        localStorage.setItem('customer_id_token', callbackSession.idToken || '');
-        localStorage.setItem('customer_refresh_token', callbackSession.refreshToken || '');
         setCustomerSession(callbackSession);
       } catch {
         // Ignore callback parse errors and keep existing local session state.
@@ -105,11 +85,6 @@ export function AuthProvider({ children }) {
       customerSession,
       async loginCustomer({ email, password }) {
         const session = await loginCustomerWithEmail(email, password);
-        localStorage.setItem('customer_email', email);
-        localStorage.setItem('customer_name', session.name || '');
-        localStorage.setItem('customer_uid', session.uid || '');
-        localStorage.setItem('customer_id_token', session.idToken || '');
-        localStorage.setItem('customer_refresh_token', session.refreshToken || '');
         setCustomerSession(session);
         return session;
       },
@@ -117,44 +92,28 @@ export function AuthProvider({ children }) {
         await loginCustomerWithGoogle(redirectPath);
       },
       async registerCustomer({ name, email, password }) {
-        const session = await registerCustomerWithEmail(name, email, password);
-        if (!session?.idToken || !session?.refreshToken) {
-          return { ...session, idToken: '', refreshToken: '' };
+        const result = await registerCustomerWithEmail(name, email, password);
+        if (result.verificationRequired) {
+          return result;
         }
 
-        localStorage.setItem('customer_email', email);
-        localStorage.setItem('customer_name', session.name || '');
-        localStorage.setItem('customer_uid', session.uid || '');
-        localStorage.setItem('customer_id_token', session.idToken || '');
-        localStorage.setItem('customer_refresh_token', session.refreshToken || '');
-        setCustomerSession(session);
-        return session;
+        setCustomerSession(result.user || null);
+        return result;
       },
       async logoutCustomer() {
-        await logoutCustomerFromSupabase(customerSession?.idToken);
-        localStorage.removeItem('customer_email');
-        localStorage.removeItem('customer_name');
-        localStorage.removeItem('customer_uid');
-        localStorage.removeItem('customer_id_token');
-        localStorage.removeItem('customer_refresh_token');
+        await logoutCustomerSession();
         setCustomerSession(null);
       },
       setCustomerSession(session) {
         const email = String(session?.email || '').trim();
-        if (!email) return;
+        if (!email) {
+          setCustomerSession(null);
+          return;
+        }
 
         const name = String(session?.name || '').trim();
         const uid = String(session?.uid || '').trim();
-        const idToken = String(session?.idToken || '').trim();
-        const refreshToken = String(session?.refreshToken || '').trim();
-
-        localStorage.setItem('customer_email', email);
-        localStorage.setItem('customer_name', name);
-        localStorage.setItem('customer_uid', uid);
-        localStorage.setItem('customer_id_token', idToken);
-        localStorage.setItem('customer_refresh_token', refreshToken);
-
-        setCustomerSession({ email, name, uid, idToken, refreshToken });
+        setCustomerSession({ email, name, uid });
       },
     }),
     [authReady, adminAuthenticated, customerSession],

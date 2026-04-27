@@ -4,7 +4,15 @@ export function getApiBaseUrl() {
 
 export async function parseJson(response) {
   try {
-    return await response.json();
+    const data = await response.json();
+    if (data && typeof data.error === 'object' && data.error && typeof data.error.message === 'string') {
+      return {
+        ...data,
+        error: data.error.message,
+      };
+    }
+
+    return data;
   } catch {
     return {};
   }

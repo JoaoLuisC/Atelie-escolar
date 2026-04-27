@@ -1,6 +1,31 @@
 const { AppError } = require('../utils/app-error');
 const { getAnonClient, getProfileRoleByUserId } = require('../services/supabase-auth');
 
+function normalizeRole(role) {
+  return String(role || '').trim().toUpperCase();
+}
+
+function roleMatchesExpected(currentRole, expectedRole) {
+  const normalizedCurrent = normalizeRole(currentRole);
+  const normalizedExpected = normalizeRole(expectedRole);
+
+  if (!normalizedCurrent || !normalizedExpected) {
+    return false;
+  }
+
+  const aliases = {
+    ADMIN: ['ADMIN', 'MASTER'],
+    MASTER: ['MASTER', 'ADMIN'],
+    SELLER: ['SELLER', 'VENDEDOR'],
+    VENDEDOR: ['VENDEDOR', 'SELLER'],
+    CUSTOMER: ['CUSTOMER', 'CLIENTE'],
+    CLIENTE: ['CLIENTE', 'CUSTOMER'],
+  };
+
+  const expectedSet = aliases[normalizedExpected] || [normalizedExpected];
+  return expectedSet.includes(normalizedCurrent);
+}
+
 function extractBearerToken(headerValue) {
   if (!headerValue || typeof headerValue !== 'string') {
     return null;
@@ -43,8 +68,6 @@ async function authenticate(req, _res, next) {
 }
 
 function checkRole(expectedRole) {
-  const normalizedExpected = String(expectedRole || '').toUpperCase();
-
   return async function checkRoleMiddleware(req, _res, next) {
     try {
       if (!req.auth?.user?.id) {
@@ -56,10 +79,9 @@ function checkRole(expectedRole) {
         return next(new AppError('Perfil de acesso não encontrado.', 403));
       }
 
-      const normalizedCurrent = String(profileRole).toUpperCase();
-      req.auth.role = normalizedCurrent;
+      req.auth.role = normalizeRole(profileRole);
 
-      if (normalizedCurrent !== normalizedExpected) {
+      if (!roleMatchesExpected(profileRole, expectedRole)) {
         return next(new AppError('Acesso negado para este recurso.', 403));
       }
 

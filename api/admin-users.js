@@ -22,7 +22,7 @@ function formatUsers(usersRows, statsByEmail) {
         createdAt: row.created_at,
       };
     })
-    .filter((user) => user.role !== 'admin');
+    .filter((user) => !['admin', 'master'].includes(String(user.role || '').toLowerCase()));
 }
 
 async function listUsers() {
@@ -73,7 +73,7 @@ async function updateUser(body) {
     return { status: 404, body: { success: false, error: 'Usuário não encontrado.' } };
   }
 
-  if (String(existing.role || '').toLowerCase() === 'admin') {
+  if (['admin', 'master'].includes(String(existing.role || '').toLowerCase())) {
     return { status: 403, body: { success: false, error: 'Não é permitido editar usuário admin por este endpoint.' } };
   }
 
@@ -104,7 +104,7 @@ async function deleteUser(id) {
     return { status: 404, body: { success: false, error: 'Usuário não encontrado.' } };
   }
 
-  if (String(existing.role || '').toLowerCase() === 'admin') {
+  if (['admin', 'master'].includes(String(existing.role || '').toLowerCase())) {
     return { status: 403, body: { success: false, error: 'Não é permitido excluir usuário admin por este endpoint.' } };
   }
 

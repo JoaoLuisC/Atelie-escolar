@@ -6,6 +6,8 @@ import { CustomerAuthPage } from './pages/CustomerAuthPage';
 import { DownloadsPage } from './pages/DownloadsPage';
 import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { AdminUsersPage } from './pages/AdminUsersPage';
 import { ProductDetailsPage } from './pages/ProductDetailsPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -20,6 +22,7 @@ export default function App() {
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/login" element={<CustomerAuthPage />} />
       <Route path="/conta" element={<CustomerAuthPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/downloads" element={<DownloadsPage />} />
       <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
       <Route path="/admin-login" element={<Navigate to={ADMIN_LOGIN_PATH} replace />} />
@@ -28,6 +31,14 @@ export default function App() {
         element={(
           <ProtectedRoute>
             <AdminPage />
+          </ProtectedRoute>
+        )}
+      />
+      <Route
+        path="/admin/usuarios"
+        element={(
+          <ProtectedRoute>
+            <AdminUsersPage />
           </ProtectedRoute>
         )}
       />

@@ -1,5 +1,6 @@
-require('dotenv').config({ path: '.env.local' });
-require('dotenv').config(); // fallback to .env for any missing vars
+const fs = require('node:fs');
+const path = require('node:path');
+const dotenv = require('dotenv');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -7,8 +8,30 @@ const rateLimit = require('express-rate-limit');
 const authRoutes = require('./routes/auth.routes');
 const productRoutes = require('./routes/products.routes');
 const paymentRoutes = require('./routes/payment.routes');
-const legacyRoutes = require('./routes/legacy.routes');
+const apiCompatRoutes = require('./routes/api-compat.routes');
 const { notFoundHandler, errorHandler } = require('./middleware/error.middleware');
+
+function loadEnvFiles() {
+  const initialEnv = String(process.env.APP_ENV || process.env.NODE_ENV || 'development').trim().toLowerCase();
+
+  const candidates = [
+    `.env.${initialEnv}.local`,
+    ...(initialEnv === 'test' ? [] : ['.env.local']),
+    `.env.${initialEnv}`,
+    '.env',
+  ];
+
+  for (const envFile of candidates) {
+    const envPath = path.join(process.cwd(), envFile);
+    if (!fs.existsSync(envPath)) {
+      continue;
+    }
+
+    dotenv.config({ path: envPath, override: false });
+  }
+}
+
+loadEnvFiles();
 
 const RUNTIME_ENV = String(process.env.APP_ENV || process.env.NODE_ENV || 'development').trim().toLowerCase();
 process.env.NODE_ENV = RUNTIME_ENV;
@@ -75,9 +98,7 @@ app.get('/health', (_req, res) => {
 app.use('/api', authRoutes);
 app.use('/api', productRoutes);
 app.use('/api', paymentRoutes);
-
-// Compatibilidade durante migração: qualquer endpoint legado segue funcionando.
-app.use('/api', legacyRoutes);
+app.use('/api', apiCompatRoutes);
 app.use('/api', notFoundHandler);
 
 app.use((_req, res) => {

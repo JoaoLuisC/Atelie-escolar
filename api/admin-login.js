@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const { getTableRow } = require('../lib/supabase');
 const { safeCompare, setAdminCorsHeaders, setSessionCookie } = require('../lib/admin-session');
+const { getAnonClient, getProfileRoleByEmail } = require('../services/supabase-auth');
 
 const FACTOR_CHALLENGE_TTL_SECONDS = 5 * 60;
 
@@ -27,11 +28,11 @@ function fromBase64Url(input) {
   return Buffer.from(padded, 'base64').toString('utf8');
 }
 
-function createChallengeToken(username) {
+function createChallengeToken(email) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     sub: 'admin-2fa',
-    username,
+    email,
     nonce: crypto.randomBytes(12).toString('hex'),
     iat: now,
     exp: now + FACTOR_CHALLENGE_TTL_SECONDS,
@@ -46,7 +47,7 @@ function createChallengeToken(username) {
   return `${encodedPayload}.${signature}`;
 }
 
-function verifyChallengeToken(token, expectedUsername) {
+function verifyChallengeToken(token, expectedEmail) {
   const raw = String(token || '');
   if (!raw.includes('.')) {
     return { valid: false };
@@ -69,7 +70,7 @@ function verifyChallengeToken(token, expectedUsername) {
       return { valid: false };
     }
 
-    if (!safeCompare(String(payload?.username || ''), String(expectedUsername || ''))) {
+    if (!safeCompare(String(payload?.email || ''), String(expectedEmail || ''))) {
       return { valid: false };
     }
 
@@ -190,30 +191,40 @@ module.exports = async function adminLoginHandler(req, res) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const username = String(req.body?.username || '').trim();
+  const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
   const factorCode = String(req.body?.factorCode || '').trim();
   const challengeToken = String(req.body?.challengeToken || '').trim();
 
-  if (!username || !password) {
-    return res.status(400).json({ success: false, error: 'Usuario e senha sao obrigatorios.' });
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: 'E-mail e senha sao obrigatorios.' });
   }
 
-  const expectedUser = String(process.env.ADMIN_USERNAME || '').trim();
-  const expectedPassword = String(process.env.ADMIN_PASSWORD || '');
-
-  if (!expectedUser || !expectedPassword) {
+  const supabase = getAnonClient();
+  if (!supabase) {
     return res.status(500).json({
       success: false,
-      error: 'Credenciais de admin nao configuradas no servidor.',
+      error: 'Configuracao do Supabase indisponivel no servidor.',
     });
   }
 
-  const validUser = safeCompare(username, expectedUser);
-  const validPassword = safeCompare(password, expectedPassword);
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
-  if (!validUser || !validPassword) {
+  if (authError || !authData?.user?.id) {
     return res.status(401).json({ success: false, error: 'Credenciais invalidas.' });
+  }
+
+  const role = await getProfileRoleByEmail(authData.user.email || email);
+  const normalizedRole = String(role || '').trim().toLowerCase();
+
+  if (!['admin', 'master'].includes(normalizedRole)) {
+    return res.status(403).json({
+      success: false,
+      error: 'Acesso restrito ao perfil master/admin.',
+    });
   }
 
   const adminConfig = await readAdminConfig();
@@ -231,11 +242,11 @@ module.exports = async function adminLoginHandler(req, res) {
         success: false,
         requiresSecondFactor: true,
         methods,
-        challengeToken: createChallengeToken(username),
+        challengeToken: createChallengeToken(email),
       });
     }
 
-    const challenge = verifyChallengeToken(challengeToken, username);
+    const challenge = verifyChallengeToken(challengeToken, email);
     if (!challenge.valid) {
       return res.status(401).json({
         success: false,
@@ -265,5 +276,5 @@ module.exports = async function adminLoginHandler(req, res) {
   }
 
   setSessionCookie(res);
-  return res.status(200).json({ success: true, user: { role: 'admin' } });
+  return res.status(200).json({ success: true, user: { role: normalizedRole || 'admin', email } });
 };
