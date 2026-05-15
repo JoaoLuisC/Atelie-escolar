@@ -1,102 +1,57 @@
 # Ateliê da Escola
 
-Base em migração para Supabase.
+Plataforma de vendas de materiais educativos desenvolvida para facilitar a experiência de compra, o acesso a conteúdos digitais e a gestão administrativa do negócio.
 
-## Estado Atual
+## Visão geral
 
-Frontend legado removido. O projeto agora roda com:
+Este projeto foi pensado para apresentar uma solução real de comércio digital, com foco em experiência do usuário, organização operacional e segurança no acesso.
 
-- React (Vite) para interface
-- Node API server para endpoints em `/api`
+A aplicação combina uma interface moderna com rotinas de suporte ao negócio, permitindo que visitantes naveguem pelos produtos, clientes concluam compras e administradores gerenciem o conteúdo com controle de acesso.
 
-## Fluxo Profissional (recomendado)
+Hoje a solução é composta por:
 
-### Bootstrap inicial
+- Frontend em React com Vite
+- API em Node.js com Express
+- Integração com Supabase Auth e banco remoto
+- Integração com Mercado Pago para pagamentos
 
-1. Instalar dependencias:
-	- `npm run bootstrap`
-2. Rodar validacao base (testes + build):
-	- `npm run check`
+## Para que serve
 
-### Desenvolvimento diario
+- Permite que o cliente conheça produtos e finalize compras com um fluxo simples
+- Centraliza autenticação e acesso à conta do usuário
+- Libera conteúdos digitais após a compra
+- Mantém uma área administrativa protegida para gestão do painel
+- Organiza a integração entre frontend, API e banco de dados em uma arquitetura separada
 
-- Rodar frontend + API em paralelo:
-	- `npm run dev:all`
+## Destaques do projeto
 
-- Alias para fluxo de desenvolvimento (frontend + API):
-	- `npm run dev:full`
+- Experiência de navegação pensada para loja digital
+- Área de login, recuperação de senha e acesso à conta
+- Painel administrativo com controle de permissões
+- Suporte a pagamentos e rotas de pedido
+- Base preparada para evolução com Supabase como backend principal
 
-### Scripts de qualidade e manutencao
+## Stack
 
-- Limpar build:
-	- `npm run clean`
-- Rebuild limpo:
-	- `npm run rebuild`
-- Testes:
-	- `npm run test`
-- Build:
-	- `npm run build`
+- React 19
+- Vite
+- React Router
+- Express 5
+- Supabase JS
+- Zod para validação
+- Vitest e Testing Library para testes
+- Tailwind CSS e PostCSS para estilo
 
-### Como rodar localmente
+## Imagens
 
-1. Suba a API em um terminal:
-	- `npm run dev:api`
-2. Suba o frontend React em outro terminal:
-	- `npm run dev`
+<img width="1885" height="927" alt="Captura de tela 2026-05-15 151401" src="https://github.com/user-attachments/assets/e62c9cec-a4ea-458e-a729-5d503a9f5ce6" />
+</br>
+<img width="1841" height="950" alt="Captura de tela 2026-05-15 151413" src="https://github.com/user-attachments/assets/d03e6401-b3f4-4844-a4cd-dbbb1ba2786c" />
+</br>
+<img width="1699" height="849" alt="Captura de tela 2026-05-15 151426" src="https://github.com/user-attachments/assets/d427c628-a33b-4c76-a036-f39fce0c4b8e" />
+</br>
+<img width="1873" height="919" alt="Captura de tela 2026-05-15 151438" src="https://github.com/user-attachments/assets/6b8eebd0-83ec-40b7-96bc-e8c327d39459" />
+</br>
+<img width="1898" height="947" alt="Captura de tela 2026-05-15 151527" src="https://github.com/user-attachments/assets/f0d5e94c-c383-4a8d-bde5-e1e8c92b407f" />
+</br>
 
-Frontend: http://localhost:5173
-API: http://localhost:3000
-
-### Variaveis de ambiente (Vite + API)
-
-- Use `APP_ENV` para controlar ambiente da API local (`development`, `test`, `production`).
-- Evite `NODE_ENV` em arquivos `.env*` do projeto para nao gerar warning no Vite.
-- O `server.js` faz fallback automatico para `development` quando `APP_ENV` nao estiver definido.
-- Para login de cliente (e-mail/senha + Google) via Supabase Auth no frontend, configure:
-	- `VITE_SUPABASE_URL`
-	- `VITE_SUPABASE_ANON_KEY`
-- No painel do Supabase, habilite o provedor Google em `Authentication > Providers`.
-- O acesso administrativo agora vem do Supabase Auth e da tabela `profiles`.
-- Crie o perfil com `role = 'master'` ou `role = 'admin'` para liberar o painel.
-
-## Supabase CLI (workflow recomendado)
-
-Este repositorio esta configurado para usar o Supabase remoto como fluxo principal de banco.
-
-### Primeira configuracao
-
-1. Fazer login no Supabase CLI:
-	 - `npm run supabase:login`
-2. Inicializar estrutura do projeto (ja executado neste repositorio):
-	 - `npm run supabase:init`
-3. Vincular ao projeto remoto:
-	 - `npm run supabase:link -- --project-ref SEU_PROJECT_REF`
-
-### Comandos do dia a dia (remoto)
-
-- Criar migration nova:
-	- `npm run supabase:migration:new -- nome_da_migration`
-- Puxar mudancas do remoto para migration:
-	- `npm run supabase:db:pull`
-- Enviar migrations/schema para remoto:
-	- `npm run supabase:db:push`
-- Gerar tipos para React:
-	- `npm run supabase:types`
-
-### Fluxo seguro de banco
-
-1. Criar migration.
-2. Revisar e aplicar no projeto remoto.
-3. Testar API/frontend.
-4. Fazer push para remoto.
-5. Gerar tipos e commitar junto.
-
-## Próximos passos
-
-1. Executar o schema do Supabase em [supabase/schema.sql](supabase/schema.sql).
-2. Configurar as variáveis em [.env.local](.env.local).
-3. Evoluir o app React e manter apenas o fluxo Supabase como fonte de dados.
-
-## Release
-
-Antes de publicar, siga o checklist em [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md).
