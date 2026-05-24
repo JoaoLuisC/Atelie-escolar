@@ -2,6 +2,23 @@
 
 Escopo: fluxo do cliente apenas. A área admin permanece fora deste plano.
 
+## Status (resumo executivo)
+
+| Item | Status | Onde está |
+|------|--------|-----------|
+| Extrair `useCatalogFilters` da `ProductsPage` | ✅ Feito | [src/hooks/useProductFilters.js](../src/hooks/useProductFilters.js) |
+| `ProductsPage` enxuta | ✅ Feito | [src/pages/ProductsPage.jsx](../src/pages/ProductsPage.jsx) |
+| Stepper de progresso (3 etapas) no checkout/downloads | ✅ Feito | [src/components/StatusStepper.jsx](../src/components/StatusStepper.jsx), usado em [CheckoutPage.jsx](../src/pages/CheckoutPage.jsx) e [DownloadsPage.jsx](../src/pages/DownloadsPage.jsx) |
+| Polling extraído para hook (`usePendingOrderPolling`) | ✅ Feito | dentro de [DownloadsPage.jsx](../src/pages/DownloadsPage.jsx) |
+| `TrustBadgeRow` no checkout/home | ⏳ Pendente | — |
+| `SocialProofStrip` na home | ⏳ Pendente | — |
+| Skeleton dedicado durante polling | ⏳ Pendente | — |
+| Drawer lateral de carrinho no `Shell` | ⏳ Pendente | hoje vai direto para `/checkout` |
+| Captura de e-mail no início do checkout (carrinho abandonado) | ⏳ Pendente | — |
+| Acessibilidade WCAG do Shell + cards (44×44, line-clamp) | 🚧 Parcial | revisar após próximo redesign |
+
+Marcar este plano como concluído só após fechar os itens "Pendente" acima, ou movê-los para o roadmap geral em [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md) (Fases 2 e 3).
+
 ## Direção geral
 
 O objetivo não é apenas "deixar bonito". Para esta loja educacional, a UI precisa reduzir esforço cognitivo, transmitir credibilidade institucional e conduzir o usuário até a compra com o mínimo de fricção.
@@ -17,7 +34,7 @@ Prioridade sugerida:
 
 ### O problema atual
 
-`ProductsPage` concentra busca, filtro, ordenação, abertura da sidebar, interpretação de query string, contagem de resultados e renderização dos cards. Isso cria um arquivo difícil de manter e uma tela visualmente carregada.
+> ✅ **Refactor de lógica concluído.** A `ProductsPage` original concentrava busca, filtro, ordenação, abertura da sidebar e parsing de query string. Hoje toda essa lógica vive em [src/hooks/useProductFilters.js](../src/hooks/useProductFilters.js); a `ProductsPage` apenas compõe `ProductSidebar`, `ProductGrid` e `SortDropdown` ao redor do hook. A estrutura de pastas abaixo (`src/features/catalog/...`) **não foi adotada** — o projeto manteve `src/hooks/` e `src/components/` flat. As recomendações de UI (card mais limpo, hierarquia visual) seguem pendentes.
 
 ### Estrutura de pastas recomendada
 
@@ -229,13 +246,15 @@ export function SocialProofStrip() {
 
 ### O problema atual
 
-O polling existe e funciona, mas o usuário fica em um estado visual pouco guiado enquanto o pagamento ainda não foi aprovado.
+> ✅ **Stepper já implementado** em [src/components/StatusStepper.jsx](../src/components/StatusStepper.jsx), com as três etapas (pedido criado, pagamento em análise, downloads liberados). Já é usado por [CheckoutPage.jsx](../src/pages/CheckoutPage.jsx) e [DownloadsPage.jsx](../src/pages/DownloadsPage.jsx). Falta ainda o skeleton dedicado para o bloco de downloads enquanto a resposta não chegou; a linguagem do polling foi suavizada.
+
+O polling existe e funciona, mas o usuário ainda fica em um estado visual pouco guiado quanto à parte de skeleton de carregamento dos arquivos.
 
 ### Melhorias recomendadas
 
-- Mostrar um stepper de progresso com 3 etapas: pagamento criado, aguardando confirmação, acesso liberado.
-- Exibir skeletons no bloco de downloads enquanto a resposta ainda não chegou.
-- Usar uma linguagem mais calma e previsível: "Estamos confirmando seu pagamento" em vez de mensagens secas de erro.
+- ✅ Mostrar um stepper de progresso com 3 etapas: pagamento criado, aguardando confirmação, acesso liberado.
+- ⏳ Exibir skeletons no bloco de downloads enquanto a resposta ainda não chegou.
+- ✅ Usar uma linguagem mais calma e previsível: "Estamos confirmando seu pagamento" em vez de mensagens secas de erro.
 
 ### Estrutura de pastas recomendada
 
@@ -378,10 +397,10 @@ src/
 
 ## Ordem de implementação sugerida
 
-1. Extrair `useCatalogFilters`, `CatalogToolbar` e `ProductCard`.
-2. Inserir `TrustBadgeRow` na Home e `CheckoutTrustPanel` no checkout.
-3. Adicionar `AsyncStepper` e `SkeletonCard` ao fluxo de pagamento e downloads.
-4. Ajustar `Shell.jsx` e os cards para acessibilidade e legibilidade.
+1. ✅ Extrair `useCatalogFilters`, `CatalogToolbar` e `ProductCard`. *(feito como `useProductFilters` + componentes existentes)*
+2. ⏳ Inserir `TrustBadgeRow` na Home e `CheckoutTrustPanel` no checkout.
+3. ✅/⏳ Adicionar `AsyncStepper` e `SkeletonCard` ao fluxo de pagamento e downloads. *(stepper feito como `StatusStepper`; skeletons ainda pendentes)*
+4. ⏳ Ajustar `Shell.jsx` e os cards para acessibilidade e legibilidade.
 
 ## Critério de sucesso
 

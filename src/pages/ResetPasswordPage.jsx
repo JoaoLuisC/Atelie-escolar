@@ -118,45 +118,56 @@ export function ResetPasswordPage() {
     }
   }
 
+  const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50';
+
   return (
-    <section className="auth-standalone-page customer-reset-page">
-      <article className="card customer-auth-card auth-standalone-card">
-        <div className="auth-standalone-head">
-          <p className="eyebrow">Conta</p>
-          <h1>Redefinir senha</h1>
-          <p>Escolha uma nova senha para continuar acessando sua conta.</p>
-          <Link to="/login" className="auth-back-link">
+    <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-100 via-white to-sky-50 px-4 py-10">
+      <article className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-xl backdrop-blur sm:p-8">
+        <header className="mb-5">
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Conta</p>
+          <h1 className="font-display text-2xl font-extrabold text-slate-900">Redefinir senha</h1>
+          <p className="mt-1 text-sm text-slate-600">Escolha uma nova senha para continuar acessando sua conta.</p>
+          <Link to="/login" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline">
             <i className="bi bi-arrow-left" /> Voltar para o login
           </Link>
-        </div>
+        </header>
 
-        <form className="customer-auth-form customer-reset-form" onSubmit={handleSubmit}>
-          <label htmlFor="new-password">Nova Senha</label>
-          <input
-            id="new-password"
-            type="password"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            placeholder="Mínimo de 6 caracteres"
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div>
+            <label htmlFor="new-password" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nova senha</label>
+            <input
+              id="new-password"
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              placeholder="Mínimo de 6 caracteres"
+              disabled={loading}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="confirm-password" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Confirmar nova senha</label>
+            <input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="Digite a senha novamente"
+              disabled={loading}
+              className={inputClass}
+            />
+          </div>
+
+          <button
+            type="submit"
             disabled={loading}
-          />
-
-          <label htmlFor="confirm-password">Confirmar Nova Senha</label>
-          <input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            placeholder="Digite a senha novamente"
-            disabled={loading}
-          />
-
-          <button type="submit" className="button primary" disabled={loading}>
-            {loading ? 'Salvando...' : 'Salvar nova senha'}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:bg-brand-300"
+          >
+            {loading ? 'Salvando…' : 'Salvar nova senha'}
           </button>
 
-          <p className="customer-reset-note">
-            Após concluir, você será redirecionado para {redirectTo === '/downloads' ? 'Downloads' : 'Checkout'}.
+          <p className="text-xs text-slate-500">
+            Após concluir, você será redirecionado para <strong>{redirectTo === '/downloads' ? 'Downloads' : 'Checkout'}</strong>.
           </p>
         </form>
       </article>

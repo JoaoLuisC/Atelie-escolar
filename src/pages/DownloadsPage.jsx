@@ -53,8 +53,10 @@ function usePendingOrderPolling({ orderId, paymentStatus, setOrder, setStatus, s
           setOrder(data.order);
           setStatus('Pagamento nao aprovado para este pedido.');
         }
-      } catch {
-        // Nao interromper polling por falha transitoria
+      } catch (pollError) {
+        if (import.meta.env.DEV) {
+          console.warn('[downloads] reconsulta falhou:', pollError.message);
+        }
       }
     }, 10000);
 
@@ -187,160 +189,162 @@ export function DownloadsPage() {
     statusStep = 1;
   }
 
+  const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50';
+
   return (
     <Shell>
-      <section className="page-section">
-        <p className="eyebrow">Pos-compra</p>
-        <h1>Meus Downloads</h1>
-        <p>Seu historico e seus arquivos, com a mesma experiencia visual consolidada da loja.</p>
-      </section>
+      <section className="mx-auto max-w-4xl px-4 py-8 lg:px-6">
+        <header className="mb-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Pós-compra</p>
+          <h1 className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">Meus Downloads</h1>
+          <p className="mt-2 text-sm text-slate-600">Seu histórico e seus arquivos em um só lugar.</p>
+        </header>
 
-      <section className="downloads-wrap products-preview-section">
-        <div className="container">
         {hasSuccessFlag ? (
-          <article className="card success-card">
-            <h3>Pagamento confirmado</h3>
-            <p>Seu pedido foi recebido. Se o status estiver aprovado, os botoes de download ja aparecem abaixo.</p>
+          <article className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
+            <strong className="block font-bold">Pagamento confirmado.</strong>
+            Seu pedido foi recebido. Se o status estiver aprovado, os botões de download aparecem abaixo.
           </article>
         ) : null}
 
-        <article className="card downloads-card">
-          <div className="downloads-head">
-            <div>
-              <h3>Pedido {orderId ? `#${orderId}` : ''}</h3>
-              <p>{status}</p>
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-heading text-lg font-bold text-slate-900">
+                {orderId ? `Pedido #${orderId}` : 'Nenhum pedido selecionado'}
+              </h3>
+              {status ? <p className="text-sm text-slate-500">{status}</p> : null}
             </div>
-
-            <button type="button" className="button secondary small" onClick={loadOrder} disabled={loading}>
-              {loading ? 'Atualizando...' : 'Atualizar'}
+            <button
+              type="button"
+              onClick={loadOrder}
+              disabled={loading}
+              className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+            >
+              {loading ? 'Atualizando…' : 'Atualizar'}
             </button>
           </div>
 
           <StatusStepper
             activeStep={statusStep}
-            description={pollingStatus || status || 'Acompanhe a liberacao do pedido com feedback visual em tempo real.'}
+            description={pollingStatus || status || 'Acompanhe a liberação em tempo real.'}
             steps={[
-              { label: 'Processando Pagamento', description: 'O sistema esta validando a cobranca.' },
-              { label: 'Preparando Arquivos', description: 'Os links estao sendo organizados.' },
-              { label: 'Download Liberado', description: 'Seu acesso ja pode ser aberto.' },
+              { label: 'Processando', description: 'Validando a cobrança.' },
+              { label: 'Confirmando', description: 'Organizando os links.' },
+              { label: 'Liberado', description: 'Acesso pronto.' },
             ]}
           />
 
-          {pollingStatus ? <p className="downloads-polling-status">{pollingStatus}</p> : null}
-
-          <form className="downloads-search" onSubmit={handleSubmit(loadOrdersByEmail)} noValidate>
-            <div className="form-field">
-              <label htmlFor="downloads-email">Buscar pedidos por e-mail</label>
-              <div className="downloads-search-row">
-                <input
-                  id="downloads-email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  disabled={searchingByEmail}
-                  aria-invalid={Boolean(errors.email)}
-                  aria-describedby={errors.email ? 'downloads-email-error' : undefined}
-                  {...register('email', {
-                    required: 'Informe o e-mail usado na compra.',
-                    pattern: {
-                      value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                      message: 'Digite um e-mail valido para localizar o pedido.',
-                    },
-                  })}
-                />
-                <button type="submit" className="button secondary small" disabled={searchingByEmail}>
-                  {searchingByEmail ? 'Buscando...' : 'Buscar'}
-                </button>
-              </div>
-              {errors.email ? (
-                <p className="form-error" id="downloads-email-error" role="alert">
-                  {errors.email.message}
-                </p>
-              ) : null}
+          <form onSubmit={handleSubmit(loadOrdersByEmail)} noValidate className="mt-5">
+            <label htmlFor="downloads-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Buscar pedidos por e-mail
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="downloads-email"
+                type="email"
+                placeholder="seu@email.com"
+                disabled={searchingByEmail}
+                aria-invalid={Boolean(errors.email)}
+                aria-describedby={errors.email ? 'downloads-email-error' : undefined}
+                className={inputClass}
+                {...register('email', {
+                  required: 'Informe o e-mail usado na compra.',
+                  pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Digite um e-mail válido.' },
+                })}
+              />
+              <button
+                type="submit"
+                disabled={searchingByEmail}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:bg-brand-300"
+              >
+                {searchingByEmail ? 'Buscando…' : 'Buscar'}
+              </button>
             </div>
-            {emailStatus ? <p className="downloads-search-status">{emailStatus}</p> : null}
+            {errors.email ? (
+              <p id="downloads-email-error" role="alert" className="mt-1 text-xs text-rose-700">{errors.email.message}</p>
+            ) : null}
+            {emailStatus ? <p className="mt-2 text-xs text-slate-500">{emailStatus}</p> : null}
           </form>
 
-          {orderId ? null : (
-            <div className="downloads-empty-state">
-              <h4>Nenhum pedido selecionado</h4>
-              <p>Informe um pedido via checkout ou pesquise pelo seu e-mail para localizar compras.</p>
-            </div>
-          )}
-
-          {orderId && order === null && !orderError ? (
-            <p className="empty-text">Quando voce concluir um pagamento, os downloads aparecerao aqui.</p>
-          ) : null}
-
           {orderError ? (
-            <div className="downloads-error-state">
-              <h4>Falha ao carregar pedido</h4>
-              <p>{orderError}</p>
+            <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
+              <strong className="block text-sm font-bold text-rose-800">Falha ao carregar pedido</strong>
+              <p className="mt-1 text-xs text-rose-700/80">{orderError}</p>
             </div>
           ) : null}
 
           {order && order.paymentStatus !== 'approved' ? (
-            <p className="empty-text">Seu pedido ainda nao foi aprovado para download.</p>
+            <p className="mt-5 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200">
+              Seu pedido ainda não foi aprovado para download.
+            </p>
           ) : null}
 
           {orders.length > 0 ? (
-            <div className="downloads-history">
-              <h4>Historico de Pedidos</h4>
-              {orders.map((entry) => (
-                <article className="download-history-card" key={`${entry.orderId}-${entry.internalOrderId || ''}`}>
-                  <div>
-                    <strong>Pedido #{entry.orderId || entry.internalOrderId}</strong>
-                    <p>
-                      Status: {entry.paymentStatus || entry.status} | Total: {formatPrice(entry.totalAmount)}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="button secondary small"
-                    onClick={() => openOrder(entry.orderId, entry.internalOrderId)}
-                  >
-                    Abrir pedido
-                  </button>
-                </article>
-              ))}
+            <div className="mt-5">
+              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">Histórico de pedidos</h4>
+              <ul className="flex flex-col gap-2">
+                {orders.map((entry) => (
+                  <li key={`${entry.orderId}-${entry.internalOrderId || ''}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <strong className="block text-sm text-slate-800">Pedido #{entry.orderId || entry.internalOrderId}</strong>
+                      <p className="text-xs text-slate-500">
+                        Status: {entry.paymentStatus || entry.status} · Total: {formatPrice(entry.totalAmount)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openOrder(entry.orderId, entry.internalOrderId)}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Abrir pedido
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
 
           {order?.paymentStatus === 'approved' ? (
-            <div className="downloads-list">
-              {(order.downloadTokens || []).map((item) => (
-                <article className="download-item-card" key={item.token}>
-                  <div>
-                    <strong>{item.productName || `Produto ${item.productId}`}</strong>
-                    <p>Token vinculado ao pedido aprovado.</p>
-                  </div>
-                  <a className="button primary small" href={`/api/download?token=${item.token}`}>
-                    Baixar
-                  </a>
-                </article>
-              ))}
+            <div className="mt-5">
+              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">Arquivos disponíveis</h4>
+              {(order.downloadTokens || []).length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center">
+                  <strong className="block text-sm text-slate-800">Pedido aprovado sem arquivos</strong>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Aguarde alguns instantes e clique em Atualizar.
+                  </p>
+                </div>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {(order.downloadTokens || []).map((item) => (
+                    <li key={item.token} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-br from-brand-50 to-white p-3 ring-1 ring-brand-100">
+                      <div className="min-w-0">
+                        <strong className="block text-sm text-slate-800">{item.productName || `Produto ${item.productId}`}</strong>
+                        <p className="text-xs text-slate-500">Token vinculado ao pedido aprovado.</p>
+                      </div>
+                      <a
+                        href={`/api/download?token=${item.token}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                      >
+                        <i className="bi bi-download" /> Baixar
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           ) : null}
 
-          {order?.paymentStatus === 'approved' && (order.downloadTokens || []).length === 0 ? (
-            <div className="downloads-empty-state">
-              <h4>Pedido aprovado sem arquivos</h4>
-              <p>
-                Ainda nao recebemos os links de download para este pedido. Aguarde alguns instantes e clique em
-                Atualizar.
-              </p>
-            </div>
-          ) : null}
-
-          <div className="downloads-actions">
-            <Link to="/produtos" className="button secondary small">
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link to="/produtos" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
               Voltar para produtos
             </Link>
-            <Link to="/checkout" className="button secondary small">
+            <Link to="/checkout" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
               Ir para checkout
             </Link>
           </div>
         </article>
-        </div>
       </section>
     </Shell>
   );

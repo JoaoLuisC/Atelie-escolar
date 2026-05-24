@@ -5,15 +5,18 @@ export function getApiBaseUrl() {
 export async function parseJson(response) {
   try {
     const data = await response.json();
-    if (data && typeof data.error === 'object' && data.error && typeof data.error.message === 'string') {
+    if (data && typeof data === 'object' && data.error && typeof data.error === 'object' && typeof data.error.message === 'string') {
       return {
         ...data,
         error: data.error.message,
       };
     }
 
-    return data;
-  } catch {
+    return data && typeof data === 'object' ? data : {};
+  } catch (parseError) {
+    if (import.meta.env?.DEV) {
+      console.warn('[api] resposta sem JSON valido:', parseError.message);
+    }
     return {};
   }
 }

@@ -98,7 +98,7 @@ router.post('/auth/customer/login', customerLoginLimiter, async (req, res, next)
     const password = String(req.body?.password || '');
 
     if (!email || !password) {
-      return res.status(401).json({ success: false, error: invalidCredentialsMessage });
+      return res.status(401).json({ success: false, error: 'Informe e-mail e senha.' });
     }
 
     const { response, data } = await supabaseAuthRequest('token?grant_type=password', {
@@ -107,7 +107,15 @@ router.post('/auth/customer/login', customerLoginLimiter, async (req, res, next)
     });
 
     if (!response.ok || !data?.user?.id) {
-      return res.status(401).json({ success: false, error: invalidCredentialsMessage });
+      const code = String(data?.error_code || data?.code || '').toLowerCase();
+      const msg = String(data?.msg || data?.message || data?.error_description || '').toLowerCase();
+      let userError = invalidCredentialsMessage;
+      if (code.includes('email_not_confirmed') || msg.includes('email not confirmed')) {
+        userError = 'E-mail ainda não confirmado. Verifique sua caixa de entrada.';
+      } else if (msg.includes('invalid login') || msg.includes('invalid credentials')) {
+        userError = 'E-mail ou senha incorretos.';
+      }
+      return res.status(401).json({ success: false, error: userError });
     }
 
     const user = {
@@ -123,14 +131,42 @@ router.post('/auth/customer/login', customerLoginLimiter, async (req, res, next)
   }
 });
 
+function mapSupabaseAuthError(data, status) {
+  const code = String(data?.error_code || data?.code || '').toLowerCase();
+  const message = String(data?.msg || data?.message || data?.error_description || data?.error || '').toLowerCase();
+
+  if (status === 422 || code.includes('user_already_exists') || message.includes('already registered') || message.includes('already been registered')) {
+    return 'Este e-mail já está cadastrado. Tente fazer login.';
+  }
+  if (code.includes('weak_password') || message.includes('password')) {
+    return 'Senha fraca. Use ao menos 8 caracteres, com letra maiúscula, minúscula e número.';
+  }
+  if (message.includes('invalid email') || message.includes('email address')) {
+    return 'E-mail inválido. Verifique e tente novamente.';
+  }
+  if (message.includes('rate limit') || code.includes('over_email_send_rate_limit')) {
+    return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  }
+  return 'Não foi possível criar a conta. Verifique os dados e tente novamente.';
+}
+
 router.post('/auth/customer/register', async (req, res, next) => {
   try {
     const name = String(req.body?.name || '').trim();
     const email = String(req.body?.email || '').trim();
     const password = String(req.body?.password || '');
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ success: false, error: invalidCredentialsMessage });
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Informe seu nome completo.' });
+    }
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Informe um e-mail válido.' });
+    }
+    if (!password) {
+      return res.status(400).json({ success: false, error: 'Informe uma senha.' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, error: 'A senha precisa ter ao menos 8 caracteres.' });
     }
 
     const { response, data } = await supabaseAuthRequest('signup', {
@@ -146,7 +182,10 @@ router.post('/auth/customer/register', async (req, res, next) => {
     });
 
     if (!response.ok) {
-      return res.status(400).json({ success: false, error: invalidCredentialsMessage });
+      return res.status(400).json({
+        success: false,
+        error: mapSupabaseAuthError(data, response.status),
+      });
     }
 
     if (!data?.access_token || !data?.user?.id) {

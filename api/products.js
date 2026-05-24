@@ -25,7 +25,7 @@ module.exports = async function productsHandler(req, res) {
 
     const [productsRows, categoriesRows, approvedOrdersRows, orderItemsRows] = await Promise.all([
       listTableRows('products', {
-        select: 'id,name,description,price,original_price,image_url,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
+        select: 'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
         filters: [{ column: 'active', value: true }],
         orderBy: 'created_at',
         ascending: false,
@@ -64,26 +64,31 @@ module.exports = async function productsHandler(req, res) {
       soldCountByProduct.set(productId, (soldCountByProduct.get(productId) || 0) + (Number.isFinite(qty) ? qty : 0));
     }
 
-    const products = productsRows.map((row) => ({
-      id: String(row.id),
-      name: row.name,
-      description: row.description,
-      price: Number(row.price || 0),
-      originalPrice: row.original_price ?? null,
-      image: row.image_url,
-      images: [],
-      category: row.category_id ? categoryById.get(String(row.category_id)) || null : null,
-      tags: Array.isArray(row.tags) ? row.tags : [],
-      productType: row.product_type || 'individual',
-      isKit: row.is_kit === true,
-      pageSize: row.page_size || '',
-      paperType: row.paper_type || '',
-      kitItems: Array.isArray(row.kit_items) ? row.kit_items : [],
-      panelSizes: Array.isArray(row.panel_sizes) ? row.panel_sizes : [],
-      soldCount: soldCountByProduct.get(String(row.id)) || 0,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    const products = productsRows.map((row) => {
+      const images = Array.isArray(row.images) ? row.images : [];
+      return {
+        id: String(row.id),
+        name: row.name,
+        description: row.description,
+        price: Number(row.price || 0),
+        originalPrice: row.original_price ?? null,
+        image: row.image_url || images[0] || '',
+        images,
+        videos: Array.isArray(row.videos) ? row.videos : [],
+        category: row.category_id ? categoryById.get(String(row.category_id)) || null : null,
+        categoryId: row.category_id ? String(row.category_id) : null,
+        tags: Array.isArray(row.tags) ? row.tags : [],
+        productType: row.product_type || 'individual',
+        isKit: row.is_kit === true,
+        pageSize: row.page_size || '',
+        paperType: row.paper_type || '',
+        kitItems: Array.isArray(row.kit_items) ? row.kit_items : [],
+        panelSizes: Array.isArray(row.panel_sizes) ? row.panel_sizes : [],
+        soldCount: soldCountByProduct.get(String(row.id)) || 0,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    });
 
     return res.status(200).json({
       success: true,

@@ -1,36 +1,7 @@
-import { apiRequest, getApiBaseUrl } from '../utils/api';
+import { apiRequest } from '../utils/api';
+import { buildOAuthRedirectUrl, getSupabaseBrowserClient } from './supabase-browser';
 
-const INVALID_CREDENTIALS_MESSAGE = 'Credenciais invalidas.';
-
-function parseOAuthTokensFromHash() {
-  if (!globalThis.window) {
-    return null;
-  }
-
-  const hash = String(globalThis.window.location.hash || '').replace(/^#/, '');
-  if (!hash) {
-    return null;
-  }
-
-  const params = new URLSearchParams(hash);
-  const accessToken = String(params.get('access_token') || '').trim();
-  const tokenType = String(params.get('token_type') || '').trim().toLowerCase();
-
-  if (!accessToken || tokenType !== 'bearer') {
-    return null;
-  }
-
-  return { accessToken };
-}
-
-function clearOAuthHashFromUrl() {
-  if (!globalThis.window) {
-    return;
-  }
-
-  const cleanUrl = `${globalThis.window.location.pathname}${globalThis.window.location.search}`;
-  globalThis.window.history.replaceState({}, document.title, cleanUrl);
-}
+const INVALID_CREDENTIALS_MESSAGE = 'Credenciais inválidas.';
 
 function normalizeUser(user = {}) {
   const uid = String(user.uid || user.id || '').trim();
@@ -46,7 +17,7 @@ function normalizeUser(user = {}) {
 
 function ensureAuthSuccess(response, data, fallbackMessage = INVALID_CREDENTIALS_MESSAGE) {
   if (!response.ok || data?.success !== true) {
-    throw new Error(fallbackMessage);
+    throw new Error(data?.error || fallbackMessage);
   }
 }
 
@@ -76,7 +47,7 @@ export async function registerCustomerWithEmail(name, email, password) {
     body: JSON.stringify({ name, email, password }),
   });
 
-  ensureAuthSuccess(response, data, INVALID_CREDENTIALS_MESSAGE);
+  ensureAuthSuccess(response, data, data?.error || 'Não foi possível criar a conta.');
 
   if (data.verificationRequired) {
     return {
@@ -91,35 +62,83 @@ export async function registerCustomerWithEmail(name, email, password) {
   };
 }
 
+/**
+ * Inicia o fluxo Google OAuth.
+ * Usa o Supabase JS Client direto (PKCE) para evitar bugs do fluxo
+ * implícito legado. O cliente armazena o `code_verifier` no
+ * localStorage e troca o `code` por sessão automaticamente quando
+ * o usuário volta para `/login?oauth=google&code=...`.
+ */
 export async function loginCustomerWithGoogle(postLoginRedirect = '/checkout') {
-  if (!globalThis.window) {
-    throw new TypeError('Login com Google disponivel apenas no navegador.');
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Configuração do Supabase ausente no frontend.');
   }
 
-  const redirect = String(postLoginRedirect || '/checkout').trim() || '/checkout';
-  const baseUrl = getApiBaseUrl().replace(/\/+$/, '');
-  const target = `${baseUrl}/auth/customer/google/start?redirect=${encodeURIComponent(redirect)}`;
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: buildOAuthRedirectUrl(postLoginRedirect),
+    },
+  });
 
-  globalThis.window.location.assign(target);
+  if (error) {
+    throw new Error(error.message || 'Falha ao iniciar login com Google.');
+  }
 }
 
+/**
+ * Detecta retorno do callback OAuth do Google e sincroniza com o
+ * backend (cria cookie HttpOnly de sessão do cliente).
+ * Roda no mount do AuthProvider.
+ */
 export async function consumeCustomerSessionFromAuthCallback() {
-  const tokenData = parseOAuthTokensFromHash();
-  if (!tokenData) {
+  if (!globalThis.window) return null;
+
+  const url = new URL(globalThis.window.location.href);
+  const hasOAuthMarker = url.searchParams.get('oauth') === 'google'
+    || url.searchParams.has('code')
+    || url.hash.includes('access_token=');
+
+  if (!hasOAuthMarker) return null;
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+
+  // O cliente já detecta automaticamente (detectSessionInUrl: true).
+  // Esperamos a sessão estar disponível.
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData?.session?.access_token) {
+    cleanOAuthParamsFromUrl();
     return null;
   }
+
+  const accessToken = sessionData.session.access_token;
 
   const { response, data } = await apiRequest('/auth/customer/google/callback', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify(tokenData),
+    body: JSON.stringify({ accessToken }),
   });
 
-  clearOAuthHashFromUrl();
+  cleanOAuthParamsFromUrl();
 
-  ensureAuthSuccess(response, data, INVALID_CREDENTIALS_MESSAGE);
+  if (!response.ok || data?.success !== true) {
+    return null;
+  }
+
   return normalizeUser(data.user);
+}
+
+function cleanOAuthParamsFromUrl() {
+  if (!globalThis.window) return;
+  const url = new URL(globalThis.window.location.href);
+  url.searchParams.delete('oauth');
+  url.searchParams.delete('code');
+  url.searchParams.delete('state');
+  url.hash = '';
+  globalThis.window.history.replaceState({}, document.title, url.toString());
 }
 
 export async function fetchCustomerSession() {
@@ -136,6 +155,12 @@ export async function fetchCustomerSession() {
 }
 
 export async function logoutCustomerSession() {
+  // Limpa sessão do Supabase no browser (PKCE state, localStorage)
+  const supabase = getSupabaseBrowserClient();
+  if (supabase) {
+    await supabase.auth.signOut().catch(() => {});
+  }
+  // Limpa cookie HttpOnly do backend
   await apiRequest('/auth/customer/logout', {
     method: 'POST',
     credentials: 'include',

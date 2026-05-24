@@ -39,26 +39,33 @@ process.env.NODE_ENV = RUNTIME_ENV;
 const PORT = 3000;
 const app = express();
 
+const LOCALHOST_ORIGIN_PATTERN = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
+
 function buildCorsConfig() {
   const allowedOrigins = String(process.env.CORS_ORIGINS || '')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
+  // Default (sem CORS_ORIGINS): libera QUALQUER porta de localhost/127.0.0.1.
+  // Vite pode subir em 5173, 5174, 5175... dependendo de portas ocupadas.
   if (!allowedOrigins.length) {
     return {
-      origin: [
-        'http://localhost:5173',
-        'http://localhost:3000',
-      ],
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (LOCALHOST_ORIGIN_PATTERN.test(origin)) return callback(null, true);
+        return callback(new Error(`CORS: origem ${origin} não permitida em dev.`));
+      },
       credentials: true,
     };
   }
 
+  // Wildcard + credentials é incompatível com browsers e expõe a API.
+  // Quando '*' está configurado, refletimos a origem sem credentials.
   if (allowedOrigins.includes('*')) {
     return {
       origin: true,
-      credentials: true,
+      credentials: false,
     };
   }
 

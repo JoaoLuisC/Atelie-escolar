@@ -76,12 +76,24 @@ function toProductPayload(body = {}, existing = {}) {
   const kitItems = resolveArray(body.kitItems, existing.kit_items);
   const panelSizes = resolveArray(body.panelSizes, existing.panel_sizes);
 
+  const incomingImages = resolveArray(body.images, existing.images)
+    .map((url) => String(url || '').trim())
+    .filter(Boolean);
+  const incomingVideos = resolveArray(body.videos, existing.videos)
+    .map((url) => String(url || '').trim())
+    .filter(Boolean);
+
+  // image_url (campo legado/principal) = primeira da galeria OU o campo `image` direto
+  const primaryImage = String(body.image ?? body.imageUrl ?? incomingImages[0] ?? existing.image_url ?? '').trim();
+
   return {
     name: String(body.name ?? existing.name ?? '').trim(),
     description: String(body.description ?? existing.description ?? ''),
     price: Number(body.price ?? existing.price ?? 0),
     original_price: originalPrice,
-    image_url: String(body.image ?? body.imageUrl ?? existing.image_url ?? ''),
+    image_url: primaryImage,
+    images: incomingImages,
+    videos: incomingVideos,
     download_url: String(body.downloadUrl ?? existing.download_url ?? ''),
     category_id: body.category_id ?? existing.category_id ?? null,
     active,
@@ -99,7 +111,7 @@ function toProductPayload(body = {}, existing = {}) {
 async function listProducts() {
   const [productsRows, categoriesRows] = await Promise.all([
     listTableRows('products', {
-      select: 'id,name,description,price,original_price,image_url,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
+      select: 'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -111,27 +123,33 @@ async function listProducts() {
   ]);
 
   const categoryById = new Map(categoriesRows.map((category) => [String(category.id), category.name]));
-  return productsRows.map((row) => ({
-    id: String(row.id),
-    name: row.name,
-    description: row.description,
-    price: Number(row.price || 0),
-    originalPrice: row.original_price ?? null,
-    image: row.image_url || '',
-    downloadUrl: row.download_url || '',
-    category: row.category_id ? categoryById.get(String(row.category_id)) || null : null,
-    active: row.active !== false,
-    featured: row.featured === true,
-    tags: Array.isArray(row.tags) ? row.tags : [],
-    productType: row.product_type || 'individual',
-    isKit: row.is_kit === true,
-    pageSize: row.page_size || '',
-    paperType: row.paper_type || '',
-    kitItems: Array.isArray(row.kit_items) ? row.kit_items : [],
-    panelSizes: Array.isArray(row.panel_sizes) ? row.panel_sizes : [],
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+  return productsRows.map((row) => {
+    const images = Array.isArray(row.images) ? row.images : [];
+    return {
+      id: String(row.id),
+      name: row.name,
+      description: row.description,
+      price: Number(row.price || 0),
+      originalPrice: row.original_price ?? null,
+      image: row.image_url || images[0] || '',
+      images,
+      videos: Array.isArray(row.videos) ? row.videos : [],
+      downloadUrl: row.download_url || '',
+      category: row.category_id ? categoryById.get(String(row.category_id)) || null : null,
+      categoryId: row.category_id ? String(row.category_id) : null,
+      active: row.active !== false,
+      featured: row.featured === true,
+      tags: Array.isArray(row.tags) ? row.tags : [],
+      productType: row.product_type || 'individual',
+      isKit: row.is_kit === true,
+      pageSize: row.page_size || '',
+      paperType: row.paper_type || '',
+      kitItems: Array.isArray(row.kit_items) ? row.kit_items : [],
+      panelSizes: Array.isArray(row.panel_sizes) ? row.panel_sizes : [],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  });
 }
 
 async function createProduct(body) {
@@ -152,7 +170,7 @@ async function updateProduct(body) {
   }
 
   const existing = await getTableRow('products', {
-    select: 'id,name,description,price,original_price,image_url,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes',
+    select: 'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes',
     filters: [{ column: 'id', value: id }],
   });
 

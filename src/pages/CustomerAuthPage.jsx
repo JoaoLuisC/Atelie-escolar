@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
+import { ADMIN_LOGIN_PATH } from '../constants/routes';
 import { buildPasswordResetRedirectUrl, getSupabaseBrowserClient } from '../services/supabase-browser';
 
 function getMode(search) {
@@ -36,45 +37,45 @@ function useCustomerAuthHandlers({ loginCustomer, loginCustomerGoogle, registerC
       });
       pushToast('Login realizado com sucesso.', 'success');
       navigate(redirectTo);
-    } catch {
-      const message = 'Credenciais invalidas.';
-      pushToast(message, 'error');
+    } catch (error) {
+      pushToast(error?.message || 'E-mail ou senha incorretos.', 'error');
     } finally {
       setLoading(false);
     }
   }
 
   async function submitRegister(registerForm) {
-    if (!registerForm.name.trim() || !registerForm.email.trim() || !registerForm.password) {
+    const name = registerForm.name.trim();
+    const email = registerForm.email.trim();
+    const password = registerForm.password;
+
+    if (!name || !email || !password) {
       pushToast('Preencha nome, e-mail e senha para cadastrar.', 'warning');
       return;
     }
-
-    if (registerForm.password.length < 6) {
-      pushToast('Use uma senha com pelo menos 6 caracteres.', 'warning');
+    if (password.length < 8) {
+      pushToast('A senha precisa ter ao menos 8 caracteres.', 'warning');
+      return;
+    }
+    if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) {
+      pushToast('Senha deve ter letra maiúscula, minúscula e número.', 'warning');
       return;
     }
 
     setLoading(true);
 
     try {
-      const result = await registerCustomer({
-        name: registerForm.name.trim(),
-        email: registerForm.email.trim(),
-        password: registerForm.password,
-      });
+      const result = await registerCustomer({ name, email, password });
 
       if (result?.verificationRequired) {
-        const msg = 'Conta criada. Verifique seu e-mail para confirmar o cadastro.';
-        pushToast(msg, 'warning');
+        pushToast('Conta criada. Verifique seu e-mail para confirmar o cadastro.', 'warning');
         return;
       }
 
       pushToast('Conta criada com sucesso.', 'success');
       navigate(redirectTo);
-    } catch {
-      const message = 'Credenciais invalidas.';
-      pushToast(message, 'error');
+    } catch (error) {
+      pushToast(error?.message || 'Não foi possível criar a conta.', 'error');
     } finally {
       setLoading(false);
     }
@@ -82,12 +83,11 @@ function useCustomerAuthHandlers({ loginCustomer, loginCustomerGoogle, registerC
 
   async function submitGoogleLogin() {
     setLoading(true);
-
     try {
       await loginCustomerGoogle(redirectTo);
-    } catch {
-      const message = 'Credenciais invalidas.';
-      pushToast(message, 'error');
+      // navega para Google: loading fica até o redirect
+    } catch (error) {
+      pushToast(error?.message || 'Falha ao iniciar login com Google.', 'error');
       setLoading(false);
     }
   }
@@ -190,170 +190,201 @@ export function CustomerAuthPage() {
     await submitPasswordReset(recoveryForm);
   }
 
+  const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50';
+  const primaryBtnClass = 'inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:bg-brand-300';
+
   let authForm = null;
 
   if (mode === 'login') {
     authForm = (
       <>
-        <div className="customer-social-auth">
-          <button
-            type="button"
-            className="button secondary customer-google-button"
-            onClick={submitGoogleLogin}
-            disabled={loading}
-          >
-            <span className="customer-google-icon" aria-hidden="true">G</span>
-            {loading ? 'Conectando...' : 'Entrar com Google'}
-          </button>
+        <button
+          type="button"
+          onClick={submitGoogleLogin}
+          disabled={loading}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+        >
+          <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 via-amber-500 to-sky-500 text-[10px] font-bold text-white">G</span>
+          {loading ? 'Conectando…' : 'Entrar com Google'}
+        </button>
+
+        <div role="separator" aria-label="ou" className="my-3 flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
+          <span className="h-px flex-1 bg-slate-200" />
+          ou
+          <span className="h-px flex-1 bg-slate-200" />
         </div>
 
-        <div className="customer-auth-divider" role="separator" aria-label="ou">
-          <span>ou</span>
-        </div>
-
-        <form className="customer-auth-form" onSubmit={submitLoginForm}>
-          <label htmlFor="customer-login-email">E-mail</label>
-          <input
-            id="customer-login-email"
-            type="email"
-            value={loginForm.email}
-            onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))}
-            placeholder="seu@email.com"
-            disabled={loading}
-          />
-
-          <label htmlFor="customer-login-password">Senha</label>
-          <input
-            id="customer-login-password"
-            type="password"
-            value={loginForm.password}
-            onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
-            placeholder="Sua senha"
-            disabled={loading}
-          />
-
+        <form onSubmit={submitLoginForm} className="flex flex-col gap-3">
+          <div>
+            <label htmlFor="customer-login-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">E-mail</label>
+            <input
+              id="customer-login-email"
+              type="email"
+              value={loginForm.email}
+              onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))}
+              placeholder="seu@email.com"
+              disabled={loading}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="customer-login-password" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Senha</label>
+            <input
+              id="customer-login-password"
+              type="password"
+              value={loginForm.password}
+              onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
+              placeholder="Sua senha"
+              disabled={loading}
+              className={inputClass}
+            />
+          </div>
           <button
             type="button"
-            className="customer-forgot-link"
             onClick={() => changeMode('forgot')}
             disabled={loading}
+            className="self-end text-xs font-semibold text-brand-700 transition hover:underline"
           >
             Esqueci minha senha
           </button>
-
-          <button type="submit" className="button primary" disabled={loading}>
-            {loading ? 'Entrando...' : 'Entrar'}
+          <button type="submit" disabled={loading} className={primaryBtnClass}>
+            {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
       </>
     );
   } else if (mode === 'forgot') {
     authForm = (
-      <form className="customer-auth-form customer-recovery-form" onSubmit={submitRecoveryForm}>
-        <label htmlFor="customer-recovery-email">E-mail</label>
-        <input
-          id="customer-recovery-email"
-          type="email"
-          value={recoveryForm.email}
-          onChange={(event) => setRecoveryForm((prev) => ({ ...prev, email: event.target.value }))}
-          placeholder="seu@email.com"
-          disabled={loading}
-        />
-
-        <button type="submit" className="button primary" disabled={loading}>
-          {loading ? 'Enviando...' : 'Enviar link de recuperação'}
+      <form onSubmit={submitRecoveryForm} className="flex flex-col gap-3">
+        <div>
+          <label htmlFor="customer-recovery-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">E-mail</label>
+          <input
+            id="customer-recovery-email"
+            type="email"
+            value={recoveryForm.email}
+            onChange={(event) => setRecoveryForm((prev) => ({ ...prev, email: event.target.value }))}
+            placeholder="seu@email.com"
+            disabled={loading}
+            className={inputClass}
+          />
+        </div>
+        <button type="submit" disabled={loading} className={primaryBtnClass}>
+          {loading ? 'Enviando…' : 'Enviar link de recuperação'}
         </button>
-
-        <button type="button" className="button secondary small" onClick={() => changeMode('login')} disabled={loading}>
-          Voltar para login
+        <button
+          type="button"
+          onClick={() => changeMode('login')}
+          disabled={loading}
+          className="text-xs font-semibold text-slate-500 transition hover:text-slate-700"
+        >
+          ← Voltar para login
         </button>
       </form>
     );
   } else {
     authForm = (
-      <form className="customer-auth-form" onSubmit={submitRegisterForm}>
-        <label htmlFor="customer-register-name">Nome</label>
-        <input
-          id="customer-register-name"
-          type="text"
-          value={registerForm.name}
-          onChange={(event) => setRegisterForm((prev) => ({ ...prev, name: event.target.value }))}
-          placeholder="Seu nome"
-          disabled={loading}
-        />
-
-        <label htmlFor="customer-register-email">E-mail</label>
-        <input
-          id="customer-register-email"
-          type="email"
-          value={registerForm.email}
-          onChange={(event) => setRegisterForm((prev) => ({ ...prev, email: event.target.value }))}
-          placeholder="seu@email.com"
-          disabled={loading}
-        />
-
-        <label htmlFor="customer-register-password">Senha</label>
-        <input
-          id="customer-register-password"
-          type="password"
-          value={registerForm.password}
-          onChange={(event) => setRegisterForm((prev) => ({ ...prev, password: event.target.value }))}
-          placeholder="Minimo de 6 caracteres"
-          disabled={loading}
-        />
-
-        <button type="submit" className="button primary" disabled={loading}>
-          {loading ? 'Cadastrando...' : 'Criar conta'}
+      <form onSubmit={submitRegisterForm} className="flex flex-col gap-3">
+        <div>
+          <label htmlFor="customer-register-name" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nome</label>
+          <input
+            id="customer-register-name"
+            type="text"
+            value={registerForm.name}
+            onChange={(event) => setRegisterForm((prev) => ({ ...prev, name: event.target.value }))}
+            placeholder="Seu nome"
+            disabled={loading}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label htmlFor="customer-register-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">E-mail</label>
+          <input
+            id="customer-register-email"
+            type="email"
+            value={registerForm.email}
+            onChange={(event) => setRegisterForm((prev) => ({ ...prev, email: event.target.value }))}
+            placeholder="seu@email.com"
+            disabled={loading}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label htmlFor="customer-register-password" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Senha</label>
+          <input
+            id="customer-register-password"
+            type="password"
+            value={registerForm.password}
+            onChange={(event) => setRegisterForm((prev) => ({ ...prev, password: event.target.value }))}
+            placeholder="Mín. 8 caracteres, com maiúscula, minúscula e número"
+            disabled={loading}
+            className={inputClass}
+          />
+        </div>
+        <button type="submit" disabled={loading} className={primaryBtnClass}>
+          {loading ? 'Cadastrando…' : 'Criar conta'}
         </button>
       </form>
     );
   }
 
   return (
-    <section className="auth-standalone-page">
-      <article className="card customer-auth-card account-auth-card auth-standalone-card">
-        <div className="auth-standalone-head">
-          <p className="eyebrow">Conta</p>
-          <h1>Acesso do cliente</h1>
-          <p>Entre ou crie sua conta para continuar sua compra.</p>
-          <Link to="/" className="auth-back-link">
+    <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-100 via-white to-sky-50 px-4 py-10">
+      <article className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-xl backdrop-blur sm:p-8">
+        <header className="mb-5">
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Conta</p>
+          <h1 className="font-display text-2xl font-extrabold text-slate-900">Acesso do cliente</h1>
+          <p className="mt-1 text-sm text-slate-600">Entre ou crie sua conta para continuar sua compra.</p>
+          <Link to="/" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline">
             <i className="bi bi-arrow-left" /> Voltar para a loja
           </Link>
-        </div>
+        </header>
 
         {customerSession?.email ? (
-          <div className="customer-auth-signed">
-            <h3>Voce ja esta conectado</h3>
-            <p>
-              Sessao ativa para <strong>{customerSession.email}</strong>.
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <h3 className="font-bold text-emerald-900">Você já está conectado</h3>
+            <p className="mt-1 text-sm text-emerald-800">
+              Sessão ativa para <strong>{customerSession.email}</strong>.
             </p>
-            <Link className="button primary small" to="/checkout">
-              Ir para checkout
+            <Link to="/checkout" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">
+              Ir para checkout <i className="bi bi-arrow-right" />
             </Link>
           </div>
-        ) : null}
-
-        {customerSession ? null : (
+        ) : (
           <>
-            <div className="customer-auth-tabs">
-              <button
-                type="button"
-                className={`button secondary small ${mode === 'login' ? 'active-inline-tab' : ''}`}
-                onClick={() => changeMode('login')}
-              >
-                Entrar
-              </button>
-              <button
-                type="button"
-                className={`button secondary small ${mode === 'register' ? 'active-inline-tab' : ''}`}
-                onClick={() => changeMode('register')}
-              >
-                Cadastrar
-              </button>
-            </div>
+            {mode !== 'forgot' ? (
+              <div className="mb-4 flex gap-1 rounded-lg bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => changeMode('login')}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                    mode === 'login' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  Entrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeMode('register')}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                    mode === 'register' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  Cadastrar
+                </button>
+              </div>
+            ) : null}
 
             {authForm}
 
+            <div className="mt-6 border-t border-slate-100 pt-3 text-center">
+              <Link
+                to={ADMIN_LOGIN_PATH}
+                className="text-[10px] font-medium uppercase tracking-widest text-slate-300 transition hover:text-slate-500"
+                title="Acesso restrito"
+              >
+                · admin ·
+              </Link>
+            </div>
           </>
         )}
       </article>

@@ -92,69 +92,79 @@ export function CategoryWizard({
       showProgress={false}
       size="modal-medium"
     >
-      <div className="wizard-panel">
-        <div className="form-grid">
-          <div className="form-group full-width">
-            <label htmlFor="cat-name">Nome da Categoria *</label>
-            <input
-              type="text"
-              id="cat-name"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              placeholder="Ex: Festa Junina"
-            />
-          </div>
+      <div className="flex flex-col gap-4">
+        <div>
+          <label htmlFor="cat-name" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Nome da categoria *
+          </label>
+          <input
+            id="cat-name"
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleInputChange}
+            placeholder="Ex: Festa Junina"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
+        </div>
 
-          <div className="form-group">
-            <label htmlFor="cat-color">Cor de destaque</label>
+        <div>
+          <label htmlFor="cat-color" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Cor de destaque
+          </label>
+          <div className="flex items-center gap-3">
             <input
-              type="color"
               id="cat-color"
+              type="color"
               name="color"
               value={formData.color}
               onChange={handleInputChange}
+              className="h-10 w-16 cursor-pointer rounded-lg border border-slate-200 bg-white"
             />
-            <div className="category-color-preview" aria-live="polite">
+            <div aria-live="polite" className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
               <span
-                className="category-color-swatch"
-                style={{ backgroundColor: formData.color }}
                 aria-hidden="true"
+                className="h-5 w-5 rounded ring-1 ring-slate-200"
+                style={{ backgroundColor: formData.color }}
               />
-              <span className="category-color-code">Cor selecionada: {String(formData.color || '').toUpperCase()}</span>
+              <span className="font-mono text-xs text-slate-600">
+                {String(formData.color || '').toUpperCase()}
+              </span>
             </div>
           </div>
-
-          <div className="form-group full-width">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                name="featured"
-                checked={formData.featured}
-                onChange={handleInputChange}
-              />
-              <span>★ Evidenciar na página de produtos</span>
-            </label>
-            <p className="form-hint">
-              Categorias evidenciadas aparecem em destaque no topo da lista de produtos.
-            </p>
-          </div>
-
-          <div className="form-group full-width">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                name="active"
-                checked={formData.active}
-                onChange={handleInputChange}
-              />
-              <span>Categoria ativa</span>
-            </label>
-            <p className="form-hint">
-              Desative para ocultar a categoria da loja, mas manter dados.
-            </p>
-          </div>
         </div>
+
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+          <input
+            type="checkbox"
+            name="featured"
+            checked={formData.featured}
+            onChange={handleInputChange}
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          <span>
+            <span className="block text-sm font-semibold text-slate-800">★ Evidenciar na página de produtos</span>
+            <span className="block text-xs text-slate-500">
+              Categorias evidenciadas aparecem em destaque no topo da lista de produtos.
+            </span>
+          </span>
+        </label>
+
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+          <input
+            type="checkbox"
+            name="active"
+            checked={formData.active}
+            onChange={handleInputChange}
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          <span>
+            <span className="block text-sm font-semibold text-slate-800">Categoria ativa</span>
+            <span className="block text-xs text-slate-500">
+              Desative para ocultar a categoria da loja, mantendo os dados.
+            </span>
+          </span>
+        </label>
       </div>
     </ModalWizard>
   );

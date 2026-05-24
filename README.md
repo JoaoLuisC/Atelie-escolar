@@ -1,102 +1,77 @@
 # Ateliê da Escola
 
-Base em migração para Supabase.
+Plataforma de vendas de materiais educativos digitais (banners, painéis, atividades pedagógicas) com download imediato após pagamento aprovado.
 
-## Estado Atual
+**Stack**: React 19 + Vite + Tailwind + Express + Supabase + Mercado Pago.
 
-Frontend legado removido. O projeto agora roda com:
+---
 
-- React (Vite) para interface
-- Node API server para endpoints em `/api`
+## Quickstart
 
-## Fluxo Profissional (recomendado)
+```bash
+git clone <repo>
+cd Projeto-mae
+npm install
+cp .env.example .env.local   # editar com suas credenciais
+npm run dev:all              # sobe frontend (5173) + API (3000)
+```
 
-### Bootstrap inicial
+Abra http://localhost:5173
 
-1. Instalar dependencias:
-	- `npm run bootstrap`
-2. Rodar validacao base (testes + build):
-	- `npm run check`
+---
 
-### Desenvolvimento diario
+## Documentação completa
 
-- Rodar frontend + API em paralelo:
-	- `npm run dev:all`
+| 📖 Documento | Conteúdo |
+|----|----|
+| **[docs/README.md](./docs/README.md)** | Visão geral, stack, scripts |
+| **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** | Estrutura de pastas, decisões, camada de dados |
+| **[docs/FLOWS.md](./docs/FLOWS.md)** | Fluxogramas em Mermaid (auth, checkout, admin, webhook) |
+| **[docs/SETUP.md](./docs/SETUP.md)** | Setup detalhado de Supabase, Google OAuth, Mercado Pago, deploy |
+| **[docs/SECURITY.md](./docs/SECURITY.md)** | Modelo de ameaça, RLS, secrets, auditoria |
+| [docs/SUPABASE-SETUP.md](./docs/SUPABASE-SETUP.md) | Setup específico Supabase (legado) |
+| [docs/E2E-CHECKLIST-SANDBOX.md](./docs/E2E-CHECKLIST-SANDBOX.md) | Testes end-to-end (sandbox MP) |
+| [docs/RELEASE-CHECKLIST.md](./docs/RELEASE-CHECKLIST.md) | Pré-deploy |
 
-- Alias para fluxo de desenvolvimento (frontend + API):
-	- `npm run dev:full`
+---
 
-### Scripts de qualidade e manutencao
+## Para que serve
 
-- Limpar build:
-	- `npm run clean`
-- Rebuild limpo:
-	- `npm run rebuild`
-- Testes:
-	- `npm run test`
-- Build:
-	- `npm run build`
+- ✅ Visitante navega catálogo, busca, filtra e adiciona ao carrinho
+- ✅ Cliente faz checkout integrado com Mercado Pago (cartão, pix, boleto)
+- ✅ Após aprovação, libera download automático dos arquivos comprados
+- ✅ Admin gerencia produtos (com galeria + vídeos), categorias, pedidos, vitrine, usuários
+- ✅ Auth com Supabase (e-mail/senha + Google OAuth) + recuperação por e-mail
+- ✅ Admin com 2FA opcional (TOTP + PIN de recuperação)
 
-### Como rodar localmente
+---
 
-1. Suba a API em um terminal:
-	- `npm run dev:api`
-2. Suba o frontend React em outro terminal:
-	- `npm run dev`
+## Scripts úteis
 
-Frontend: http://localhost:5173
-API: http://localhost:3000
+| Comando | O que faz |
+|---------|-----------|
+| `npm run dev` | Frontend Vite em :5173 |
+| `npm run dev:api` | API Express em :3000 |
+| `npm run dev:all` | Os dois em paralelo |
+| `npm run build` | Build de produção |
+| `npm run test` | Vitest |
+| `npm run check` | test + build (usado em CI) |
 
-### Variaveis de ambiente (Vite + API)
+### Scripts utilitários (`scripts/`)
 
-- Use `APP_ENV` para controlar ambiente da API local (`development`, `test`, `production`).
-- Evite `NODE_ENV` em arquivos `.env*` do projeto para nao gerar warning no Vite.
-- O `server.js` faz fallback automatico para `development` quando `APP_ENV` nao estiver definido.
-- Para login de cliente (e-mail/senha + Google) via Supabase Auth no frontend, configure:
-	- `VITE_SUPABASE_URL`
-	- `VITE_SUPABASE_ANON_KEY`
-- No painel do Supabase, habilite o provedor Google em `Authentication > Providers`.
-- O acesso administrativo agora vem do Supabase Auth e da tabela `profiles`.
-- Crie o perfil com `role = 'master'` ou `role = 'admin'` para liberar o painel.
+| Script | Uso |
+|--------|-----|
+| `check-advisor.js` | Lê Security Advisor do Supabase via Management API |
+| `configure-auth.js` | Atualiza URLs OAuth permitidas no Supabase |
+| `fix-dns.ps1` | Conserta DNS local Windows (precisa admin) |
+| `fix-utf8.js` | Conserta encoding de dados corrompidos no banco |
+| `check-utf8.js` | Audita encoding nos textos do banco (sem alterar) |
+| `db-inspect.js` | Inventário de tabelas via REST |
 
-## Supabase CLI (workflow recomendado)
+Necessitam variáveis: `SUPABASE_PAT=sbp_...` e `SUPABASE_PROJECT_REF=<ref>`.
 
-Este repositorio esta configurado para usar o Supabase remoto como fluxo principal de banco.
+---
 
-### Primeira configuracao
+## Licença
 
-1. Fazer login no Supabase CLI:
-	 - `npm run supabase:login`
-2. Inicializar estrutura do projeto (ja executado neste repositorio):
-	 - `npm run supabase:init`
-3. Vincular ao projeto remoto:
-	 - `npm run supabase:link -- --project-ref SEU_PROJECT_REF`
-
-### Comandos do dia a dia (remoto)
-
-- Criar migration nova:
-	- `npm run supabase:migration:new -- nome_da_migration`
-- Puxar mudancas do remoto para migration:
-	- `npm run supabase:db:pull`
-- Enviar migrations/schema para remoto:
-	- `npm run supabase:db:push`
-- Gerar tipos para React:
-	- `npm run supabase:types`
-
-### Fluxo seguro de banco
-
-1. Criar migration.
-2. Revisar e aplicar no projeto remoto.
-3. Testar API/frontend.
-4. Fazer push para remoto.
-5. Gerar tipos e commitar junto.
-
-## Próximos passos
-
-1. Executar o schema do Supabase em [supabase/schema.sql](supabase/schema.sql).
-2. Configurar as variáveis em [.env.local](.env.local).
-3. Evoluir o app React e manter apenas o fluxo Supabase como fonte de dados.
-
-## Release
-
-Antes de publicar, siga o checklist em [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md).
+MIT

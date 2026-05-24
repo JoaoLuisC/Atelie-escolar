@@ -1,5 +1,11 @@
 import PropTypes from 'prop-types';
 
+const SIZE_CLASSES = {
+  'modal-small': 'max-w-md',
+  'modal-medium': 'max-w-xl',
+  'modal-large': 'max-w-3xl',
+};
+
 export function ModalWizard({
   title,
   steps,
@@ -12,99 +18,112 @@ export function ModalWizard({
   showProgress = true,
   size = 'modal-large',
 }) {
+  const sizeClass = SIZE_CLASSES[size] || SIZE_CLASSES['modal-large'];
+
   return (
-    <div className="modal-wizard-overlay">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
       <button
         type="button"
-        className="modal-wizard-overlay-btn"
-        onClick={onClose}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') onClose();
-        }}
         aria-label="Fechar modal"
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
       />
+
       <dialog
-        className={`modal-wizard ${size}`}
         open
+        className={`relative z-10 flex w-full max-h-[90vh] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl ${sizeClass}`}
       >
-        <div className="modal-wizard-header">
-          <div className="modal-wizard-title-row">
-            <h2>{title}</h2>
+        <header className="border-b border-slate-200 px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="font-heading text-lg font-bold text-slate-900">{title}</h2>
             <button
-              className="modal-close"
+              type="button"
               onClick={onClose}
               aria-label="Fechar"
-              type="button"
+              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
             >
-              ×
+              <i className="bi bi-x-lg" />
             </button>
           </div>
 
-          {showProgress && steps && steps.length > 1 && (
-            <div className="modal-stepper" role="tablist">
-              {steps.map((step, idx) => (
-                <div key={step.id} className="modal-stepper-item">
-                  <button
-                    type="button"
-                    className={`modal-step ${
-                      currentStep === idx ? 'active' : ''
-                    } ${idx < currentStep ? 'completed' : ''}`}
-                    onClick={() => onStepChange(idx)}
-                    disabled={idx > currentStep}
-                  >
-                    <span className="modal-step-num">{idx + 1}</span>
-                    <span className="modal-step-label">{step.label}</span>
-                  </button>
-                  {idx < steps.length - 1 && <div className="modal-step-bar" />}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          {showProgress && steps && steps.length > 1 ? (
+            <ol role="tablist" className="mt-4 flex items-center gap-2">
+              {steps.map((step, idx) => {
+                const isActive = currentStep === idx;
+                const isCompleted = idx < currentStep;
+                return (
+                  <li key={step.id} className="flex flex-1 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onStepChange(idx)}
+                      disabled={idx > currentStep}
+                      className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                        isActive
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : isCompleted
+                            ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+                            : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/30 text-[10px] font-bold">
+                        {isCompleted ? <i className="bi bi-check2" /> : idx + 1}
+                      </span>
+                      <span className="hidden sm:inline">{step.label}</span>
+                    </button>
+                    {idx < steps.length - 1 ? <span className="h-px flex-1 bg-slate-200" /> : null}
+                  </li>
+                );
+              })}
+            </ol>
+          ) : null}
+        </header>
 
-        <form onSubmit={onSubmit} className="modal-wizard-form">
-          <div className="modal-wizard-content">{children}</div>
+        <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
-          <div className="modal-wizard-footer">
+          <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
             <button
               type="button"
-              className="btn-secondary"
               onClick={onClose}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
               Cancelar
             </button>
-            <div className="modal-nav-group">
-              {currentStep > 0 && (
+            <div className="flex gap-2">
+              {currentStep > 0 ? (
                 <button
                   type="button"
-                  className="btn-secondary modal-nav-btn"
                   onClick={(e) => {
                     e.preventDefault();
                     onStepChange(currentStep - 1);
                   }}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                 >
                   ← Voltar
                 </button>
-              )}
-              {currentStep < steps.length - 1 && (
+              ) : null}
+              {currentStep < steps.length - 1 ? (
                 <button
                   type="button"
-                  className="btn-primary modal-nav-btn"
                   onClick={(e) => {
                     e.preventDefault();
                     onStepChange(currentStep + 1);
                   }}
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
                 >
                   Avançar →
                 </button>
-              )}
-              {currentStep === steps.length - 1 && (
-                <button type="submit" className="btn-primary">
-                  ✓ {submitLabel}
+              ) : null}
+              {currentStep === steps.length - 1 ? (
+                <button
+                  type="submit"
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                >
+                  <i className="bi bi-check2" /> {submitLabel}
                 </button>
-              )}
+              ) : null}
             </div>
-          </div>
+          </footer>
         </form>
       </dialog>
     </div>
@@ -117,7 +136,7 @@ ModalWizard.propTypes = {
     PropTypes.shape({
       id: PropTypes.string.isRequired,
       label: PropTypes.string.isRequired,
-    })
+    }),
   ),
   currentStep: PropTypes.number.isRequired,
   onStepChange: PropTypes.func.isRequired,

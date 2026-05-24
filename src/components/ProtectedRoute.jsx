@@ -10,10 +10,11 @@ export function ProtectedRoute({ children }) {
 
   if (!authReady) {
     return (
-      <section className="admin-wrap" style={{ padding: '24px' }}>
-        <article className="card admin-access-card">
-          <h3>Verificando sessao</h3>
-          <p>Aguarde enquanto validamos seu acesso administrativo.</p>
+      <section className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <article className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <i className="bi bi-shield-lock-fill text-3xl text-brand-600" />
+          <h3 className="mt-2 font-heading text-lg font-bold text-slate-900">Verificando sessão</h3>
+          <p className="mt-1 text-sm text-slate-600">Aguarde enquanto validamos seu acesso administrativo.</p>
         </article>
       </section>
     );

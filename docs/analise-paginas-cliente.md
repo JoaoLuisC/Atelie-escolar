@@ -1,5 +1,7 @@
 # Análise das páginas do cliente
 
+> Histórico: este documento descreve o estado original das páginas do cliente antes do refactor descrito em [plano-melhorias-fluxo-cliente.md](./plano-melhorias-fluxo-cliente.md). Os trechos sobre "alta concentração de lógica em `ProductsPage`" e ausência de stepper de status já foram resolvidos — a maioria está documentada como "concluído" no plano de melhorias. Mantido como referência para auditoria.
+
 Escopo desta análise: apenas as páginas do fluxo do cliente. A área administrativa foi ignorada propositalmente.
 
 ## 1. Design e Estrutura
@@ -150,10 +152,16 @@ Depois:
 
 Essa página encerra o ciclo do usuário: ela transforma pagamento aprovado em acesso efetivo ao arquivo.
 
-## 5. Trechos que merecem refatoração
+## 5. Trechos que mereciam refatoração — situação atual
 
-O trecho mais complexo hoje é `ProductsPage`. Ele concentra carregamento, parsing de query string, filtro por categoria, filtro por preço, ordenação, estados da sidebar e renderização de cards. O próprio arquivo já sinaliza isso com a anotação de alta complexidade cognitiva. Aqui há um bom candidato para extração de responsabilidades em hooks menores e componentes de UI especializados.
+O diagnóstico original apontava `ProductsPage` como o trecho mais carregado, concentrando carregamento, parsing de query string, filtros, ordenação, estado da sidebar e renderização de cards. **Esse refactor foi feito**: hoje toda essa lógica vive em [src/hooks/useProductFilters.js](../src/hooks/useProductFilters.js), e [ProductsPage.jsx](../src/pages/ProductsPage.jsx) ficou enxuto, basicamente compondo `ProductSidebar`, `ProductGrid` e `SortDropdown` ao redor do hook.
 
-Também vale atenção em `CheckoutPage` e `DownloadsPage`, porque ambos acumulam polling, integração com API, mensagens de status e regras de transição de estado. Funcionam, mas estão fazendo muitas coisas ao mesmo tempo.
+`CheckoutPage` e `DownloadsPage` continuam carregando polling, integração com API e mensagens de status, mas ganharam um componente compartilhado de feedback ([StatusStepper.jsx](../src/components/StatusStepper.jsx)) usado em ambos para indicar "Pedido criado → Pagamento em análise → Downloads liberados". O polling em `DownloadsPage` foi extraído para um hook interno (`usePendingOrderPolling`).
 
-Em resumo, a base está organizada e legível, mas o catálogo e os fluxos assíncronos poderiam ficar mais simples se parte da lógica fosse movida para hooks ou serviços de domínio.
+Itens em aberto sugeridos pelo plano de melhorias que ainda não foram feitos:
+
+- Drawer lateral de carrinho a partir do `Shell` (hoje a ação leva para `/checkout` direto).
+- Captura de e-mail no início do checkout para habilitar fluxo de carrinho abandonado.
+- Cupons de desconto.
+
+Em resumo, a base já está bem mais enxuta do que no diagnóstico original; restam principalmente as iniciativas de conversão/UX listadas no plano de melhorias.

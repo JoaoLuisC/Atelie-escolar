@@ -26,9 +26,10 @@ export function getSupabaseBrowserClient() {
 
   supabaseBrowserClient = createClient(config.url, config.anonKey, {
     auth: {
-      autoRefreshToken: false,
+      autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: true,
+      flowType: 'pkce',
     },
   });
 
@@ -44,5 +45,17 @@ export function buildPasswordResetRedirectUrl(postResetRedirect = '/checkout') {
   const url = new URL(CUSTOMER_RESET_PASSWORD_PATH, globalThis.window.location.origin);
   url.searchParams.set('redirect', safeRedirect);
 
+  return url.toString();
+}
+
+export function buildOAuthRedirectUrl(postLoginRedirect = '/checkout') {
+  if (!globalThis.window) {
+    throw new Error('Login com Google disponivel apenas no navegador.');
+  }
+
+  const safeRedirect = String(postLoginRedirect || '/checkout').trim() || '/checkout';
+  const url = new URL('/login', globalThis.window.location.origin);
+  url.searchParams.set('oauth', 'google');
+  url.searchParams.set('redirect', safeRedirect);
   return url.toString();
 }

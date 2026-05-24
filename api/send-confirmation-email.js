@@ -58,25 +58,17 @@ module.exports = async function sendConfirmationEmailHandler(req, res) {
       ? `R$ ${Number(order.total_amount || 0).toFixed(2).replace('.', ',')}`
       : '';
 
-    // Bloco de credenciais (só para contas novas)
+    // Bloco de criação de conta (só para contas novas) — instrui o cliente a definir senha via reset
     const credentialsBlock = isNewAccount ? `
       <div style="background:#f5f0ff;border:1.5px solid #d4b8ff;border-radius:12px;padding:20px 24px;margin:24px 0;">
         <h3 style="margin:0 0 12px;color:#7A3DC0;font-size:15px;font-weight:700;">
-          🔑 Seus dados de acesso
+          🔑 Conta criada para você
         </h3>
-        <table style="font-size:14px;color:#2d3748;border-collapse:collapse;">
-          <tr>
-            <td style="padding:4px 12px 4px 0;color:#718096;font-weight:600;">Login:</td>
-            <td style="padding:4px 0;"><strong>${customerEmail}</strong></td>
-          </tr>
-          <tr>
-            <td style="padding:4px 12px 4px 0;color:#718096;font-weight:600;">Senha:</td>
-            <td style="padding:4px 0;"><strong>123456</strong></td>
-          </tr>
-        </table>
-        <p style="font-size:12px;color:#718096;margin:12px 0 0;">
-          💡 Recomendamos alterar sua senha após o primeiro acesso em
-          <a href="${loginUrl}" style="color:#9B5DE5;">${loginUrl}</a>.
+        <p style="font-size:14px;color:#2d3748;margin:0 0 12px;">
+          Sua conta foi criada com o e-mail <strong>${customerEmail}</strong>.
+          Para definir sua senha e acessar seus downloads a qualquer momento,
+          clique em <em>"Esqueci minha senha"</em> em
+          <a href="${loginUrl}" style="color:#9B5DE5;font-weight:600;">${loginUrl}</a>.
         </p>
       </div>` : '';
 

@@ -1,12 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { AdminProductsManager } from '../features/admin/AdminProductsManager';
 import { ProductWizard } from '../components/ProductWizard';
 import { CategoryWizard } from '../components/CategoryWizard';
+import { AdminLayout } from '../components/admin/AdminLayout';
+import { DashboardTab } from '../components/admin/tabs/DashboardTab';
+import { ProductsTab } from '../components/admin/tabs/ProductsTab';
+import { CategoriesTab } from '../components/admin/tabs/CategoriesTab';
+import { OrdersTab } from '../components/admin/tabs/OrdersTab';
+import { UsersTab } from '../components/admin/tabs/UsersTab';
+import { FinanceTab } from '../components/admin/tabs/FinanceTab';
+import { ComparisonTab } from '../components/admin/tabs/ComparisonTab';
+import { PerformanceTab } from '../components/admin/tabs/PerformanceTab';
+import { VitrineTab } from '../components/admin/tabs/VitrineTab';
+import { SecurityTab } from '../components/admin/tabs/SecurityTab';
+import { OrderDetailModal } from '../components/admin/OrderDetailModal';
 import {
   createAdminCategory,
   deleteAdminCategory,
+  deleteAdminUser,
   fetchAdminDashboardData,
   fetchAdminOrders,
   fetchAdminSetting,
@@ -14,605 +26,256 @@ import {
   patchAdminProduct,
   saveAdminSetting,
   updateAdminCategory,
+  updateAdminUser,
 } from '../services/admin-panel';
-import { formatPrice } from '../utils/currency';
+import {
+  createAdminProduct,
+  deleteAdminProduct,
+  updateAdminProduct,
+} from '../services/admin-products';
+import {
+  deriveAbcCurve,
+  deriveApprovedOrders,
+  deriveCategoryRevenue,
+  deriveComparisonDelta,
+  deriveCustomerMix,
+  deriveDailyRevenue,
+  deriveFaturamentoSeries,
+  deriveMonthlyComparison,
+  deriveMonthSparkline,
+  deriveProductPerformance,
+  deriveRecentOrders,
+  deriveTicketMedio,
+  getSectionDefaultTitle,
+  parseHomeSectionsSetting,
+  serializeHomeSections,
+} from '../components/admin/utils/derive';
+import { isSessionError } from '../components/admin/utils/format';
+import { TAB_LABELS, TABS_NEEDING_DASHBOARD } from '../components/admin/utils/tabs';
 
-function toDateSafe(value) {
-  const dt = new Date(value || 0);
-  return Number.isNaN(dt.getTime()) ? null : dt;
-}
+const EMPTY_DASHBOARD = {
+  summary: {
+    revenueMonth: 0,
+    revenueTotal: 0,
+    approvedOrders: 0,
+    pendingOrders: 0,
+    activeProducts: 0,
+    totalUsers: 0,
+  },
+  products: [],
+  orders: [],
+  categories: [],
+  users: [],
+  settings: { homeSections: { sections: [] } },
+};
 
-function formatDateTime(value) {
-  const dt = toDateSafe(value);
-  if (!dt) return '-';
-  return dt.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function getStatusLabel(status) {
-  const normalized = String(status || '').toLowerCase();
-  const map = {
-    approved: 'Aprovado',
-    pending: 'Pendente',
-    rejected: 'Recusado',
-    cancelled: 'Cancelado',
-    failed: 'Falhou',
-    completed: 'Concluido',
-  };
-  return map[normalized] || status || '-';
-}
-
-function createEmptyDashboardData() {
-  return {
-    summary: {
-      revenueMonth: 0,
-      revenueTotal: 0,
-      approvedOrders: 0,
-      pendingOrders: 0,
-      activeProducts: 0,
-      totalUsers: 0,
-    },
-    products: [],
-    orders: [],
-    categories: [],
-    settings: {
-      homeSections: { sections: [] },
-    },
-  };
-}
-
-function createLocalSectionId() {
-  return `section-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function getSectionDefaultTitle(type) {
-  if (type === 'best_sellers') return 'Mais vendidos';
-  if (type === 'new_arrivals') return 'Novidades';
-  return 'Categoria';
-}
-
-function getSectionHeadline(section, categories) {
-  if (section.type === 'category') {
-    const categoryName = categories.find((cat) => String(cat.id) === String(section.categoryId))?.name || 'Sem categoria';
-    return `Categoria: ${categoryName}`;
-  }
-
-  if (section.type === 'best_sellers') {
-    return 'Especial: Mais vendidos';
-  }
-
-  return 'Especial: Novidades';
-}
-
-function parseHomeSectionsSetting(raw, categories) {
-  const categoryById = new Map((categories || []).map((category) => [String(category.id), category]));
-  const sections = Array.isArray(raw?.sections) ? raw.sections : [];
-
-  const parsed = sections
-    .map((section) => {
-      const type = String(section?.type || '').trim();
-      if (!['category', 'best_sellers', 'new_arrivals'].includes(type)) {
-        return null;
-      }
-
-      if (type === 'category') {
-        const categoryId = String(section?.categoryId || '').trim();
-        const category = categoryById.get(categoryId);
-        if (!category) {
-          return null;
-        }
-
-        return {
-          localId: createLocalSectionId(),
-          type,
-          title: String(section?.title || category.name).trim() || category.name,
-          categoryId,
-          limit: Number.isFinite(Number(section?.limit)) ? Math.max(4, Math.min(20, Number(section.limit))) : 8,
-          enabled: section?.enabled !== false,
-        };
-      }
-
-      return {
-        localId: createLocalSectionId(),
-        type,
-        title: String(section?.title || (type === 'best_sellers' ? 'Mais vendidos' : 'Novidades')).trim()
-          || (type === 'best_sellers' ? 'Mais vendidos' : 'Novidades'),
-        limit: Number.isFinite(Number(section?.limit)) ? Math.max(4, Math.min(20, Number(section.limit))) : 8,
-        enabled: section?.enabled !== false,
-      };
-    })
-    .filter(Boolean);
-
-  if (parsed.length) {
-    return parsed;
-  }
-
-  const defaults = (categories || [])
-    .filter((category) => category.active !== false)
-    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }))
-    .slice(0, 3)
-    .map((category) => ({
-      localId: createLocalSectionId(),
-      type: 'category',
-      title: category.name,
-      categoryId: String(category.id),
-      limit: 8,
-      enabled: true,
-    }));
-
-  return [
-    ...defaults,
-    { localId: createLocalSectionId(), type: 'best_sellers', title: 'Mais vendidos', limit: 8, enabled: true },
-    { localId: createLocalSectionId(), type: 'new_arrivals', title: 'Novidades', limit: 8, enabled: true },
-  ];
-}
-
-// eslint-disable-next-line sonarjs/cognitive-complexity
 export function AdminPage() {
   const { logoutAdmin, setAdminAuthenticated } = useAuth();
   const { pushToast } = useToast();
   const allowAdminBypass = import.meta.env.DEV || import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
+
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [productsGroupOpen, setProductsGroupOpen] = useState(true);
-  const [financeGroupOpen, setFinanceGroupOpen] = useState(false);
-  const [siteGroupOpen, setSiteGroupOpen] = useState(false);
-  const [dashboardData, setDashboardData] = useState(createEmptyDashboardData);
+  const [dashboardData, setDashboardData] = useState(EMPTY_DASHBOARD);
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [ordersFilter, setOrdersFilter] = useState('');
-  const [usersFilter, setUsersFilter] = useState('');
   const [vitrineSections, setVitrineSections] = useState([]);
-  const [categoryToAddToVitrine, setCategoryToAddToVitrine] = useState('');
-  const [securityJson, setSecurityJson] = useState('');
-  const [tabStatus, setTabStatus] = useState('');
+  const [vitrineSaving, setVitrineSaving] = useState(false);
+  const [adminConfig, setAdminConfig] = useState({});
+  const [securitySaving, setSecuritySaving] = useState(false);
   const [tabLoading, setTabLoading] = useState(false);
-  const [orderDetailOpen, setOrderDetailOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [tabError, setTabError] = useState('');
+  const [usersUpdatingId, setUsersUpdatingId] = useState('');
+
+  const [orderDetail, setOrderDetail] = useState(null);
   const [productWizardOpen, setProductWizardOpen] = useState(false);
   const [categoryWizardOpen, setCategoryWizardOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
 
-  const pageTitle = useMemo(() => {
-    const titles = {
-      dashboard: 'Dashboard',
-      produtos: 'Produtos',
-      categorias: 'Categorias',
-      pedidos: 'Pedidos',
-      'prod-config': 'Configuracao de Produtos',
-      'prod-saida': 'Saida e Desempenho',
-      faturamento: 'Faturamento',
-      comparativo: 'Comparativo',
-      usuarios: 'Usuarios',
-      vitrine: 'Vitrine',
-      seguranca: 'Seguranca',
-    };
+  const pageTitle = TAB_LABELS[activeTab] || 'Painel Admin';
 
-    return titles[activeTab] || 'Painel Admin';
-  }, [activeTab]);
-
-  const today = new Date().toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
-
-  async function onLogout() {
-    try {
-      await logoutAdmin();
-      pushToast('Sessao administrativa encerrada.', 'info');
-    } catch (error) {
-      pushToast(error.message || 'Erro ao encerrar sessao.', 'error');
-    }
-  }
-
-  function onAuthExpired() {
-    if (allowAdminBypass) {
-      return;
-    }
+  const onAuthExpired = useCallback(() => {
+    if (allowAdminBypass) return;
     setAdminAuthenticated(false);
-    pushToast('Sessao admin expirada. Faca login novamente.', 'warning');
-  }
+    pushToast('Sessão admin expirada. Faça login novamente.', 'warning');
+  }, [allowAdminBypass, setAdminAuthenticated, pushToast]);
+
+  const handleAdminError = useCallback((error, fallback) => {
+    if (isSessionError(error)) {
+      onAuthExpired();
+    }
+    pushToast(error?.message || fallback, 'error');
+  }, [onAuthExpired, pushToast]);
 
   useEffect(() => {
-    // eslint-disable-next-line sonarjs/cognitive-complexity
-    async function loadForTab() {
-      try {
-        setTabLoading(true);
-        setTabStatus('Carregando...');
+    let cancelled = false;
 
-        if (['dashboard', 'faturamento', 'comparativo', 'prod-saida', 'prod-config', 'vitrine'].includes(activeTab)) {
+    async function load() {
+      setTabLoading(true);
+      setTabError('');
+      try {
+        if (TABS_NEEDING_DASHBOARD.has(activeTab)) {
           const data = await fetchAdminDashboardData();
+          if (cancelled) return;
           setDashboardData(data);
-          setCategories(data.categories || []);
           if (activeTab === 'vitrine') {
-            const parsedSections = parseHomeSectionsSetting(data.settings?.homeSections || { sections: [] }, data.categories || []);
-            setVitrineSections(parsedSections);
-            setCategoryToAddToVitrine('');
+            setVitrineSections(parseHomeSectionsSetting(data.settings?.homeSections || { sections: [] }, data.categories || []));
           }
         }
 
         if (activeTab === 'usuarios') {
           const data = await fetchAdminUsers();
-          setUsers(data.users || []);
+          if (!cancelled) setUsers(data.users || []);
         }
 
         if (activeTab === 'pedidos') {
           const data = await fetchAdminOrders(ordersFilter);
-          setOrders(data.orders || []);
-        }
-
-        if (activeTab === 'categorias') {
-          const data = await fetchAdminDashboardData();
-          setCategories(data.categories || []);
+          if (!cancelled) setOrders(data.orders || []);
         }
 
         if (activeTab === 'seguranca') {
           const data = await fetchAdminSetting('adminConfig');
-          setSecurityJson(JSON.stringify(data.value || {}, null, 2));
+          if (!cancelled) setAdminConfig(data.value || {});
         }
-
-        setTabStatus('');
       } catch (error) {
-        const isSessionError = String(error.message || '').toLowerCase().includes('sessao admin');
-
-        if (isSessionError && allowAdminBypass) {
-          setDashboardData(createEmptyDashboardData());
-          setCategories([]);
-          setUsers([]);
-          setOrders([]);
-          if (activeTab === 'vitrine') {
-            setVitrineSections([]);
-            setCategoryToAddToVitrine('');
-          }
-          if (activeTab === 'seguranca') {
-            setSecurityJson(JSON.stringify({}, null, 2));
-          }
-          setTabStatus('');
+        if (cancelled) return;
+        if (isSessionError(error) && allowAdminBypass) {
+          setDashboardData(EMPTY_DASHBOARD);
           return;
         }
-
-        if (isSessionError) {
-          onAuthExpired();
-        }
-        setTabStatus(error.message || 'Erro ao carregar dados da aba.');
+        if (isSessionError(error)) onAuthExpired();
+        setTabError(error?.message || 'Erro ao carregar dados da aba.');
       } finally {
-        setTabLoading(false);
+        if (!cancelled) setTabLoading(false);
       }
     }
 
-    loadForTab();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, ordersFilter]);
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, ordersFilter, allowAdminBypass, onAuthExpired]);
 
-  const approvedOrders = useMemo(
-    () => (dashboardData?.orders || []).filter((order) => order.paymentStatus === 'approved'),
-    [dashboardData],
-  );
+  const approvedOrders = useMemo(() => deriveApprovedOrders(dashboardData.orders), [dashboardData.orders]);
+  const productPerformance = useMemo(() => deriveProductPerformance(dashboardData.products, approvedOrders), [dashboardData.products, approvedOrders]);
+  const monthlyComparison = useMemo(() => deriveMonthlyComparison(approvedOrders), [approvedOrders]);
+  const comparisonDelta = useMemo(() => deriveComparisonDelta(monthlyComparison), [monthlyComparison]);
+  const recentOrders = useMemo(() => deriveRecentOrders(dashboardData.orders), [dashboardData.orders]);
+  const dailyRevenue = useMemo(() => deriveDailyRevenue(approvedOrders), [approvedOrders]);
+  const categoryRevenue = useMemo(() => deriveCategoryRevenue(dashboardData.products, approvedOrders), [dashboardData.products, approvedOrders]);
+  const faturamentoSeries = useMemo(() => deriveFaturamentoSeries(approvedOrders), [approvedOrders]);
+  const ticketMedio = useMemo(() => deriveTicketMedio(monthlyComparison), [monthlyComparison]);
+  const customerMix = useMemo(() => deriveCustomerMix(dashboardData.users), [dashboardData.users]);
+  const abcCurve = useMemo(() => deriveAbcCurve(productPerformance), [productPerformance]);
+  const sparkline = useMemo(() => deriveMonthSparkline(approvedOrders, 14), [approvedOrders]);
 
-  const productPerformance = useMemo(() => {
-    const base = (dashboardData?.products || []).map((product) => ({
-      ...product,
-      qty: 0,
-      rev: 0,
-      downloads: Number(product.downloads || 0),
-    }));
-
-    const index = Object.fromEntries(base.map((product) => [String(product.id), product]));
-    for (const order of approvedOrders) {
-      for (const item of order.items || []) {
-        const id = String(item.id || item.productId || '');
-        if (!id || !index[id]) continue;
-        index[id].qty += Number(item.quantity || 0);
-        index[id].rev += Number(item.price || 0) * Number(item.quantity || 0);
-      }
-    }
-
-    return base.sort((a, b) => b.qty - a.qty);
-  }, [dashboardData, approvedOrders]);
-
-  const monthlyComparison = useMemo(() => {
-    const now = new Date();
-    const months = [0, 1].map((offset) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-      const start = new Date(date.getFullYear(), date.getMonth(), 1);
-      const end = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-      const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-      const monthOrders = approvedOrders.filter((order) => {
-        const dt = new Date(order.completedAt || order.createdAt || 0);
-        return dt >= start && dt < end;
-      });
-
-      const gross = monthOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-      const qty = monthOrders.length;
-      const avg = qty ? gross / qty : 0;
-
-      return { label, gross, qty, avg };
-    });
-
-    return months.reverse();
-  }, [approvedOrders]);
-
-  const recentOrders = useMemo(() => {
-    const ordered = [...(dashboardData?.orders || [])].sort((a, b) => {
-      const da = new Date(a.createdAt || 0).getTime();
-      const db = new Date(b.createdAt || 0).getTime();
-      return db - da;
-    });
-    return ordered.slice(0, 8);
-  }, [dashboardData]);
-
-  const dailyRevenue = useMemo(() => {
-    const days = 7;
-    const now = new Date();
-    const labels = [];
-    const values = [];
-    const map = new Map();
-
-    for (const order of approvedOrders) {
-      const dt = toDateSafe(order.completedAt || order.createdAt);
-      if (!dt) continue;
-      const key = dt.toISOString().slice(0, 10);
-      map.set(key, (map.get(key) || 0) + Number(order.totalAmount || 0));
-    }
-
-    for (let i = days - 1; i >= 0; i -= 1) {
-      const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const key = dt.toISOString().slice(0, 10);
-      labels.push(dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
-      values.push(map.get(key) || 0);
-    }
-
-    const max = Math.max(1, ...values);
-    return values.map((value, index) => ({
-      label: labels[index],
-      value,
-      pct: Math.max(6, Math.round((value / max) * 100)),
-    }));
-  }, [approvedOrders]);
-
-  const categoryRevenue = useMemo(() => {
-    const productCategory = {};
-    for (const product of dashboardData?.products || []) {
-      productCategory[String(product.id)] = product.category || 'Sem categoria';
-    }
-
-    const buckets = {};
-    for (const order of approvedOrders) {
-      for (const item of order.items || []) {
-        const id = String(item.id || item.productId || '');
-        const category = productCategory[id] || 'Sem categoria';
-        buckets[category] = (buckets[category] || 0) + Number(item.price || 0) * Number(item.quantity || 0);
-      }
-    }
-
-    const list = Object.entries(buckets)
-      .map(([category, value]) => ({ category, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
-    const max = Math.max(1, ...list.map((item) => item.value), 1);
-    return list.map((item) => ({
-      ...item,
-      pct: Math.max(8, Math.round((item.value / max) * 100)),
-    }));
-  }, [approvedOrders, dashboardData]);
-
-  const faturamentoSeries = useMemo(() => {
-    const months = [];
-    const now = new Date();
-
-    for (let i = 5; i >= 0; i -= 1) {
-      const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const start = new Date(dt.getFullYear(), dt.getMonth(), 1);
-      const end = new Date(dt.getFullYear(), dt.getMonth() + 1, 1);
-      const value = approvedOrders
-        .filter((order) => {
-          const date = toDateSafe(order.completedAt || order.createdAt);
-          return date && date >= start && date < end;
-        })
-        .reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-
-      months.push({
-        label: dt.toLocaleDateString('pt-BR', { month: 'short' }),
-        value,
-      });
-    }
-
-    const max = Math.max(1, ...months.map((item) => item.value), 1);
-    return months.map((item) => ({ ...item, pct: Math.max(8, Math.round((item.value / max) * 100)) }));
-  }, [approvedOrders]);
-
-  const comparisonDelta = useMemo(() => {
-    if (monthlyComparison.length < 2) {
-      return { pct: 0, trend: 'stable' };
-    }
-
-    const prev = monthlyComparison[0].gross;
-    const current = monthlyComparison[1].gross;
-    if (!prev && !current) {
-      return { pct: 0, trend: 'stable' };
-    }
-
-    if (!prev && current) {
-      return { pct: 100, trend: 'up' };
-    }
-
-    const pct = ((current - prev) / prev) * 100;
-    if (pct > 0.01) return { pct, trend: 'up' };
-    if (pct < -0.01) return { pct, trend: 'down' };
-    return { pct, trend: 'stable' };
-  }, [monthlyComparison]);
-
-
-
-  async function removeCategory(id) {
+  async function refreshDashboard() {
     try {
-      await deleteAdminCategory(id);
-      const data = await fetchAdminDashboardData();
-      setCategories(data.categories || []);
-      pushToast('Categoria removida.', 'success');
-    } catch (error) {
-      if (String(error.message || '').toLowerCase().includes('sessao admin')) {
-        onAuthExpired();
-      }
-      pushToast(error.message || 'Erro ao remover categoria.', 'error');
-    }
-  }
-
-  async function toggleProductActive(product) {
-    try {
-      const isInactive = product.active === false;
-      await patchAdminProduct({ id: product.id, active: isInactive });
       const data = await fetchAdminDashboardData();
       setDashboardData(data);
-      pushToast(`Produto ${isInactive ? 'ativado' : 'desativado'}.`, 'success');
     } catch (error) {
-      if (String(error.message || '').toLowerCase().includes('sessao admin')) {
-        onAuthExpired();
-      }
-      pushToast(error.message || 'Erro ao atualizar produto.', 'error');
+      handleAdminError(error, 'Erro ao atualizar dados.');
     }
   }
 
-  function moveVitrineSection(index, direction) {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= vitrineSections.length) {
-      return;
-    }
-
-    const next = [...vitrineSections];
-    const [current] = next.splice(index, 1);
-    next.splice(targetIndex, 0, current);
-    setVitrineSections(next);
-  }
-
-  function updateVitrineSection(localId, patch) {
-    setVitrineSections((previous) =>
-      previous.map((section) => (section.localId === localId ? { ...section, ...patch } : section)),
-    );
-  }
-
-  function removeVitrineSection(localId) {
-    setVitrineSections((previous) => previous.filter((section) => section.localId !== localId));
-  }
-
-  function addCategoryToVitrine() {
-    if (!categoryToAddToVitrine) {
-      return;
-    }
-
-    const category = categories.find((item) => String(item.id) === String(categoryToAddToVitrine));
-    if (!category) {
-      return;
-    }
-
-    setVitrineSections((previous) => [
-      ...previous,
-      {
-        localId: createLocalSectionId(),
-        type: 'category',
-        title: category.name,
-        categoryId: String(category.id),
-        limit: 8,
-        enabled: true,
-      },
-    ]);
-    setCategoryToAddToVitrine('');
-  }
-
-  function addSpecialSection(type) {
-    if (!['best_sellers', 'new_arrivals'].includes(type)) {
-      return;
-    }
-
-    const alreadyExists = vitrineSections.some((section) => section.type === type);
-    if (alreadyExists) {
-      pushToast('Essa secao especial ja existe na vitrine.', 'warning');
-      return;
-    }
-
-    setVitrineSections((previous) => [
-      ...previous,
-      {
-        localId: createLocalSectionId(),
-        type,
-        title: type === 'best_sellers' ? 'Mais vendidos' : 'Novidades',
-        limit: 8,
-        enabled: true,
-      },
-    ]);
-  }
-
-  async function saveVitrine() {
+  async function onLogout() {
     try {
-      const payload = {
-        sections: vitrineSections
-          .filter((section) => section.enabled !== false)
-          .map((section) => ({
-            type: section.type,
-            title: String(section.title || '').trim() || getSectionDefaultTitle(section.type),
-            categoryId: section.type === 'category' ? String(section.categoryId || '') : undefined,
-            limit: Math.max(4, Math.min(20, Number(section.limit || 8))),
-            enabled: true,
-          }))
-          .filter((section) => section.type !== 'category' || section.categoryId),
-      };
-
-      await saveAdminSetting({ key: 'homeSections', value: payload });
-      pushToast('Configuracao da vitrine salva.', 'success');
+      await logoutAdmin();
+      pushToast('Sessão administrativa encerrada.', 'info');
     } catch (error) {
-      pushToast(error.message || 'Erro ao salvar configuracao da vitrine.', 'error');
+      pushToast(error?.message || 'Erro ao encerrar sessão.', 'error');
     }
   }
 
-  async function saveSecurity() {
-    try {
-      const parsed = JSON.parse(securityJson || '{}');
-      await saveAdminSetting({ key: 'adminConfig', value: parsed });
-      pushToast('Configuracao de seguranca salva.', 'success');
-    } catch (error) {
-      pushToast(error.message || 'JSON invalido para seguranca.', 'error');
-    }
+  function openCreateProduct() {
+    setEditingProduct(null);
+    setProductWizardOpen(true);
   }
 
-  function openOrderDetail(order) {
-    setSelectedOrder(order);
-    setOrderDetailOpen(true);
+  function openEditProduct(product) {
+    setEditingProduct(product);
+    setProductWizardOpen(true);
   }
 
-  function closeOrderDetail() {
-    setOrderDetailOpen(false);
-    setSelectedOrder(null);
+  function closeProductWizard() {
+    setProductWizardOpen(false);
+    setEditingProduct(null);
   }
 
   async function handleProductSave(product) {
     try {
-      if (product.id) {
-        await patchAdminProduct(product);
+      const images = (product.images || []).map((url) => String(url || '').trim()).filter(Boolean);
+      const videos = (product.videos || []).map((url) => String(url || '').trim()).filter(Boolean);
+
+      const payload = {
+        id: product.id || undefined,
+        name: product.name,
+        description: product.description,
+        price: Number(product.price),
+        originalPrice: product.originalPrice ? Number(product.originalPrice) : null,
+        image: images[0] || '',
+        images,
+        videos,
+        downloadUrl: product.downloadUrl,
+        categoryId: product.category,
+        productType: product.productType || 'individual',
+        active: product.active !== false,
+        featured: product.featured === true,
+      };
+
+      if (payload.id) {
+        await updateAdminProduct(payload);
         pushToast('Produto atualizado.', 'success');
       } else {
-        // For new products, store in Firestore/Oracle
-        // This will depend on your API structure
-        pushToast('Produto criado. Implementar API de criacao.', 'info');
+        await createAdminProduct(payload);
+        pushToast('Produto criado.', 'success');
       }
-      const data = await fetchAdminDashboardData();
-      setDashboardData(data);
-      setProductWizardOpen(false);
-      setEditingProduct(null);
+
+      await refreshDashboard();
+      closeProductWizard();
     } catch (error) {
-      if (String(error.message || '').toLowerCase().includes('sessao admin')) {
-        onAuthExpired();
-      }
-      pushToast(error.message || 'Erro ao salvar produto.', 'error');
+      handleAdminError(error, 'Erro ao salvar produto.');
     }
+  }
+
+  async function handleToggleProductActive(product) {
+    try {
+      const nextActive = product.active === false;
+      await patchAdminProduct({ id: product.id, active: nextActive });
+      await refreshDashboard();
+      pushToast(`Produto ${nextActive ? 'ativado' : 'pausado'}.`, 'success');
+    } catch (error) {
+      handleAdminError(error, 'Erro ao atualizar produto.');
+    }
+  }
+
+  async function handleDeleteProduct(product) {
+    if (typeof globalThis.window !== 'undefined' && !globalThis.window.confirm?.(`Excluir o produto "${product.name}"?`)) {
+      return;
+    }
+    try {
+      await deleteAdminProduct(product.id);
+      await refreshDashboard();
+      pushToast('Produto removido.', 'success');
+    } catch (error) {
+      handleAdminError(error, 'Erro ao remover produto.');
+    }
+  }
+
+  function openCreateCategory() {
+    setEditingCategory(null);
+    setCategoryWizardOpen(true);
+  }
+
+  function openEditCategory(category) {
+    setEditingCategory(category);
+    setCategoryWizardOpen(true);
+  }
+
+  function closeCategoryWizard() {
+    setCategoryWizardOpen(false);
+    setEditingCategory(null);
   }
 
   async function handleCategorySave(category) {
@@ -624,648 +287,192 @@ export function AdminPage() {
         await createAdminCategory(category);
         pushToast('Categoria criada.', 'success');
       }
-      const data = await fetchAdminDashboardData();
-      setCategories(data.categories || []);
-      setCategoryWizardOpen(false);
-      setEditingCategory(null);
+      await refreshDashboard();
+      closeCategoryWizard();
     } catch (error) {
-      if (String(error.message || '').toLowerCase().includes('sessao admin')) {
-        onAuthExpired();
-      }
-      pushToast(error.message || 'Erro ao salvar categoria.', 'error');
+      handleAdminError(error, 'Erro ao salvar categoria.');
     }
   }
 
-  function closeProductWizard() {
-    setProductWizardOpen(false);
-    setEditingProduct(null);
+  async function handleDeleteCategory(category) {
+    if (typeof globalThis.window !== 'undefined' && !globalThis.window.confirm?.(`Excluir a categoria "${category.name}"?`)) {
+      return;
+    }
+    try {
+      await deleteAdminCategory(category.id);
+      await refreshDashboard();
+      pushToast('Categoria removida.', 'success');
+    } catch (error) {
+      handleAdminError(error, 'Erro ao remover categoria.');
+    }
   }
 
-  function closeCategoryWizard() {
-    setCategoryWizardOpen(false);
-    setEditingCategory(null);
+  async function handleUserRoleChange(user, nextRole) {
+    setUsersUpdatingId(user.id);
+    try {
+      await updateAdminUser({ id: user.id, role: String(nextRole || '').toLowerCase() });
+      setUsers((prev) => prev.map((entry) => (
+        entry.id === user.id ? { ...entry, role: nextRole } : entry
+      )));
+      pushToast('Papel do usuário atualizado.', 'success');
+    } catch (error) {
+      handleAdminError(error, 'Erro ao atualizar usuário.');
+    } finally {
+      setUsersUpdatingId('');
+    }
   }
 
-  const filteredUsers = useMemo(() => {
-    const q = usersFilter.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter(
-      (user) => String(user.name || '').toLowerCase().includes(q) || String(user.email || '').toLowerCase().includes(q),
-    );
-  }, [users, usersFilter]);
+  async function handleUserDelete(user) {
+    setUsersUpdatingId(user.id);
+    try {
+      await deleteAdminUser(user.id);
+      setUsers((prev) => prev.filter((entry) => entry.id !== user.id));
+      pushToast('Acesso revogado.', 'success');
+    } catch (error) {
+      handleAdminError(error, 'Erro ao revogar acesso.');
+    } finally {
+      setUsersUpdatingId('');
+    }
+  }
 
-  const availableCategoriesForVitrine = useMemo(() => {
-    const selected = new Set(
-      vitrineSections
-        .filter((section) => section.type === 'category' && section.categoryId)
-        .map((section) => String(section.categoryId)),
-    );
+  async function handleVitrineSave() {
+    try {
+      setVitrineSaving(true);
+      const payload = serializeHomeSections(vitrineSections, getSectionDefaultTitle);
+      await saveAdminSetting({ key: 'homeSections', value: payload });
+      pushToast('Vitrine salva com sucesso.', 'success');
+    } catch (error) {
+      handleAdminError(error, 'Erro ao salvar vitrine.');
+    } finally {
+      setVitrineSaving(false);
+    }
+  }
 
-    return categories.filter((category) => !selected.has(String(category.id)));
-  }, [categories, vitrineSections]);
+  async function handleSecuritySave(nextConfig) {
+    try {
+      setSecuritySaving(true);
+      await saveAdminSetting({ key: 'adminConfig', value: nextConfig });
+      setAdminConfig(nextConfig);
+      pushToast('Configurações de segurança salvas.', 'success');
+    } catch (error) {
+      handleAdminError(error, 'Erro ao salvar configurações.');
+    } finally {
+      setSecuritySaving(false);
+    }
+  }
+
+  function renderActiveTab() {
+    if (tabError) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-10 text-center text-sm text-rose-700">
+          <i className="bi bi-exclamation-triangle text-2xl" />
+          <p className="font-semibold">{tabError}</p>
+        </div>
+      );
+    }
+
+    if (tabLoading) {
+      return (
+        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-12 text-sm text-slate-500">
+          <i className="bi bi-arrow-clockwise mr-2 animate-spin" /> Carregando…
+        </div>
+      );
+    }
+
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <DashboardTab
+            summary={dashboardData.summary}
+            dailyRevenue={dailyRevenue}
+            categoryRevenue={categoryRevenue}
+            recentOrders={recentOrders}
+            ticketMedio={ticketMedio}
+            customerMix={customerMix}
+            abcCurve={abcCurve}
+            comparisonDelta={comparisonDelta}
+            sparkline={sparkline}
+            onOpenOrder={setOrderDetail}
+          />
+        );
+      case 'produtos':
+        return (
+          <ProductsTab
+            products={dashboardData.products || []}
+            categories={dashboardData.categories || []}
+            onCreate={openCreateProduct}
+            onEdit={openEditProduct}
+            onToggleActive={handleToggleProductActive}
+            onDelete={handleDeleteProduct}
+          />
+        );
+      case 'categorias':
+        return (
+          <CategoriesTab
+            categories={dashboardData.categories || []}
+            onCreate={openCreateCategory}
+            onEdit={openEditCategory}
+            onDelete={handleDeleteCategory}
+          />
+        );
+      case 'pedidos':
+        return (
+          <OrdersTab
+            orders={orders}
+            statusFilter={ordersFilter}
+            onStatusFilterChange={setOrdersFilter}
+            onOpenOrder={setOrderDetail}
+          />
+        );
+      case 'usuarios':
+        return (
+          <UsersTab
+            users={users}
+            onRoleChange={handleUserRoleChange}
+            onDelete={handleUserDelete}
+            updatingId={usersUpdatingId}
+          />
+        );
+      case 'faturamento':
+        return <FinanceTab approvedOrders={approvedOrders} faturamentoSeries={faturamentoSeries} />;
+      case 'comparativo':
+        return <ComparisonTab monthlyComparison={monthlyComparison} comparisonDelta={comparisonDelta} />;
+      case 'prod-saida':
+        return <PerformanceTab productPerformance={productPerformance} />;
+      case 'vitrine':
+        return (
+          <VitrineTab
+            sections={vitrineSections}
+            categories={dashboardData.categories || []}
+            onChange={setVitrineSections}
+            onSave={handleVitrineSave}
+            saving={vitrineSaving}
+          />
+        );
+      case 'seguranca':
+        return <SecurityTab config={adminConfig} onSave={handleSecuritySave} saving={securitySaving} />;
+      default:
+        return null;
+    }
+  }
 
   return (
     <>
-      <section className="admin-page-body legacy-admin-shell-wrap">
-        <button type="button" className="adm-toggle" aria-label="Menu" onClick={() => setMenuOpen(true)}>
-          <i className="bi bi-list" />
-        </button>
-
-        <button
-          type="button"
-          className={`adm-overlay${menuOpen ? ' open' : ''}`}
-          onClick={() => setMenuOpen(false)}
-          aria-label="Fechar menu"
-        />
-
-        <aside className={`adm-sidebar${menuOpen ? ' open' : ''}`}>
-          <div className="adm-brand">
-            <div className="adm-brand-icon"><i className="bi bi-palette2" /></div>
-            <div>
-              <div className="adm-brand-name">Atelie da Escola</div>
-              <div className="adm-brand-sub">Painel Admin</div>
-            </div>
-          </div>
-
-          <nav className="adm-nav">
-            <button type="button" className={`adm-nav-item${activeTab === 'dashboard' ? ' active' : ''}`} onClick={() => { setActiveTab('dashboard'); setMenuOpen(false); }}>
-              <i className="bi bi-grid-1x2-fill" /> Dashboard
-            </button>
-
-            <div className="adm-nav-group">
-              <button type="button" className="adm-nav-group-head" onClick={() => setProductsGroupOpen((value) => !value)}>
-                <span><i className="bi bi-box-seam-fill" /> Produtos</span>
-                <i className={`bi bi-chevron-down adm-grp-chevron${productsGroupOpen ? ' open' : ''}`} />
-              </button>
-              <div className={`adm-nav-sub${productsGroupOpen ? ' open' : ''}`}>
-                <button type="button" className={`adm-nav-sub-item${activeTab === 'prod-config' ? ' active' : ''}`} onClick={() => { setActiveTab('prod-config'); setMenuOpen(false); }}>
-                  <i className="bi bi-sliders" /> Configuracao
-                </button>
-                <button type="button" className={`adm-nav-sub-item${activeTab === 'prod-saida' ? ' active' : ''}`} onClick={() => { setActiveTab('prod-saida'); setMenuOpen(false); }}>
-                  <i className="bi bi-graph-up" /> Saida e Desempenho
-                </button>
-                <button type="button" className={`adm-nav-sub-item${activeTab === 'categorias' ? ' active' : ''}`} onClick={() => { setActiveTab('categorias'); setMenuOpen(false); }}>
-                  <i className="bi bi-tags-fill" /> Categorias
-                </button>
-                <button type="button" className={`adm-nav-sub-item${activeTab === 'pedidos' ? ' active' : ''}`} onClick={() => { setActiveTab('pedidos'); setMenuOpen(false); }}>
-                  <i className="bi bi-receipt" /> Pedidos
-                </button>
-                <button type="button" className={`adm-nav-sub-item${activeTab === 'produtos' ? ' active' : ''}`} onClick={() => { setActiveTab('produtos'); setMenuOpen(false); }}>
-                  <i className="bi bi-box-fill" /> Lista de Produtos
-                </button>
-              </div>
-            </div>
-
-            <div className="adm-nav-group">
-              <button type="button" className="adm-nav-group-head" onClick={() => setFinanceGroupOpen((value) => !value)}>
-                <span><i className="bi bi-cash-coin" /> Financeiro</span>
-                <i className={`bi bi-chevron-down adm-grp-chevron${financeGroupOpen ? ' open' : ''}`} />
-              </button>
-              <div className={`adm-nav-sub${financeGroupOpen ? ' open' : ''}`}>
-                <button type="button" className={`adm-nav-sub-item${activeTab === 'faturamento' ? ' active' : ''}`} onClick={() => { setActiveTab('faturamento'); setMenuOpen(false); }}>
-                  <i className="bi bi-bar-chart-line-fill" /> Faturamento
-                </button>
-                <button type="button" className={`adm-nav-sub-item${activeTab === 'comparativo' ? ' active' : ''}`} onClick={() => { setActiveTab('comparativo'); setMenuOpen(false); }}>
-                  <i className="bi bi-bar-chart-steps" /> Comparativo
-                </button>
-              </div>
-            </div>
-
-            <button type="button" className={`adm-nav-item${activeTab === 'usuarios' ? ' active' : ''}`} onClick={() => { setActiveTab('usuarios'); setMenuOpen(false); }}>
-              <i className="bi bi-people-fill" /> Usuarios
-            </button>
-
-            <div className="adm-nav-group">
-              <button type="button" className="adm-nav-group-head" onClick={() => setSiteGroupOpen((value) => !value)}>
-                <span><i className="bi bi-gear-fill" /> Configuracoes do Site</span>
-                <i className={`bi bi-chevron-down adm-grp-chevron${siteGroupOpen ? ' open' : ''}`} />
-              </button>
-              <div className={`adm-nav-sub${siteGroupOpen ? ' open' : ''}`}>
-                <button type="button" className={`adm-nav-sub-item${activeTab === 'vitrine' ? ' active' : ''}`} onClick={() => { setActiveTab('vitrine'); setMenuOpen(false); }}>
-                  <i className="bi bi-layout-text-window-reverse" /> Vitrine
-                </button>
-              </div>
-            </div>
-
-            <button type="button" className={`adm-nav-item${activeTab === 'seguranca' ? ' active' : ''}`} onClick={() => { setActiveTab('seguranca'); setMenuOpen(false); }}>
-              <i className="bi bi-shield-lock-fill" /> Seguranca
-            </button>
-          </nav>
-
-          <div className="adm-sidebar-foot">
-            <div className="adm-user-chip">
-              <i className="bi bi-person-circle" />
-              <span>admin@atelie</span>
-            </div>
-            <button type="button" className="adm-logout-btn" onClick={onLogout}>
-              <i className="bi bi-box-arrow-right" /> Sair
-            </button>
-          </div>
-        </aside>
-
-        <div className="adm-main">
-          <div className="adm-topbar">
-            <div className="adm-topbar-left">
-              <h1 className="adm-page-title">{pageTitle}</h1>
-            </div>
-            <div className="adm-topbar-right">
-              <span className="adm-topbar-date">{today}</span>
-            </div>
-          </div>
-
-          <div className="adm-content">
-            <div className={`tab-panel${activeTab === 'dashboard' ? ' active' : ''}`}>
-              {tabLoading && activeTab === 'dashboard' ? <div className="loading-state"><p>Carregando dashboard...</p></div> : null}
-              {tabStatus && activeTab === 'dashboard' ? <p className="admin-status">{tabStatus}</p> : null}
-              {!tabLoading && !tabStatus && activeTab === 'dashboard' ? (
-                <div className="admin-wrap">
-                  <article className="card admin-list-card">
-                    <h3>Resumo do painel</h3>
-                    <div className="adm-kpi-grid">
-                      <div className="adm-kpi-card">
-                        <span>Faturamento do mes</span>
-                        <strong>{formatPrice(dashboardData?.summary?.revenueMonth || 0)}</strong>
-                      </div>
-                      <div className="adm-kpi-card">
-                        <span>Receita total</span>
-                        <strong>{formatPrice(dashboardData?.summary?.revenueTotal || 0)}</strong>
-                      </div>
-                      <div className="adm-kpi-card">
-                        <span>Pedidos aprovados</span>
-                        <strong>{dashboardData?.summary?.approvedOrders || 0}</strong>
-                      </div>
-                      <div className="adm-kpi-card">
-                        <span>Pendentes</span>
-                        <strong>{dashboardData?.summary?.pendingOrders || 0}</strong>
-                      </div>
-                      <div className="adm-kpi-card">
-                        <span>Produtos ativos</span>
-                        <strong>{dashboardData?.summary?.activeProducts || 0}</strong>
-                      </div>
-                      <div className="adm-kpi-card">
-                        <span>Usuarios</span>
-                        <strong>{dashboardData?.summary?.totalUsers || 0}</strong>
-                      </div>
-                    </div>
-                  </article>
-
-                  <article className="card admin-list-card">
-                    <h3>Receita dos ultimos 7 dias</h3>
-                    <div className="adm-bars-grid">
-                      {dailyRevenue.map((day) => (
-                        <div key={day.label} className="adm-bar-item">
-                          <div className="adm-bar-track">
-                            <div className="adm-bar-fill" style={{ width: `${day.pct}%` }} />
-                          </div>
-                          <div className="adm-bar-meta">
-                            <span>{day.label}</span>
-                            <strong>{formatPrice(day.value)}</strong>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-
-                  <article className="card admin-list-card">
-                    <h3>Receita por categoria</h3>
-                    {categoryRevenue.length === 0 ? <p className="empty-text">Sem dados de categoria no periodo.</p> : null}
-                    <div className="adm-bars-grid">
-                      {categoryRevenue.map((entry) => (
-                        <div key={entry.category} className="adm-bar-item">
-                          <div className="adm-bar-track">
-                            <div className="adm-bar-fill adm-bar-fill-alt" style={{ width: `${entry.pct}%` }} />
-                          </div>
-                          <div className="adm-bar-meta">
-                            <span>{entry.category}</span>
-                            <strong>{formatPrice(entry.value)}</strong>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-
-                  <article className="card admin-list-card">
-                    <h3>Pedidos recentes</h3>
-                    {recentOrders.length === 0 ? <p className="empty-text">Nenhum pedido recente.</p> : null}
-                    <div className="adm-orders-table">
-                      {recentOrders.map((order) => (
-                        <div key={order.id} className="adm-orders-row">
-                          <div>
-                            <strong>{order.orderId || order.id}</strong>
-                            <p>{order.customerEmail || order.customerName || 'Cliente nao identificado'}</p>
-                          </div>
-                          <div>
-                            <span className={`adm-status-chip status-${String(order.paymentStatus || '').toLowerCase()}`}>
-                              {getStatusLabel(order.paymentStatus)}
-                            </span>
-                            <p>{formatDateTime(order.createdAt)}</p>
-                          </div>
-                          <div>
-                            <strong>{formatPrice(order.totalAmount || 0)}</strong>
-                            <button
-                              type="button"
-                              className="button secondary small"
-                              onClick={() => openOrderDetail(order)}
-                            >
-                              Detalhes
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                </div>
-              ) : null}
-            </div>
-
-            <div className={`tab-panel${activeTab === 'produtos' ? ' active' : ''}`}>
-              <AdminProductsManager onAuthExpired={onAuthExpired} />
-            </div>
-
-            <div className={`tab-panel${activeTab === 'categorias' ? ' active' : ''}`}>
-              <section className="admin-wrap">
-                <article className="card admin-list-card">
-                  <div className="admin-list-header">
-                    <h3>Categorias</h3>
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      onClick={() => {
-                        setEditingCategory(null);
-                        setCategoryWizardOpen(true);
-                      }}
-                    >
-                      <i className="bi bi-plus-lg" /> Adicionar Categoria
-                    </button>
-                  </div>
-                  {categories.length === 0 ? <p className="empty-text">Nenhuma categoria cadastrada.</p> : null}
-                  <div className="admin-products-list">
-                    {categories.map((category) => (
-                      <article key={category.id} className="admin-product-item">
-                        <div>
-                          <strong>{category.name}</strong>
-                          <p>Cor: {category.color || '#9B5DE5'}</p>
-                        </div>
-                        <div className="admin-item-actions">
-                          <button
-                            type="button"
-                            className="button secondary small"
-                            onClick={() => {
-                              setEditingCategory(category);
-                              setCategoryWizardOpen(true);
-                            }}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            className="button secondary small"
-                            onClick={() => removeCategory(category.id)}
-                          >
-                            Excluir
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-              </section>
-            </div>
-
-            <div className={`tab-panel${activeTab === 'usuarios' ? ' active' : ''}`}>
-              <section className="admin-wrap">
-                <article className="card admin-list-card">
-                  <h3>Usuarios</h3>
-                  <input
-                    value={usersFilter}
-                    placeholder="Buscar por nome ou email"
-                    onChange={(event) => setUsersFilter(event.target.value)}
-                  />
-                  {filteredUsers.length === 0 ? <p className="empty-text">Nenhum usuario encontrado.</p> : null}
-                  <div className="admin-products-list">
-                    {filteredUsers.map((user) => (
-                      <article key={user.id} className="admin-product-item">
-                        <div>
-                          <strong>{user.name || 'Sem nome'}</strong>
-                          <p>{user.email} | Compras: {user.purchases || 0} | Total: {formatPrice(user.totalSpent || 0)}</p>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-              </section>
-            </div>
-
-            <div className={`tab-panel${activeTab === 'pedidos' ? ' active' : ''}`}>
-              <section className="admin-wrap">
-                <article className="card admin-list-card">
-                  <h3>Pedidos</h3>
-                  <div className="admin-actions">
-                    <select value={ordersFilter} onChange={(event) => setOrdersFilter(event.target.value)}>
-                      <option value="">Todos os status</option>
-                      <option value="approved">Aprovado</option>
-                      <option value="pending">Pendente</option>
-                      <option value="rejected">Recusado</option>
-                      <option value="cancelled">Cancelado</option>
-                      <option value="failed">Falhou</option>
-                    </select>
-                  </div>
-                  {orders.length === 0 ? <p className="empty-text">Nenhum pedido encontrado.</p> : null}
-                  <div className="adm-orders-table">
-                    {orders.map((order) => (
-                      <article key={order.id} className="adm-orders-row">
-                        <div>
-                          <strong>{order.orderId || order.id}</strong>
-                          <p>{order.customerEmail || order.customerName || 'Cliente nao identificado'}</p>
-                        </div>
-                        <div>
-                          <span className={`adm-status-chip status-${String(order.paymentStatus || '').toLowerCase()}`}>
-                            {getStatusLabel(order.paymentStatus)}
-                          </span>
-                          <p>{formatDateTime(order.createdAt)}</p>
-                        </div>
-                        <div>
-                          <strong>{formatPrice(order.totalAmount || 0)}</strong>
-                          <button
-                            type="button"
-                            className="button secondary small"
-                            onClick={() => openOrderDetail(order)}
-                          >
-                            Detalhes
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-              </section>
-            </div>
-
-            <div className={`tab-panel${activeTab === 'vitrine' ? ' active' : ''}`}>
-              <section className="admin-wrap">
-                <article className="card admin-form-card">
-                  <h3>Configuracao da vitrine</h3>
-                  <p>Defina quais secoes aparecem na home, a ordem delas e quantos produtos por faixa.</p>
-
-                  <div className="admin-actions vitrine-toolbar">
-                    <select
-                      value={categoryToAddToVitrine}
-                      onChange={(event) => setCategoryToAddToVitrine(event.target.value)}
-                    >
-                      <option value="">Selecionar categoria para vitrine</option>
-                      {availableCategoriesForVitrine.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button type="button" className="button secondary small" onClick={addCategoryToVitrine}>
-                      Adicionar categoria
-                    </button>
-                    <button type="button" className="button secondary small" onClick={() => addSpecialSection('best_sellers')}>
-                      Adicionar Mais vendidos
-                    </button>
-                    <button type="button" className="button secondary small" onClick={() => addSpecialSection('new_arrivals')}>
-                      Adicionar Novidades
-                    </button>
-                  </div>
-
-                  <div className="admin-products-list">
-                    {vitrineSections.length === 0 ? <p className="empty-text">Nenhuma secao configurada.</p> : null}
-
-                    {vitrineSections.map((section, index) => (
-                      <article key={section.localId} className="admin-product-item vitrine-item">
-                        <div className="vitrine-item-main">
-                          <div className="vitrine-item-head">
-                            <strong>{getSectionHeadline(section, categories)}</strong>
-                            <span className="vitrine-order-badge">Ordem {index + 1}</span>
-                          </div>
-
-                          <div className="admin-form-grid vitrine-item-grid">
-                            <div>
-                              <label htmlFor={`section-title-${section.localId}`}>Titulo da secao</label>
-                              <input
-                                id={`section-title-${section.localId}`}
-                                value={section.title}
-                                onChange={(event) => updateVitrineSection(section.localId, { title: event.target.value })}
-                              />
-                            </div>
-
-                            <div>
-                              <label htmlFor={`section-limit-${section.localId}`}>Produtos na faixa</label>
-                              <input
-                                id={`section-limit-${section.localId}`}
-                                type="number"
-                                min="4"
-                                max="20"
-                                value={section.limit}
-                                onChange={(event) => updateVitrineSection(section.localId, { limit: event.target.value })}
-                              />
-                            </div>
-
-                            {section.type === 'category' ? (
-                              <div>
-                                <label htmlFor={`section-category-${section.localId}`}>Categoria vinculada</label>
-                                <select
-                                  id={`section-category-${section.localId}`}
-                                  value={section.categoryId}
-                                  onChange={(event) => updateVitrineSection(section.localId, { categoryId: event.target.value })}
-                                >
-                                  {categories.map((category) => (
-                                    <option key={category.id} value={category.id}>
-                                      {category.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div className="admin-item-actions vitrine-item-actions">
-                          <button type="button" className="button secondary small" onClick={() => moveVitrineSection(index, -1)}>
-                            Subir
-                          </button>
-                          <button type="button" className="button secondary small" onClick={() => moveVitrineSection(index, 1)}>
-                            Descer
-                          </button>
-                          <button type="button" className="button secondary small" onClick={() => removeVitrineSection(section.localId)}>
-                            Remover
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-
-                  <div className="admin-actions">
-                    <button type="button" className="button primary small" onClick={saveVitrine}>Salvar vitrine</button>
-                  </div>
-                </article>
-              </section>
-            </div>
-
-            <div className={`tab-panel${activeTab === 'faturamento' ? ' active' : ''}`}>
-              <section className="admin-wrap">
-                <article className="card admin-list-card">
-                  <h3>Faturamento</h3>
-                  <p>Pedidos aprovados: {approvedOrders.length}</p>
-                  <p>Bruto acumulado: <strong>{formatPrice(approvedOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0))}</strong></p>
-                  <div className="adm-bars-grid">
-                    {faturamentoSeries.map((entry) => (
-                      <div key={entry.label} className="adm-bar-item">
-                        <div className="adm-bar-track">
-                          <div className="adm-bar-fill" style={{ width: `${entry.pct}%` }} />
-                        </div>
-                        <div className="adm-bar-meta">
-                          <span>{entry.label}</span>
-                          <strong>{formatPrice(entry.value)}</strong>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              </section>
-            </div>
-
-            <div className={`tab-panel${activeTab === 'comparativo' ? ' active' : ''}`}>
-              <section className="admin-wrap">
-                <article className="card admin-list-card">
-                  <h3>Comparativo mensal</h3>
-                  <p>
-                    Variacao:
-                    {' '}
-                    <strong className={`adm-delta-${comparisonDelta.trend}`}>
-                      {comparisonDelta.pct > 0 ? '+' : ''}
-                      {comparisonDelta.pct.toFixed(1)}%
-                    </strong>
-                  </p>
-                  <div className="admin-products-list">
-                    {monthlyComparison.map((month) => (
-                      <article key={month.label} className="admin-product-item">
-                        <div>
-                          <strong>{month.label}</strong>
-                          <p>Vendas: {month.qty} | Receita: {formatPrice(month.gross)} | Ticket medio: {formatPrice(month.avg)}</p>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-              </section>
-            </div>
-
-            <div className={`tab-panel${activeTab === 'prod-config' ? ' active' : ''}`}>
-              <section className="admin-wrap">
-                <article className="card admin-list-card">
-                  <h3>Configuracao de produtos</h3>
-                  <div className="admin-products-list">
-                    {(dashboardData?.products || []).map((product) => (
-                      <article key={product.id} className="admin-product-item">
-                        <div>
-                          <strong>{product.name}</strong>
-                          <p>{formatPrice(product.price)} | {product.category || 'Sem categoria'} | {product.active === false ? 'Inativo' : 'Ativo'}</p>
-                        </div>
-                        <div className="admin-item-actions">
-                          <button type="button" className="button secondary small" onClick={() => toggleProductActive(product)}>
-                            {product.active === false ? 'Ativar' : 'Desativar'}
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-              </section>
-            </div>
-
-            <div className={`tab-panel${activeTab === 'prod-saida' ? ' active' : ''}`}>
-              <section className="admin-wrap">
-                <article className="card admin-list-card">
-                  <h3>Saida e desempenho</h3>
-                  <div className="admin-products-list">
-                    {productPerformance.map((product) => (
-                      <article key={product.id} className="admin-product-item">
-                        <div>
-                          <strong>{product.name}</strong>
-                          <p>Vendas: {product.qty} | Receita: {formatPrice(product.rev)} | Downloads: {product.downloads || 0}</p>
-                          <div className="adm-inline-progress-wrap">
-                            <span>Conversao</span>
-                            <div className="adm-inline-progress">
-                              <div
-                                className="adm-inline-progress-fill"
-                                style={{
-                                  width: `${Math.min(100, Math.max(6, Math.round(((product.downloads || 0) / Math.max(product.qty || 1, 1)) * 100)))}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-              </section>
-            </div>
-
-            <div className={`tab-panel${activeTab === 'seguranca' ? ' active' : ''}`}>
-              <section className="admin-wrap">
-                <article className="card admin-form-card">
-                  <h3>Configuracao de seguranca</h3>
-                  <p>Gerencie a configuracao do admin (exemplo: totpSecret, fallbackPin).</p>
-                  <textarea rows="12" value={securityJson} onChange={(event) => setSecurityJson(event.target.value)} />
-                  <div className="admin-actions">
-                    <button type="button" className="button primary small" onClick={saveSecurity}>Salvar seguranca</button>
-                  </div>
-                </article>
-              </section>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {orderDetailOpen && selectedOrder ? (
-        <div className="adm-modal-root">
-          <button type="button" className="adm-modal-overlay" aria-label="Fechar detalhes do pedido" onClick={closeOrderDetail} />
-          <dialog open className="adm-modal-card" aria-labelledby="adm-order-title">
-            <div className="adm-modal-head">
-              <h3 id="adm-order-title">Pedido {selectedOrder.orderId || selectedOrder.id}</h3>
-              <button type="button" className="button secondary small" onClick={closeOrderDetail}>Fechar</button>
-            </div>
-            <p>
-              Cliente: <strong>{selectedOrder.customerName || selectedOrder.customerEmail || '-'}</strong>
-            </p>
-            <p>
-              E-mail: <strong>{selectedOrder.customerEmail || '-'}</strong>
-            </p>
-            <p>
-              Status: <strong>{getStatusLabel(selectedOrder.paymentStatus)}</strong>
-            </p>
-            <p>
-              Total: <strong>{formatPrice(selectedOrder.totalAmount || 0)}</strong>
-            </p>
-            <p>
-              Data: <strong>{formatDateTime(selectedOrder.createdAt)}</strong>
-            </p>
-
-            <h4>Itens</h4>
-            {(selectedOrder.items || []).length === 0 ? <p className="empty-text">Sem itens vinculados.</p> : null}
-            <div className="adm-modal-items">
-              {(selectedOrder.items || []).map((item, index) => (
-                <div key={`${item.id || item.productId || 'item'}-${index}`} className="adm-modal-item-row">
-                  <span>{item.title || `Produto ${item.id || item.productId || index + 1}`}</span>
-                  <span>
-                    {item.quantity || 1} x {formatPrice(item.price || 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </dialog>
-        </div>
-      ) : null}
+      <AdminLayout
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        pageTitle={pageTitle}
+        userLabel="Administrador"
+        onLogout={onLogout}
+      >
+        {renderActiveTab()}
+      </AdminLayout>
 
       <ProductWizard
         isOpen={productWizardOpen}
         onClose={closeProductWizard}
         onSubmit={handleProductSave}
-        categories={categories}
+        categories={dashboardData.categories || []}
         initialProduct={editingProduct}
       />
 
@@ -1275,6 +482,8 @@ export function AdminPage() {
         onSubmit={handleCategorySave}
         initialCategory={editingCategory}
       />
+
+      {orderDetail ? <OrderDetailModal order={orderDetail} onClose={() => setOrderDetail(null)} /> : null}
     </>
   );
 }

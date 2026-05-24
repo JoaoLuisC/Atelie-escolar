@@ -41,90 +41,91 @@ export function ProductsPage() {
 
   return (
     <Shell>
-      <section className="hero-animated products-page-header">
-        <div className="hero-bg-gradient" />
-        <div className="hero-blob hero-blob-1" />
-        <div className="hero-blob hero-blob-2" />
-        <div className="hero-blob hero-blob-3" />
-        <div className="hero-blob hero-blob-4" />
-        <div className="hero-grid" />
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50">
+        <div aria-hidden="true" className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-brand-400/30 blur-3xl" />
+        <div aria-hidden="true" className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-accent-sky/20 blur-3xl" />
 
-        <div className="hero-school-icons" aria-hidden="true">
-          <span className="school-icon school-icon-1">✏️</span>
-          <span className="school-icon school-icon-2">📚</span>
-          <span className="school-icon school-icon-3">🎨</span>
-          <span className="school-icon school-icon-4">⭐</span>
-          <span className="school-icon school-icon-5">📐</span>
-          <span className="school-icon school-icon-6">🖍️</span>
-          <span className="school-icon school-icon-7">📏</span>
-          <span className="school-icon school-icon-8">🔢</span>
-          <span className="school-icon school-icon-9">🌈</span>
-          <span className="school-icon school-icon-10">🎒</span>
-        </div>
-
-        <div className="container hero-content">
-          <div className="row align-items-center" style={{ minHeight: '30vh', padding: '40px 0 44px' }}>
-            <div className="col-lg-8">
-              <h1 className="hero-title" style={{ fontSize: 'clamp(1.8rem, 4vw, 2.8rem)' }}>
-                Banners para toda
-                <br />
-                <span className="highlight-royal">ocasiao escolar</span>
-              </h1>
-            </div>
-          </div>
+        <div className="relative mx-auto max-w-6xl px-4 py-12 lg:px-6 lg:py-16">
+          <h1 className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl lg:text-5xl">
+            Banners para toda<br />
+            <span className="bg-gradient-to-r from-brand-600 to-accent-pink bg-clip-text text-transparent">ocasião escolar</span>
+          </h1>
         </div>
       </section>
 
-      <div className="products-layout">
-        <ProductSidebar
-          activeCategory={activeCategory}
-          activePriceRange={activePriceRange}
-          categories={categories}
-          isCategorySectionOpen={isCategorySectionOpen}
-          isOpen={isSidebarOpen}
-          isPriceSectionOpen={isPriceSectionOpen}
-          onClose={closeSidebar}
-          onSelectCategory={selectCategory}
-          onSelectPriceRange={selectPriceRange}
-          onToggleCategorySection={toggleCategorySection}
-          onTogglePriceSection={togglePriceSection}
-          totalByCategory={totalByCategory}
-        />
-
-        <div className="products-main">
-          <div className="products-top-bar">
-            <button type="button" className="btn-toggle-filters" onClick={openSidebar}>
-              <i className="bi bi-sliders" /> Filtros
-            </button>
-
-            <div className="cat-filter-bar">
-              <button
-                type="button"
-                className={`cat-btn${activeCategory === 'all' ? ' active' : ''}`}
-                onClick={() => selectCategory('all')}
-              >
-                Todos
-              </button>
-              {featuredCategories.map((category) => (
-                <button
-                  type="button"
-                  key={category}
-                  className={`cat-btn${activeCategory === category ? ' active' : ''}`}
-                  onClick={() => selectCategory(category)}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-
-            <SortDropdown value={activeSort} onChange={(event) => setActiveSort(event.target.value)} />
+      <section className="mx-auto max-w-6xl px-4 py-8 lg:px-6">
+        <div className="flex flex-col gap-6 lg:flex-row">
+          <div className="lg:w-64 lg:shrink-0">
+            <ProductSidebar
+              activeCategory={activeCategory}
+              activePriceRange={activePriceRange}
+              categories={categories}
+              isCategorySectionOpen={isCategorySectionOpen}
+              isOpen={isSidebarOpen}
+              isPriceSectionOpen={isPriceSectionOpen}
+              onClose={closeSidebar}
+              onSelectCategory={selectCategory}
+              onSelectPriceRange={selectPriceRange}
+              onToggleCategorySection={toggleCategorySection}
+              onTogglePriceSection={togglePriceSection}
+              totalByCategory={totalByCategory}
+            />
           </div>
 
-          {canShowResultsCount ? <p className="results-count">{filteredProducts.length} produto{resultSuffix} encontrado{resultSuffix}</p> : null}
+          <div className="min-w-0 flex-1">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openSidebar}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 lg:hidden"
+              >
+                <i className="bi bi-sliders" /> Filtros
+              </button>
 
-          <ProductGrid error={error} loading={loading} onAddToCart={onAddToCart} products={filteredProducts} />
+              <div className="flex flex-1 flex-wrap gap-1.5 overflow-x-auto">
+                <CategoryChip active={activeCategory === 'all'} onClick={() => selectCategory('all')}>
+                  Todos
+                </CategoryChip>
+                {featuredCategories.map((category) => (
+                  <CategoryChip
+                    key={category}
+                    active={activeCategory === category}
+                    onClick={() => selectCategory(category)}
+                  >
+                    {category}
+                  </CategoryChip>
+                ))}
+              </div>
+
+              <SortDropdown value={activeSort} onChange={(event) => setActiveSort(event.target.value)} />
+            </div>
+
+            {canShowResultsCount ? (
+              <p className="mb-4 text-sm text-slate-500">
+                {filteredProducts.length} produto{resultSuffix} encontrado{resultSuffix}
+              </p>
+            ) : null}
+
+            <ProductGrid error={error} loading={loading} onAddToCart={onAddToCart} products={filteredProducts} />
+          </div>
         </div>
-      </div>
+      </section>
     </Shell>
+  );
+}
+
+function CategoryChip({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+        active
+          ? 'bg-brand-600 text-white shadow-sm'
+          : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

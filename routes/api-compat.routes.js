@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 
 const adminCategoriesHandler = require('../api/admin-categories');
 const adminDashboardHandler = require('../api/admin-dashboard');
@@ -45,7 +46,15 @@ function wrapCompatHandler(handler) {
 
 router.all('/admin-categories', wrapCompatHandler(adminCategoriesHandler));
 router.all('/admin-dashboard', wrapCompatHandler(adminDashboardHandler));
-router.all('/admin-login', wrapCompatHandler(adminLoginHandler));
+const adminLoginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: 'Muitas tentativas. Aguarde 10 minutos e tente novamente.' },
+});
+router.all('/admin-login', adminLoginLimiter, wrapCompatHandler(adminLoginHandler));
 router.all('/admin-logout', wrapCompatHandler(adminLogoutHandler));
 router.all('/admin-orders', wrapCompatHandler(adminOrdersHandler));
 router.all('/admin-products', wrapCompatHandler(adminProductsHandler));

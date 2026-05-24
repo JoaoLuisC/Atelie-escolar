@@ -4,15 +4,65 @@ import { Shell } from '../components/Shell';
 import { fetchHomeSections } from '../services/products';
 import { formatPrice } from '../utils/currency';
 
+const MARQUEE_ITEMS_TOP = ['BANNERS', 'PAINÉIS', 'ATIVIDADES', 'LEMBRANCINHAS', 'KITS'];
+const MARQUEE_ITEMS_BOTTOM = [
+  'ALTA RESOLUÇÃO',
+  'PRONTO PARA IMPRESSÃO',
+  'PDF EM ALTA RESOLUÇÃO',
+  'DESIGN EXCLUSIVO',
+  'DOWNLOAD SEGURO',
+  'CRIADO COM CUIDADO',
+];
+
+const SCHOOL_ICONS = [
+  { emoji: '✏️', position: 'left-[4%] top-[18%]' },
+  { emoji: '📚', position: 'right-[8%] top-[12%]' },
+  { emoji: '🎨', position: 'left-[12%] bottom-[16%]' },
+  { emoji: '⭐', position: 'right-[14%] bottom-[12%]' },
+  { emoji: '📐', position: 'left-[40%] top-[8%]' },
+  { emoji: '🖍️', position: 'right-[42%] top-[6%]' },
+  { emoji: '📏', position: 'left-[24%] top-[36%]' },
+  { emoji: '🌈', position: 'right-[22%] bottom-[28%]' },
+];
+
+const HOW_STEPS = [
+  { num: '01', icon: 'search', title: 'Escolha', text: 'Navegue pelo catálogo e encontre atividades práticas para tornar o aprendizado dos seus alunos mais prazeroso.', accent: 'from-brand-500 to-brand-700' },
+  { num: '02', icon: 'credit-card-fill', title: 'Pague', text: 'Finalize seu pedido com segurança e confirmação rápida.', accent: 'from-emerald-500 to-emerald-700' },
+  { num: '03', icon: 'cloud-arrow-down-fill', title: 'Baixe na hora', text: 'Acesso liberado imediatamente após a aprovação do pagamento.', accent: 'from-sky-500 to-sky-700' },
+  { num: '04', icon: 'printer-fill', title: 'Imprima', text: 'Os arquivos estão prontos para uso no formato PDF com acesso ilimitado e permanente.', accent: 'from-amber-500 to-rose-500' },
+];
+
+const TESTIMONIALS = [
+  { initial: 'C', name: 'Carla M.', role: 'Professora, SP', text: '"Comprei, baixei e mandei para a gráfica em menos de 5 minutos! 😍"', avatarBg: 'bg-gradient-to-br from-brand-500 to-accent-pink' },
+  { initial: 'A', name: 'Ana R.', role: 'Diretora, MG', text: '"Os banners de formatura ficaram lindos. Todos elogiaram o design!"', avatarBg: 'bg-gradient-to-br from-accent-sky to-emerald-400' },
+  { initial: 'J', name: 'Juliana F.', role: 'Coord. Pedagógica, RJ', text: '"Recebi os arquivos na hora e consegui organizar tudo sem complicação!"', avatarBg: 'bg-gradient-to-br from-accent-yellow to-accent-pink' },
+];
+
+function Marquee({ items, dark = false, reverse = false }) {
+  const doubled = [...items, ...items];
+  return (
+    <div
+      aria-hidden="true"
+      className={`overflow-hidden border-y py-3 ${
+        dark ? 'border-slate-700 bg-slate-900 text-white' : 'border-brand-100 bg-brand-50 text-brand-700'
+      }`}
+    >
+      <div className={`flex w-max gap-8 whitespace-nowrap font-display text-sm font-bold uppercase tracking-widest ${reverse ? 'animate-marquee-reverse' : 'animate-marquee'}`}>
+        {doubled.map((item, i) => (
+          <span key={`${item}-${i}`} className="inline-flex items-center gap-8">
+            {item}
+            <span className="opacity-50">✦</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function HomePage() {
-  const [visibleTestimonials, setVisibleTestimonials] = useState(false);
   const [homeSections, setHomeSections] = useState([]);
   const [homeSectionsStatus, setHomeSectionsStatus] = useState('');
   const laneRefs = useRef({});
-
-  useEffect(() => {
-    setVisibleTestimonials(true);
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -21,22 +71,17 @@ export function HomePage() {
       try {
         setHomeSectionsStatus('Carregando vitrine...');
         const data = await fetchHomeSections();
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         setHomeSections(data);
         setHomeSectionsStatus('');
       } catch (error) {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         setHomeSections([]);
         setHomeSectionsStatus(error.message || 'Erro ao carregar vitrine.');
       }
     }
 
     loadHomeSections();
-
     return () => {
       mounted = false;
     };
@@ -46,10 +91,7 @@ export function HomePage() {
 
   function scrollLane(laneKey, direction) {
     const laneElement = laneRefs.current[laneKey];
-    if (!laneElement) {
-      return;
-    }
-
+    if (!laneElement) return;
     const distance = Math.max(240, Math.round(laneElement.clientWidth * 0.8));
     laneElement.scrollBy({
       left: direction === 'left' ? -distance : distance,
@@ -59,307 +101,243 @@ export function HomePage() {
 
   return (
     <Shell>
-      {/* HERO SECTION */}
-      <section className="hero-animated">
-        <div className="hero-bg-gradient" />
-        <div className="hero-blob hero-blob-1" />
-        <div className="hero-blob hero-blob-2" />
-        <div className="hero-blob hero-blob-3" />
-        <div className="hero-blob hero-blob-4" />
-        <div className="hero-grid" />
+      {/* HERO */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50">
+        <div aria-hidden="true" className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-brand-400/30 blur-3xl" />
+        <div aria-hidden="true" className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-accent-sky/20 blur-3xl" />
+        <div aria-hidden="true" className="absolute top-1/2 left-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-pink/15 blur-3xl" />
 
-        <div className="hero-school-icons" aria-hidden="true">
-          <span className="school-icon school-icon-1">✏️</span>
-          <span className="school-icon school-icon-2">📚</span>
-          <span className="school-icon school-icon-3">🎨</span>
-          <span className="school-icon school-icon-4">⭐</span>
-          <span className="school-icon school-icon-5">📐</span>
-          <span className="school-icon school-icon-6">🖍️</span>
-          <span className="school-icon school-icon-7">📏</span>
-          <span className="school-icon school-icon-8">🔢</span>
-          <span className="school-icon school-icon-9">🌈</span>
-          <span className="school-icon school-icon-10">🎒</span>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden sm:block">
+          {SCHOOL_ICONS.map((icon, i) => (
+            <span
+              key={i}
+              className={`absolute text-3xl opacity-60 ${icon.position}`}
+              style={{ animation: `float ${5 + i * 0.5}s ease-in-out infinite`, animationDelay: `${i * 0.3}s` }}
+            >
+              {icon.emoji}
+            </span>
+          ))}
         </div>
 
-        <div className="container hero-content">
-          <div className="row align-items-center" style={{ minHeight: '50vh', padding: '55px 0 60px' }}>
-            <div className="col-lg-8">
-              <h1 className="hero-title">
-                Painéis e recursos pedagógicos<br />
-                feitos com <span className="highlight-royal">cuidado</span><br />
-                e <span className="highlight-emerald">criatividade</span>
-              </h1>
-              <div className="hero-cta-group">
-                <Link to="/produtos" className="btn-hero-primary">
-                  Ver Produtos <i className="bi bi-arrow-right" />
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+        <div className="relative mx-auto max-w-6xl px-4 py-20 lg:px-6 lg:py-28">
+          <div className="max-w-3xl">
+            <h1 className="font-display text-4xl font-extrabold leading-tight text-slate-900 sm:text-5xl lg:text-6xl">
+              Painéis e recursos pedagógicos<br />
+              feitos com{' '}
+              <span className="bg-gradient-to-r from-brand-600 to-accent-pink bg-clip-text text-transparent">cuidado</span>
+              <br />
+              e{' '}
+              <span className="bg-gradient-to-r from-emerald-500 to-accent-sky bg-clip-text text-transparent">criatividade</span>
+            </h1>
 
-      {/* MARQUEE 1 */}
-      <div className="marquee-strip" aria-hidden="true">
-        <div className="marquee-track">
-          <span className="marquee-item">BANNERS</span>
-          <span className="marquee-item marquee-sep">✦</span>
-          <span className="marquee-item">PAINÉIS</span>
-          <span className="marquee-item marquee-sep">✦</span>
-          <span className="marquee-item">ATIVIDADES</span>
-          <span className="marquee-item marquee-sep">✦</span>
-          <span className="marquee-item">LEMBRANCINHAS</span>
-          <span className="marquee-item marquee-sep">✦</span>
-          <span className="marquee-item">KITS</span>
-          <span className="marquee-item marquee-sep">✦</span>
-          <span className="marquee-item">BANNERS</span>
-          <span className="marquee-item marquee-sep">✦</span>
-          <span className="marquee-item">PAINÉIS</span>
-          <span className="marquee-item marquee-sep">✦</span>
-          <span className="marquee-item">ATIVIDADES</span>
-          <span className="marquee-item marquee-sep">✦</span>
-          <span className="marquee-item">LEMBRANCINHAS</span>
-          <span className="marquee-item marquee-sep">✦</span>
-          <span className="marquee-item">KITS</span>
-          <span className="marquee-item marquee-sep">✦</span>
-        </div>
-      </div>
-
-      {/* CATÁLOGO EM DESTAQUE */}
-      <section className="products-preview-section">
-        <div className="container">
-          <div className="row justify-content-between align-items-end mb-5">
-            <div className="col-lg-6">
-              <p className="section-label">Catálogo</p>
-              <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', margin: 0 }}>
-                É exatamente isso que<br />você precisa 👇
-              </h2>
-            </div>
-            <div className="col-lg-4 text-lg-end">
-              <Link to="/produtos" className="btn-hero-primary" style={{ padding: '12px 28px', fontSize: '.9rem' }}>
-                Ver catálogo completo <i className="bi bi-arrow-right" />
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                to="/produtos"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-6 py-3 text-base font-semibold text-white shadow-brand transition hover:scale-105"
+              >
+                Ver Produtos <i className="bi bi-arrow-right" />
               </Link>
             </div>
           </div>
-
-          <div id="home-sections-wrap">
-            {homeSectionsStatus ? <p className="home-vitrine-status">{homeSectionsStatus}</p> : null}
-
-            {hasHomeSections
-              ? homeSections.map((section) => (
-                <div key={section.key} className="home-vitrine-row">
-                  <div className="home-vitrine-row-head">
-                    <h3>{section.title}</h3>
-                    <Link to={section.link || '/produtos'} className="home-vitrine-more-btn">
-                      Mais produtos
-                    </Link>
-                  </div>
-
-                  <div className="home-vitrine-lane-shell">
-                    <button
-                      type="button"
-                      className="home-vitrine-arrow"
-                      aria-label={`Rolar ${section.title} para esquerda`}
-                      onClick={() => scrollLane(section.key, 'left')}
-                    >
-                      ←
-                    </button>
-
-                    <div
-                      className="home-vitrine-lane"
-                      ref={(element) => {
-                        laneRefs.current[section.key] = element;
-                      }}
-                    >
-                      {(section.products || []).map((product) => (
-                        <Link key={product.id} to={`/produtos/${product.id}`} className="home-vitrine-item">
-                          <div className="home-vitrine-item-media">
-                            {product.image ? <img src={product.image} alt={product.name} /> : <span>Produto</span>}
-                          </div>
-                          <div className="home-vitrine-item-body">
-                            <strong>{product.name}</strong>
-                            <span>{formatPrice(product.price || 0)}</span>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      className="home-vitrine-arrow"
-                      aria-label={`Rolar ${section.title} para direita`}
-                      onClick={() => scrollLane(section.key, 'right')}
-                    >
-                      →
-                    </button>
-                  </div>
-                </div>
-              ))
-              : null}
-          </div>
         </div>
+      </section>
+
+      <Marquee items={MARQUEE_ITEMS_TOP} />
+
+      {/* CATÁLOGO */}
+      <section className="mx-auto max-w-6xl px-4 py-16 lg:px-6">
+        <div className="mb-8 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">Catálogo</p>
+            <h2 className="font-display text-3xl font-bold text-slate-900 sm:text-4xl">
+              É exatamente isso que<br />você precisa 👇
+            </h2>
+          </div>
+          <Link
+            to="/produtos"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+          >
+            Ver catálogo completo <i className="bi bi-arrow-right" />
+          </Link>
+        </div>
+
+        {homeSectionsStatus ? (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{homeSectionsStatus}</p>
+        ) : null}
+
+        {hasHomeSections ? (
+          <div className="space-y-10">
+            {homeSections.map((section) => (
+              <div key={section.key}>
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <h3 className="font-display text-xl font-bold text-slate-800">{section.title}</h3>
+                  <Link
+                    to={section.link || '/produtos'}
+                    className="text-sm font-semibold text-brand-700 transition hover:underline"
+                  >
+                    Mais produtos →
+                  </Link>
+                </div>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-label="Rolar para esquerda"
+                    onClick={() => scrollLane(section.key, 'left')}
+                    className="absolute -left-2 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-lg ring-1 ring-slate-200 transition hover:bg-brand-50 hover:text-brand-700 md:flex"
+                  >
+                    <i className="bi bi-chevron-left" />
+                  </button>
+
+                  <div
+                    ref={(element) => {
+                      laneRefs.current[section.key] = element;
+                    }}
+                    className="flex gap-4 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    {(section.products || []).map((product) => (
+                      <Link
+                        key={product.id}
+                        to={`/produtos/${product.id}`}
+                        className="group flex w-44 shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-brand"
+                      >
+                        <div className="aspect-square overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
+                          {product.image ? (
+                            <img src={product.image} alt={product.name} loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs text-white/70">Produto</div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1 p-3">
+                          <strong className="line-clamp-2 text-sm text-slate-800">{product.name}</strong>
+                          <span className="font-display text-base font-bold text-brand-700">{formatPrice(product.price || 0)}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    aria-label="Rolar para direita"
+                    onClick={() => scrollLane(section.key, 'right')}
+                    className="absolute -right-2 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-lg ring-1 ring-slate-200 transition hover:bg-brand-50 hover:text-brand-700 md:flex"
+                  >
+                    <i className="bi bi-chevron-right" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {/* COMO FUNCIONA */}
-      <section id="como-funciona" className="how-section-v2">
-        <div className="container">
-          <div className="row justify-content-center mb-5">
-            <div className="col-lg-6 text-center">
-              <p className="section-label">Simples assim</p>
-              <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.6rem)' }}>
-                Do clique à impressão<br /><span style={{ color: 'var(--primary)' }}>em minutos</span>
-              </h2>
-              <p style={{ color: '#999', marginTop: '12px' }}>Sem cadastro obrigatório. Sem espera. Sem complicação.</p>
-            </div>
+      <section id="como-funciona" className="bg-slate-50 py-16">
+        <div className="mx-auto max-w-6xl px-4 lg:px-6">
+          <div className="mb-10 text-center">
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">Simples assim</p>
+            <h2 className="font-display text-3xl font-bold text-slate-900 sm:text-4xl">
+              Do clique à impressão<br />
+              <span className="text-brand-600">em minutos</span>
+            </h2>
+            <p className="mt-3 text-sm text-slate-500">Sem cadastro obrigatório. Sem espera. Sem complicação.</p>
           </div>
 
-          <div className="how-v2-track">
-            <div className="how-v2-step">
-              <div className="how-v2-ghost" aria-hidden="true">01</div>
-              <div className="how-v2-icon-orb"><i className="bi bi-search" /></div>
-              <div className="how-v2-body">
-                <h5>Escolha</h5>
-                <p>Navegue pelo catálogo e encontre atividades práticas para tornar o aprendizado dos seus alunos mais prazeroso.</p>
-              </div>
-            </div>
-            <div className="how-v2-connector" aria-hidden="true"><span /></div>
-            <div className="how-v2-step">
-              <div className="how-v2-ghost" aria-hidden="true">02</div>
-              <div className="how-v2-icon-orb how-v2-orb-2"><i className="bi bi-credit-card-fill" /></div>
-              <div className="how-v2-body">
-                <h5>Pague</h5>
-                <p>Finalize seu pedido com segurança e confirmação rápida.</p>
-              </div>
-            </div>
-            <div className="how-v2-connector" aria-hidden="true"><span /></div>
-            <div className="how-v2-step">
-              <div className="how-v2-ghost" aria-hidden="true">03</div>
-              <div className="how-v2-icon-orb how-v2-orb-3"><i className="bi bi-cloud-arrow-down-fill" /></div>
-              <div className="how-v2-body">
-                <h5>Baixe na hora</h5>
-                <p>Acesso liberado imediatamente após a aprovação do pagamento.</p>
-              </div>
-            </div>
-            <div className="how-v2-connector" aria-hidden="true"><span /></div>
-            <div className="how-v2-step">
-              <div className="how-v2-ghost" aria-hidden="true">04</div>
-              <div className="how-v2-icon-orb how-v2-orb-4"><i className="bi bi-printer-fill" /></div>
-              <div className="how-v2-body">
-                <h5>Imprima</h5>
-                <p>Os arquivos estão prontos para uso no formato PDF com acesso ilimitado e permanente.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="row justify-content-center mt-5">
-            <div className="col-lg-8">
-              <div className="how-v2-formats">
-                <div className="how-v2-formats-icon"><i className="bi bi-info-circle-fill" /></div>
-                <div>
-                  <strong>PDF em alta resolução</strong><br />
-                  <span>Arquivos prontos para impressão, com acesso ilimitado e permanente.</span>
+          <ol className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {HOW_STEPS.map((step) => (
+              <li key={step.num} className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+                <span aria-hidden="true" className="pointer-events-none absolute right-3 top-2 font-display text-5xl font-extrabold text-slate-100">
+                  {step.num}
+                </span>
+                <div className={`relative inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br text-xl text-white shadow-brand ${step.accent}`}>
+                  <i className={`bi bi-${step.icon}`} />
                 </div>
+                <h5 className="relative mt-3 font-heading text-lg font-bold text-slate-900">{step.title}</h5>
+                <p className="relative mt-1 text-sm text-slate-600">{step.text}</p>
+              </li>
+            ))}
+          </ol>
+
+          <div className="mx-auto mt-10 max-w-2xl rounded-2xl border border-brand-200 bg-brand-50/60 p-4">
+            <div className="flex items-start gap-3">
+              <i className="bi bi-info-circle-fill text-2xl text-brand-600" />
+              <div>
+                <strong className="block font-semibold text-slate-900">PDF em alta resolução</strong>
+                <span className="text-sm text-slate-600">Arquivos prontos para impressão, com acesso ilimitado e permanente.</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SOCIAL PROOF SECTION */}
-      <section className="social-proof-section">
-        <div className="sp-blob sp-blob-left" aria-hidden="true" />
-        <div className="sp-blob sp-blob-right" aria-hidden="true" />
+      {/* SOCIAL PROOF */}
+      <section className="relative overflow-hidden py-16">
+        <div aria-hidden="true" className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-accent-pink/20 blur-3xl" />
+        <div aria-hidden="true" className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-accent-sky/20 blur-3xl" />
 
-        <div className="container" style={{ position: 'relative', zIndex: 1 }}>
-          <div className="row justify-content-center mb-4">
-            <div className="col-lg-7 text-center">
-              <p className="section-label">Como a escola usa</p>
-              <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.6rem)' }}>
-                Mais de <span style={{ color: 'var(--primary)' }}>16.000 professoras</span><br />nos seguem nas redes 📲
-              </h2>
-              <p style={{ color: '#999', marginTop: '12px' }}>Veja como escolas de todo o Brasil estão usando nossos materiais.</p>
-            </div>
+        <div className="relative mx-auto max-w-6xl px-4 lg:px-6">
+          <div className="mb-10 text-center">
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">Como a escola usa</p>
+            <h2 className="font-display text-3xl font-bold text-slate-900 sm:text-4xl">
+              Mais de <span className="text-brand-600">16.000 professoras</span><br />nos seguem nas redes 📲
+            </h2>
+            <p className="mt-3 text-sm text-slate-500">Veja como escolas de todo o Brasil estão usando nossos materiais.</p>
           </div>
 
-          {/* STATS STRIP */}
-          <div className="sp-stats-strip">
-            <div className="sp-stat">
-              <span className="sp-stat-num">4,2k</span>
-              <span className="sp-stat-lbl"><i className="bi bi-instagram" style={{ color: '#ee2a7b' }} /> seguidores</span>
-            </div>
-            <div className="sp-stat-divider" />
-            <div className="sp-stat">
-              <span className="sp-stat-num">48k</span>
-              <span className="sp-stat-lbl"><i className="bi bi-tiktok" /> curtidas</span>
-            </div>
-            <div className="sp-stat-divider" />
-            <div className="sp-stat">
-              <span className="sp-stat-num">98%</span>
-              <span className="sp-stat-lbl"><i className="bi bi-star-fill" style={{ color: '#FEE440' }} /> aprovação</span>
-            </div>
-            <div className="sp-stat-divider" />
-            <div className="sp-stat">
-              <span className="sp-stat-num">5k+</span>
-              <span className="sp-stat-lbl"><i className="bi bi-bag-check-fill" style={{ color: 'var(--accent)' }} /> pedidos</span>
-            </div>
+          <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Stat num="4,2k" icon="instagram" iconColor="text-pink-600" label="seguidores" />
+            <Stat num="48k" icon="tiktok" iconColor="text-slate-900" label="curtidas" />
+            <Stat num="98%" icon="star-fill" iconColor="text-accent-yellow" label="aprovação" />
+            <Stat num="5k+" icon="bag-check-fill" iconColor="text-accent-sky" label="pedidos" />
           </div>
 
-          {/* TESTIMONIALS */}
-          <div className={`sp-testimonials-row ${visibleTestimonials ? 'visible' : ''}`}>
-            <div className="sp-testimonial">
-              <div className="sp-t-avatar" style={{ background: 'linear-gradient(135deg, #9B5DE5, #F15BB5)' }}>C</div>
-              <div className="sp-t-body">
-                <p>"Comprei, baixei e mandei para a gráfica em menos de 5 minutos! 😍"</p>
-                <span>Carla M. · Professora, SP</span>
-              </div>
-            </div>
-            <div className="sp-testimonial">
-              <div className="sp-t-avatar" style={{ background: 'linear-gradient(135deg, #00BBF9, #00F5D4)' }}>A</div>
-              <div className="sp-t-body">
-                <p>"Os banners de formatura ficaram lindos. Todos elogiaram o design!"</p>
-                <span>Ana R. · Diretora, MG</span>
-              </div>
-            </div>
-            <div className="sp-testimonial">
-              <div className="sp-t-avatar" style={{ background: 'linear-gradient(135deg, #FEE440, #F15BB5)' }}>J</div>
-              <div className="sp-t-body">
-                <p>"Recebi os arquivos na hora e consegui organizar tudo sem complicação!"</p>
-                <span>Juliana F. · Coord. Pedagógica, RJ</span>
-              </div>
-            </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {TESTIMONIALS.map((t, i) => (
+              <article key={i} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-bold text-white ${t.avatarBg}`}>
+                  {t.initial}
+                </div>
+                <div>
+                  <p className="text-sm leading-relaxed text-slate-700">{t.text}</p>
+                  <span className="mt-2 block text-xs font-semibold text-slate-500">{t.name} · {t.role}</span>
+                </div>
+              </article>
+            ))}
           </div>
 
-          {/* CTA SOCIAL */}
-          <div className="row justify-content-center mt-4">
-            <div className="col-auto">
-              <a href="https://www.instagram.com/profamarciarcardoso" target="_blank" rel="noopener noreferrer" className="sp-social-btn sp-btn-ig">
-                <i className="bi bi-instagram" /> @profamarciarcardoso no Insta
-              </a>
-              <a href="https://www.tiktok.com/@profamarciarcardoso" target="_blank" rel="noopener noreferrer" className="sp-social-btn sp-btn-tt">
-                <i className="bi bi-tiktok" /> @profamarciarcardoso no TikTok
-              </a>
-            </div>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="https://www.instagram.com/profamarciarcardoso"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-pink-500 via-fuchsia-500 to-amber-400 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:scale-105"
+            >
+              <i className="bi bi-instagram" /> @profamarciarcardoso
+            </a>
+            <a
+              href="https://www.tiktok.com/@profamarciarcardoso"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:scale-105"
+            >
+              <i className="bi bi-tiktok" /> @profamarciarcardoso
+            </a>
           </div>
         </div>
       </section>
 
-      {/* MARQUEE 2 - DARK */}
-      <div className="marquee-strip marquee-strip-dark" aria-hidden="true">
-        <div className="marquee-track marquee-track-reverse">
-          <span className="marquee-item">ALTA RESOLUÇÃO</span>
-          <span className="marquee-item marquee-sep">·</span>
-          <span className="marquee-item">PRONTO PARA IMPRESSÃO</span>
-          <span className="marquee-item marquee-sep">·</span>
-          <span className="marquee-item">PDF EM ALTA RESOLUÇÃO</span>
-          <span className="marquee-item marquee-sep">·</span>
-          <span className="marquee-item">DESIGN EXCLUSIVO</span>
-          <span className="marquee-item marquee-sep">·</span>
-          <span className="marquee-item">DOWNLOAD SEGURO</span>
-          <span className="marquee-item marquee-sep">·</span>
-          <span className="marquee-item">CRIADO COM CUIDADO</span>
-          <span className="marquee-item marquee-sep">·</span>
-        </div>
-      </div>
+      <Marquee items={MARQUEE_ITEMS_BOTTOM} dark reverse />
     </Shell>
+  );
+}
+
+function Stat({ num, icon, iconColor, label }) {
+  return (
+    <div className="flex flex-col items-center text-center">
+      <span className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">{num}</span>
+      <span className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+        <i className={`bi bi-${icon} ${iconColor}`} /> {label}
+      </span>
+    </div>
   );
 }
