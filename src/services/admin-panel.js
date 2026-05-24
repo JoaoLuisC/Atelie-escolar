@@ -103,3 +103,30 @@ export async function saveAdminSetting({ key, value }) {
     body: JSON.stringify({ key, value }),
   });
 }
+
+export async function fetchAdminFunnel(days = 30) {
+  const query = Number.isFinite(Number(days)) ? `?days=${encodeURIComponent(days)}` : '';
+  return request(`/admin-funnel${query}`);
+}
+
+export async function fetchAdminSegments() {
+  return request('/admin-segments');
+}
+
+export async function fetchAdminAbcProducts({ period = 'month', categoryId = null } = {}) {
+  const params = new URLSearchParams({ period });
+  if (categoryId) params.set('categoryId', String(categoryId));
+  return request(`/admin-abc-products?${params.toString()}`);
+}
+
+export async function fetchAdminAbcCustomers({ period = 'quarter' } = {}) {
+  return request(`/admin-abc-customers?period=${encodeURIComponent(period)}`);
+}
+
+export async function fetchAdminCohort({ months = 12 } = {}) {
+  return request(`/admin-cohort?months=${encodeURIComponent(months)}`);
+}
+
+export async function fetchAdminKpis({ window = 12 } = {}) {
+  return request(`/admin-kpis?window=${encodeURIComponent(window)}`);
+}

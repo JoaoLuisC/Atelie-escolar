@@ -1,17 +1,12 @@
-const { getSupabaseConfig, listTableRows } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { listTableRows } } = require('../lib/supabase');
 
 /**
  * API: Listar produtos disponíveis
  * GET /api/products
  */
 module.exports = async function productsHandler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
   if (req.method !== 'GET') {
@@ -25,7 +20,7 @@ module.exports = async function productsHandler(req, res) {
 
     const [productsRows, categoriesRows, approvedOrdersRows, orderItemsRows] = await Promise.all([
       listTableRows('products', {
-        select: 'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
+        select: 'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
         filters: [{ column: 'active', value: true }],
         orderBy: 'created_at',
         ascending: false,
@@ -68,6 +63,7 @@ module.exports = async function productsHandler(req, res) {
       const images = Array.isArray(row.images) ? row.images : [];
       return {
         id: String(row.id),
+        slug: row.slug || String(row.id),
         name: row.name,
         description: row.description,
         price: Number(row.price || 0),
@@ -98,9 +94,6 @@ module.exports = async function productsHandler(req, res) {
 
   } catch (error) {
     console.error('Error fetching products:', error);
-    return res.status(500).json({ 
-      error: 'Erro ao buscar produtos',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    return res.status(500).json({ error: 'Erro ao buscar produtos' });
   }
 };

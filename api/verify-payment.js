@@ -1,8 +1,9 @@
 const crypto = require('node:crypto');
 const mercadopago = require('mercadopago');
 const { initializeMercadoPago } = require('../lib/mercadopago-config');
-const { getSupabaseConfig, getTableRow, insertIntoTable, listTableRows, updateTable } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable } } = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
+const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 
 async function fetchPaymentByOrderId(orderId) {
   const mpClient = initializeMercadoPago();
@@ -83,12 +84,6 @@ async function createTokensForOrder(order, items, paymentId) {
   return downloadTokens;
 }
 
-function setCorsHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
-
 function mapTokenRows(rows) {
   return rows.map((token) => ({
     productId: String(token.product_id),
@@ -138,10 +133,8 @@ async function refreshApprovedOrderData(order, orderId) {
 }
 
 module.exports = async function verifyPaymentHandler(req, res) {
-  setCorsHeaders(res);
-
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
   if (req.method !== 'GET') {
@@ -149,9 +142,14 @@ module.exports = async function verifyPaymentHandler(req, res) {
   }
 
   try {
-    const { orderId } = req.query;
+    const orderId = String(req.query?.orderId || '').trim();
+    const email = String(req.query?.email || '').trim().toLowerCase();
+
     if (!orderId) {
       return res.status(400).json({ error: 'orderId é obrigatório' });
+    }
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'email é obrigatório' });
     }
 
     if (!getSupabaseConfig()) {
@@ -160,6 +158,26 @@ module.exports = async function verifyPaymentHandler(req, res) {
 
     const order = await loadOrder(orderId);
     if (!order) {
+      return res.status(404).json({ error: 'Pedido não encontrado' });
+    }
+
+    // Defesa contra enumeração: order_code + email têm que bater (timing-safe).
+    const expectedEmail = String(order.customer_email || '').trim().toLowerCase();
+    const expectedBuf = Buffer.from(expectedEmail);
+    const providedBuf = Buffer.from(email);
+    const emailMatches = expectedBuf.length === providedBuf.length
+      && crypto.timingSafeEqual(expectedBuf, providedBuf);
+    if (!emailMatches) {
+      await recordSecurityEvent({
+        eventName: 'verify_payment_email_mismatch',
+        severity: 'warn',
+        ip: extractClientIp(req),
+        userAgent: req.headers['user-agent'],
+        properties: {
+          order_code_prefix: orderId.slice(0, 12),
+          provided_email_hash: crypto.createHash('sha256').update(email).digest('hex').slice(0, 16),
+        },
+      });
       return res.status(404).json({ error: 'Pedido não encontrado' });
     }
 
@@ -182,9 +200,6 @@ module.exports = async function verifyPaymentHandler(req, res) {
     });
   } catch (error) {
     console.error('Error verifying payment:', error);
-    return res.status(500).json({
-      error: 'Erro ao verificar pagamento',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-    });
+    return res.status(500).json({ error: 'Erro ao verificar pagamento' });
   }
 };

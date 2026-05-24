@@ -1,5 +1,5 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { deleteFromTable, getSupabaseConfig, getTableRow, listTableRows, updateTable } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { deleteFromTable, getTableRow, listTableRows, updateTable } } = require('../lib/supabase');
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -146,7 +146,6 @@ module.exports = async function adminUsersHandler(req, res) {
     return res.status(500).json({
       success: false,
       error: 'Erro ao carregar usuários do admin.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

@@ -1,8 +1,39 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
+import { SocialProofStrip } from '../components/SocialProofStrip';
+import { TrustBadgeRow } from '../components/TrustBadgeRow';
 import { fetchHomeSections } from '../services/products';
 import { formatPrice } from '../utils/currency';
+
+const HOME_SEO_TITLE = 'Materiais educativos digitais para professores';
+const HOME_SEO_DESCRIPTION = 'Painéis, banners e atividades pedagógicas em PDF, prontos para imprimir. Download imediato após o pagamento. Criados por professores, para professores.';
+
+const HOME_JSON_LD = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Profa. Marciar Cardoso · Ateliê da Escola',
+    url: 'https://profamarciarcardoso.com.br',
+    logo: 'https://profamarciarcardoso.com.br/og-default.png',
+    sameAs: [
+      'https://www.instagram.com/profamarciarcardoso',
+      'https://www.tiktok.com/@profamarciarcardoso',
+    ],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Ateliê da Escola',
+    url: 'https://profamarciarcardoso.com.br',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: 'https://profamarciarcardoso.com.br/produtos?q={search_term_string}',
+      'query-input': 'required name=search_term_string',
+    },
+  },
+];
 
 const MARQUEE_ITEMS_TOP = ['BANNERS', 'PAINÉIS', 'ATIVIDADES', 'LEMBRANCINHAS', 'KITS'];
 const MARQUEE_ITEMS_BOTTOM = [
@@ -101,6 +132,12 @@ export function HomePage() {
 
   return (
     <Shell>
+      <SEO
+        title={HOME_SEO_TITLE}
+        description={HOME_SEO_DESCRIPTION}
+        pathname="/"
+        jsonLd={HOME_JSON_LD}
+      />
       {/* HERO */}
       <section className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50">
         <div aria-hidden="true" className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-brand-400/30 blur-3xl" />
@@ -143,6 +180,14 @@ export function HomePage() {
       </section>
 
       <Marquee items={MARQUEE_ITEMS_TOP} />
+
+      {/* TRUST BADGES — faixa logo abaixo do hero para reforçar credibilidade */}
+      <section aria-labelledby="trust-badges-title" className="bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
+          <h2 id="trust-badges-title" className="sr-only">Garantias de compra</h2>
+          <TrustBadgeRow />
+        </div>
+      </section>
 
       {/* CATÁLOGO */}
       <section className="mx-auto max-w-6xl px-4 py-16 lg:px-6">
@@ -198,12 +243,12 @@ export function HomePage() {
                     {(section.products || []).map((product) => (
                       <Link
                         key={product.id}
-                        to={`/produtos/${product.id}`}
+                        to={`/produtos/${product.slug || product.id}`}
                         className="group flex w-44 shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-brand"
                       >
                         <div className="aspect-square overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
                           {product.image ? (
-                            <img src={product.image} alt={product.name} loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
+                            <img src={product.image} alt={product.name} loading="lazy" decoding="async" className="h-full w-full object-cover transition group-hover:scale-105" />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-xs text-white/70">Produto</div>
                           )}
@@ -284,12 +329,7 @@ export function HomePage() {
             <p className="mt-3 text-sm text-slate-500">Veja como escolas de todo o Brasil estão usando nossos materiais.</p>
           </div>
 
-          <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat num="4,2k" icon="instagram" iconColor="text-pink-600" label="seguidores" />
-            <Stat num="48k" icon="tiktok" iconColor="text-slate-900" label="curtidas" />
-            <Stat num="98%" icon="star-fill" iconColor="text-accent-yellow" label="aprovação" />
-            <Stat num="5k+" icon="bag-check-fill" iconColor="text-accent-sky" label="pedidos" />
-          </div>
+          <SocialProofStrip className="mb-8" />
 
           <div className="grid gap-4 md:grid-cols-3">
             {TESTIMONIALS.map((t, i) => (
@@ -326,18 +366,34 @@ export function HomePage() {
         </div>
       </section>
 
+      {/* CTA FINAL — convite para retornar ao catálogo antes do fechamento */}
+      <section className="bg-gradient-to-br from-brand-50 via-white to-sky-50">
+        <div className="mx-auto max-w-6xl px-4 py-14 text-center lg:px-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Pronto para começar?</p>
+          <h2 className="mt-2 font-display text-2xl font-bold text-slate-900 sm:text-3xl">
+            Encontre o material certo para sua turma
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-slate-600">
+            Catálogo organizado por categoria, com prévia de cada arquivo. Download imediato após o pagamento aprovado.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              to="/produtos"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-6 py-3 text-base font-semibold text-white shadow-brand transition hover:scale-105"
+            >
+              Ver catálogo completo <i className="bi bi-arrow-right" aria-hidden="true" />
+            </Link>
+            <a
+              href="/#como-funciona"
+              className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-5 py-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
+            >
+              <i className="bi bi-question-circle" aria-hidden="true" /> Como funciona
+            </a>
+          </div>
+        </div>
+      </section>
+
       <Marquee items={MARQUEE_ITEMS_BOTTOM} dark reverse />
     </Shell>
-  );
-}
-
-function Stat({ num, icon, iconColor, label }) {
-  return (
-    <div className="flex flex-col items-center text-center">
-      <span className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">{num}</span>
-      <span className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-        <i className={`bi bi-${icon} ${iconColor}`} /> {label}
-      </span>
-    </div>
   );
 }

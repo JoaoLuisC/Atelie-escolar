@@ -1,0 +1,188 @@
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { SEO } from '../components/SEO';
+import { Shell } from '../components/Shell';
+import { getApiBaseUrl } from '../utils/api';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function Container({ children }) {
+  return (
+    <Shell>
+      <section className="mx-auto flex max-w-xl flex-col items-center px-4 py-16 text-center lg:px-6">
+        {children}
+      </section>
+    </Shell>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// /confirmar-inscricao?token=...
+// ════════════════════════════════════════════════════════════════════
+export function ConfirmSubscriptionPage() {
+  const [params] = useSearchParams();
+  const [status, setStatus] = useState({ state: 'loading', message: 'Confirmando sua inscrição…' });
+
+  useEffect(() => {
+    const token = params.get('token') || '';
+    if (!token) {
+      setStatus({ state: 'error', message: 'Link inválido. Volte ao seu email e clique no botão de confirmação.' });
+      return;
+    }
+
+    (async () => {
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/confirm-subscription?token=${encodeURIComponent(token)}`);
+        const data = await response.json();
+        if (!data.confirmed) {
+          setStatus({ state: 'error', message: data.error || 'Token inválido ou expirado.' });
+          return;
+        }
+        setStatus({
+          state: 'success',
+          message: data.alreadyConfirmed
+            ? 'Você já tinha confirmado antes — está tudo certo!'
+            : 'Inscrição confirmada! Você vai receber as novidades por email.',
+          email: data.email,
+        });
+      } catch (err) {
+        setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });
+      }
+    })();
+  }, [params]);
+
+  const isSuccess = status.state === 'success';
+  const isError = status.state === 'error';
+
+  return (
+    <Container>
+      <SEO title="Confirmar inscrição" pathname="/confirmar-inscricao" noindex />
+      <p className="text-xs font-bold uppercase tracking-widest text-brand-600">
+        {isSuccess ? '✓ Confirmado' : isError ? 'Ops…' : 'Aguarde'}
+      </p>
+      <h1 className="mt-2 font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">
+        {isSuccess ? 'Bem-vindo(a) à lista!' : isError ? 'Não foi possível confirmar' : 'Confirmando…'}
+      </h1>
+      <p className="mt-3 max-w-md text-sm text-slate-600">{status.message}</p>
+      <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <Link
+          to="/produtos"
+          className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+        >
+          Ver produtos
+        </Link>
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+        >
+          Voltar à home
+        </Link>
+      </div>
+    </Container>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// /desinscrever?token=...   ou   ?email=...   ou   form vazio
+// ════════════════════════════════════════════════════════════════════
+export function UnsubscribePage() {
+  const [params] = useSearchParams();
+  const [emailInput, setEmailInput] = useState(params.get('email') || '');
+  const [status, setStatus] = useState({ state: 'idle', message: '' });
+
+  useEffect(() => {
+    const token = params.get('token') || '';
+    if (!token) return;
+
+    (async () => {
+      setStatus({ state: 'loading', message: 'Cancelando sua inscrição…' });
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/unsubscribe?token=${encodeURIComponent(token)}`);
+        const data = await response.json();
+        setStatus({
+          state: data.success ? 'success' : 'error',
+          message: data.message || data.error || 'Algo deu errado.',
+        });
+      } catch (err) {
+        setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });
+      }
+    })();
+  }, [params]);
+
+  async function onSubmit(event) {
+    event.preventDefault();
+    const email = emailInput.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(email)) {
+      setStatus({ state: 'error', message: 'Informe um email válido.' });
+      return;
+    }
+    setStatus({ state: 'loading', message: 'Cancelando…' });
+
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/unsubscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json();
+      setStatus({
+        state: data.success ? 'success' : 'error',
+        message: data.message || data.error || 'Algo deu errado.',
+      });
+    } catch (err) {
+      setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });
+    }
+  }
+
+  const isSuccess = status.state === 'success';
+  const showForm = !params.get('token') && status.state !== 'success';
+
+  return (
+    <Container>
+      <SEO title="Cancelar inscrição" pathname="/desinscrever" noindex />
+      <p className="text-xs font-bold uppercase tracking-widest text-brand-600">
+        {isSuccess ? '✓ Cancelado' : 'Cancelar inscrição'}
+      </p>
+      <h1 className="mt-2 font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">
+        {isSuccess ? 'Pronto, você foi removido' : 'Cancelar inscrição'}
+      </h1>
+      {status.message ? (
+        <p className={`mt-3 max-w-md text-sm ${isSuccess ? 'text-emerald-700' : 'text-slate-600'}`}>
+          {status.message}
+        </p>
+      ) : null}
+
+      {showForm ? (
+        <form onSubmit={onSubmit} className="mt-6 flex w-full max-w-md flex-col gap-2 text-left">
+          <label htmlFor="unsub-email" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Email cadastrado
+          </label>
+          <input
+            id="unsub-email"
+            type="email"
+            required
+            value={emailInput}
+            onChange={(event) => setEmailInput(event.target.value)}
+            disabled={status.state === 'loading'}
+            placeholder="seu@email.com"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
+          <button
+            type="submit"
+            disabled={status.state === 'loading'}
+            className="mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
+          >
+            Confirmar cancelamento
+          </button>
+        </form>
+      ) : null}
+
+      <Link
+        to="/"
+        className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:underline"
+      >
+        ← Voltar à home
+      </Link>
+    </Container>
+  );
+}

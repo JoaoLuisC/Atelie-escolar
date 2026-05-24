@@ -451,4 +451,4 @@ Sem isso, é só achismo. E e-commerce é caro demais para ser tocado por achism
 - **MARQUEZ, W. T. et al.** Estratégias de marketing digital para a alavancagem em e-commerce. REAVI, 2018.
 - **GILIOLI, R. M.; GHIGGI, T.** E-commerce: reflexões sobre estratégias e desafios. Revista Eletrônica Gestão e Serviços, 2020.
 - **KOTLER, P.; KELLER, K. L.** Marketing Management. Pearson, 2016.
-- Documentação interna: [ARCHITECTURE.md](./ARCHITECTURE.md), [SECURITY.md](./SECURITY.md), [plano-melhorias-fluxo-cliente.md](./plano-melhorias-fluxo-cliente.md).
+- Documentação interna: [ARCHITECTURE.md](./ARCHITECTURE.md), [SECURITY.md](./SECURITY.md), [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md), [PENDENCIAS.md](./PENDENCIAS.md).

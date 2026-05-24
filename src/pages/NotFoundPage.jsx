@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
+import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 
 export function NotFoundPage() {
   return (
     <Shell>
+      <SEO title="Página não encontrada" noindex />
       <section className="mx-auto flex max-w-2xl flex-col items-center px-4 py-20 text-center lg:px-6">
         <p className="text-xs font-bold uppercase tracking-widest text-brand-600">404</p>
         <h1 className="mt-2 font-display text-5xl font-extrabold text-slate-900 sm:text-6xl">Página não encontrada</h1>

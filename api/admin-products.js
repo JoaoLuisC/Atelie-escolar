@@ -1,11 +1,13 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
 const {
-  deleteFromTable,
   getSupabaseConfig,
-  getTableRow,
-  insertIntoTable,
-  listTableRows,
-  updateTable,
+  serviceRoleHelpers: {
+    deleteFromTable,
+    getTableRow,
+    insertIntoTable,
+    listTableRows,
+    updateTable,
+  },
 } = require('../lib/supabase');
 
 function normalizeSlug(value) {
@@ -111,7 +113,7 @@ function toProductPayload(body = {}, existing = {}) {
 async function listProducts() {
   const [productsRows, categoriesRows] = await Promise.all([
     listTableRows('products', {
-      select: 'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
+      select: 'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -127,6 +129,7 @@ async function listProducts() {
     const images = Array.isArray(row.images) ? row.images : [];
     return {
       id: String(row.id),
+      slug: row.slug || String(row.id),
       name: row.name,
       description: row.description,
       price: Number(row.price || 0),
@@ -249,7 +252,6 @@ module.exports = async function adminProductsHandler(req, res) {
     console.error('Admin products error:', error);
     return res.status(500).json({
       error: 'Erro ao processar produtos do admin',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

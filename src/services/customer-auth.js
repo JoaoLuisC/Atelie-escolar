@@ -7,12 +7,13 @@ function normalizeUser(user = {}) {
   const uid = String(user.uid || user.id || '').trim();
   const email = String(user.email || '').trim();
   const name = String(user.name || '').trim();
+  const role = String(user.role || '').trim().toLowerCase();
 
   if (!uid || !email) {
     return null;
   }
 
-  return { uid, email, name };
+  return { uid, email, name, role };
 }
 
 function ensureAuthSuccess(response, data, fallbackMessage = INVALID_CREDENTIALS_MESSAGE) {

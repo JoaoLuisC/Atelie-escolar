@@ -14,12 +14,13 @@
 ## Camadas de defesa
 
 ### 1. Network / Headers
-- `helmet()` — CSP, HSTS, X-Frame-Options, X-Content-Type-Options
+- `helmet()` — CSP estrita explícita (script-src whitelist GA4/Meta/MP), HSTS, X-Frame-Options DENY, X-Content-Type-Options
 - `cors()` — allowlist explícita em prod; permissivo em dev (apenas `localhost:*`)
 - `rate-limit` global — 250 req/15min global; 30 req/15min em `/auth/*`
 - `rate-limit` em `/admin-login` — **5 tentativas falhas / 10 min** (definido em [routes/api-compat.routes.js](../routes/api-compat.routes.js); `skipSuccessfulRequests: true` para não punir admin legítimo fazendo logins repetidos)
 - `rate-limit` em `/auth/customer/login` — 5 tentativas / 10 min
-- HTTPS only em produção (configurado pelo Vercel)
+- `rate-limit` em `/verify-payment` — 60 req/min por IP (mitiga enumeração de `order_code`)
+- HTTPS obrigatório em produção: o boot em [server.js](../server.js) falha se `APP_URL` não começar com `https://` quando `APP_ENV=production`. Cookies `Secure` dependem disso.
 
 ### 2. Autenticação
 - **Cookies HttpOnly** — `customer_session` e `admin_session`. JavaScript não acessa.
@@ -43,6 +44,7 @@
 | user_products | auth (próprios) | service_role |
 | download_tokens | — | service_role |
 | download_logs | — | service_role |
+| security_events | — | service_role |
 | settings | — | service_role |
 | page_views | — | anon+auth (path não nulo) |
 
@@ -144,6 +146,51 @@ Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Res
 - Backend valida: token existe + não expirou + não foi usado
 - Marca `used=true` após primeiro download bem-sucedido
 - Loga em `download_logs` (IP + user agent + timestamp)
+- Resposta inclui `Referrer-Policy: no-referrer` antes do redirect — token não vaza no `Referer` para o destino externo
+
+### 9. Verify-payment exige email
+
+`/api/verify-payment` exige `orderId` **e** `email` (LGPD: defesa contra enumeração).
+
+- `order_code` tem 128 bits de entropia (`crypto.randomBytes(16).toString('hex')`).
+- Comparação do email usa `crypto.timingSafeEqual` para não vazar diferenças por tempo.
+- Resposta uniforme `404 "Pedido não encontrado"` em ambos os casos (order não existe vs email não bate).
+- Rate-limit por IP (60 req/min) bloqueia tentativas em massa.
+
+### 10. Retenção de logs (LGPD princípio da minimização)
+
+Migration [`20260526000000_phase2_log_retention.sql`](../supabase/migrations/20260526000000_phase2_log_retention.sql) cria a função `public.purge_old_logs()` e agenda via `pg_cron`:
+
+| Tabela | Retenção | Justificativa |
+|---|---|---|
+| `download_logs` | 12 meses | Cobre auditoria de fraude e disputas |
+| `analytics_events` | 24 meses | Permite comparação YoY |
+
+Job agendado diariamente às 03:00 UTC. Se `pg_cron` não estiver habilitado no Supabase (`create extension pg_cron;`), a migration cai num `notice` e o purge precisa ser rodado manualmente (`select public.purge_old_logs();`).
+
+### 11. Monitoramento de tentativas de fraude
+
+Eventos passam por [lib/security-logger.js](../lib/security-logger.js) que escreve em **três** destinos:
+
+1. **stdout estruturado JSON** (`{ level, event, severity, ip, ... }`) — Vercel/Supabase captura.
+2. **Tabela `public.security_events`** (RLS service-role only) — queryable do admin via SQL.
+3. **`SECURITY_ALERT_WEBHOOK_URL`** (env opcional) — POST JSON pra Slack/Discord/Sentry. Em branco → pula.
+
+Eventos emitidos hoje:
+
+| `event_name` | Origem | Severidade | Quando dispara |
+|---|---|---|---|
+| `webhook_invalid_signature` | [api/webhook.js](../api/webhook.js) | warn | HMAC do MP não bate fora de `APP_ENV=test` |
+| `admin_login_failed` | [api/admin-login.js](../api/admin-login.js) | warn | Senha errada **ou** sessão sem `role=admin` |
+| `verify_payment_email_mismatch` | [api/verify-payment.js](../api/verify-payment.js) | warn | Order existe mas email passado não bate (enumeração) |
+
+Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 16)` para correlação cross-event sem violar LGPD. Rate-limits relacionados:
+
+- `/verify-payment` — 60 req/min por IP ([routes/api-compat.routes.js](../routes/api-compat.routes.js)).
+- `/admin-login` — 5 falhas/10min por IP (skipSuccessfulRequests, mesmo arquivo).
+- `/auth/customer/login` — 5/10min por IP.
+
+Retenção: 6 meses em `security_events`, via `purge_old_logs()` (migração [`20260526110000_phase2_security_events.sql`](../supabase/migrations/20260526110000_phase2_security_events.sql)).
 
 ---
 
@@ -159,11 +206,42 @@ Deve retornar **0 CRITICAL**. Os INFO "RLS Enabled No Policy" em `settings`, `do
 
 ### Rotação de secrets
 
-Recomendação trimestral:
-1. Gere novos secrets: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-2. Atualize `.env.local` e variáveis do Vercel
-3. Redeploy
-4. Sessões ativas serão invalidadas (usuários terão de logar de novo)
+**Cadência mínima: trimestral.** Marcar no calendário do administrador (Q1 jan, Q2 abr, Q3 jul, Q4 out).
+
+Secrets a rotacionar (todos no `.env.local` + Vercel):
+
+| Secret | Impacto da rotação | Ação extra |
+|---|---|---|
+| `ADMIN_SESSION_SECRET` | Logout forçado de admins | Avisar a equipe |
+| `CUSTOMER_SESSION_SECRET` | Logout forçado de clientes | Sem ação |
+| `DOWNLOAD_TOKEN_SECRET` | Nenhum (tokens são opacos) | — |
+| `WEBHOOK_SECRET` | Precisa sincronizar com painel Mercado Pago | Atualizar no painel MP **antes** do redeploy |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role muda — rotacionar via dashboard Supabase | Atualizar Vercel imediatamente |
+| `MERCADOPAGO_ACCESS_TOKEN` | Pagamentos param se desincronizar | Gerar novo no painel MP **antes** de atualizar prod |
+
+Passo a passo:
+
+1. Gere novo secret: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+2. Para `WEBHOOK_SECRET` e `MERCADOPAGO_ACCESS_TOKEN`: gere/copie do painel MP primeiro.
+3. Atualize `.env.local` (dev) e Vercel (prod) — em prod, atualize **Production** e **Preview** separadamente.
+4. Redeploy em produção.
+5. Verifique: webhook MP entrega 200, login admin funciona, criação de pedido funciona.
+
+Em caso de incidente (segredo vazado): rotacione tudo na hora, mesmo fora do trimestre.
+
+### Pen-test focado (TODO externo)
+
+Próxima janela: **prévia a cada release maior** (mínimo anual).
+
+Escopo mínimo recomendado:
+- Enumeração de `order_code` em `/verify-payment` (com e sem email).
+- IDOR em `/api/admin-*` (cookie de cliente tentando acessar endpoints de admin).
+- CSRF em endpoints POST que dependem só de cookie (`/auth/customer/login`, `/admin-login`).
+- Injeção em campos de produto (nome, descrição) → XSS armazenado.
+- Bypass de RLS pelo cliente usando o anon key publicado.
+- Replay de webhook MP (assinatura válida + body antigo).
+
+Resultados ficam em arquivo cifrado fora do repositório.
 
 ### Atualização de dependências
 

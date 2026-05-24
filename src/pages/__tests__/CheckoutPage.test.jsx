@@ -81,7 +81,7 @@ describe('CheckoutPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Pagamento nao aprovado. Tente novamente.')).toBeInTheDocument();
+      expect(screen.getByText(/Não conseguimos confirmar este pagamento/i)).toBeInTheDocument();
     });
   });
 
@@ -122,7 +122,7 @@ describe('CheckoutPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Tempo de espera excedido. Voce pode verificar mais tarde em Downloads.')).toBeInTheDocument();
+      expect(screen.getByText(/Demorou mais do que esperávamos/i)).toBeInTheDocument();
     });
   });
 });

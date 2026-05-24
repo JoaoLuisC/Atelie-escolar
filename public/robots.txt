@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /painel-acesso-privado-atelie
+Disallow: /reset-password
+Disallow: /downloads
+Disallow: /checkout
+Disallow: /login
+Disallow: /api/
+Disallow: /confirmar-inscricao
+Disallow: /desinscrever
+
+Sitemap: https://profamarciarcardoso.com.br/sitemap.xml

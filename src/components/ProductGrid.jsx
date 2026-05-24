@@ -19,7 +19,7 @@ function ProductCard({ onAddToCart, product }) {
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-brand">
-      <Link to={`/produtos/${product.id}`} className="relative block aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
+      <Link to={`/produtos/${product.slug || product.id}`} className="relative block aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
         {product.image ? (
           <img
             src={product.image}
@@ -68,7 +68,7 @@ function ProductCard({ onAddToCart, product }) {
             <i className="bi bi-cart-plus" /> Adicionar
           </button>
           <Link
-            to={`/produtos/${product.id}`}
+            to={`/produtos/${product.slug || product.id}`}
             className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             Detalhes

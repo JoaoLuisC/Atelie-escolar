@@ -22,8 +22,17 @@ export async function fetchHomeSections() {
   return payload.sections || [];
 }
 
-export async function fetchProductById(productId) {
-  const response = await fetch(`${getApiBaseUrl()}/product-details?id=${encodeURIComponent(productId)}`);
+/**
+ * Busca um produto por slug OU id legado. O backend decide qual coluna
+ * usar (id se for numérico puro, slug caso contrário).
+ */
+export async function fetchProductByIdentifier(identifier) {
+  const value = String(identifier || '').trim();
+  if (!value) return null;
+
+  const isNumeric = /^\d+$/.test(value);
+  const param = isNumeric ? 'id' : 'slug';
+  const response = await fetch(`${getApiBaseUrl()}/product-details?${param}=${encodeURIComponent(value)}`);
 
   if (response.status === 404) {
     return null;
@@ -36,3 +45,6 @@ export async function fetchProductById(productId) {
   const payload = await response.json();
   return payload.product || null;
 }
+
+// Compatibilidade com chamadas legadas. Marcar como deprecated.
+export const fetchProductById = fetchProductByIdentifier;

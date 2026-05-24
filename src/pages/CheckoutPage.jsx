@@ -1,27 +1,40 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { CouponField } from '../components/CouponField';
+import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { StatusStepper } from '../components/StatusStepper';
+import { TrustBadgeRow } from '../components/TrustBadgeRow';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
 import { getApiBaseUrl } from '../utils/api';
 import { formatPrice } from '../utils/currency';
+import {
+  buildCartPayload,
+  getAttributionPayload,
+  trackEvent,
+} from '../utils/analytics';
+import { getSessionId } from '../utils/attribution';
 
 export function CheckoutPage() {
   const navigate = useNavigate();
-  const { customerSession, setCustomerSession } = useAuth();
+  const { customerSession, setCustomerSession, loginCustomerGoogle } = useAuth();
   const { cart, total, removeFromCart, clearCart } = useCart();
   const { pushToast } = useToast();
   const [status, setStatus] = useState('');
   const [processing, setProcessing] = useState(false);
   const [pendingOrderId, setPendingOrderId] = useState('');
+  const [pendingOrderEmail, setPendingOrderEmail] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const {
     formState: { errors },
     handleSubmit,
     register,
     setValue,
+    watch,
   } = useForm({
     defaultValues: {
       email: customerSession?.email || '',
@@ -29,6 +42,39 @@ export function CheckoutPage() {
     },
     mode: 'onSubmit',
   });
+
+  const watchedEmail = watch('email');
+
+  // Captura de e-mail para carrinho abandonado: debounce 1.5s; só
+  // dispara se email é válido e cart tem itens. Falha silenciosamente.
+  useEffect(() => {
+    if (!cart.length) return undefined;
+    const email = (watchedEmail || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return undefined;
+
+    const timeoutId = setTimeout(() => {
+      fetch(`${getApiBaseUrl()}/abandoned-cart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          email,
+          sessionId: getSessionId(),
+          items: cart.map((item) => ({
+            productId: String(item.id),
+            name: item.name,
+            price: Number(item.price || 0),
+            quantity: Number(item.quantity || 1),
+          })),
+          attribution: getAttributionPayload(),
+        }),
+      }).catch(() => {
+        /* silencioso — não pode quebrar checkout */
+      });
+    }, 1500);
+
+    return () => clearTimeout(timeoutId);
+  }, [watchedEmail, cart]);
 
   useEffect(() => {
     if (customerSession?.email) {
@@ -38,6 +84,14 @@ export function CheckoutPage() {
       setValue('name', customerSession.name, { shouldValidate: true });
     }
   }, [customerSession, setValue]);
+
+  useEffect(() => {
+    if (!cart.length) return;
+    trackEvent('begin_checkout', buildCartPayload(cart, total));
+    // Disparar uma vez por mount com carrinho preenchido — guarda mais
+    // fiel ao significado do evento canônico do GA4.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!pendingOrderId) return undefined;
@@ -55,13 +109,14 @@ export function CheckoutPage() {
         if (!cancelled) {
           setProcessing(false);
           setPendingOrderId('');
-          setStatus('Tempo de espera excedido. Voce pode verificar mais tarde em Downloads.');
+          setPendingOrderEmail('');
+          setStatus('Demorou mais do que esperávamos para confirmar. Você pode acompanhar a qualquer momento em Meus Downloads — ninguém perde o pedido.');
         }
         return;
       }
 
       try {
-        const verifyResponse = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${pendingOrderId}`);
+        const verifyResponse = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${encodeURIComponent(pendingOrderId)}&email=${encodeURIComponent(pendingOrderEmail)}`);
         const verifyData = await verifyResponse.json();
         if (cancelled) return;
         const paymentStatus = verifyData?.order?.paymentStatus;
@@ -71,9 +126,10 @@ export function CheckoutPage() {
           clearCart();
           setProcessing(false);
           setPendingOrderId('');
+          setPendingOrderEmail('');
           pushToast('Pagamento aprovado.', 'success');
-          setStatus('Pagamento aprovado. Redirecionando para downloads...');
-          navigate(`/downloads?order=${pendingOrderId}&success=1`);
+          setStatus('Tudo certo! Pagamento aprovado. Levando você para a área de downloads…');
+          navigate(`/downloads?order=${encodeURIComponent(pendingOrderId)}&email=${encodeURIComponent(pendingOrderEmail)}&success=1`);
           return;
         }
 
@@ -81,8 +137,9 @@ export function CheckoutPage() {
           clearInterval(interval);
           setProcessing(false);
           setPendingOrderId('');
-          setStatus('Pagamento nao aprovado. Tente novamente.');
-          pushToast('Pagamento nao aprovado.', 'warning');
+          setPendingOrderEmail('');
+          setStatus('Não conseguimos confirmar este pagamento. Você pode tentar de novo com outro método sem perder o carrinho.');
+          pushToast('Pagamento não confirmado.', 'warning');
         }
       } catch (pollError) {
         if (import.meta.env.DEV) {
@@ -95,7 +152,7 @@ export function CheckoutPage() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [pendingOrderId, clearCart, navigate, pushToast]);
+  }, [pendingOrderId, pendingOrderEmail, clearCart, navigate, pushToast]);
 
   const statusStep = useMemo(() => {
     if (status.includes('aprovado')) return 2;
@@ -106,11 +163,11 @@ export function CheckoutPage() {
 
   const stepperDescription = useMemo(() => {
     if (processing) {
-      return 'Criando pagamento e abrindo a cobrança.';
+      return 'Estamos preparando seu pagamento e abrindo a cobrança em uma nova aba.';
     }
 
     if (status.includes('Aguardando')) {
-      return 'Acompanhando a confirmação do pagamento em tempo real.';
+      return 'Acompanhando a confirmação do pagamento em tempo real. Pode fechar a outra aba quando terminar de pagar.';
     }
 
     if (status.includes('aprovado')) {
@@ -125,17 +182,19 @@ export function CheckoutPage() {
     const email = formData.email.trim();
 
     if (!cart.length) {
-      setStatus('Seu carrinho esta vazio.');
+      setStatus('Seu carrinho está vazio. Volte ao catálogo para escolher seus materiais.');
       return;
     }
 
     setProcessing(true);
-    setStatus('Criando pagamento...');
+    setStatus('Estamos preparando seu pagamento…');
 
     try {
       const payload = {
         items: cart.map((item) => ({ productId: item.id, quantity: item.quantity || 1 })),
         customer: { name, email },
+        attribution: getAttributionPayload(),
+        couponCode: appliedCoupon?.code || null,
       };
 
       if (email && customerSession?.email !== email) {
@@ -158,6 +217,7 @@ export function CheckoutPage() {
       }
 
       localStorage.setItem('lastOrderId', String(data.orderId || ''));
+      localStorage.setItem('lastOrderEmail', email);
 
       const paymentUrl = data.initPoint || data.sandboxInitPoint;
       if (!paymentUrl) {
@@ -165,8 +225,9 @@ export function CheckoutPage() {
       }
 
       window.open(paymentUrl, '_blank');
-      pushToast('Pagamento criado. Aguardando confirmacao.', 'info');
-      setStatus('Aguardando confirmacao do pagamento...');
+      pushToast('Pagamento gerado. Estamos aguardando a confirmação.', 'info');
+      setStatus('Aguardando confirmação do pagamento. Pode finalizar pela aba que abrimos — vamos te avisar aqui assim que aprovar.');
+      setPendingOrderEmail(email);
       setPendingOrderId(String(data.orderId || ''));
     } catch (submitError) {
       setProcessing(false);
@@ -179,9 +240,39 @@ export function CheckoutPage() {
   const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50 disabled:text-slate-500';
   const errorInputClass = 'border-rose-300 focus:border-rose-500 focus:ring-rose-100';
 
+  const discount = appliedCoupon?.discount || 0;
+  const displayTotal = Math.max(0, total - discount);
+
+  async function onGoogleSignIn() {
+    setGoogleLoading(true);
+    try {
+      await loginCustomerGoogle('/checkout');
+      // O fluxo OAuth redireciona; o estado de loading fica até a navegação
+    } catch (err) {
+      setGoogleLoading(false);
+      pushToast(err?.message || 'Não foi possível entrar com Google.', 'error');
+    }
+  }
+
   return (
     <Shell>
+      <SEO
+        title="Finalizar compra"
+        description="Conclua sua compra com pagamento seguro e download imediato dos materiais educativos."
+        pathname="/checkout"
+        noindex
+      />
       <section className="mx-auto max-w-6xl px-4 py-8 lg:px-6">
+        {/* TRUST PANEL — credibilidade acima da dobra, antes do formulário */}
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <TrustBadgeRow />
+          <p className="mt-3 text-center text-xs text-slate-500 sm:text-sm">
+            <i className="bi bi-info-circle mr-1 text-brand-600" aria-hidden="true" />
+            Você verá a confirmação do pagamento antes de sair desta página.
+            Não precisa atualizar nem voltar — vamos te avisar em tempo real.
+          </p>
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
           {/* RESUMO */}
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -219,9 +310,33 @@ export function CheckoutPage() {
               </ul>
             )}
 
-            <div className="mt-5 flex items-baseline justify-between rounded-xl bg-gradient-to-br from-brand-50 to-white p-4 ring-1 ring-brand-100">
-              <span className="text-sm font-semibold text-slate-600">Total</span>
-              <strong className="font-display text-2xl font-bold text-brand-700">{formatPrice(total)}</strong>
+            <div className="mt-5">
+              <CouponField
+                cart={cart.map((item) => ({ ...item, categoryId: item.categoryId || null }))}
+                applied={appliedCoupon}
+                onApply={setAppliedCoupon}
+                onClear={() => setAppliedCoupon(null)}
+                disabled={processing}
+              />
+            </div>
+
+            <div className="mt-4 rounded-xl bg-gradient-to-br from-brand-50 to-white p-4 ring-1 ring-brand-100">
+              {discount > 0 ? (
+                <>
+                  <div className="mb-1 flex items-baseline justify-between text-sm text-slate-500">
+                    <span>Subtotal</span>
+                    <span>{formatPrice(total)}</span>
+                  </div>
+                  <div className="mb-2 flex items-baseline justify-between text-sm text-emerald-700">
+                    <span>Desconto</span>
+                    <span>−{formatPrice(discount)}</span>
+                  </div>
+                </>
+              ) : null}
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-semibold text-slate-600">Total</span>
+                <strong className="font-display text-2xl font-bold text-brand-700">{formatPrice(displayTotal)}</strong>
+              </div>
             </div>
 
             <p className="mt-3 text-xs text-slate-500">
@@ -251,12 +366,28 @@ export function CheckoutPage() {
                 Comprando como <strong className="text-slate-800">{customerSession.email}</strong>
               </p>
             ) : (
-              <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                Entre na sua conta para preencher seus dados automaticamente.{' '}
-                <Link to="/login?mode=login&redirect=/checkout" className="font-semibold text-brand-700 hover:underline">
-                  Entrar agora
-                </Link>
-              </p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <p className="mb-2 text-xs text-slate-600">
+                  Acelere preenchendo seus dados pela sua conta Google — ou continue como convidado preenchendo nome e e-mail abaixo.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={onGoogleSignIn}
+                    disabled={googleLoading || processing}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <i className="bi bi-google text-base" aria-hidden="true" />
+                    {googleLoading ? 'Abrindo Google…' : 'Continuar com Google'}
+                  </button>
+                  <Link
+                    to="/login?mode=login&redirect=/checkout"
+                    className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold text-brand-700 transition hover:underline"
+                  >
+                    Já tenho conta
+                  </Link>
+                </div>
+              </div>
             )}
 
             <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-3">

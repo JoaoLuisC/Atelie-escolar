@@ -1,10 +1,50 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { CrossSellSection } from '../components/CrossSellSection';
+import { ProductBenefits } from '../components/ProductBenefits';
+import { ProductFaq } from '../components/ProductFaq';
+import { ProductReviews } from '../components/ProductReviews';
+import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
-import { fetchProductById } from '../services/products';
+import { fetchProductByIdentifier } from '../services/products';
 import { formatPrice } from '../utils/currency';
+import { buildItemPayload, trackEvent } from '../utils/analytics';
+
+function buildProductJsonLd(product) {
+  if (!product) return null;
+  return {
+    '@context': 'https://schema.org/',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description || '',
+    image: (product.images || []).filter(Boolean).slice(0, 5),
+    sku: String(product.id),
+    category: product.category || undefined,
+    brand: { '@type': 'Brand', name: 'Profa. Marciar Cardoso' },
+    offers: {
+      '@type': 'Offer',
+      url: typeof window !== 'undefined'
+        ? `${window.location.origin}/produtos/${product.slug || product.id}`
+        : undefined,
+      priceCurrency: 'BRL',
+      price: Number(product.price || 0).toFixed(2),
+      availability: product.active === false
+        ? 'https://schema.org/OutOfStock'
+        : 'https://schema.org/InStock',
+      itemCondition: 'https://schema.org/NewCondition',
+    },
+  };
+}
+
+function buildProductSeoDescription(product) {
+  if (!product) return undefined;
+  const base = (product.description || '').replace(/\s+/g, ' ').trim();
+  if (base.length > 30) return base.slice(0, 200);
+  const fallback = `${product.name} · material educativo em PDF, pronto para imprimir.`;
+  return fallback.slice(0, 200);
+}
 
 function getYoutubeEmbedUrl(url) {
   try {
@@ -24,7 +64,7 @@ function getYoutubeEmbedUrl(url) {
 }
 
 export function ProductDetailsPage() {
-  const { id } = useParams();
+  const { slug } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { pushToast } = useToast();
@@ -40,11 +80,20 @@ export function ProductDetailsPage() {
       try {
         setLoading(true);
         setError('');
-        const data = await fetchProductById(id);
+        const data = await fetchProductByIdentifier(slug);
         if (!data) throw new Error('Produto não encontrado na API.');
         if (isMounted) {
           setProduct(data);
           setActiveMediaIndex(0);
+          trackEvent('view_item', buildItemPayload(data));
+
+          // Soft redirect: usuário chegou por /produtos/<id-numérico>?
+          // Reescreve a URL para o slug canônico sem recarregar a página.
+          // Garante que canonical, share e SEO usem a URL nova.
+          const canonicalSlug = data.slug || String(data.id);
+          if (canonicalSlug && canonicalSlug !== slug) {
+            navigate(`/produtos/${canonicalSlug}`, { replace: true });
+          }
         }
       } catch (requestError) {
         if (isMounted) setError(requestError.message);
@@ -57,7 +106,7 @@ export function ProductDetailsPage() {
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [slug, navigate]);
 
   const mediaList = useMemo(() => {
     if (!product) return [];
@@ -88,6 +137,22 @@ export function ProductDetailsPage() {
 
   return (
     <Shell>
+      {product ? (
+        <SEO
+          title={product.name}
+          description={buildProductSeoDescription(product)}
+          image={(product.images || [])[0] || product.image || undefined}
+          type="product"
+          pathname={`/produtos/${product.slug || product.id}`}
+          jsonLd={buildProductJsonLd(product)}
+        />
+      ) : (
+        <SEO
+          title="Carregando produto"
+          pathname={`/produtos/${slug || ''}`}
+          noindex
+        />
+      )}
       <section className="mx-auto max-w-6xl px-4 py-8 lg:px-6">
         <Link to="/produtos" className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline">
           <i className="bi bi-arrow-left" /> Voltar ao catálogo
@@ -145,7 +210,7 @@ export function ProductDetailsPage() {
                         }`}
                       >
                         {m.type === 'image' ? (
-                          <img src={m.url} alt={`Mídia ${i + 1}`} className="h-full w-full object-cover" />
+                          <img src={m.url} alt={`Mídia ${i + 1}`} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-slate-900 text-white">
                             <i className="bi bi-play-circle-fill text-2xl" />
@@ -210,6 +275,8 @@ export function ProductDetailsPage() {
                 </dl>
               ) : null}
 
+              <ProductBenefits items={product.benefits} className="mt-5" />
+
               <div className="mt-6 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -228,6 +295,14 @@ export function ProductDetailsPage() {
               </div>
             </div>
           </article>
+        ) : null}
+
+        {!loading && !error && product ? (
+          <>
+            <ProductReviews items={product.reviews} />
+            <ProductFaq items={product.faq} />
+            <CrossSellSection productId={product.id} />
+          </>
         ) : null}
       </section>
     </Shell>

@@ -1,17 +1,21 @@
 const crypto = require('node:crypto');
-const { getTableRow } = require('../lib/supabase');
+const { serviceRoleHelpers: { getTableRow } } = require('../lib/supabase');
+const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 const { safeCompare, setAdminCorsHeaders, setSessionCookie } = require('../lib/admin-session');
 const { getAnonClient, getProfileRoleByEmail } = require('../services/supabase-auth');
 
 const FACTOR_CHALLENGE_TTL_SECONDS = 5 * 60;
 
 function getChallengeSecret() {
-  return (
-    process.env.ADMIN_SESSION_SECRET ||
-    process.env.WEBHOOK_SECRET ||
-    process.env.DOWNLOAD_TOKEN_SECRET ||
-    'dev-admin-session-secret-change-me'
-  );
+  const secret = String(process.env.ADMIN_SESSION_SECRET || '').trim();
+  if (secret) return secret;
+
+  const runtimeEnv = String(process.env.APP_ENV || process.env.NODE_ENV || '').toLowerCase();
+  if (runtimeEnv === 'production') {
+    throw new Error('ADMIN_SESSION_SECRET é obrigatório em produção.');
+  }
+
+  return 'dev-admin-session-secret-change-me';
 }
 
 function toBase64Url(input) {
@@ -214,6 +218,13 @@ module.exports = async function adminLoginHandler(req, res) {
   });
 
   if (authError || !authData?.user?.id) {
+    await recordSecurityEvent({
+      eventName: 'admin_login_failed',
+      severity: 'warn',
+      ip: extractClientIp(req),
+      userAgent: req.headers['user-agent'],
+      properties: { reason: 'invalid_credentials', email_hash: crypto.createHash('sha256').update(email).digest('hex').slice(0, 16) },
+    });
     return res.status(401).json({ success: false, error: 'Credenciais invalidas.' });
   }
 
@@ -221,6 +232,13 @@ module.exports = async function adminLoginHandler(req, res) {
   const normalizedRole = String(role || '').trim().toLowerCase();
 
   if (!['admin', 'master'].includes(normalizedRole)) {
+    await recordSecurityEvent({
+      eventName: 'admin_login_failed',
+      severity: 'warn',
+      ip: extractClientIp(req),
+      userAgent: req.headers['user-agent'],
+      properties: { reason: 'non_admin_role', role: normalizedRole || 'none', email_hash: crypto.createHash('sha256').update(email).digest('hex').slice(0, 16) },
+    });
     return res.status(403).json({
       success: false,
       error: 'Acesso restrito ao perfil master/admin.',

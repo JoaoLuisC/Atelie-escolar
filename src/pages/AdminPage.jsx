@@ -14,6 +14,9 @@ import { ComparisonTab } from '../components/admin/tabs/ComparisonTab';
 import { PerformanceTab } from '../components/admin/tabs/PerformanceTab';
 import { VitrineTab } from '../components/admin/tabs/VitrineTab';
 import { SecurityTab } from '../components/admin/tabs/SecurityTab';
+import { AnalysisTab } from '../components/admin/tabs/AnalysisTab';
+import { FunnelTab } from '../components/admin/tabs/FunnelTab';
+import { SegmentsTab } from '../components/admin/tabs/SegmentsTab';
 import { OrderDetailModal } from '../components/admin/OrderDetailModal';
 import {
   createAdminCategory,
@@ -437,6 +440,12 @@ export function AdminPage() {
         return <FinanceTab approvedOrders={approvedOrders} faturamentoSeries={faturamentoSeries} />;
       case 'comparativo':
         return <ComparisonTab monthlyComparison={monthlyComparison} comparisonDelta={comparisonDelta} />;
+      case 'funil':
+        return <FunnelTab />;
+      case 'analise':
+        return <AnalysisTab categories={dashboardData.categories || []} />;
+      case 'segmentos':
+        return <SegmentsTab />;
       case 'prod-saida':
         return <PerformanceTab productPerformance={productPerformance} />;
       case 'vitrine':

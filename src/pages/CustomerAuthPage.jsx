@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { SEO } from '../components/SEO';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { ADMIN_LOGIN_PATH } from '../constants/routes';
@@ -329,6 +330,7 @@ export function CustomerAuthPage() {
 
   return (
     <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-100 via-white to-sky-50 px-4 py-10">
+      <SEO title="Entrar ou criar conta" pathname="/login" noindex />
       <article className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-xl backdrop-blur sm:p-8">
         <header className="mb-5">
           <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Conta</p>

@@ -2,6 +2,15 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { authenticate } = require('../middleware/auth.middleware');
 const { getProfileRoleByUserId } = require('../services/supabase-auth');
+
+async function resolveProfileRole(userId) {
+  try {
+    const role = await getProfileRoleByUserId(userId);
+    return String(role || '').trim().toLowerCase();
+  } catch {
+    return '';
+  }
+}
 const {
   clearCustomerSessionCookie,
   getCustomerSessionFromRequest,
@@ -122,6 +131,7 @@ router.post('/auth/customer/login', customerLoginLimiter, async (req, res, next)
       uid: String(data.user.id || '').trim(),
       email: String(data.user.email || '').trim(),
       name: extractSupabaseUserName(data.user),
+      role: await resolveProfileRole(data.user.id),
     };
 
     setCustomerSessionCookie(res, user);
@@ -199,6 +209,7 @@ router.post('/auth/customer/register', async (req, res, next) => {
       uid: String(data.user.id || '').trim(),
       email: String(data.user.email || '').trim(),
       name: extractSupabaseUserName(data.user) || name,
+      role: await resolveProfileRole(data.user.id),
     };
 
     setCustomerSessionCookie(res, user);
@@ -252,6 +263,7 @@ router.post('/auth/customer/google/callback', async (req, res, next) => {
       uid: String(data.id || '').trim(),
       email: String(data.email || '').trim(),
       name: extractSupabaseUserName(data),
+      role: await resolveProfileRole(data.id),
     };
 
     setCustomerSessionCookie(res, user);

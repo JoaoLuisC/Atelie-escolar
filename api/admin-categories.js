@@ -1,11 +1,13 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
 const {
-  deleteFromTable,
   getSupabaseConfig,
-  getTableRow,
-  insertIntoTable,
-  listTableRows,
-  updateTable,
+  serviceRoleHelpers: {
+    deleteFromTable,
+    getTableRow,
+    insertIntoTable,
+    listTableRows,
+    updateTable,
+  },
 } = require('../lib/supabase');
 
 function normalizeSlug(value) {
@@ -144,7 +146,6 @@ module.exports = async function adminCategoriesHandler(req, res) {
     return res.status(500).json({
       success: false,
       error: 'Erro ao processar categorias do admin.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

@@ -11,6 +11,10 @@ const CustomerAuthPage = lazy(() => import('./pages/CustomerAuthPage').then((m) 
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const DownloadsPage = lazy(() => import('./pages/DownloadsPage').then((m) => ({ default: m.DownloadsPage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
+const PrivacyPage = lazy(() => import('./pages/LegalPages').then((m) => ({ default: m.PrivacyPage })));
+const TermsPage = lazy(() => import('./pages/LegalPages').then((m) => ({ default: m.TermsPage })));
+const ConfirmSubscriptionPage = lazy(() => import('./pages/SubscriptionPages').then((m) => ({ default: m.ConfirmSubscriptionPage })));
+const UnsubscribePage = lazy(() => import('./pages/SubscriptionPages').then((m) => ({ default: m.UnsubscribePage })));
 const AdminLoginPage = lazy(() => import('./pages/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
 
@@ -29,12 +33,16 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/produtos" element={<ProductsPage />} />
-        <Route path="/produtos/:id" element={<ProductDetailsPage />} />
+        <Route path="/produtos/:slug" element={<ProductDetailsPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/login" element={<CustomerAuthPage />} />
         <Route path="/conta" element={<CustomerAuthPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/downloads" element={<DownloadsPage />} />
+        <Route path="/privacidade" element={<PrivacyPage />} />
+        <Route path="/termos" element={<TermsPage />} />
+        <Route path="/confirmar-inscricao" element={<ConfirmSubscriptionPage />} />
+        <Route path="/desinscrever" element={<UnsubscribePage />} />
         <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
         <Route path="/admin-login" element={<Navigate to={ADMIN_LOGIN_PATH} replace />} />
         <Route

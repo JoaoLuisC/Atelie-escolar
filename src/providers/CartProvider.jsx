@@ -1,6 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { readCart, writeCart } from '../utils/cart-storage';
+import { buildItemPayload, trackEvent } from '../utils/analytics';
 
 export const CartContext = React.createContext(null);
 
@@ -30,12 +31,25 @@ export function CartProvider({ children }) {
     ];
 
     setCart(next);
+    trackEvent('add_to_cart', {
+      currency: 'BRL',
+      value: Number(product.price) || 0,
+      items: [buildItemPayload(product)],
+    });
     return { ok: true, message: 'Produto adicionado ao carrinho.' };
   }, [cart]);
 
   const removeFromCart = React.useCallback((productId) => {
+    const removed = cart.find((item) => String(item.id) === String(productId));
     const nextCart = cart.filter((item) => String(item.id) !== String(productId));
     setCart(nextCart);
+    if (removed) {
+      trackEvent('remove_from_cart', {
+        currency: 'BRL',
+        value: Number(removed.price) || 0,
+        items: [{ item_id: String(removed.id), item_name: removed.name, price: Number(removed.price) || 0 }],
+      });
+    }
   }, [cart]);
 
   const clearCart = React.useCallback(() => {

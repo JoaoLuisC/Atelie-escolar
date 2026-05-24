@@ -1,9 +1,11 @@
 import { useContext, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { CartContext } from '../providers/CartProvider';
 import { useToast } from '../hooks/useToast';
+import { CartDrawer } from './CartDrawer';
+import { NewsletterSignup } from './NewsletterSignup';
 
 function navLinkClass({ isActive }) {
   return `inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
@@ -16,16 +18,32 @@ function staticLinkClass() {
 }
 
 export function Shell({ children }) {
+  const navigate = useNavigate();
   const { customerSession, logoutCustomer } = useAuth();
   const cartContext = useContext(CartContext);
   const cartCount = Array.isArray(cartContext?.cart) ? cartContext.cart.length : 0;
   const { pushToast } = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
+
+  const isAdminRole = ['admin', 'master'].includes(String(customerSession?.role || '').toLowerCase());
 
   function handleCustomerLogout() {
     logoutCustomer();
     pushToast('Sessão encerrada.', 'info');
     setMobileMenuOpen(false);
+  }
+
+  function openCart() {
+    setCartDrawerOpen(true);
+  }
+
+  function closeCart() {
+    setCartDrawerOpen(false);
+  }
+
+  function goToCheckout() {
+    navigate('/checkout');
   }
 
   return (
@@ -61,21 +79,36 @@ export function Shell({ children }) {
                 </NavLink>
               </li>
             ) : null}
+            {isAdminRole ? (
+              <li>
+                <NavLink
+                  to="/admin"
+                  className={({ isActive }) => `inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                    isActive ? 'bg-amber-100 text-amber-800' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                  }`}
+                >
+                  <i className="bi bi-shield-lock" /> Painel admin
+                </NavLink>
+              </li>
+            ) : null}
           </ul>
 
           <div className="flex items-center gap-1">
-            <NavLink
-              to="/checkout"
-              aria-label="Carrinho"
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 hover:text-brand-700"
+            <button
+              type="button"
+              onClick={openCart}
+              aria-label={cartCount > 0 ? `Abrir carrinho com ${cartCount} ${cartCount === 1 ? 'item' : 'itens'}` : 'Abrir carrinho'}
+              aria-haspopup="dialog"
+              aria-expanded={cartDrawerOpen}
+              className="relative inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 hover:text-brand-700"
             >
-              <i className="bi bi-cart3 text-xl" />
+              <i className="bi bi-cart3 text-xl" aria-hidden="true" />
               {cartCount > 0 ? (
                 <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-bold text-white">
                   {cartCount}
                 </span>
               ) : null}
-            </NavLink>
+            </button>
 
             <NavLink
               to="/login"
@@ -116,6 +149,19 @@ export function Shell({ children }) {
               <li><NavLink to="/produtos" onClick={() => setMobileMenuOpen(false)} className={navLinkClass}>Produtos</NavLink></li>
               {customerSession?.email ? (
                 <li><NavLink to="/downloads" onClick={() => setMobileMenuOpen(false)} className={navLinkClass}><i className="bi bi-bag-heart" /> Meus produtos</NavLink></li>
+              ) : null}
+              {isAdminRole ? (
+                <li>
+                  <NavLink
+                    to="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={({ isActive }) => `inline-flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                      isActive ? 'bg-amber-100 text-amber-800' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                    }`}
+                  >
+                    <i className="bi bi-shield-lock" /> Painel admin
+                  </NavLink>
+                </li>
               ) : null}
               <li><NavLink to="/login" onClick={() => setMobileMenuOpen(false)} className={navLinkClass}><i className="bi bi-person-circle" /> {customerSession?.email ? 'Conta' : 'Entrar'}</NavLink></li>
               {customerSession?.email ? (
@@ -192,12 +238,23 @@ export function Shell({ children }) {
             </div>
           </div>
 
-          <div className="mt-10 border-t border-white/15 pt-6 text-center text-xs text-white/70">
+          <div className="mt-8 border-t border-white/15 pt-6">
+            <NewsletterSignup source="footer" className="mx-auto max-w-md" />
+          </div>
+
+          <div className="mt-8 border-t border-white/15 pt-6 text-center text-xs text-white/70">
             <p>&copy; 2026 Profa. Marciar Cardoso · Todos os direitos reservados</p>
             <p className="mt-1 italic">Iluminando o futuro com criatividade e amor</p>
+            <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+              <Link to="/privacidade" className="underline-offset-2 hover:underline">Política de Privacidade</Link>
+              <span aria-hidden="true">·</span>
+              <Link to="/termos" className="underline-offset-2 hover:underline">Termos de Uso</Link>
+            </p>
           </div>
         </div>
       </footer>
+
+      <CartDrawer isOpen={cartDrawerOpen} onClose={closeCart} onCheckout={goToCheckout} />
     </div>
   );
 }

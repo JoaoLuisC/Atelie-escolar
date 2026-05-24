@@ -19,6 +19,10 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/sitemap.xml",
+      "dest": "/api/sitemap.xml.js"
+    },
+    {
       "handle": "filesystem"
     },
     {
@@ -29,6 +33,8 @@
   "env": {
     "VITE_SUPABASE_URL": "@supabase_url",
     "VITE_SUPABASE_ANON_KEY": "@supabase_anon_key",
+    "VITE_GA4_ID": "@vite_ga4_id",
+    "VITE_META_PIXEL_ID": "@vite_meta_pixel_id",
     "SUPABASE_URL": "@supabase_url",
     "SUPABASE_ANON_KEY": "@supabase_anon_key",
     "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",

@@ -1,12 +1,20 @@
-const { getSupabaseConfig, getTableRow } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { getTableRow } } = require('../lib/supabase');
+
+const SELECT_FIELDS = 'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,product_type,tags,is_kit,page_size,paper_type,kit_items,panel_sizes,featured,active,faq,reviews,benefits';
+
+function pickIdentifier(query) {
+  const raw = String(query?.slug || query?.id || '').trim();
+  if (!raw) return { type: null, value: null };
+  // Bigint id puro → busca por id; senão é slug.
+  if (/^\d+$/.test(raw)) {
+    return { type: 'id', value: raw };
+  }
+  return { type: 'slug', value: raw };
+}
 
 module.exports = async function productDetailsHandler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
   if (req.method !== 'GET') {
@@ -14,10 +22,10 @@ module.exports = async function productDetailsHandler(req, res) {
   }
 
   try {
-    const id = req.query?.id;
+    const { type, value } = pickIdentifier(req.query);
 
-    if (!id) {
-      return res.status(400).json({ error: 'id é obrigatório' });
+    if (!value) {
+      return res.status(400).json({ error: 'slug ou id é obrigatório' });
     }
 
     if (!getSupabaseConfig()) {
@@ -25,8 +33,8 @@ module.exports = async function productDetailsHandler(req, res) {
     }
 
     const product = await getTableRow('products', {
-      select: 'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,product_type,tags,is_kit,page_size,paper_type,kit_items,panel_sizes,featured',
-      filters: [{ column: 'id', value: id }],
+      select: SELECT_FIELDS,
+      filters: [{ column: type, value }],
     });
 
     if (!product) {
@@ -36,7 +44,7 @@ module.exports = async function productDetailsHandler(req, res) {
     let category = null;
     if (product.category_id) {
       category = await getTableRow('categories', {
-        select: 'name',
+        select: 'name,slug',
         filters: [{ column: 'id', value: product.category_id }],
       });
     }
@@ -46,6 +54,7 @@ module.exports = async function productDetailsHandler(req, res) {
       success: true,
       product: {
         id: String(product.id),
+        slug: product.slug || String(product.id),
         name: product.name,
         description: product.description,
         price: Number(product.price || 0),
@@ -56,21 +65,23 @@ module.exports = async function productDetailsHandler(req, res) {
         downloadUrl: product.download_url || '',
         category: category?.name || null,
         categoryId: product.category_id ? String(product.category_id) : null,
+        categorySlug: category?.slug || null,
         productType: product.product_type || 'individual',
         isKit: product.is_kit === true,
         featured: product.featured === true,
+        active: product.active !== false,
         tags: Array.isArray(product.tags) ? product.tags : [],
         pageSize: product.page_size || '',
         paperType: product.paper_type || '',
         kitItems: Array.isArray(product.kit_items) ? product.kit_items : [],
         panelSizes: Array.isArray(product.panel_sizes) ? product.panel_sizes : [],
+        faq: Array.isArray(product.faq) ? product.faq : [],
+        reviews: Array.isArray(product.reviews) ? product.reviews : [],
+        benefits: Array.isArray(product.benefits) ? product.benefits : [],
       },
     });
   } catch (error) {
     console.error('Error fetching product details:', error);
-    return res.status(500).json({
-      error: 'Erro ao buscar detalhes do produto',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-    });
+    return res.status(500).json({ error: 'Erro ao buscar detalhes do produto' });
   }
 };

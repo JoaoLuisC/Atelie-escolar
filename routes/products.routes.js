@@ -3,7 +3,7 @@ const { authenticate, checkRole } = require('../middleware/auth.middleware');
 const { validateBody } = require('../middleware/validate.middleware');
 const { createProductSchema } = require('../validation/product.schemas');
 const { AppError } = require('../utils/app-error');
-const { getTableRow, insertIntoTable } = require('../lib/supabase');
+const { serviceRoleHelpers: { getTableRow, insertIntoTable } } = require('../lib/supabase');
 
 const router = express.Router();
 

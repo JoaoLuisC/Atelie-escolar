@@ -1,4 +1,4 @@
-const { getSupabaseConfig, getTableRow, listTableRows } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, listTableRows } } = require('../lib/supabase');
 
 function safeJsonParse(value, fallback) {
   if (value === null || value === undefined) {
@@ -102,12 +102,8 @@ function normalizeSections(rawSetting, categories) {
 }
 
 module.exports = async function homeSectionsHandler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
   if (req.method !== 'GET') {
@@ -131,7 +127,7 @@ module.exports = async function homeSectionsHandler(req, res) {
         ascending: true,
       }),
       listTableRows('products', {
-        select: 'id,name,price,image_url,category_id,active,created_at',
+        select: 'id,slug,name,price,image_url,category_id,active,created_at',
         filters: [{ column: 'active', value: true }],
         orderBy: 'created_at',
         ascending: false,
@@ -169,6 +165,7 @@ module.exports = async function homeSectionsHandler(req, res) {
       const category = categoryById.get(String(product.category_id));
       return {
         id: String(product.id),
+        slug: product.slug || String(product.id),
         name: product.name,
         price: Number(product.price || 0),
         image: product.image_url || '',
@@ -223,10 +220,6 @@ module.exports = async function homeSectionsHandler(req, res) {
     });
   } catch (error) {
     console.error('Home sections error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao carregar vitrine da home.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-    });
+    return res.status(500).json({ success: false, error: 'Erro ao carregar vitrine da home.' });
   }
 };

@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { formatPrice } from '../../../utils/currency';
+import { fetchAdminKpis } from '../../../services/admin-panel';
 import { Card } from '../ui/Card';
 import { StatusChip } from '../ui/StatusChip';
 import { Button } from '../ui/Button';
@@ -439,6 +440,17 @@ export function DashboardTab({
   const ticket = ticketMedio || { value: 0, pct: 0, trend: 'stable', qty: 0 };
   const mix = customerMix || { total: 0, newCustomers: 0, recurring: 0, recurringPct: 0, inactive: 0 };
 
+  // KPIs avançados (LTV, recompra, LTV/CAC) — carregados sob demanda
+  // para não bloquear o render do resto do dashboard.
+  const [advancedKpis, setAdvancedKpis] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminKpis({ window: 12 })
+      .then((data) => { if (!cancelled) setAdvancedKpis(data?.kpis || null); })
+      .catch(() => { if (!cancelled) setAdvancedKpis(null); });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className="flex flex-col gap-5">
       {/* Hero KPIs */}
@@ -482,6 +494,38 @@ export function DashboardTab({
         <MiniStat label="Produtos ativos" value={safeSummary.activeProducts || 0} icon="box-seam" accent="success" />
         <MiniStat label="Pendentes" value={safeSummary.pendingOrders || 0} icon="hourglass-split" accent="warning" />
         <MiniStat label="Clientes cadastrados" value={safeSummary.totalUsers || 0} icon="people" accent="neutral" />
+      </div>
+
+      {/* KPIs avançados (Fase 4) — LTV, recompra, LTV/CAC ratio */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MiniStat
+          label="LTV médio (12m)"
+          value={advancedKpis ? formatPrice(advancedKpis.ltvAvg) : '—'}
+          icon="cash-coin"
+          accent="info"
+        />
+        <MiniStat
+          label="Taxa de recompra"
+          value={advancedKpis ? `${Math.round(advancedKpis.repurchaseRate)}%` : '—'}
+          icon="arrow-repeat"
+          accent="success"
+        />
+        <MiniStat
+          label="Ticket médio (12m)"
+          value={advancedKpis ? formatPrice(advancedKpis.ticketMedio) : '—'}
+          icon="receipt"
+          accent="neutral"
+        />
+        <MiniStat
+          label="LTV / CAC"
+          value={
+            advancedKpis?.ltvCacRatio
+              ? `${advancedKpis.ltvCacRatio.toFixed(1)}x`
+              : 'Fase 5'
+          }
+          icon="speedometer2"
+          accent={advancedKpis?.ltvCacRatio >= 3 ? 'success' : 'warning'}
+        />
       </div>
 
       {/* Charts row */}

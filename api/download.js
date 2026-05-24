@@ -1,4 +1,6 @@
-const { deleteFromTable, getSupabaseConfig, getTableRow, insertIntoTable, updateTable } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, insertIntoTable, updateTable } } = require('../lib/supabase');
+const { createSignedDownloadUrl } = require('../lib/storage-signed-url');
+const { extractClientIp } = require('../lib/security-logger');
 
 module.exports = async function downloadHandler(req, res) {
   if (req.method !== 'GET') {
@@ -45,6 +47,13 @@ module.exports = async function downloadHandler(req, res) {
       return res.status(404).json({ error: 'Link de download não encontrado' });
     }
 
+    // Tenta gerar signed URL temporário (5 min) quando o arquivo está no
+    // Supabase Storage. Caso contrário cai no redirect direto (Drive etc.) —
+    // legado, com Referrer-Policy: no-referrer pra não vazar `Referer`.
+    const signedUrl = await createSignedDownloadUrl(product.download_url);
+    const finalUrl = signedUrl || product.download_url;
+    const deliveryMode = signedUrl ? 'signed-storage' : 'external-redirect';
+
     await updateTable('download_tokens', { token: `eq.${tokenRecord.token}` }, {
       used: true,
       used_at: new Date().toISOString(),
@@ -54,17 +63,18 @@ module.exports = async function downloadHandler(req, res) {
       order_id: tokenRecord.order_id,
       product_id: tokenRecord.product_id,
       token,
-      ip_address: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || ''),
+      ip_address: extractClientIp(req) || '',
       user_agent: String(req.headers['user-agent'] || ''),
       downloaded_at: new Date().toISOString(),
     });
 
-    return res.redirect(product.download_url);
+    // Evita que o token (signed ou externo) vaze via Referer pro destino.
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('X-Download-Mode', deliveryMode);
+    return res.redirect(finalUrl);
   } catch (error) {
     console.error('Download error:', error);
-    return res.status(500).json({
-      error: 'Erro ao processar download',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-    });
+    return res.status(500).json({ error: 'Erro ao processar download' });
   }
 };

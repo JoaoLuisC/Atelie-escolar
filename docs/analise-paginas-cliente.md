@@ -1,6 +1,6 @@
 # Análise das páginas do cliente
 
-> Histórico: este documento descreve o estado original das páginas do cliente antes do refactor descrito em [plano-melhorias-fluxo-cliente.md](./plano-melhorias-fluxo-cliente.md). Os trechos sobre "alta concentração de lógica em `ProductsPage`" e ausência de stepper de status já foram resolvidos — a maioria está documentada como "concluído" no plano de melhorias. Mantido como referência para auditoria.
+> Histórico: este documento descreve o estado original das páginas do cliente antes dos refactors da Fase 2 do [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md) (que absorveu o antigo `plano-melhorias-fluxo-cliente.md`). Os trechos sobre "alta concentração de lógica em `ProductsPage`" e ausência de stepper de status já foram resolvidos — ver status atualizado por item no plano. Mantido como referência para auditoria.
 
 Escopo desta análise: apenas as páginas do fluxo do cliente. A área administrativa foi ignorada propositalmente.
 

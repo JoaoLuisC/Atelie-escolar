@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
+import { SkeletonDownloadList } from '../components/Skeleton';
 import { StatusStepper } from '../components/StatusStepper';
+import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { getApiBaseUrl } from '../utils/api';
 import { formatPrice } from '../utils/currency';
+import { trackPurchaseOnce } from '../utils/analytics';
 
-function usePendingOrderPolling({ orderId, paymentStatus, setOrder, setStatus, setPollingStatus, pushToast }) {
+function usePendingOrderPolling({ orderId, orderEmail, paymentStatus, setOrder, setStatus, setPollingStatus, pushToast }) {
   useEffect(() => {
-    if (!orderId || paymentStatus !== 'pending') {
+    if (!orderId || !orderEmail || paymentStatus !== 'pending') {
       setPollingStatus('');
       return undefined;
     }
@@ -17,19 +21,19 @@ function usePendingOrderPolling({ orderId, paymentStatus, setOrder, setStatus, s
     let attempts = 0;
     const maxAttempts = 12;
 
-    setPollingStatus('Reconsultando automaticamente a cada 10 segundos...');
+    setPollingStatus('Estamos verificando o pagamento sem você precisar fazer nada.');
 
     const interval = setInterval(async () => {
       attempts += 1;
 
       if (attempts > maxAttempts) {
         clearInterval(interval);
-        setPollingStatus('Reconsulta automatica encerrada. Clique em Atualizar para tentar novamente.');
+        setPollingStatus('Pausamos a verificação automática. Clique em Atualizar quando quiser tentar de novo.');
         return;
       }
 
       try {
-        const response = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${orderId}`);
+        const response = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${encodeURIComponent(orderId)}&email=${encodeURIComponent(orderEmail)}`);
         const data = await response.json();
 
         if (!response.ok || !data.success) {
@@ -40,18 +44,28 @@ function usePendingOrderPolling({ orderId, paymentStatus, setOrder, setStatus, s
 
         if (nextStatus === 'approved') {
           clearInterval(interval);
-          setPollingStatus('Pagamento aprovado na reconsulta automatica.');
+          setPollingStatus('Pagamento aprovado. Liberando seus arquivos…');
           setOrder(data.order);
-          setStatus('Pagamento aprovado. Seus downloads estao liberados.');
+          setStatus('Tudo certo. Seus arquivos estão liberados abaixo.');
           pushToast('Pagamento aprovado. Downloads liberados.', 'success');
+          trackPurchaseOnce(data.order?.orderId || orderId, {
+            currency: 'BRL',
+            value: Number(data.order?.totalAmount || 0),
+            items: (data.order?.items || []).map((item) => ({
+              item_id: String(item.id),
+              item_name: item.title,
+              price: Number(item.price || 0),
+              quantity: Number(item.quantity || 1),
+            })),
+          });
           return;
         }
 
         if (nextStatus === 'rejected' || nextStatus === 'cancelled') {
           clearInterval(interval);
-          setPollingStatus('Pagamento retornou como nao aprovado.');
+          setPollingStatus('Recebemos o status final do pagamento.');
           setOrder(data.order);
-          setStatus('Pagamento nao aprovado para este pedido.');
+          setStatus('Não conseguimos confirmar este pagamento. Tente novamente em alguns minutos ou nos chame pelo e-mail.');
         }
       } catch (pollError) {
         if (import.meta.env.DEV) {
@@ -61,7 +75,7 @@ function usePendingOrderPolling({ orderId, paymentStatus, setOrder, setStatus, s
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [orderId, paymentStatus, pushToast, setOrder, setPollingStatus, setStatus]);
+  }, [orderId, orderEmail, paymentStatus, pushToast, setOrder, setPollingStatus, setStatus]);
 }
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -69,6 +83,7 @@ export function DownloadsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { pushToast } = useToast();
+  const { customerSession } = useAuth();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
   const [order, setOrder] = useState(null);
@@ -77,6 +92,7 @@ export function DownloadsPage() {
   const [searchingByEmail, setSearchingByEmail] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [pollingStatus, setPollingStatus] = useState('');
+  const [searchedEmail, setSearchedEmail] = useState('');
   const {
     formState: { errors },
     handleSubmit,
@@ -90,11 +106,24 @@ export function DownloadsPage() {
 
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order') || localStorage.getItem('lastOrderId') || '';
+  const orderEmail = (
+    params.get('email')
+    || localStorage.getItem('lastOrderEmail')
+    || customerSession?.email
+    || ''
+  ).trim().toLowerCase();
   const hasSuccessFlag = params.get('success') === '1';
 
   async function loadOrder() {
     if (!orderId) {
-      setStatus('Nenhum pedido encontrado para exibir downloads.');
+      setStatus('Nenhum pedido para exibir agora. Use a busca por e-mail abaixo para encontrar seus downloads.');
+      setOrder(null);
+      setOrderError('');
+      setLoading(false);
+      return;
+    }
+    if (!orderEmail) {
+      setStatus('Para consultar este pedido, informe o e-mail usado na compra abaixo.');
       setOrder(null);
       setOrderError('');
       setLoading(false);
@@ -102,14 +131,14 @@ export function DownloadsPage() {
     }
 
     setLoading(true);
-    setStatus('Verificando pedido...');
+    setStatus('Carregando as informações do seu pedido…');
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${orderId}`);
+      const response = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${encodeURIComponent(orderId)}&email=${encodeURIComponent(orderEmail)}`);
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Nao foi possivel verificar o pedido.');
+        throw new Error(data.error || 'Não foi possível verificar o pedido agora.');
       }
 
       setOrder(data.order || null);
@@ -117,11 +146,22 @@ export function DownloadsPage() {
 
       if (data.order?.paymentStatus === 'approved') {
         localStorage.removeItem('lastOrderId');
-        setStatus('Pagamento aprovado. Seus downloads estao liberados.');
+        localStorage.removeItem('lastOrderEmail');
+        setStatus('Tudo certo. Seus arquivos estão liberados abaixo.');
+        trackPurchaseOnce(data.order?.orderId || orderId, {
+          currency: 'BRL',
+          value: Number(data.order?.totalAmount || 0),
+          items: (data.order?.items || []).map((item) => ({
+            item_id: String(item.id),
+            item_name: item.title,
+            price: Number(item.price || 0),
+            quantity: Number(item.quantity || 1),
+          })),
+        });
       } else if (data.order?.paymentStatus === 'pending') {
-        setStatus('Pagamento pendente. Atualize para verificar novamente.');
+        setStatus('Estamos confirmando seu pagamento. Vamos liberar os arquivos assim que aprovar — sem necessidade de recarregar.');
       } else {
-        setStatus('Pagamento nao aprovado para este pedido.');
+        setStatus('Não conseguimos confirmar este pagamento. Tente novamente em alguns minutos ou nos chame pelo e-mail.');
       }
     } catch (error) {
       const message = error.message || 'Erro ao carregar downloads.';
@@ -141,6 +181,7 @@ export function DownloadsPage() {
 
   usePendingOrderPolling({
     orderId,
+    orderEmail,
     paymentStatus: order?.paymentStatus,
     setOrder,
     setStatus,
@@ -149,9 +190,10 @@ export function DownloadsPage() {
   });
 
   async function loadOrdersByEmail(formData) {
-    const email = formData.email.trim();
+    const email = formData.email.trim().toLowerCase();
     setSearchingByEmail(true);
     setEmailStatus('Buscando historico...');
+    setSearchedEmail(email);
 
     try {
       const response = await fetch(`${getApiBaseUrl()}/customer-orders?email=${encodeURIComponent(email)}`);
@@ -176,10 +218,12 @@ export function DownloadsPage() {
     }
   }
 
-  function openOrder(orderCode, internalOrderId) {
+  function openOrder(orderCode, internalOrderId, customerEmail) {
     const id = orderCode || internalOrderId;
     if (!id) return;
-    navigate(`/downloads?order=${encodeURIComponent(id)}`);
+    const email = (customerEmail || orderEmail || '').trim().toLowerCase();
+    const emailParam = email ? `&email=${encodeURIComponent(email)}` : '';
+    navigate(`/downloads?order=${encodeURIComponent(id)}${emailParam}`);
   }
 
   let statusStep = 0;
@@ -193,6 +237,12 @@ export function DownloadsPage() {
 
   return (
     <Shell>
+      <SEO
+        title="Meus downloads"
+        description="Acesse os arquivos dos seus pedidos aprovados a qualquer momento."
+        pathname="/downloads"
+        noindex
+      />
       <section className="mx-auto max-w-4xl px-4 py-8 lg:px-6">
         <header className="mb-6">
           <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Pós-compra</p>
@@ -227,7 +277,7 @@ export function DownloadsPage() {
 
           <StatusStepper
             activeStep={statusStep}
-            description={pollingStatus || status || 'Acompanhe a liberação em tempo real.'}
+            description={pollingStatus || status || 'Acompanhe a liberação em tempo real. Pode fechar a aba e voltar quando quiser.'}
             steps={[
               { label: 'Processando', description: 'Validando a cobrança.' },
               { label: 'Confirmando', description: 'Organizando os links.' },
@@ -274,10 +324,32 @@ export function DownloadsPage() {
             </div>
           ) : null}
 
-          {order && order.paymentStatus !== 'approved' ? (
-            <p className="mt-5 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200">
-              Seu pedido ainda não foi aprovado para download.
+          {/* Estado de espera: pedido encontrado mas ainda não aprovado.
+              Combinamos um aviso suave com skeletons que ancoram o usuário
+              no layout que vai aparecer assim que o pagamento confirmar. */}
+          {order && order.paymentStatus === 'pending' ? (
+            <div className="mt-5 space-y-3">
+              <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200">
+                <i className="bi bi-hourglass-split mr-1.5" aria-hidden="true" />
+                Pagamento ainda em análise. Você não precisa fazer nada — assim que confirmar, seus arquivos aparecem aqui.
+              </p>
+              <SkeletonDownloadList count={Math.max(1, (order.items || []).length || 2)} />
+            </div>
+          ) : null}
+
+          {order && order.paymentStatus !== 'approved' && order.paymentStatus !== 'pending' ? (
+            <p className="mt-5 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-800 ring-1 ring-rose-200">
+              <i className="bi bi-x-octagon mr-1.5" aria-hidden="true" />
+              Este pedido não foi aprovado. Se já tentou pagar e o valor foi cobrado, nos chame por e-mail que verificamos.
             </p>
+          ) : null}
+
+          {/* Carga inicial com orderId conhecido: skeleton enquanto o backend responde. */}
+          {loading && orderId && !order ? (
+            <div className="mt-5 space-y-2">
+              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">Arquivos disponíveis</h4>
+              <SkeletonDownloadList count={2} />
+            </div>
           ) : null}
 
           {orders.length > 0 ? (
@@ -294,7 +366,7 @@ export function DownloadsPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => openOrder(entry.orderId, entry.internalOrderId)}
+                      onClick={() => openOrder(entry.orderId, entry.internalOrderId, searchedEmail)}
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                     >
                       Abrir pedido
@@ -309,11 +381,12 @@ export function DownloadsPage() {
             <div className="mt-5">
               <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">Arquivos disponíveis</h4>
               {(order.downloadTokens || []).length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center">
-                  <strong className="block text-sm text-slate-800">Pedido aprovado sem arquivos</strong>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Aguarde alguns instantes e clique em Atualizar.
+                <div className="space-y-3">
+                  <p className="rounded-xl bg-sky-50 px-3 py-2.5 text-sm text-sky-800 ring-1 ring-sky-200">
+                    <i className="bi bi-arrow-clockwise mr-1.5" aria-hidden="true" />
+                    Tudo certo com o pagamento — estamos preparando os arquivos. Em alguns segundos clique em Atualizar.
                   </p>
+                  <SkeletonDownloadList count={Math.max(1, (order.items || []).length || 1)} />
                 </div>
               ) : (
                 <ul className="flex flex-col gap-2">

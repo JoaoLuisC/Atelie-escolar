@@ -1,5 +1,5 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { deleteFromTable, getSupabaseConfig, getTableRow, listTableRows, updateTable } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { deleteFromTable, getTableRow, listTableRows, updateTable } } = require('../lib/supabase');
 
 function sortByDateDesc(items) {
   return [...items].sort((a, b) => {
@@ -150,7 +150,6 @@ module.exports = async function adminOrdersHandler(req, res) {
     return res.status(500).json({
       success: false,
       error: 'Erro ao buscar pedidos do admin.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

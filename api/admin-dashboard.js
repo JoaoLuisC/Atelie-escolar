@@ -1,5 +1,5 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { getSupabaseConfig, listTableRows } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { listTableRows } } = require('../lib/supabase');
 
 function safeJsonParse(value, fallback) {
   if (value === null || value === undefined) {
@@ -55,7 +55,7 @@ function buildSummary(payload) {
 async function loadDashboard() {
   const [productsRows, categoriesRows, profilesRows, ordersRows, orderItemsRows, downloadLogsRows, settingsRows] = await Promise.all([
     listTableRows('products', {
-      select: 'id,name,description,price,image_url,download_url,category_id,active,featured,created_at,updated_at',
+      select: 'id,slug,name,description,price,image_url,download_url,category_id,active,featured,created_at,updated_at',
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -225,7 +225,6 @@ module.exports = async function adminDashboardHandler(req, res) {
     return res.status(500).json({
       success: false,
       error: 'Erro ao carregar dados do admin dashboard.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

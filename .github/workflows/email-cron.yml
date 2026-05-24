@@ -1,0 +1,38 @@
+name: Email cron
+
+# Roda de hora em hora. Cada execução processa:
+# - Carrinho abandonado (1h e 24h)
+# - Sequência pós-compra (D+3, D+15, D+45)
+# - Reativação 90 dias
+#
+# Idempotência garantida por `email_sent_log` no backend — rodar mais
+# vezes não duplica envios.
+#
+# Secrets necessários no GitHub:
+# - APP_URL          → https://profamarciarcardoso.com.br
+# - CRON_SECRET      → mesmo valor que está em produção (Vercel env)
+on:
+  schedule:
+    # A cada hora em ponto, UTC
+    - cron: '0 * * * *'
+  # Permite disparo manual via UI (Actions → Run workflow)
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit cron endpoint
+        run: |
+          set -e
+          response=$(curl -sS -w "\n%{http_code}" -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron-email-jobs")
+          body=$(echo "$response" | sed '$d')
+          status=$(echo "$response" | tail -n1)
+          echo "Status: $status"
+          echo "Body: $body"
+          if [ "$status" -ne 200 ]; then
+            echo "::error::cron-email-jobs returned non-200"
+            exit 1
+          fi

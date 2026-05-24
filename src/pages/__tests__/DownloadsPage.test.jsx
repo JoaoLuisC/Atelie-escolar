@@ -38,7 +38,7 @@ describe('DownloadsPage', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/downloads?order=ORD-ERRO']}>
+      <MemoryRouter initialEntries={['/downloads?order=ORD-ERRO&email=cliente%40teste.com']}>
         <DownloadsPage />
       </MemoryRouter>,
     );

@@ -128,8 +128,9 @@ npm run check            # test + build (CI)
 
 | Documento | Sobre |
 |-----------|-------|
-| [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md) | Plano de implementação em 6 fases para chegar a um e-commerce de alta qualidade |
+| [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md) | Plano de implementação em 6 fases para chegar a um e-commerce de alta qualidade (absorve o antigo `plano-melhorias-fluxo-cliente.md`) |
 | [REGRAS_ECOMMERCE.md](./REGRAS_ECOMMERCE.md) | Princípios invioláveis, anti-padrões e checklist obrigatório antes de PRs |
+| [PENDENCIAS.md](./PENDENCIAS.md) | Lista única e atual de pendências de execução por fase (substitui os antigos `FASE*_PENDENCIAS` e `MELHORIAS_CLIENTE_PENDENCIAS`) |
 
 ### Técnico
 
@@ -142,7 +143,6 @@ npm run check            # test + build (CI)
 | [SUPABASE-SETUP.md](./SUPABASE-SETUP.md) | Setup específico do Supabase (legado) |
 | [E2E-CHECKLIST-SANDBOX.md](./E2E-CHECKLIST-SANDBOX.md) | Checklist de testes end-to-end |
 | [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) | Pré-deploy |
-| [plano-melhorias-fluxo-cliente.md](./plano-melhorias-fluxo-cliente.md) | Refatoração de UX do fluxo do cliente — com status atualizado por item |
 | [analise-paginas-cliente.md](./analise-paginas-cliente.md) | Análise histórica das páginas do cliente (pré-refactor) |
 | [SPRING-SECURITY-BFF.md](./SPRING-SECURITY-BFF.md) | Referência de port para Spring Boot do BFF de auth (não usado em produção) |
 

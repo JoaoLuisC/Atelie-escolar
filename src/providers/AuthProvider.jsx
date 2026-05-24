@@ -113,7 +113,8 @@ export function AuthProvider({ children }) {
 
         const name = String(session?.name || '').trim();
         const uid = String(session?.uid || '').trim();
-        setCustomerSession({ email, name, uid });
+        const role = String(session?.role || '').trim().toLowerCase();
+        setCustomerSession({ email, name, uid, role });
       },
     }),
     [authReady, adminAuthenticated, customerSession],

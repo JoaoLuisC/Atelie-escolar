@@ -1,7 +1,9 @@
 const crypto = require('node:crypto');
 const { getPaymentInfo, validateWebhookSignature } = require('../lib/mercadopago-config');
-const { getSupabaseConfig, getTableRow, insertIntoTable, listTableRows, updateTable } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable } } = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
+const { recordEvent } = require('../lib/analytics-events');
+const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 
 async function loadOrder(orderId) {
   return getTableRow('orders', {
@@ -64,7 +66,19 @@ module.exports = async function webhookHandler(req, res) {
     }
 
     const isValid = validateWebhookSignature(req);
-    if (!isValid && process.env.NODE_ENV === 'production') {
+    const runtimeEnv = String(process.env.APP_ENV || process.env.NODE_ENV || '').toLowerCase();
+    if (!isValid && runtimeEnv !== 'test') {
+      await recordSecurityEvent({
+        eventName: 'webhook_invalid_signature',
+        severity: 'warn',
+        ip: extractClientIp(req),
+        userAgent: req.headers['user-agent'],
+        requestId: req.headers['x-request-id'],
+        properties: {
+          has_signature_header: Boolean(req.headers['x-signature']),
+          payment_id: String(req.body?.data?.id || ''),
+        },
+      });
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
@@ -113,6 +127,20 @@ module.exports = async function webhookHandler(req, res) {
         console.error('[webhook] Falha ao provisionar conta de cliente:', provisionErr.message);
       }
 
+      await recordEvent({
+        eventName: 'payment_approved',
+        customerEmail: order.customer_email,
+        orderId: order.id,
+        properties: {
+          order_code: order.order_code,
+          value: Number(order.total_amount || 0),
+          currency: 'BRL',
+          payment_id: payment.id,
+          payment_method: payment.payment_method_id || null,
+        },
+        source: 'webhook',
+      });
+
       return res.status(200).json({
         message: 'Webhook processed successfully',
         downloadTokens,
@@ -125,14 +153,25 @@ module.exports = async function webhookHandler(req, res) {
         payment_id: payment.id,
         status: 'failed',
       });
+
+      await recordEvent({
+        eventName: payment.status === 'cancelled' ? 'payment_cancelled' : 'payment_rejected',
+        customerEmail: order.customer_email,
+        orderId: order.id,
+        properties: {
+          order_code: order.order_code,
+          value: Number(order.total_amount || 0),
+          currency: 'BRL',
+          payment_id: payment.id,
+          status_detail: payment.status_detail || null,
+        },
+        source: 'webhook',
+      });
     }
 
     return res.status(200).json({ message: 'Webhook processed successfully' });
   } catch (error) {
     console.error('Webhook error:', error);
-    return res.status(500).json({
-      error: 'Webhook processing failed',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-    });
+    return res.status(500).json({ error: 'Webhook processing failed' });
   }
 };

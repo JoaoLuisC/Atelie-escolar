@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { ProductGrid } from '../components/ProductGrid';
 import { ProductSidebar } from '../components/ProductSidebar';
@@ -5,10 +7,18 @@ import { SortDropdown } from '../components/SortDropdown';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
 import { useProductFilters } from '../hooks/useProductFilters';
+import { trackEvent } from '../utils/analytics';
 
 export function ProductsPage() {
   const { addToCart } = useCart();
   const { pushToast } = useToast();
+
+  // Primeira etapa do funil canônico (PLANO_ECOMMERCE §"Fase 0").
+  // Disparado uma vez por montagem — re-renders por filtro/ordenação
+  // não devem contar como nova "visita ao catálogo".
+  useEffect(() => {
+    trackEvent('view_catalog', { source: 'products_page' });
+  }, []);
   const {
     activeCategory,
     activePriceRange,
@@ -41,6 +51,11 @@ export function ProductsPage() {
 
   return (
     <Shell>
+      <SEO
+        title="Catálogo de materiais educativos"
+        description="Banners, painéis e atividades pedagógicas em PDF, organizados por categoria. Pague uma vez e use o ano todo na sala de aula."
+        pathname="/produtos"
+      />
       <section className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50">
         <div aria-hidden="true" className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-brand-400/30 blur-3xl" />
         <div aria-hidden="true" className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-accent-sky/20 blur-3xl" />

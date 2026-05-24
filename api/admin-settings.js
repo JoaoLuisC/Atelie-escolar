@@ -1,9 +1,11 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
 const {
   getSupabaseConfig,
-  getTableRow,
-  insertIntoTable,
-  updateTable,
+  serviceRoleHelpers: {
+    getTableRow,
+    insertIntoTable,
+    updateTable,
+  },
 } = require('../lib/supabase');
 
 const ALLOWED_KEYS = new Set(['homeSections', 'adminConfig']);
@@ -93,7 +95,6 @@ module.exports = async function adminSettingsHandler(req, res) {
     return res.status(500).json({
       success: false,
       error: 'Erro ao processar configurações do admin.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

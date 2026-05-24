@@ -38,6 +38,24 @@ const NAV_SECTIONS = [
   },
   {
     type: 'item',
+    id: 'funil',
+    label: 'Funil',
+    icon: 'funnel-fill',
+  },
+  {
+    type: 'item',
+    id: 'analise',
+    label: 'Análise',
+    icon: 'bar-chart-line-fill',
+  },
+  {
+    type: 'item',
+    id: 'segmentos',
+    label: 'Segmentos',
+    icon: 'envelope-heart-fill',
+  },
+  {
+    type: 'item',
     id: 'usuarios',
     label: 'Usuários',
     icon: 'people-fill',

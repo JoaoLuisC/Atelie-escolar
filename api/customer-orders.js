@@ -1,4 +1,4 @@
-const { getSupabaseConfig, listTableRows } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { listTableRows } } = require('../lib/supabase');
 
 function mapOrder(order, itemsByOrder, tokensByOrder) {
   const orderIdKey = String(order.id);
@@ -37,12 +37,8 @@ function groupBy(rows, key) {
 }
 
 module.exports = async function customerOrdersHandler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
   if (req.method !== 'GET') {
@@ -94,9 +90,6 @@ module.exports = async function customerOrdersHandler(req, res) {
     return res.status(200).json({ success: true, orders });
   } catch (error) {
     console.error('Error fetching customer orders:', error);
-    return res.status(500).json({
-      error: 'Erro ao buscar pedidos do cliente',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-    });
+    return res.status(500).json({ error: 'Erro ao buscar pedidos do cliente' });
   }
 };
