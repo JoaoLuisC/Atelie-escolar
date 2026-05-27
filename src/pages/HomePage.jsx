@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { SocialProofStrip } from '../components/SocialProofStrip';
-import { TrustBadgeRow } from '../components/TrustBadgeRow';
 import { fetchHomeSections } from '../services/products';
 import { formatPrice } from '../utils/currency';
 
@@ -36,14 +35,6 @@ const HOME_JSON_LD = [
 ];
 
 const MARQUEE_ITEMS_TOP = ['BANNERS', 'PAINÉIS', 'ATIVIDADES', 'LEMBRANCINHAS', 'KITS'];
-const MARQUEE_ITEMS_BOTTOM = [
-  'ALTA RESOLUÇÃO',
-  'PRONTO PARA IMPRESSÃO',
-  'PDF EM ALTA RESOLUÇÃO',
-  'DESIGN EXCLUSIVO',
-  'DOWNLOAD SEGURO',
-  'CRIADO COM CUIDADO',
-];
 
 const SCHOOL_ICONS = [
   { emoji: '✏️', position: 'left-[4%] top-[18%]' },
@@ -70,7 +61,7 @@ const TESTIMONIALS = [
 ];
 
 function Marquee({ items, dark = false, reverse = false }) {
-  const doubled = [...items, ...items];
+  const doubled = [...items, ...items, ...items, ...items];
   return (
     <div
       aria-hidden="true"
@@ -78,9 +69,9 @@ function Marquee({ items, dark = false, reverse = false }) {
         dark ? 'border-slate-700 bg-slate-900 text-white' : 'border-brand-100 bg-brand-50 text-brand-700'
       }`}
     >
-      <div className={`flex w-max gap-8 whitespace-nowrap font-display text-sm font-bold uppercase tracking-widest ${reverse ? 'animate-marquee-reverse' : 'animate-marquee'}`}>
+      <div className={`flex w-max whitespace-nowrap font-display text-sm font-bold uppercase tracking-widest ${reverse ? 'animate-marquee-reverse' : 'animate-marquee'}`}>
         {doubled.map((item, i) => (
-          <span key={`${item}-${i}`} className="inline-flex items-center gap-8">
+          <span key={`${item}-${i}`} className="inline-flex items-center gap-8 pr-8">
             {item}
             <span className="opacity-50">✦</span>
           </span>
@@ -156,21 +147,20 @@ export function HomePage() {
           ))}
         </div>
 
-        <div className="relative mx-auto max-w-6xl px-4 py-20 lg:px-6 lg:py-28">
+        <div className="relative mx-auto max-w-6xl px-4 py-10 lg:px-6 lg:py-14">
           <div className="max-w-3xl">
-            <h1 className="font-display text-4xl font-extrabold leading-tight text-slate-900 sm:text-5xl lg:text-6xl">
-              Painéis e recursos pedagógicos<br />
+            <h1 className="font-display text-2xl font-extrabold leading-tight text-slate-900 sm:text-3xl lg:text-4xl">
+              Painéis e recursos pedagógicos{' '}
               feitos com{' '}
               <span className="bg-gradient-to-r from-brand-600 to-accent-pink bg-clip-text text-transparent">cuidado</span>
-              <br />
-              e{' '}
+              {' '}e{' '}
               <span className="bg-gradient-to-r from-emerald-500 to-accent-sky bg-clip-text text-transparent">criatividade</span>
             </h1>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-5 flex flex-wrap gap-3">
               <Link
                 to="/produtos"
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-6 py-3 text-base font-semibold text-white shadow-brand transition hover:scale-105"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-5 py-2.5 text-sm font-semibold text-white shadow-brand transition hover:scale-105"
               >
                 Ver Produtos <i className="bi bi-arrow-right" />
               </Link>
@@ -180,14 +170,6 @@ export function HomePage() {
       </section>
 
       <Marquee items={MARQUEE_ITEMS_TOP} />
-
-      {/* TRUST BADGES — faixa logo abaixo do hero para reforçar credibilidade */}
-      <section aria-labelledby="trust-badges-title" className="bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
-          <h2 id="trust-badges-title" className="sr-only">Garantias de compra</h2>
-          <TrustBadgeRow />
-        </div>
-      </section>
 
       {/* CATÁLOGO */}
       <section className="mx-auto max-w-6xl px-4 py-16 lg:px-6">
@@ -244,7 +226,7 @@ export function HomePage() {
                       <Link
                         key={product.id}
                         to={`/produtos/${product.slug || product.id}`}
-                        className="group flex w-44 shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-brand"
+                        className="group flex w-44 shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-brand-soft transition duration-300 hover:-translate-y-1 hover:shadow-brand"
                       >
                         <div className="aspect-square overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
                           {product.image ? (
@@ -366,34 +348,6 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* CTA FINAL — convite para retornar ao catálogo antes do fechamento */}
-      <section className="bg-gradient-to-br from-brand-50 via-white to-sky-50">
-        <div className="mx-auto max-w-6xl px-4 py-14 text-center lg:px-6">
-          <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Pronto para começar?</p>
-          <h2 className="mt-2 font-display text-2xl font-bold text-slate-900 sm:text-3xl">
-            Encontre o material certo para sua turma
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm text-slate-600">
-            Catálogo organizado por categoria, com prévia de cada arquivo. Download imediato após o pagamento aprovado.
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              to="/produtos"
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-6 py-3 text-base font-semibold text-white shadow-brand transition hover:scale-105"
-            >
-              Ver catálogo completo <i className="bi bi-arrow-right" aria-hidden="true" />
-            </Link>
-            <a
-              href="/#como-funciona"
-              className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-5 py-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
-            >
-              <i className="bi bi-question-circle" aria-hidden="true" /> Como funciona
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <Marquee items={MARQUEE_ITEMS_BOTTOM} dark reverse />
     </Shell>
   );
 }

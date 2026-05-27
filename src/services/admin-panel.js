@@ -130,3 +130,61 @@ export async function fetchAdminCohort({ months = 12 } = {}) {
 export async function fetchAdminKpis({ window = 12 } = {}) {
   return request(`/admin-kpis?window=${encodeURIComponent(window)}`);
 }
+
+// ════════════════════════════════════════════════════════════════════
+// Upload de mídia/arquivo direto pro Supabase Storage.
+// 1. Pede uma URL assinada pro backend (requer admin session)
+// 2. Faz PUT do arquivo direto pro Storage — bypassa limite de body
+//    do Express (1MB) e libera arquivos até o limite do bucket (10MB
+//    imagens / 50MB vídeos e downloads).
+// kind: 'image' | 'video' | 'download'
+// Retorna { url, bucket, path } — url é o que deve ser salvo em
+// products.image_url / videos[] / download_url.
+// ════════════════════════════════════════════════════════════════════
+export async function uploadProductAsset({ kind, file, onProgress }) {
+  if (!file) throw new Error('Arquivo não informado.');
+  if (!['image', 'video', 'download'].includes(kind)) {
+    throw new Error(`kind inválido: ${kind}`);
+  }
+
+  const sign = await request('/admin-upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      kind,
+      filename: file.name,
+      mimeType: file.type || null,
+    }),
+  });
+
+  const { uploadUrl, finalUrl, bucket, path, maxSize } = sign;
+
+  if (maxSize && file.size > maxSize) {
+    const limitMb = Math.floor(maxSize / (1024 * 1024));
+    throw new Error(`Arquivo excede ${limitMb}MB.`);
+  }
+
+  // XHR ao invés de fetch pra ter progresso real.
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    if (file.type) xhr.setRequestHeader('Content-Type', file.type);
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && typeof onProgress === 'function') {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`Upload falhou (HTTP ${xhr.status}).`));
+      }
+    });
+    xhr.addEventListener('error', () => reject(new Error('Erro de rede no upload.')));
+    xhr.addEventListener('abort', () => reject(new Error('Upload cancelado.')));
+    xhr.send(file);
+  });
+
+  return { url: finalUrl, bucket, path };
+}

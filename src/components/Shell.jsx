@@ -182,74 +182,75 @@ export function Shell({ children }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer id="contato" className="relative mt-12 overflow-hidden bg-gradient-to-br from-brand-700 via-brand-800 to-slate-900 text-white">
-        <div aria-hidden="true" className="absolute -top-24 right-1/4 h-72 w-72 rounded-full bg-brand-500/30 blur-3xl" />
-        <div aria-hidden="true" className="absolute -bottom-24 left-1/4 h-72 w-72 rounded-full bg-accent-sky/20 blur-3xl" />
-
-        <div className="relative mx-auto max-w-6xl px-4 py-12 lg:px-6">
-          <div className="grid gap-10 md:grid-cols-3">
-            <div>
-              <Link to="/" className="flex items-center gap-2.5">
-                <OwlLogo width={28} height={28} />
-                <span className="font-display text-base font-bold uppercase">Profa. Marciar Cardoso</span>
+      <footer id="contato" className="border-t border-slate-800 bg-slate-950 text-slate-300">
+        <div className="mx-auto max-w-6xl px-4 py-14 lg:px-6">
+          <div className="grid gap-10 md:grid-cols-4">
+            <div className="md:col-span-2 md:pr-8">
+              <Link to="/" className="inline-flex items-center gap-2.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800">
+                  <OwlLogo width={22} height={22} />
+                </span>
+                <span className="font-display text-sm font-semibold uppercase tracking-wider text-white">
+                  Profa. Marciar Cardoso
+                </span>
               </Link>
-              <p className="mt-3 text-sm text-white/80">
+              <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-400">
                 Materiais gráficos digitais profissionais e editáveis para festas, eventos e decoração escolar.
-                Download instantâneo no seu tempo.
+                Download instantâneo após a aprovação do pagamento.
               </p>
-              <div className="mt-4 flex gap-2">
-                <a href="https://instagram.com/profamarciarcardoso" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20">
+              <div className="mt-5 flex gap-2">
+                <a href="https://instagram.com/profamarciarcardoso" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white">
                   <i className="bi bi-instagram" />
                 </a>
-                <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20">
+                <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white">
                   <i className="bi bi-facebook" />
                 </a>
-                <a href="https://www.pinterest.com" target="_blank" rel="noopener noreferrer" aria-label="Pinterest" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20">
+                <a href="https://www.pinterest.com" target="_blank" rel="noopener noreferrer" aria-label="Pinterest" className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white">
                   <i className="bi bi-pinterest" />
                 </a>
               </div>
             </div>
 
             <div>
-              <h4 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-accent-yellow">
-                <i className="bi bi-bookmark-fill" /> Links rápidos
-              </h4>
-              <ul className="space-y-2 text-sm text-white/80">
-                <li><Link to="/" className="transition hover:text-white">Início</Link></li>
-                <li><Link to="/produtos" className="transition hover:text-white">Produtos</Link></li>
-                <li><a href="/#como-funciona" className="transition hover:text-white">Como Funciona</a></li>
-                <li><Link to="/login" className="transition hover:text-white">Minha Conta</Link></li>
-                <li><Link to="/downloads" className="transition hover:text-white">Downloads</Link></li>
+              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Navegação</h4>
+              <ul className="mt-4 space-y-2.5 text-sm">
+                <li><Link to="/" className="text-slate-400 transition hover:text-white">Início</Link></li>
+                <li><Link to="/produtos" className="text-slate-400 transition hover:text-white">Produtos</Link></li>
+                <li><a href="/#como-funciona" className="text-slate-400 transition hover:text-white">Como funciona</a></li>
+                <li><Link to="/login" className="text-slate-400 transition hover:text-white">Minha conta</Link></li>
+                <li><Link to="/downloads" className="text-slate-400 transition hover:text-white">Downloads</Link></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-accent-pink">
-                <i className="bi bi-chat-heart-fill" /> Fale conosco
-              </h4>
-              <p className="flex items-center gap-2 text-sm text-white/80">
-                <i className="bi bi-envelope-fill text-accent-sky" />
-                contato@profamarciarcardoso.com.br
-              </p>
-              <p className="mt-2 flex items-center gap-2 text-sm text-white/80">
-                <i className="bi bi-whatsapp text-emerald-300" />
-                (11) 99999-9999
-              </p>
+              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Contato</h4>
+              <ul className="mt-4 space-y-2.5 text-sm">
+                <li>
+                  <a href="mailto:contato@profamarciarcardoso.com.br" className="flex items-center gap-2 text-slate-400 transition hover:text-white">
+                    <i className="bi bi-envelope" aria-hidden="true" />
+                    contato@profamarciarcardoso.com.br
+                  </a>
+                </li>
+                <li>
+                  <a href="https://wa.me/5511999999999" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-slate-400 transition hover:text-white">
+                    <i className="bi bi-whatsapp" aria-hidden="true" />
+                    (11) 99999-9999
+                  </a>
+                </li>
+              </ul>
             </div>
           </div>
 
-          <div className="mt-8 border-t border-white/15 pt-6">
+          <div className="mt-12 border-t border-slate-800 pt-8">
             <NewsletterSignup source="footer" className="mx-auto max-w-md" />
           </div>
 
-          <div className="mt-8 border-t border-white/15 pt-6 text-center text-xs text-white/70">
-            <p>&copy; 2026 Profa. Marciar Cardoso · Todos os direitos reservados</p>
-            <p className="mt-1 italic">Iluminando o futuro com criatividade e amor</p>
-            <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-              <Link to="/privacidade" className="underline-offset-2 hover:underline">Política de Privacidade</Link>
-              <span aria-hidden="true">·</span>
-              <Link to="/termos" className="underline-offset-2 hover:underline">Termos de Uso</Link>
-            </p>
+          <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-slate-800 pt-6 text-xs text-slate-500 sm:flex-row">
+            <p>&copy; 2026 Profa. Marciar Cardoso. Todos os direitos reservados.</p>
+            <div className="flex items-center gap-4">
+              <Link to="/privacidade" className="transition hover:text-slate-300">Privacidade</Link>
+              <Link to="/termos" className="transition hover:text-slate-300">Termos</Link>
+            </div>
           </div>
         </div>
       </footer>

@@ -20,8 +20,19 @@ function normalizeSlug(value) {
     .replaceAll(/^-+|-+$/g, '') || 'sem-categoria';
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function toCategoryPayload(body = {}, existing = {}) {
   const name = String(body.name || existing.name || '').trim();
+  if (!name) {
+    throw new Error('Nome da categoria é obrigatório.');
+  }
+  if (UUID_PATTERN.test(name)) {
+    throw new Error('Nome inválido: não cole IDs no campo nome.');
+  }
+  if (name.length < 2 || name.length > 60) {
+    throw new Error('Nome deve ter entre 2 e 60 caracteres.');
+  }
   const color = String(body.color || existing.color || '#9B5DE5').trim();
   const hasActive = Object.hasOwn(body, 'active');
   const hasFeatured = Object.hasOwn(body, 'featured');
@@ -60,9 +71,11 @@ async function listCategories() {
 }
 
 async function createCategory(body) {
-  const payload = toCategoryPayload(body);
-  if (!payload.name) {
-    return { status: 400, body: { success: false, error: 'Nome da categoria é obrigatório.' } };
+  let payload;
+  try {
+    payload = toCategoryPayload(body);
+  } catch (err) {
+    return { status: 400, body: { success: false, error: err.message } };
   }
 
   const existing = await getTableRow('categories', {
@@ -93,9 +106,11 @@ async function updateCategory(body) {
     return { status: 404, body: { success: false, error: 'Categoria não encontrada.' } };
   }
 
-  const payload = toCategoryPayload(body, existing);
-  if (!payload.name) {
-    return { status: 400, body: { success: false, error: 'Nome da categoria é obrigatório.' } };
+  let payload;
+  try {
+    payload = toCategoryPayload(body, existing);
+  } catch (err) {
+    return { status: 400, body: { success: false, error: err.message } };
   }
 
   await updateTable('categories', { id: `eq.${id}` }, payload);

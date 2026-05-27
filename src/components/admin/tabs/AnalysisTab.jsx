@@ -30,6 +30,178 @@ const RELATIONSHIP_STYLES = {
 };
 
 // ════════════════════════════════════════════════════════════════════
+// Explicações: o que é, o que observar, como agir
+// ════════════════════════════════════════════════════════════════════
+const EXPLANATIONS = {
+  products: {
+    title: 'Curva ABC — Produtos',
+    intro: 'Aplicação do princípio de Pareto (80/20) ao seu catálogo. Cada produto é classificado pela receita que gera no período, e agrupado em três classes acumuladas.',
+    how: [
+      'Soma da receita real (preço × quantidade) de cada produto no período selecionado.',
+      'Produtos ordenados do maior para o menor faturamento.',
+      'Classe A: produtos que acumulam os primeiros 80% da receita.',
+      'Classe B: próximos 15% (acumulado 80–95%).',
+      'Classe C: cauda longa, últimos 5%.',
+    ],
+    observe: [
+      'Quantos produtos formam a classe A? Saudável: 5–30% do catálogo. Menos = dependência perigosa de poucos itens. Mais = catálogo disperso sem hit definido.',
+      'Receita total no período x perfil esperado (sazonal/normal). Se total caiu mas A se manteve, o problema é a cauda — não os campeões.',
+      'Produto na classe C com tráfego alto (view_item) mas conversão baixa = oportunidade. Não é "produto morto", é vitrine ruim.',
+      'Produto na classe C com ticket baixo pode ser "produto de entrada" — atrai cliente novo que depois compra A.',
+    ],
+    act: [
+      'Classe A → vitrine sempre, lookalike de mídia paga, bundle com outros itens A, monitorar disponibilidade.',
+      'Classe B → cross-sell agressivo combinando com itens A. Promover na sequência pós-compra D+15.',
+      'Classe C com tráfego alto → revisar página de produto (título, imagens, depoimentos, preço).',
+      'Classe C sem tráfego e sem ser produto de entrada → desativar trimestralmente (regra: 0 vendas em 90d).',
+      'Nunca cortar produto C cegamente sem checar se é porta de entrada — pode matar aquisição de novos clientes.',
+    ],
+  },
+  customers: {
+    title: 'Curva ABC — Clientes',
+    intro: 'Mesma lógica aplicada a clientes. Quem gera quanto da sua receita, e qual o tipo de relacionamento que cada um tem com a loja.',
+    how: [
+      'Soma da receita por cliente no período (todos os pedidos aprovados).',
+      'Classificação em A/B/C pela contribuição acumulada na receita.',
+      'Sobreposto a isso: relação (VIP / Recorrente / Eventual) baseada em quantidade de pedidos e ticket médio.',
+      'E-mails são mascarados na tela e no export por LGPD.',
+    ],
+    observe: [
+      'Concentração: quanto % da receita está nos top 5 clientes? Acima de 30% = risco (LTV depende de poucos).',
+      'Cliente classe A é VIP (recorrente) ou Eventual de ticket alto? Eventual de ticket alto pode ser uma compra única — não é base de receita previsível.',
+      'Recompra geral: VIP + Recorrente / Total. Saudável: > 20%. Abaixo disso, pós-venda está vazando.',
+      'Razão Eventual / Total alta = aquisição funciona, retenção não. Inverso = retenção boa mas aquisição parou.',
+    ],
+    act: [
+      'VIPs → audiência semente de campanhas pagas (lookalike no Meta/Google). Acesso antecipado a lançamentos.',
+      'Recorrentes → cross-sell por categoria comprada na sequência D+15 (regra D5: segmentação por categoria, não nome).',
+      'Eventuais → puxar para segunda compra com email D+15 + cupom marginal (não maior que VOLTEI15).',
+      'Cliente sem compra há 90–180d → entra no fluxo de reativação automaticamente (cron). > 180d: parar de enviar (regra D7).',
+      'Nunca personalize nominalmente em escala ("Olá Maria,...") — Ferreira 2025: gera R$ 0 RPM. Segmente pelo comportamento, escreva para o grupo.',
+    ],
+  },
+  cohort: {
+    title: 'Retenção por coorte mensal',
+    intro: 'Cada linha é um grupo de clientes que comprou pela primeira vez no mesmo mês ("coorte de janeiro", "coorte de fevereiro"). As colunas mostram quantos % desse grupo voltaram a comprar nos meses seguintes.',
+    how: [
+      'M+0 = mês da primeira compra (sempre 100% por definição).',
+      'M+1 = % do coorte que comprou de novo no mês seguinte.',
+      'M+12 = % do coorte que ainda compra um ano depois.',
+      'Cor da célula: verde escuro = retenção forte (≥ 50%); cinza = ninguém voltou.',
+      'Coluna "Tam." = quantos clientes únicos compraram pela primeira vez naquele mês.',
+    ],
+    observe: [
+      'Queda grande de M+0 para M+1 → pós-venda imediato (D+3 / D+15) não está convertendo. Email não chega, ou produto não fideliza.',
+      'Coortes mais recentes com retenção pior que antigos → algo mudou (preço, produto destaque, atendimento, layout). Investigar.',
+      'Sazonalidade: picos em fev (volta às aulas) e jun (festa junina) são esperados para esse nicho.',
+      'Coorte grande com retenção baixa = aquisição cara que não vira LTV. Pior cenário comercial.',
+      'Coorte pequeno com retenção alta = nicho fiel. Vale investir em expandir aquisição para esse perfil.',
+    ],
+    act: [
+      'Retenção M+1 baixa → reforçar templates D+3 (review/satisfação) e D+15 (cross-sell). Considerar um produto barato de "segunda compra fácil".',
+      'Coorte recente com queda → diagnóstico qualitativo: mudou preço? mudou produto destaque? mudou layout do checkout?',
+      'Coortes sazonais (festa junina, formatura) → usar para prever caixa do próximo ciclo. Receita esperada = (coorte M+0) × (retenção média histórica) × ticket médio.',
+      'Quando expandir mídia paga (Fase 5): mirar perfil de coorte com maior retenção histórica.',
+    ],
+  },
+};
+
+function ExplainModal({ data, onClose }) {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Fechar explicação"
+        className="absolute inset-0 bg-slate-900/50"
+        onClick={onClose}
+      />
+      <dialog
+        open
+        className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
+        aria-labelledby="explain-modal-title"
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-widest text-violet-600">Como ler este gráfico</p>
+            <h2 id="explain-modal-title" className="mt-0.5 text-lg font-bold text-slate-900 sm:text-xl">{data.title}</h2>
+          </div>
+          <Button variant="ghost" size="sm" icon="x-lg" onClick={onClose} aria-label="Fechar" />
+        </div>
+
+        <p className="text-sm leading-relaxed text-slate-600">{data.intro}</p>
+
+        <ExplainSection
+          title="Como o cálculo funciona"
+          icon="gear"
+          tone="slate"
+          items={data.how}
+        />
+        <ExplainSection
+          title="O que observar"
+          icon="eye"
+          tone="amber"
+          items={data.observe}
+        />
+        <ExplainSection
+          title="Como agir com base na análise"
+          icon="lightning-charge-fill"
+          tone="emerald"
+          items={data.act}
+        />
+
+        <div className="mt-6 flex justify-end">
+          <Button variant="primary" size="sm" onClick={onClose}>Entendi</Button>
+        </div>
+      </dialog>
+    </div>
+  );
+}
+
+ExplainModal.propTypes = {
+  data: PropTypes.shape({
+    title: PropTypes.string.isRequired,
+    intro: PropTypes.string.isRequired,
+    how: PropTypes.arrayOf(PropTypes.string).isRequired,
+    observe: PropTypes.arrayOf(PropTypes.string).isRequired,
+    act: PropTypes.arrayOf(PropTypes.string).isRequired,
+  }),
+  onClose: PropTypes.func.isRequired,
+};
+
+const SECTION_TONES = {
+  slate: 'border-slate-200 bg-slate-50 text-slate-700',
+  amber: 'border-amber-200 bg-amber-50 text-amber-900',
+  emerald: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+};
+
+function ExplainSection({ title, icon, tone, items }) {
+  return (
+    <section className={`mt-4 rounded-xl border p-4 ${SECTION_TONES[tone]}`}>
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
+        <i className={`bi bi-${icon}`} aria-hidden="true" />
+        {title}
+      </h3>
+      <ul className="space-y-1.5 text-sm leading-relaxed">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-2">
+            <span aria-hidden="true" className="mt-2 inline-block h-1 w-1 shrink-0 rounded-full bg-current opacity-60" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+ExplainSection.propTypes = {
+  title: PropTypes.string.isRequired,
+  icon: PropTypes.string.isRequired,
+  tone: PropTypes.oneOf(['slate', 'amber', 'emerald']).isRequired,
+  items: PropTypes.arrayOf(PropTypes.string).isRequired,
+};
+
+// ════════════════════════════════════════════════════════════════════
 // Pareto bar list — barra horizontal + chip de classe
 // ════════════════════════════════════════════════════════════════════
 function ParetoList({ items, valueLabel = 'Receita', limit = 12, getMeta }) {
@@ -146,6 +318,7 @@ export function AnalysisTab({ categories = [] }) {
   const [cohort, setCohort] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [explainKey, setExplainKey] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -297,9 +470,14 @@ export function AnalysisTab({ categories = [] }) {
         title="Curva ABC — Produtos"
         subtitle="Princípio de Pareto: A acumula 80% da receita; B vai até 95%; C é cauda longa."
         action={
-          <Button variant="secondary" size="sm" onClick={exportProductsCsv} disabled={!products?.items?.length}>
-            <i className="bi bi-download mr-1" /> CSV
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setExplainKey('products')} icon="question-circle">
+              Como ler
+            </Button>
+            <Button variant="secondary" size="sm" onClick={exportProductsCsv} disabled={!products?.items?.length}>
+              <i className="bi bi-download mr-1" /> CSV
+            </Button>
+          </div>
         }
       >
         <div className="mb-4 grid grid-cols-3 gap-2 text-center">
@@ -328,9 +506,14 @@ export function AnalysisTab({ categories = [] }) {
         title="Curva ABC — Clientes"
         subtitle="Quem gera quanto. Use para definir público de campanha (lookalike de VIP). Regra D5: segmentação por categoria, não personalização nominal."
         action={
-          <Button variant="secondary" size="sm" onClick={exportCustomersCsv} disabled={!customers?.items?.length}>
-            <i className="bi bi-download mr-1" /> CSV
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setExplainKey('customers')} icon="question-circle">
+              Como ler
+            </Button>
+            <Button variant="secondary" size="sm" onClick={exportCustomersCsv} disabled={!customers?.items?.length}>
+              <i className="bi bi-download mr-1" /> CSV
+            </Button>
+          </div>
         }
       >
         <div className="mb-4 grid grid-cols-3 gap-2 text-center">
@@ -355,9 +538,14 @@ export function AnalysisTab({ categories = [] }) {
         title="Retenção por coorte (últimos 12 meses)"
         subtitle="Linha = mês da 1ª compra; coluna = meses depois. Sazonalidade do ano letivo aparece aqui."
         action={
-          <Button variant="secondary" size="sm" onClick={exportCohortCsv} disabled={!cohort?.cohorts?.length}>
-            <i className="bi bi-download mr-1" /> CSV
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setExplainKey('cohort')} icon="question-circle">
+              Como ler
+            </Button>
+            <Button variant="secondary" size="sm" onClick={exportCohortCsv} disabled={!cohort?.cohorts?.length}>
+              <i className="bi bi-download mr-1" /> CSV
+            </Button>
+          </div>
         }
       >
         <CohortHeatmap cohorts={cohort?.cohorts || []} months={cohort?.months || 12} />
@@ -371,6 +559,8 @@ export function AnalysisTab({ categories = [] }) {
       <p className="text-xs text-slate-500">
         Dados em cache por 1h (regra F5). Adicione <code>?nocache=1</code> à URL para forçar recálculo.
       </p>
+
+      <ExplainModal data={explainKey ? EXPLANATIONS[explainKey] : null} onClose={() => setExplainKey(null)} />
     </div>
   );
 }

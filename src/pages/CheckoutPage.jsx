@@ -5,7 +5,6 @@ import { CouponField } from '../components/CouponField';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { StatusStepper } from '../components/StatusStepper';
-import { TrustBadgeRow } from '../components/TrustBadgeRow';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
@@ -263,16 +262,6 @@ export function CheckoutPage() {
         noindex
       />
       <section className="mx-auto max-w-6xl px-4 py-8 lg:px-6">
-        {/* TRUST PANEL — credibilidade acima da dobra, antes do formulário */}
-        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <TrustBadgeRow />
-          <p className="mt-3 text-center text-xs text-slate-500 sm:text-sm">
-            <i className="bi bi-info-circle mr-1 text-brand-600" aria-hidden="true" />
-            Você verá a confirmação do pagamento antes de sair desta página.
-            Não precisa atualizar nem voltar — vamos te avisar em tempo real.
-          </p>
-        </div>
-
         <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
           {/* RESUMO */}
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

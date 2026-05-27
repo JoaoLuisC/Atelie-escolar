@@ -18,7 +18,7 @@ function ProductCard({ onAddToCart, product }) {
   const badge = BADGES[product.category];
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-brand">
+    <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-brand-soft transition duration-300 hover:-translate-y-1 hover:shadow-brand">
       <Link to={`/produtos/${product.slug || product.id}`} className="relative block aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
         {product.image ? (
           <img

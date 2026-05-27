@@ -1,7 +1,8 @@
 import PropTypes from 'prop-types';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ModalWizard } from './ModalWizard';
 import { useToast } from '../hooks/useToast';
+import { uploadProductAsset } from '../services/admin-panel';
 
 export function ProductWizard({
   isOpen,
@@ -237,29 +238,20 @@ export function ProductWizard({
           <Field
             label="Imagens do produto *"
             htmlFor="product-images"
-            hint="Cole a URL de cada imagem (Google Drive, Imgur, etc.)."
+            hint="Selecione cada imagem do seu computador. JPG, PNG ou WebP até 10MB."
           >
-            <div id="product-images" className="flex flex-col gap-2">
+            <div id="product-images" className="flex flex-col gap-3">
               {images.map((image, idx) => (
-                <div key={`image-${idx}`} className="flex gap-2">
-                  <input
-                    type="url"
-                    value={image}
-                    onChange={(e) => handleImageChange(idx, e.target.value)}
-                    placeholder={`https://... (Imagem ${idx + 1})`}
-                    className={INPUT_CLASS}
-                  />
-                  {images.length > 1 ? (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(idx)}
-                      aria-label="Remover imagem"
-                      className="rounded-lg border border-slate-200 bg-white px-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700"
-                    >
-                      <i className="bi bi-x-lg" />
-                    </button>
-                  ) : null}
-                </div>
+                <AssetUploader
+                  key={`image-${idx}`}
+                  kind="image"
+                  accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+                  label={`Imagem ${idx + 1}`}
+                  value={image}
+                  onChange={(v) => handleImageChange(idx, v)}
+                  onRemove={images.length > 1 ? () => handleRemoveImage(idx) : null}
+                  pushToast={pushToast}
+                />
               ))}
             </div>
             <button type="button" onClick={handleAddImage} className={`${SECONDARY_BTN_CLASS} mt-2`}>
@@ -267,28 +259,23 @@ export function ProductWizard({
             </button>
           </Field>
 
-          <Field label="Vídeos (opcional)" htmlFor="product-videos">
-            <div id="product-videos" className="flex flex-col gap-2">
+          <Field
+            label="Vídeos (opcional)"
+            htmlFor="product-videos"
+            hint="MP4, WebM ou MOV até 50MB. Sobe pro Storage privado."
+          >
+            <div id="product-videos" className="flex flex-col gap-3">
               {videos.map((video, idx) => (
-                <div key={`video-${idx}`} className="flex gap-2">
-                  <input
-                    type="url"
-                    value={video}
-                    onChange={(e) => handleVideoChange(idx, e.target.value)}
-                    placeholder="https://youtube.com/..."
-                    className={INPUT_CLASS}
-                  />
-                  {videos.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveVideo(idx)}
-                      aria-label="Remover vídeo"
-                      className="rounded-lg border border-slate-200 bg-white px-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700"
-                    >
-                      <i className="bi bi-x-lg" />
-                    </button>
-                  ) : null}
-                </div>
+                <AssetUploader
+                  key={`video-${idx}`}
+                  kind="video"
+                  accept="video/mp4,video/webm,video/quicktime"
+                  label={`Vídeo ${idx + 1}`}
+                  value={video}
+                  onChange={(v) => handleVideoChange(idx, v)}
+                  onRemove={() => handleRemoveVideo(idx)}
+                  pushToast={pushToast}
+                />
               ))}
             </div>
             <button type="button" onClick={handleAddVideo} className={`${SECONDARY_BTN_CLASS} mt-2`}>
@@ -297,18 +284,17 @@ export function ProductWizard({
           </Field>
 
           <Field
-            label="URL do arquivo para download *"
+            label="Arquivo para download *"
             htmlFor="product-download"
-            hint="Link direto do Google Drive, Dropbox ou similar."
+            hint="PDF, ZIP ou similar até 50MB. Entregue ao cliente via URL assinada após pagamento aprovado."
           >
-            <input
-              id="product-download"
-              type="url"
-              name="downloadUrl"
+            <AssetUploader
+              kind="download"
+              accept="application/pdf,application/zip,application/x-zip-compressed,application/octet-stream"
+              label="Arquivo do produto"
               value={formData.downloadUrl}
-              onChange={handleInputChange}
-              placeholder="https://drive.google.com/file/d/..."
-              className={INPUT_CLASS}
+              onChange={(v) => setFormData((prev) => ({ ...prev, downloadUrl: v }))}
+              pushToast={pushToast}
             />
           </Field>
         </div>
@@ -393,6 +379,156 @@ Field.propTypes = {
   hint: PropTypes.string,
   className: PropTypes.string,
 };
+
+function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToast }) {
+  const inputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState('');
+
+  const isImage = kind === 'image';
+  const hasValue = Boolean(value && value.trim());
+  const displayName = hasValue ? deriveDisplayName(value) : '';
+
+  function openPicker() {
+    if (uploading) return;
+    inputRef.current?.click();
+  }
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite re-selecionar o mesmo arquivo depois
+    if (!file) return;
+
+    setUploading(true);
+    setProgress(0);
+    setError('');
+
+    try {
+      const result = await uploadProductAsset({
+        kind,
+        file,
+        onProgress: setProgress,
+      });
+      onChange(result.url);
+      pushToast(`${label} enviado.`, 'success');
+    } catch (err) {
+      const msg = err?.message || 'Falha no upload.';
+      setError(msg);
+      pushToast(msg, 'error');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleClear() {
+    onChange('');
+    setError('');
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+      <div className="flex items-center gap-3">
+        {isImage && hasValue ? (
+          // eslint-disable-next-line jsx-a11y/img-redundant-alt
+          <img
+            src={value}
+            alt={`Preview de ${label}`}
+            className="h-16 w-16 shrink-0 rounded-md object-cover ring-1 ring-slate-200"
+            onError={(e) => { e.currentTarget.style.opacity = '0.3'; }}
+          />
+        ) : (
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-white ring-1 ring-slate-200 text-slate-400">
+            <i className={`bi ${isImage ? 'bi-image' : kind === 'video' ? 'bi-film' : 'bi-file-earmark-arrow-down'} text-2xl`} />
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-slate-800">
+            {hasValue ? displayName : <span className="text-slate-500">Nenhum arquivo selecionado</span>}
+          </p>
+          {hasValue ? (
+            <p className="truncate text-[11px] text-slate-500" title={value}>{value}</p>
+          ) : (
+            <p className="text-[11px] text-slate-500">Clique em &quot;Escolher arquivo&quot;.</p>
+          )}
+          {uploading ? (
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
+            </div>
+          ) : null}
+          {error ? <p className="mt-1 text-xs text-rose-600">{error}</p> : null}
+        </div>
+
+        <div className="flex shrink-0 flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={openPicker}
+            disabled={uploading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-wait disabled:opacity-60"
+          >
+            <i className={`bi ${uploading ? 'bi-arrow-clockwise animate-spin' : hasValue ? 'bi-arrow-repeat' : 'bi-upload'}`} />
+            {uploading ? `${progress}%` : hasValue ? 'Trocar' : 'Escolher'}
+          </button>
+          {hasValue && !uploading ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-500 transition hover:bg-rose-50 hover:text-rose-700"
+            >
+              <i className="bi bi-trash" /> Limpar
+            </button>
+          ) : null}
+          {onRemove ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              disabled={uploading}
+              aria-label="Remover slot"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 transition hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+            >
+              <i className="bi bi-x-lg" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        onChange={handleFile}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+AssetUploader.propTypes = {
+  kind: PropTypes.oneOf(['image', 'video', 'download']).isRequired,
+  accept: PropTypes.string.isRequired,
+  label: PropTypes.string.isRequired,
+  value: PropTypes.string,
+  onChange: PropTypes.func.isRequired,
+  onRemove: PropTypes.func,
+  pushToast: PropTypes.func.isRequired,
+};
+
+function deriveDisplayName(url) {
+  if (!url) return '';
+  try {
+    // Path curto bucket/path
+    if (!url.startsWith('http')) {
+      const parts = url.split('/');
+      return parts[parts.length - 1] || url;
+    }
+    const u = new URL(url);
+    const last = u.pathname.split('/').filter(Boolean).pop() || '';
+    return decodeURIComponent(last);
+  } catch {
+    return url.slice(0, 60);
+  }
+}
 
 ProductWizard.propTypes = {
   isOpen: PropTypes.bool.isRequired,

@@ -105,6 +105,7 @@ async function loadDashboard() {
     image: row.image_url,
     downloadUrl: row.download_url,
     category: row.category_id ? categoryById.get(String(row.category_id)) || null : null,
+    categoryId: row.category_id ? String(row.category_id) : null,
     active: row.active !== false,
     featured: row.featured === true,
     createdAt: row.created_at,
