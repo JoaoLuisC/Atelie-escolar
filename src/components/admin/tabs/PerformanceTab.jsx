@@ -17,7 +17,7 @@ export function PerformanceTab({ productPerformance }) {
                 <th className="px-3 py-2 text-right">Vendas</th>
                 <th className="px-3 py-2 text-right">Receita</th>
                 <th className="px-3 py-2 text-right">Downloads</th>
-                <th className="px-3 py-2 text-left">Conversão</th>
+                <th className="px-3 py-2 text-left">Taxa de download</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">

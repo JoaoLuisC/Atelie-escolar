@@ -7,42 +7,47 @@ export const CartContext = React.createContext(null);
 
 export function CartProvider({ children }) {
   const [cart, setCart] = React.useState(() => readCart());
+  // Espelho síncrono do carrinho: permite checagens (exists/removed) sem prender
+  // os callbacks a `cart`, mantendo-os estáveis entre renders (deps []).
+  const cartRef = React.useRef(cart);
 
   React.useEffect(() => {
+    cartRef.current = cart;
     writeCart(cart);
   }, [cart]);
 
   const addToCart = React.useCallback((product) => {
-    const exists = cart.some((item) => String(item.id) === String(product.id));
+    const exists = cartRef.current.some((item) => String(item.id) === String(product.id));
 
     if (exists) {
-      return { ok: false, message: 'Este produto ja esta no carrinho.' };
+      return { ok: false, message: 'Este produto já está no carrinho.' };
     }
 
-    const next = [
-      ...cart,
+    setCart((prev) => [
+      ...prev,
       {
         id: product.id,
         name: product.name,
         price: Number(product.price) || 0,
         image: product.image || '',
+        // categoryId é necessário para a elegibilidade de cupom por categoria
+        // na prévia do checkout (validate-coupon). Sem ele o cupom restrito
+        // sempre reporta "não elegível", divergindo da cobrança em create-payment.
+        categoryId: product.categoryId ?? product.category_id ?? null,
         quantity: 1,
       },
-    ];
-
-    setCart(next);
+    ]);
     trackEvent('add_to_cart', {
       currency: 'BRL',
       value: Number(product.price) || 0,
       items: [buildItemPayload(product)],
     });
     return { ok: true, message: 'Produto adicionado ao carrinho.' };
-  }, [cart]);
+  }, []);
 
   const removeFromCart = React.useCallback((productId) => {
-    const removed = cart.find((item) => String(item.id) === String(productId));
-    const nextCart = cart.filter((item) => String(item.id) !== String(productId));
-    setCart(nextCart);
+    const removed = cartRef.current.find((item) => String(item.id) === String(productId));
+    setCart((prev) => prev.filter((item) => String(item.id) !== String(productId)));
     if (removed) {
       trackEvent('remove_from_cart', {
         currency: 'BRL',
@@ -50,13 +55,16 @@ export function CartProvider({ children }) {
         items: [{ item_id: String(removed.id), item_name: removed.name, price: Number(removed.price) || 0 }],
       });
     }
-  }, [cart]);
+  }, []);
 
   const clearCart = React.useCallback(() => {
     setCart([]);
   }, []);
 
-  const total = cart.reduce((sum, item) => sum + (Number(item.price) || 0) * (item.quantity || 1), 0);
+  const total = React.useMemo(
+    () => cart.reduce((sum, item) => sum + (Number(item.price) || 0) * (item.quantity || 1), 0),
+    [cart],
+  );
 
   const value = React.useMemo(
     () => ({

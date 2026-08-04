@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-export function StatusStepper({ activeStep, description, steps }) {
+export function StatusStepper({ activeStep, description = '', steps }) {
   return (
     <section aria-label="Progresso do processo" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <ol className="grid gap-3 sm:grid-cols-3">
@@ -49,8 +49,4 @@ StatusStepper.propTypes = {
       label: PropTypes.string.isRequired,
     }),
   ).isRequired,
-};
-
-StatusStepper.defaultProps = {
-  description: '',
 };

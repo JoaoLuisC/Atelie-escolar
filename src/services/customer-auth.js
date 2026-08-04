@@ -129,6 +129,11 @@ export async function consumeCustomerSessionFromAuthCallback() {
     return null;
   }
 
+  // A sessão agora vive no cookie HttpOnly emitido pelo backend. Removemos
+  // os tokens do Supabase (access/refresh) do localStorage para reduzir a
+  // superfície de exfiltração por XSS — não dependemos mais deles no app.
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+
   return normalizeUser(data.user);
 }
 
@@ -153,6 +158,44 @@ export async function fetchCustomerSession() {
   }
 
   return normalizeUser(data.user);
+}
+
+/**
+ * LGPD (§3.8) — passo 1: pede a exclusão da conta. O backend envia um
+ * e-mail com link de confirmação. Requer sessão de cliente ativa.
+ */
+export async function requestAccountDeletion() {
+  const { response, data } = await apiRequest('/me-delete-account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({}),
+  });
+
+  if (!response.ok || data?.success !== true) {
+    throw new Error(data?.error || 'Não foi possível solicitar a exclusão da conta.');
+  }
+
+  return data;
+}
+
+/**
+ * LGPD (§3.8) — passo 2: confirma a exclusão usando o token do e-mail.
+ * O token é a autorização; não exige sessão.
+ */
+export async function confirmAccountDeletion(token) {
+  const { response, data } = await apiRequest('/me-delete-account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  });
+
+  if (!response.ok || data?.success !== true) {
+    throw new Error(data?.error || 'Não foi possível concluir a exclusão da conta.');
+  }
+
+  return data;
 }
 
 export async function logoutCustomerSession() {

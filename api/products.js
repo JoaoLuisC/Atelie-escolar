@@ -86,6 +86,7 @@ module.exports = async function productsHandler(req, res) {
       };
     });
 
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=3600');
     return res.status(200).json({
       success: true,
       products,

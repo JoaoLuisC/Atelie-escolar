@@ -9,10 +9,11 @@
 | Componente | Onde | Como atualiza |
 |---|---|---|
 | Frontend | Vercel (static) | `git push` → build automático |
-| API | Vercel (serverless functions) | idem, cada `api/*.js` vira função |
+| API | Vercel (serverless functions) | idem, cada `api/**/*.js` vira função |
 | Banco | Supabase (managed) | `supabase db push` ou Dashboard |
 | Storage (arquivos) | Supabase Storage | Upload manual ou via API |
 | Cron de e-mails | GitHub Actions | `.github/workflows/email-cron.yml` |
+| CI (testes + Lighthouse) | GitHub Actions | `.github/workflows/test.yml` + `lighthouse.yml` |
 | DNS | Provedor do domínio | manual |
 | E-mail | Resend | gerenciado, sem deploy |
 
@@ -37,6 +38,7 @@ Settings → Environment Variables. Adicionar **todas** as do `.env.local`, exce
 | `SUPABASE_URL` | ✅ | ✅ | ✅ |
 | `SUPABASE_ANON_KEY` | ✅ | ✅ | ✅ |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | ❌ (não em Preview) | ❌ |
+| `SUPABASE_STORAGE_BUCKET` | `product-files` | idem | idem |
 | `MERCADOPAGO_ACCESS_TOKEN` | `APP_USR-*` | `TEST-*` | `TEST-*` |
 | `MERCADOPAGO_PUBLIC_KEY` | `APP_USR-*` | `TEST-*` | `TEST-*` |
 | `WEBHOOK_SECRET` | ✅ | ✅ | ✅ |
@@ -44,7 +46,7 @@ Settings → Environment Variables. Adicionar **todas** as do `.env.local`, exce
 | `CUSTOMER_SESSION_SECRET` | ✅ (gerar novo) | ✅ | ✅ |
 | `DOWNLOAD_TOKEN_SECRET` | ✅ | ✅ | ✅ |
 | `CRON_SECRET` | ✅ | ✅ | ✅ |
-| `APP_URL` | `https://<dominio-final>.com.br` | URL do preview | `http://localhost:5173` |
+| `APP_URL` | `https://<dominio-final>.com.br` | URL do preview | `http://localhost:3000` |
 | `APP_ENV` | `production` | `preview` | `development` |
 | `NODE_ENV` | `production` | `production` | `development` |
 | `CORS_ORIGINS` | `https://<dominio-final>.com.br,https://www.<dominio>.com.br` | URL do preview | (vazio) |
@@ -59,6 +61,10 @@ Settings → Environment Variables. Adicionar **todas** as do `.env.local`, exce
 | `VITE_META_PIXEL_ID` | `123…` | (vazio) | (vazio) |
 
 > ⚠️ **`SERVICE_ROLE_KEY` em Preview deve ser DIFERENTE** (idealmente um projeto Supabase separado de staging). Vazamento em Preview compromete prod.
+
+> O bloco `env` do `vercel.json` mapeia as principais variáveis para secrets do Vercel (`@supabase_url`, `@mercadopago_access_token`, `@app_url` etc.).
+
+Opcionais (defaults no código): `SECURITY_ALERT_WEBHOOK_URL`, `ABANDONED_CART_FIRST_HOURS` (1), `ABANDONED_CART_SECOND_HOURS` (24), `REACTIVATION_DAYS_MIN`/`MAX` (90/180), `REACTIVATION_COUPON_CODE`/`PCT` (`VOLTEI15`/15), `VIP_LTV_THRESHOLD` (300), `RATE_LIMIT_MAX` (250) e `AUTH_RATE_LIMIT_MAX` (30) — estas duas últimas só valem no Express local (rate limit não roda na Vercel).
 
 ### 1.3 Domínio customizado
 
@@ -116,17 +122,17 @@ Ou via Dashboard → Authentication → URL Configuration → Site URL + Redirec
 
 ## 4. Cron de e-mail (GitHub Actions)
 
-Arquivo: `.github/workflows/email-cron.yml`
+Arquivo: `.github/workflows/email-cron.yml` — faz `POST $APP_URL/api/cron-email-jobs` com header `X-Cron-Secret` e falha se o status ≠ 200. Cada execução processa: carrinho abandonado (1h e 24h), sequência pós-compra (D+3/D+15/D+45) e reativação 90–180 dias. Idempotente via `email_sent_log` — rodar de novo não duplica envios. A função serverless declara `maxDuration: 60`.
 
 ### Setup
 1. Settings → Secrets and variables → Actions → New repository secret
 2. Adicione:
-   - `APP_URL=https://<dominio-prod>.com.br`
+   - `APP_URL=https://profamarciarcardoso.com.br` (domínio de produção)
    - `CRON_SECRET=<o-mesmo-que-no-Vercel>`
 3. Após primeiro deploy: Actions → "Email cron" → Run workflow → validar status 200
 
 ### Frequência
-Padrão: a cada hora (`0 * * * *`). Ajustar conforme volume.
+Padrão: a cada hora em ponto, UTC (`0 * * * *`). Ajustar conforme volume.
 
 ---
 
@@ -163,7 +169,7 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 ### 5.4 Build e testes
 - [ ] `npm run check` (test + build) passou localmente
 - [ ] Build sem warnings críticos
-- [ ] Lighthouse Performance ≥ 90 mobile, SEO ≥ 95
+- [ ] Lighthouse CI: Performance ≥ 80, Acessibilidade ≥ 90, SEO ≥ 90 (asserts do `lighthouserc.json`, preset desktop sobre o build estático)
 - [ ] CI verde no GitHub
 
 ### 5.5 Smoke test pós-deploy
@@ -175,9 +181,9 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 - [ ] **Pagamento real com valor pequeno** (R$ 1) → conferir polling + webhook + download
 - [ ] E-mail de confirmação chega na caixa
 - [ ] `/downloads` lista arquivos com link funcionando
-- [ ] `/health` retorna `{ "status": "ok" }`
+- [ ] `GET /api/products` retorna 200 com JSON (`/health` é rota só do Express local — não existe na Vercel)
 - [ ] Login admin funciona
-- [ ] Painel admin renderiza todas as 13 abas
+- [ ] Painel admin renderiza todas as 14 abas
 - [ ] Logout admin funciona
 - [ ] Submeter sitemap no Search Console (apenas no primeiro deploy)
 
@@ -231,9 +237,9 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 ```
 ✓ /painel-acesso-privado-atelie carrega
 ✓ Login admin com 2FA funciona
-✓ 5 tentativas falhas em 10min retorna 429
+✓ 5 tentativas falhas em 10min retorna 429 (só no Express local — na Vercel não há rate limit de app, pendência API-03)
 ✓ Sessão de 8h ainda vale
-✓ Todas as 13 abas renderizam
+✓ Todas as 14 abas renderizam
 ✓ Criar produto via wizard funciona
 ✓ Editar produto persiste
 ✓ Atualizar pedido via modal funciona
@@ -294,13 +300,13 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 3. Se MP mostra pago mas DB ainda `pending`: webhook perdido. Forçar via `GET /api/verify-payment?orderId=X&email=Y`
 4. Se DB OK mas cliente diz que não viu links: enviar link direto `/downloads?order=X`
 
-### 7.5 Lighthouse caiu < 90
+### 7.5 Lighthouse caiu abaixo do limiar do CI (< 80 performance)
 
 **Diagnóstico:**
 1. PR CI mostra qual métrica caiu
 2. Causas comuns:
    - Imagem nova grande no hero → comprimir + lazy
-   - Bundle novo > 200kB → analisar `dist/`, `npm run build` mostra chunks
+   - Chunk novo acima do aviso de 600 kB (`chunkSizeWarningLimit`) → analisar `dist/`, `npm run build` mostra chunks
    - Fonte externa bloqueando render → auto-host
    - CLS por componente sem `aspect-ratio` → adicionar
 
@@ -351,7 +357,7 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 - **Supabase Dashboard** — DB usage, MAU, storage
 
 ### Alertas
-- **`SECURITY_ALERT_WEBHOOK_URL`** (env opcional) — POST para Slack/Discord/Sentry em eventos de segurança
+- **`SECURITY_ALERT_WEBHOOK_URL`** (env opcional) — POST para Slack/Discord/Sentry em eventos de segurança; sem ela, eventos vão só para o log do console (`console.warn`, capturado pelos Function Logs) + tabela `security_events`
 - **Resend Dashboard** — bounces e complaints
 - **Mercado Pago Dashboard** — eventos de pagamento
 

@@ -77,13 +77,13 @@ Toda página, componente ou endpoint que toque o funil de compra deve disparar:
 Toda primeira visita com `utm_*` na URL deve gravar em `localStorage` (TTL 30 dias) e ser anexada a `orders.attribution_data`.
 
 #### A4. LGPD e consentimento
-Trackers de marketing (GA4 com signals, Meta Pixel) requerem consentimento prévio. Banner com Aceitar / Rejeitar / Personalizar. Eventos disparam só após consent. Eventos essenciais (carrinho, checkout) podem rodar como `first-party only` sem consent.
+Trackers de marketing (GA4 com signals, Meta Pixel) requerem consentimento prévio. Banner (`ConsentBanner.jsx`) com **Aceitar todos** / **Apenas essenciais**. GA4/Meta só carregam após consent. Eventos essenciais (carrinho, checkout) rodam como `first-party only` (`/api/track-event`) sem consent.
 
 #### A5. Sem dados pessoais em eventos
 **Nunca** enviar email, telefone ou CPF como propriedade de evento. Use ID hasheado se precisar correlacionar.
 
 #### A6. Logs de auditoria no backend
-Eventos críticos (pagamento, login admin, alteração de produto) ficam em `analytics_events` ou tabelas dedicadas. Não confiar apenas em GA4 para histórico oficial.
+Eventos críticos (pagamento, login admin, alteração de produto) ficam em `analytics_events` e nas tabelas dedicadas `security_events` e `admin_audit_log`. Não confiar apenas em GA4 para histórico oficial.
 
 ---
 
@@ -117,7 +117,7 @@ Inputs em fontes menores que 16px causam zoom involuntário no iOS. Bloqueia con
 Botões, links e ícones clicáveis em mobile.
 
 #### B10. Contraste WCAG AA
-Texto sobre fundo com razão de contraste mínima 4.5:1 (3:1 para texto grande). Validar em PRs com plugins como `eslint-plugin-jsx-a11y`.
+Texto sobre fundo com razão de contraste mínima 4.5:1 (3:1 para texto grande). Validado no CI pelo Lighthouse (`lighthouserc.json`), com gate de acessibilidade ≥ 90.
 
 ---
 
@@ -173,6 +173,9 @@ Toda compra aprovada inicia sequência mínima:
 - D+0: confirmação + acesso (transacional)
 - D+3: pesquisa de satisfação / pedido de review
 - D+15: cross-sell baseado em categoria comprada
+- D+45: novidades da mesma categoria
+
+Implementada em `api/cron-email-jobs.js` (roda de hora em hora via GitHub Actions), idempotente via `email_sent_log`.
 
 #### D5. Segmentação por categoria, não por individualização
 Email vai para "compradores de alfabetização", não para "Maria que comprou alfabetização". Conteúdo é específico ao segmento, não à pessoa.
@@ -219,12 +222,11 @@ Pelo menos 1 produto gratuito por categoria, exigindo email para download. Alime
 ### F. Performance técnica
 
 #### F1. Lighthouse mínimo em produção
-- Performance ≥ 90 (mobile) / 95 (desktop)
-- Accessibility ≥ 90
-- Best Practices ≥ 90
-- SEO ≥ 95
-
-CI bloqueia PR que derrube qualquer um.
+Gates do CI (`lighthouserc.json`, preset desktop sobre o build de `dist/`, workflow `lighthouse.yml` em todo push/PR na `main`):
+- Performance ≥ 80 (bloqueia)
+- Accessibility ≥ 90 (bloqueia)
+- Best Practices ≥ 90 (aviso)
+- SEO ≥ 90 (bloqueia)
 
 #### F2. Core Web Vitals dentro do verde
 - LCP < 2.5s
@@ -260,10 +262,10 @@ HMAC-SHA256 com `WEBHOOK_SECRET`. Sem validação = rejeitar. Implementado em `l
 Polling em `CheckoutPage.jsx` e `DownloadsPage.jsx` existe para cobrir webhook que não chega. Em produção, webhook é o caminho oficial.
 
 #### G5. Download via token efêmero
-Nunca expor URL direta do arquivo. Sempre token com TTL e validação. Tabelas `download_tokens` e `download_logs`.
+Nunca expor URL direta do arquivo. Sempre token de **uso único** com TTL e validação (claim atômico `used=false→true`); arquivo entregue via signed URL do Supabase Storage (5 min) ou redirect legado. Tabelas `download_tokens` e `download_logs`.
 
 #### G6. Cupom validado no backend
-Frontend pode pré-validar para UX, mas validação real é server-side. **Nunca** confiar no cliente.
+Frontend pode pré-validar para UX (`POST /api/validate-coupon`), mas a validação real é server-side no `create-payment` (`lib/coupons.js`), com incremento atômico de uso via RPC `increment_coupon_usage`. **Nunca** confiar no cliente.
 
 #### G7. Suporte a múltiplos meios de pagamento
 Mercado Pago Checkout Pro entrega Pix, cartão e boleto. Não desabilitar opções sem dado claro de baixa conversão.
@@ -282,16 +284,16 @@ Sem exceção. Toda tabela nova nasce com RLS ativo.
 Sessões via cookie assinado HMAC. JS não acessa.
 
 #### H4. Rate limit em endpoints públicos
-Helmet + express-rate-limit já configurados. Reforçar para endpoints novos sensíveis.
+Helmet + express-rate-limit já configurados. Reforçar para endpoints novos sensíveis. ⚠️ O rate limit roda no Express (dev); nas funções serverless da Vercel depende de store compartilhado — pendência **API-03**, registrada em comentário de `routes/auth.routes.js` (detalhes em [08-SEGURANCA](./08-SEGURANCA.md)).
 
 #### H5. Senhas seguindo política
-Mínimo 8 chars + maiúscula + minúscula + número. Validação no client + no backend.
+Mínimo 8 chars + maiúscula + minúscula + número. Política completa validada no client (`CustomerAuthPage.jsx`); o backend (`lib/customer-auth-handlers.js`) revalida só o mínimo de 8 caracteres — a checagem de classes de caracteres depende da política do Supabase Auth (ver [01-VISAO-GERAL](./01-VISAO-GERAL.md) e [08-SEGURANCA](./08-SEGURANCA.md)).
 
 #### H6. Dados pessoais minimizados
 Coletar apenas o necessário (nome, email para compra). Endereço só se for produto físico (não é nosso caso).
 
 #### H7. LGPD: direito ao esquecimento
-Endpoint para usuário solicitar exclusão de conta + dados associados (anonimizar `orders.email`, deletar `profiles`). ⚠️ Hoje implementado via admin, ainda não self-service — pendência §13.
+Endpoint para usuário solicitar exclusão de conta + dados associados. Implementado self-service: `POST /api/me-delete-account` em 2 passos (solicitação → confirmação por token enviado por e-mail), anonimiza pedidos e limpa a sessão.
 
 #### H8. Backup automatizado
 Supabase Pro tem 30 dias. Free, 7 dias. Manter no mínimo Pro em produção.
@@ -301,19 +303,19 @@ Supabase Pro tem 30 dias. Free, 7 dias. Manter no mínimo Pro em produção.
 ### I. Painel admin
 
 #### I1. Tudo que admin faz é auditado
-Tabela `admin_audit_log` (futuro): `admin_id, action, target_type, target_id, before, after, created_at`. ⚠️ Ainda não implementado.
+Implementado: tabela `admin_audit_log` (`admin_id, action, target_type, target_id, before, after, ip, created_at`), preenchida por `lib/admin-audit.js` em toda escrita do painel (produtos, categorias, cupons, pedidos, usuários, settings). Append-only (triggers bloqueiam UPDATE/DELETE), campos sensíveis redigidos, retenção de 18 meses.
 
 #### I2. 2FA opcional, mas recomendado
-Implementado. Conta principal do admin deve ter 2FA ativo em produção.
+Implementado (TOTP com PIN de fallback, configurado na aba **Segurança**). Conta principal do admin deve ter 2FA ativo em produção.
 
 #### I3. Curva ABC sempre disponível
 Aba **Análise** é central. Decisões de produto e mídia se apoiam nela.
 
 #### I4. Export CSV em qualquer relatório
-Pedidos, clientes, vendas por período, Curva ABC. Sem isso, vira refém de quem programou.
+Pedidos, clientes, vendas por período, Curva ABC. Sem isso, vira refém de quem programou. ⚠️ Hoje implementado na aba **Análise** (Curva ABC de produtos, ABC de clientes e coorte, via `utils/csv-export.js`); demais relatórios pendentes.
 
 #### I5. Não permitir delete físico de pedidos
-Pedidos têm valor histórico. Apenas `soft delete` ou marcação de cancelado.
+Pedidos têm valor histórico. Apenas `soft delete` ou marcação de cancelado. ⚠️ Hoje `DELETE /api/admin-orders` ainda faz delete físico (auditado em `admin_audit_log`) — regra pendente de implementação.
 
 ---
 
@@ -388,7 +390,7 @@ Para cada PR que toque o fluxo do cliente, fluxo de pagamento ou admin:
 - [ ] UTMs preservadas no fluxo (se aplicável)
 
 ### Performance
-- [ ] Lighthouse continua ≥ 90 (mobile)
+- [ ] Gates do Lighthouse CI passam (preset desktop: Performance ≥ 80, Accessibility ≥ 90, SEO ≥ 90 — ver [§F1](#f1-lighthouse-mínimo-em-produção))
 - [ ] Sem aumento de bundle inicial > 10kB sem justificativa
 - [ ] Imagens novas otimizadas (WebP/AVIF + lazy load)
 

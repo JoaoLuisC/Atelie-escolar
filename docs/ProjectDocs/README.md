@@ -2,7 +2,7 @@
 
 > Plataforma de vendas de materiais educativos digitais (banners, painéis, atividades pedagógicas) com download imediato após pagamento aprovado.
 >
-> **Stack**: React 19 + Vite + Tailwind + Express + Supabase + Mercado Pago. Deploy em Vercel.
+> **Stack**: React 19 + Vite + Tailwind + Express 5 + Supabase + Mercado Pago. Deploy em Vercel.
 
 Esta pasta é a **fonte única de verdade** sobre o projeto. Toda decisão de produto, arquitetura, segurança e operação está aqui. Os MDs antigos em `docs/` (fora desta pasta) estão sendo descontinuados — esta é a versão consolidada.
 
@@ -18,7 +18,7 @@ Esta pasta é a **fonte única de verdade** sobre o projeto. Toda decisão de pr
 | 04 | [Banco de dados](./04-BANCO-DE-DADOS.md) | Schema, tabelas, RLS, migrations |
 | 05 | [Fluxos (diagramas)](./05-FLUXOS.md) | Diagramas Mermaid de auth, checkout, admin, webhook |
 | 06 | [Fluxo de compra e venda](./06-FLUXO-COMPRA-VENDA.md) | Jornada completa do cliente + responsabilidades do vendedor |
-| 07 | [Dashboard admin](./07-DASHBOARD-ADMIN.md) | As 13 abas do painel admin, KPIs, gestão de produtos/pedidos |
+| 07 | [Dashboard admin](./07-DASHBOARD-ADMIN.md) | As 14 abas do painel admin, KPIs, gestão de produtos/pedidos |
 | 08 | [Segurança](./08-SEGURANCA.md) | RLS, secrets, headers, auditoria, LGPD, modelo de ameaça |
 | 09 | [API endpoints](./09-API-ENDPOINTS.md) | Referência de todos os endpoints REST (cliente + admin) |
 | 10 | [Marketing & analytics](./10-MARKETING-ANALYTICS.md) | GA4, Meta Pixel, Curva ABC, email marketing, funil, cohort |
@@ -34,7 +34,7 @@ Esta pasta é a **fonte única de verdade** sobre o projeto. Toda decisão de pr
 
 **"Vou adicionar um endpoint novo"** → [02-ARQUITETURA](./02-ARQUITETURA.md) + [09-API-ENDPOINTS](./09-API-ENDPOINTS.md) + [08-SEGURANCA §rate-limit](./08-SEGURANCA.md)
 
-**"Vou mexer no fluxo de checkout"** → [06-FLUXO-COMPRA-VENDA](./06-FLUXO-COMPRA-VENDA.md) + [05-FLUXOS §3](./05-FLUXOS.md) + [11-REGRAS-NEGOCIO §G](./11-REGRAS-NEGOCIO.md)
+**"Vou mexer no fluxo de checkout"** → [06-FLUXO-COMPRA-VENDA](./06-FLUXO-COMPRA-VENDA.md) + [05-FLUXOS §5](./05-FLUXOS.md) + [11-REGRAS-NEGOCIO §G](./11-REGRAS-NEGOCIO.md)
 
 **"Vou criar uma tabela nova"** → [04-BANCO-DE-DADOS](./04-BANCO-DE-DADOS.md) + [08-SEGURANCA §RLS](./08-SEGURANCA.md)
 
@@ -48,20 +48,21 @@ Esta pasta é a **fonte única de verdade** sobre o projeto. Toda decisão de pr
 
 ## 🎯 O que essa loja faz
 
-- ✅ Visitante navega catálogo, busca, filtra, ordena e adiciona ao carrinho
+- ✅ Visitante navega catálogo, filtra, ordena e adiciona ao carrinho
 - ✅ Cliente faz checkout integrado com Mercado Pago (cartão, Pix, boleto)
 - ✅ Após aprovação, libera **download automático** dos arquivos comprados via token efêmero
 - ✅ Admin gerencia produtos (com galeria + vídeos + FAQ + reviews + benefícios), categorias, pedidos, vitrine, usuários, cupons
 - ✅ Auth com Supabase (e-mail/senha + Google OAuth com PKCE) + recuperação por e-mail
 - ✅ Admin com **2FA opcional** (TOTP + PIN de recuperação)
-- ✅ Acesso admin via URL obscurecida (`/painel-acesso-privado-atelie`) ou link discreto no rodapé do login
-- ✅ E-mail transacional via **Resend** (reset de senha + confirmação de compra)
+- ✅ Acesso admin via URL obscurecida (`/painel-acesso-privado-atelie`); cliente logado com papel admin vê link "Painel admin" no header
+- ✅ E-mail transacional via **Resend** (confirmação de compra); reset de senha sai pelo Supabase Auth e só passa pelo Resend com o SMTP customizado configurado ([03-SETUP §5](./03-SETUP.md))
 - ✅ Newsletter com **double opt-in** e descadastro idempotente
 - ✅ **Analytics completo**: GA4 + Meta Pixel + tabela própria `analytics_events`
 - ✅ **Dashboard analítico**: KPIs, funil, Curva ABC (produtos + clientes), coorte, segmentos, LTV/CAC
 - ✅ **SEO completo**: slugs, meta tags, schema.org, sitemap dinâmico, robots
-- ✅ **LGPD**: banner de consentimento, double opt-in, dados pessoais minimizados, retenção limitada
-- ✅ **Carrinho abandonado**: salvamento + lembrete por e-mail
+- ✅ **LGPD**: banner de consentimento, double opt-in, exclusão de conta em 2 passos, dados pessoais minimizados, retenção limitada
+- ✅ **Carrinho abandonado**: salvamento + lembretes por e-mail (1h/24h)
+- ✅ **E-mails automáticos de ciclo de vida** via cron horário: pós-compra (D+3/D+15/D+45) e reativação 90d
 - ✅ **Cupons** com cálculo server-side
 - ✅ **Cross-sell** automático na página de produto
 
@@ -80,17 +81,17 @@ Projeto-mae/
 ├── utils/                # AppError genérico
 ├── src/                  # Frontend React
 │   ├── pages/            # Páginas (Home, Produtos, Checkout, Admin, …)
-│   ├── components/       # UI compartilhada + admin/ (13 abas + ui/ + utils/)
+│   ├── components/       # UI compartilhada + admin/ (14 abas + ui/ + utils/)
 │   ├── providers/        # Auth, Cart, Toast
 │   ├── hooks/            # useAuth, useCart, useToast, useProductFilters
-│   ├── services/         # admin-auth, admin-panel, customer-auth, products, supabase-browser
+│   ├── services/         # admin-auth, admin-panel, admin-products, customer-auth, products, supabase-browser
 │   ├── utils/            # analytics, api, attribution, cart-storage, consent, csv-export, currency
-│   ├── constants/        # Rotas, breakpoints
-│   ├── types/            # Tipos Supabase gerados
+│   ├── constants/        # Rotas (routes.js)
+│   ├── types/            # (vazia)
 │   └── test/             # Setup do Vitest
 ├── supabase/             # schema.sql + security-hardening.sql + seed + migrations/
-├── scripts/              # check-advisor, configure-auth, fix-dns, fix-utf8, db-inspect
-├── public/               # robots.txt (og-default.png pendente — ver [13-ROADMAP](./13-ROADMAP-PENDENCIAS.md))
+├── scripts/              # check-advisor, check-utf8, configure-auth, db-inspect, fix-dns, fix-utf8
+├── public/               # robots.txt + favicon.svg (og-default.png pendente — ver [13-ROADMAP](./13-ROADMAP-PENDENCIAS.md))
 ├── server.js             # Bootstrap Express
 ├── vite.config.js
 ├── vercel.json

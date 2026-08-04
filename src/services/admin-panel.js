@@ -7,11 +7,11 @@ async function request(path, options = {}) {
   });
 
   if (response.status === 401) {
-    throw new Error('Sessao admin expirada. Faca login novamente.');
+    throw new Error('Sessão admin expirada. Faça login novamente.');
   }
 
   if (!response.ok || data.success === false) {
-    throw new Error(data.error || 'Falha na operacao admin.');
+    throw new Error(data.error || 'Falha na operação admin.');
   }
 
   return data;
@@ -47,12 +47,38 @@ export async function deleteAdminCategory(id) {
   });
 }
 
+export async function fetchAdminCoupons() {
+  return request('/admin-coupons');
+}
+
+export async function createAdminCoupon(payload) {
+  return request('/admin-coupons', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminCoupon(payload) {
+  return request('/admin-coupons', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAdminCoupon(id) {
+  return request(`/admin-coupons?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function fetchAdminUsers() {
-  return request('/admin/users');
+  return request('/admin-users');
 }
 
 export async function updateAdminUser(payload) {
-  return request('/admin/users', {
+  return request('/admin-users', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -60,7 +86,7 @@ export async function updateAdminUser(payload) {
 }
 
 export async function deleteAdminUser(id) {
-  return request(`/admin/users?id=${encodeURIComponent(id)}`, {
+  return request(`/admin-users?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }

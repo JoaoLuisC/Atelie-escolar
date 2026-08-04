@@ -16,7 +16,7 @@
             │                        ├──SMTP───▶ Resend (e-mails transacionais e marketing)
             │                        └──HTTP───▶ Slack/Discord webhook (alertas de segurança, opcional)
             │
-            ├──HTTPS──▶ Supabase Auth (apenas signInWithOAuth, getSession, exchangeCode)
+            ├──HTTPS──▶ Supabase Auth (apenas signInWithOAuth, resetPasswordForEmail, exchangeCode)
             ├──HTTPS──▶ GA4 (eventos do funil)
             └──HTTPS──▶ Meta Pixel (eventos do funil)
 ```
@@ -24,10 +24,10 @@
 **O Express é um BFF (Backend for Frontend)**. O browser **não fala diretamente** com Supabase para CRUD de dados. Apenas para:
 
 - `signInWithOAuth({ provider: 'google' })` — fluxo PKCE
-- `signInWithPassword`, `signUp`, `signOut`, `getSession`, `updateUser` (durante reset)
-- `exchangeCodeForSession` (durante callback de OAuth e reset)
+- `resetPasswordForEmail`, `exchangeCodeForSession`/`setSession` e `updateUser` (durante reset de senha)
+- `signOut({ scope: 'local' })` — limpa tokens do localStorage logo após o callback OAuth
 
-Toda escrita em tabelas e leitura de dados administrativos passa pelo Express usando `service_role`.
+Login com e-mail/senha e cadastro do cliente passam pelo BFF (`/api/auth/customer/login` e `/api/auth/customer/register`), que troca as credenciais por cookie HttpOnly `customer_session`. Toda escrita em tabelas e leitura de dados administrativos passa pelo Express usando `service_role`.
 
 **Por que BFF e não chamar Supabase direto do browser?**
 
@@ -35,7 +35,7 @@ Toda escrita em tabelas e leitura de dados administrativos passa pelo Express us
 2. **Validação consistente.** Zod no backend valida cada payload antes de tocar o banco. O cliente pode mentir; o servidor confere.
 3. **Cookies HttpOnly.** Sessão de admin e de cliente ficam em cookies que o JS não acessa — defesa contra XSS.
 4. **Integração com Mercado Pago.** O `access_token` do MP precisa ficar no servidor; webhook precisa de endpoint público estável.
-5. **Rate-limit centralizado.** Helmet, CORS e `express-rate-limit` ficam num só lugar.
+5. **Rate-limit centralizado.** Helmet, CORS e `express-rate-limit` ficam num só lugar (o rate-limit vale só no Express/dev; na Vercel serverless dependeria de store compartilhado — pendência API-03).
 6. **Compatibilidade com Vercel.** Cada arquivo em `api/` vira função serverless automática; em dev, o Express monta os mesmos handlers via `api-compat.routes.js`.
 
 ---
@@ -47,6 +47,9 @@ Projeto-mae/
 │
 ├── api/                                  # ❶ Endpoints serverless (Vercel) + montados no Express em dev
 │   ├── __tests__/                        # Testes dos endpoints
+│   ├── auth/customer/                    # login.js / register.js / session.js / logout.js
+│   │   └── google/                       # start.js / callback.js (OAuth Google)
+│   ├── _notfound.js                      # 404 JSON para /api/* inexistente (Vercel)
 │   ├── products.js                       # GET listagem pública
 │   ├── product-details.js                # GET por slug
 │   ├── home-sections.js                  # GET vitrine + destaques + mais vendidos
@@ -55,42 +58,48 @@ Projeto-mae/
 │   ├── webhook.js                        # POST webhook MP com HMAC
 │   ├── download.js                       # GET com token efêmero
 │   ├── customer-orders.js                # GET histórico do cliente
-│   ├── cross-sell.js                     # GET recomendações por categoria
+│   ├── cross-sell.js                     # GET recomendações por co-compra (fallback categoria)
 │   ├── validate-coupon.js                # POST valida cupom server-side
 │   ├── track-event.js                    # POST eventos do funil (RLS público)
-│   ├── abandoned-cart.js                 # POST salva + GET recupera
+│   ├── abandoned-cart.js                 # POST upsert de carrinho abandonado (só POST)
 │   ├── subscribe.js / unsubscribe.js / confirm-subscription.js   # Newsletter LGPD
 │   ├── send-confirmation-email.js        # POST nodemailer → Resend
+│   ├── me-delete-account.js              # POST exclusão de conta (LGPD, confirmação 2 passos)
 │   ├── sitemap.xml.js                    # GET sitemap dinâmico
 │   ├── cron-email-jobs.js                # POST job de email (chamado por GitHub Actions)
 │   │
 │   ├── admin-login.js / admin-logout.js / admin-session.js
 │   ├── admin-dashboard.js / admin-kpis.js
 │   ├── admin-products.js / admin-categories.js / admin-orders.js / admin-users.js
-│   ├── admin-vitrine.js / admin-settings.js
+│   ├── admin-coupons.js / admin-settings.js / admin-upload-url.js   # vitrine é servida por admin-settings
 │   ├── admin-abc-products.js / admin-abc-customers.js / admin-cohort.js
 │   ├── admin-funnel.js / admin-segments.js
 │   └── admin-cleanup-events.js
 │
-├── routes/                               # ❷ Mount points do Express
-│   ├── auth.routes.js                    # /auth/customer/* + /auth/admin/google/* (futuro)
-│   ├── payment.routes.js                 # /payments/process, /payments/verify
-│   ├── products.routes.js                # /produtos (admin, validado)
-│   └── api-compat.routes.js              # Reusa todos os api/*.js como /api/*
+├── routes/                               # ❷ Mount points do Express (só dev)
+│   ├── auth.routes.js                    # /api/auth/me + /api/auth/customer/* (mesmos handlers de api/auth/)
+│   ├── payment.routes.js                 # Router VAZIO (aliases /payments/* removidos; mantido pelo mount)
+│   ├── products.routes.js                # POST /api/produtos (admin, validado, dev-only)
+│   └── api-compat.routes.js              # Reusa todos os api/*.js como /api/* + rate-limits por endpoint
 │
 ├── middleware/                           # ❸ Middlewares Express
-│   ├── auth.middleware.js                # Resolve user/role do cookie ou Bearer
+│   ├── auth.middleware.js                # Valida Bearer token Supabase + resolve role
 │   ├── error.middleware.js               # Handler de erro global + 404
 │   └── validate.middleware.js            # validateBody(zodSchema)
 │
 ├── lib/                                  # ❹ Camada de serviço backend
 │   ├── supabase.js                       # Cliente service-role + helpers
+│   ├── env-secret.js                     # Resolve segredos + flags (cookie seguro, dev/test)
 │   ├── admin-session.js                  # Cookie HMAC + 2FA challenge + TOTP
 │   ├── customer-session.js               # Cookie HMAC do cliente
+│   ├── customer-auth-handlers.js         # Handlers de auth do cliente (compartilhados api/ ↔ routes/)
 │   ├── security-headers.js               # CSP estrita, HSTS, X-Frame-Options
 │   ├── security-logger.js                # Log estruturado + tabela security_events + webhook opcional
+│   ├── admin-audit.js                     # Trilha de auditoria de ações admin (logAdminAction)
 │   ├── mercadopago-config.js             # SDK MP + criar preferência + validar webhook
 │   ├── analytics-events.js               # Whitelist + RLS público de eventos
+│   ├── attribution-sanitize.js           # Whitelist canônica de atribuição (UTMs/referrer/sessão)
+│   ├── coupons.js                        # Validação e cálculo de desconto de cupons
 │   ├── abc-classification.js             # Algoritmo Pareto compartilhado
 │   ├── customer-segmentation.js          # RFM + lifecycle + cohort
 │   ├── customer-account-provisioning.js  # Vincula pedido a conta existente
@@ -126,7 +135,7 @@ Projeto-mae/
 │   │   ├── LegalPages.jsx                # /privacidade + /termos
 │   │   ├── SubscriptionPages.jsx         # /confirmar-inscricao + /desinscrever
 │   │   ├── AdminLoginPage.jsx            # /painel-acesso-privado-atelie
-│   │   ├── AdminPage.jsx                 # /admin (com 13 abas)
+│   │   ├── AdminPage.jsx                 # /admin (com 14 abas)
 │   │   ├── NotFoundPage.jsx              # *
 │   │   └── __tests__/                    # Testes de página
 │   │
@@ -138,20 +147,23 @@ Projeto-mae/
 │   │   ├── ProductBenefits.jsx / ProductFaq.jsx / ProductReviews.jsx
 │   │   ├── ProductWizard.jsx             # Admin: criação de produto
 │   │   ├── CategoryWizard.jsx            # Admin: criação de categoria
+│   │   ├── CouponWizard.jsx              # Admin: criação de cupom
 │   │   ├── ModalWizard.jsx               # Wrapper genérico
 │   │   ├── CrossSellSection.jsx
 │   │   ├── CouponField.jsx
 │   │   ├── NewsletterSignup.jsx
-│   │   ├── SocialProofStrip.jsx / TrustBadgeRow.jsx
+│   │   ├── SocialProofStrip.jsx
 │   │   ├── ConsentBanner.jsx             # LGPD
 │   │   ├── ProtectedRoute.jsx            # Wrapper de rota admin
 │   │   ├── ErrorBoundary.jsx
 │   │   ├── ToastViewport.jsx / Skeleton.jsx / SortDropdown.jsx / StatusStepper.jsx
 │   │   ├── SEO.jsx                       # react-helmet-async + JSON-LD
 │   │   └── admin/
-│   │       ├── tabs/                     # ⚠️ 13 abas (ver [07-DASHBOARD-ADMIN](./07-DASHBOARD-ADMIN.md))
+│   │       ├── AdminLayout.jsx           # Sidebar + header do painel
+│   │       ├── OrderDetailModal.jsx      # Modal de detalhe de pedido
+│   │       ├── tabs/                     # ⚠️ 14 abas (ver [07-DASHBOARD-ADMIN](./07-DASHBOARD-ADMIN.md))
 │   │       ├── ui/                       # StatCard, BarList, StatusChip, Card, Button, EmptyState
-│   │       └── utils/                    # Helpers admin
+│   │       └── utils/                    # Helpers admin (derive.js, format.js, tabs.js)
 │   │
 │   ├── providers/                        # Context React
 │   │   ├── AuthProvider.jsx
@@ -174,15 +186,14 @@ Projeto-mae/
 │   │
 │   ├── utils/
 │   │   ├── analytics.js                  # GA4 + Meta Pixel + consent gate
-│   │   ├── api.js                        # fetch wrapper com timeout + AppError
+│   │   ├── api.js                        # fetch wrapper com timeout 15s + parse de erro
 │   │   ├── attribution.js                # UTM persistente em localStorage
 │   │   ├── cart-storage.js
 │   │   ├── consent.js                    # LGPD state
 │   │   ├── csv-export.js                 # Export de relatórios admin
 │   │   └── currency.js
 │   │
-│   ├── constants/                        # Rotas + breakpoints
-│   ├── types/                            # supabase.ts (gerado)
+│   ├── constants/                        # routes.js (ADMIN_LOGIN_PATH, reset-password)
 │   └── test/                             # Setup Vitest
 │
 ├── supabase/
@@ -190,7 +201,7 @@ Projeto-mae/
 │   ├── security-hardening.sql            # RLS + policies + funções
 │   ├── seed-sample-data.sql              # Dados de exemplo
 │   ├── config.toml                       # Config CLI Supabase
-│   └── migrations/                       # 8 migrations versionadas
+│   └── migrations/                       # 13 migrations versionadas
 │
 ├── scripts/
 │   ├── check-advisor.js                  # Security Advisor via Management API
@@ -201,6 +212,7 @@ Projeto-mae/
 │
 ├── public/
 │   ├── robots.txt
+│   ├── favicon.svg
 │   └── og-default.png                    # ❌ ainda não criado — pendência §13
 │
 ├── server.js                             # Bootstrap Express
@@ -219,7 +231,7 @@ Projeto-mae/
 
 ```
 Browser → fetch /api/products?category=alfabetizacao
-       → utils/api.js (timeout 15s, retry, parse de erro)
+       → utils/api.js (timeout 15s via AbortController, parse de erro)
 Express :3000
        → middleware/cors → middleware/rate-limit (250/15min)
        → routes/api-compat.routes.js
@@ -254,14 +266,14 @@ Mercado Pago → POST https://app.com/api/webhook
             → body: { type: 'payment', data: { id: 'PAY-123' } }
             → headers: x-signature: ts=…,v1=hash
 Express :3000
-       → middleware/rate-limit (60/min em /webhook)
+       → middleware/rate-limit (global 250/15min; webhook sem limiter dedicado)
        → api/webhook.js
        → validateWebhookSignature() → HMAC-SHA256 com WEBHOOK_SECRET
        → 401 se inválido | continua se válido
        → mercadopago.payment.get(paymentId)
-       → match em orders.external_reference
-       → UPDATE orders SET payment_status='approved'
-       → INSERT INTO download_tokens
+       → external_reference da preference = orders.id
+       → UPDATE orders SET payment_status='approved' (transição atômica !approved→approved)
+       → INSERT INTO download_tokens (lote idempotente)
        → 200 OK
 ```
 
@@ -297,7 +309,7 @@ Express :3000
 ### D6. Cron via GitHub Actions ao invés de pg_cron
 **Contexto.** Supabase Free não garante `pg_cron`. Disparo de emails (abandoned cart, reativação) precisa ser confiável.
 **Decisão.** Workflow `email-cron.yml` chama `/api/cron-email-jobs` com `CRON_SECRET`.
-**Trade-off.** Dependência do GitHub (free 2.000 min/mês). `pg_cron` é usado apenas para retenção de logs (purge automático), que não bloqueia se falhar.
+**Trade-off.** Dependência do GitHub (free 2.000 min/mês). `pg_cron` é usado apenas para purges de retenção de dados antigos (logs, eventos de analytics, subscribers não confirmados), que não bloqueiam se falharem.
 
 ### D7. Schema único `public` no Postgres
 **Contexto.** Multi-schema (auth, public, storage) complicaria policies.
@@ -333,22 +345,22 @@ Express :3000
 ## Configurações importantes
 
 ### `server.js` (Express bootstrap)
-1. Carrega `.env.{NODE_ENV}.local` → `.env.local` → `.env.{NODE_ENV}` → `.env` (cascata)
+1. Carrega `.env.{ENV}.local` → `.env.local` → `.env.{ENV}` → `.env` (cascata; `ENV` = `APP_ENV || NODE_ENV`)
 2. Em prod: valida que `APP_URL` começa com `https://` e que segredos estão setados
 3. `app.set('trust proxy', 1)` para Vercel
 4. Helmet + CORS (allowlist em prod, localhost wildcard em dev) + express.json 1MB + rate-limit
-5. Routes na ordem: `/auth`, `/products`, `/payments`, `/api` (compat)
+5. Routes na ordem: `GET /health`, `GET /sitemap.xml`, depois tudo sob `/api`: auth → products → payments (router vazio) → compat (`api/*.js`)
 6. Handler de erro global + 404 JSON
 
 ### `vite.config.js`
 - Port 5173 com `strictPort: true` (não muda de porta se ocupada)
-- Aliases para split de chunks: `react`, `react-router`, `react-dom`, `@supabase`, `react-hook-form`+`zod` separados
+- `manualChunks` (via `rolldownOptions`, Vite 8) para split de chunks: `router` (react-router), `supabase`, `forms` (react-hook-form), `react` (react + react-dom), `vendor` (resto)
 - Test config: jsdom, setupFiles, globals
 
 ### `vercel.json`
 - Build estático em `dist/` (frontend)
-- Cada `api/*.js` vira função serverless
-- Rota `/api/*` → `/api/$1`; `/sitemap.xml` → `/api/sitemap.xml.js`; `/*` → `/index.html` (SPA fallback)
+- Cada `api/**/*.js` vira função serverless (o caminho do arquivo é a rota; ex.: `api/auth/customer/login.js` → `/api/auth/customer/login`)
+- Rotas em ordem: headers de segurança em todas as respostas (HSTS, CSP, X-Frame-Options etc., com `continue`); `/api/*` → `/api/$1`; `/sitemap.xml` → `/api/sitemap.xml.js`; filesystem (estáticos); `/api/*` sem função → `/api/_notfound.js` (404 JSON); `/*` → `/index.html` (SPA fallback)
 
 ### `tailwind.config.js`
 - Brand: `purple` (#9B5DE5) com escalas 50-900; accents `sky`, `pink`, `yellow`

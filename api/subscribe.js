@@ -5,22 +5,12 @@ const {
 } = require('../lib/supabase');
 const { sendEmail } = require('../lib/email-sender');
 const { optInConfirmation } = require('../lib/email-templates');
+const { sanitizeAttribution } = require('../lib/attribution-sanitize');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function newToken() {
   return crypto.randomBytes(32).toString('base64url');
-}
-
-function sanitizeAttribution(input) {
-  if (!input || typeof input !== 'object') return {};
-  const out = {};
-  for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'session_id']) {
-    if (typeof input[key] === 'string' && input[key].trim()) {
-      out[key] = input[key].slice(0, 200);
-    }
-  }
-  return out;
 }
 
 /**

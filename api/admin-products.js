@@ -1,4 +1,5 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
+const { logAdminAction } = require('../lib/admin-audit');
 const {
   getSupabaseConfig,
   serviceRoleHelpers: {
@@ -78,6 +79,25 @@ function toProductPayload(body = {}, existing = {}) {
   const kitItems = resolveArray(body.kitItems, existing.kit_items);
   const panelSizes = resolveArray(body.panelSizes, existing.panel_sizes);
 
+  // Campos de conversão (Fase 2): editáveis pela aba Conversão do ProductWizard.
+  const faq = resolveArray(body.faq, existing.faq)
+    .map((entry) => ({ question: String(entry?.question || '').trim(), answer: String(entry?.answer || '').trim() }))
+    .filter((entry) => entry.question && entry.answer);
+  const reviews = resolveArray(body.reviews, existing.reviews)
+    .map((entry) => ({
+      author: String(entry?.author || '').trim(),
+      role: String(entry?.role || '').trim(),
+      location: String(entry?.location || '').trim(),
+      text: String(entry?.text || '').trim(),
+      rating: entry?.rating == null || entry?.rating === '' ? null : Number(entry.rating),
+    }))
+    .filter((entry) => entry.author && entry.text);
+  const benefits = resolveArray(body.benefits, existing.benefits)
+    .map((entry) => (typeof entry === 'string'
+      ? { icon: '', label: entry.trim() }
+      : { icon: String(entry?.icon || '').trim(), label: String(entry?.label || '').trim() }))
+    .filter((entry) => entry.label);
+
   const incomingImages = resolveArray(body.images, existing.images)
     .map((url) => String(url || '').trim())
     .filter(Boolean);
@@ -107,13 +127,16 @@ function toProductPayload(body = {}, existing = {}) {
     paper_type: String(body.paperType ?? existing.paper_type ?? ''),
     kit_items: kitItems,
     panel_sizes: panelSizes,
+    faq,
+    reviews,
+    benefits,
   };
 }
 
 async function listProducts() {
   const [productsRows, categoriesRows] = await Promise.all([
     listTableRows('products', {
-      select: 'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
+      select: 'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,faq,reviews,benefits,created_at,updated_at',
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -149,6 +172,9 @@ async function listProducts() {
       paperType: row.paper_type || '',
       kitItems: Array.isArray(row.kit_items) ? row.kit_items : [],
       panelSizes: Array.isArray(row.panel_sizes) ? row.panel_sizes : [],
+      faq: Array.isArray(row.faq) ? row.faq : [],
+      reviews: Array.isArray(row.reviews) ? row.reviews : [],
+      benefits: Array.isArray(row.benefits) ? row.benefits : [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -173,7 +199,7 @@ async function updateProduct(body) {
   }
 
   const existing = await getTableRow('products', {
-    select: 'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes',
+    select: 'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,faq,reviews,benefits',
     filters: [{ column: 'id', value: id }],
   });
 
@@ -247,6 +273,21 @@ module.exports = async function adminProductsHandler(req, res) {
     }
 
     const result = await handler();
+
+    // Auditoria de escrita (regra I1) — best-effort.
+    if (result.status >= 200 && result.status < 300 && req.method !== 'GET') {
+      const actionByMethod = { POST: 'create', PUT: 'update', PATCH: 'patch', DELETE: 'delete' };
+      await logAdminAction({
+        req,
+        action: actionByMethod[req.method] || String(req.method).toLowerCase(),
+        targetType: 'product',
+        targetId: req.method === 'DELETE'
+          ? String(req.query?.id || req.body?.id || '').trim()
+          : (req.body?.id ?? result.body?.id ?? null),
+        after: req.method === 'DELETE' ? null : (req.body || null),
+      });
+    }
+
     return res.status(result.status).json(result.body);
   } catch (error) {
     console.error('Admin products error:', error);

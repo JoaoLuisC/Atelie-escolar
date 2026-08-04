@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useContext, useEffect } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { CartContext } from '../providers/CartProvider';
 import { formatPrice } from '../utils/currency';
@@ -24,6 +24,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
   const total = Number(ctx?.total || 0);
   const removeFromCart = ctx?.removeFromCart || (() => {});
   const clearCart = ctx?.clearCart || (() => {});
+  const dialogRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -33,6 +34,63 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
     globalThis.document?.addEventListener('keydown', onKeyDown);
     return () => globalThis.document?.removeEventListener('keydown', onKeyDown);
   }, [isOpen, onClose]);
+
+  // Focus trap: ao abrir, move o foco para dentro do drawer; Tab/Shift+Tab
+  // ciclam apenas entre os elementos focáveis do dialog; ao fechar, devolve o
+  // foco ao elemento que o abriu (o botão do carrinho no Shell).
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const doc = globalThis.document;
+    if (!doc) return undefined;
+
+    const previouslyFocused = doc.activeElement;
+    const dialog = dialogRef.current;
+
+    const getFocusable = () => {
+      if (!dialog) return [];
+      return Array.from(
+        dialog.querySelectorAll(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+    };
+
+    const focusables = getFocusable();
+    if (focusables.length > 0) {
+      focusables[0].focus();
+    } else if (dialog) {
+      dialog.focus();
+    }
+
+    const onKeyDown = (event) => {
+      if (event.key !== 'Tab') return;
+      const items = getFocusable();
+      if (items.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = doc.activeElement;
+      if (event.shiftKey) {
+        if (active === first || !dialog?.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !dialog?.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    doc.addEventListener('keydown', onKeyDown);
+    return () => {
+      doc.removeEventListener('keydown', onKeyDown);
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus();
+      }
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (typeof globalThis.document === 'undefined') return undefined;
@@ -64,10 +122,12 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
         className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm transition-opacity"
       />
       <aside
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="cart-drawer-title"
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-2xl"
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-2xl focus:outline-none"
       >
         <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>

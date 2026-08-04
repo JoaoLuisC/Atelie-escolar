@@ -111,6 +111,7 @@ export function CouponField({ cart, applied, onApply, onClear, disabled = false 
           <div className="flex flex-wrap gap-2">
             <input
               type="text"
+              aria-label="Código do cupom"
               placeholder="DIGITE O CÓDIGO"
               value={code}
               onChange={(event) => setCode(event.target.value.toUpperCase())}

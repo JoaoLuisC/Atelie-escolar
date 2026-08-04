@@ -20,11 +20,16 @@ Sem isso o backend tenta colunas inexistentes e quebra. **Aplicar tudo de uma ve
 |---|---|---|
 | [`20260524_phase0_analytics`](../../supabase/migrations/20260524000000_phase0_analytics.sql) | `analytics_events` + `orders.attribution_data` | `select count(*) from analytics_events;` |
 | [`20260525_phase1_product_slugs`](../../supabase/migrations/20260525000000_phase1_product_slugs.sql) | `products.slug` + trigger auto-gerador | `select slug from products limit 3;` |
-| [`20260526_phase2_conversion`](../../supabase/migrations/20260526000000_phase2_conversion.sql) | `coupons` + `abandoned_carts` + `products.{faq,reviews,benefits}` + `orders.{coupon_code,discount_amount}` | `select rowsecurity from pg_class where relname = 'coupons';` |
+| [`20260526_phase2_conversion`](../../supabase/migrations/20260526000000_phase2_conversion.sql) | `coupons` + `abandoned_carts` + `products.{faq,reviews,benefits}` + `orders.{coupon_code,discount_amount}` | `select relrowsecurity from pg_class where relname = 'coupons';` |
 | [`20260527_phase0_retention`](../../supabase/migrations/20260527000000_phase0_analytics_retention.sql) | `cleanup_old_analytics_events()` + `pg_cron` se disponível | `select proname from pg_proc where proname like 'cleanup%';` |
 | [`20260528_phase3_email`](../../supabase/migrations/20260528000000_phase3_email_marketing.sql) | `email_subscribers` + `email_sent_log` + cleanup | `select tablename from pg_tables where tablename like 'email_%';` |
+| [`20260530_phase4_admin_audit_log`](../../supabase/migrations/20260530000000_phase4_admin_audit_log.sql) | `admin_audit_log` (auditoria de escrita do painel admin) | `select count(*) from admin_audit_log;` |
+| [`20260701_phase5_audit_immutability`](../../supabase/migrations/20260701000000_phase5_audit_immutability.sql) | `admin_audit_log` append-only (revoke update/delete + triggers) | `select tgname from pg_trigger where tgname like 'admin_audit_log_no%';` |
+| [`20260701_phase5_payment_hardening`](../../supabase/migrations/20260701000001_phase5_payment_hardening.sql) | UNIQUE `(order_id, product_id)` em `download_tokens` + `increment_coupon_usage()` atômico | `select proname from pg_proc where proname = 'increment_coupon_usage';` |
+| [`20260702_phase6_db_rls_hardening`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql) | Baseline RLS nas 17 tabelas + guard de `profiles` + `handle_new_user()` versionado + purges agendados | `select count(*) from pg_policies where schemaname = 'public';` |
+| [`20260703_perf_indexes`](../../supabase/migrations/20260703000000_perf_indexes.sql) | 5 índices de performance (`orders`, `email_sent_log`, `abandoned_carts`) | `select indexname from pg_indexes where indexname = 'orders_payment_status_completed_at_idx';` |
 
-Plus 3 do Phase 2 já incluídas: `phase2_log_retention`, `phase2_security_events`, `phase2_enable_pg_cron`.
+Plus 3 do Phase 2 já incluídas: `phase2_log_retention`, `phase2_security_events`, `phase2_enable_pg_cron` — total: **13 migrations** em `supabase/migrations/`.
 
 ---
 
@@ -41,7 +46,7 @@ Setar nos dois lugares: `.env.local` (dev) + Vercel Environment Variables (prod,
 
 ### 2.2 `og-default.png` (1200×630)
 
-[`src/components/SEO.jsx`](../../src/components/SEO.jsx) referencia `/og-default.png` mas o arquivo **não existe** em `public/`. Criar com marca + logo + tagline, salvar em `public/og-default.png`, validar em [opengraph.xyz](https://www.opengraph.xyz/) após deploy.
+[`src/components/SEO.jsx`](../../src/components/SEO.jsx) **não referencia mais** o `og-default.png` inexistente — a referência quebrada foi corrigida e o fallback atual (`DEFAULT_IMAGE`) é `/favicon.svg`, que existe em `public/`. Pendência de polimento: criar imagem OG real com marca + logo + tagline, salvar em `public/og-default.png`, apontar `DEFAULT_IMAGE` para ela (SVG não renderiza como preview na maioria das redes) e validar em [opengraph.xyz](https://www.opengraph.xyz/) após deploy.
 
 ### 2.3 APP_URL canônica no Vercel
 
@@ -64,14 +69,14 @@ VITE_PUBLIC_BASE_URL=https://profamarciarcardoso.com.br  (opcional para SSR futu
 
 Sem isso o workflow `email-cron.yml` falha 401.
 
-1. Gerar: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`
+1. Gerar: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` (formato do `.env.example`)
 2. Setar `CRON_SECRET=<o-segredo>` em **Vercel** (Environment Variables) **e GitHub** (Settings → Secrets → Actions)
 3. Setar `APP_URL` no GitHub também
 4. GitHub → Actions → "Email cron" → Run workflow → validar status 200
 
 ### 2.6 Cupom de reativação `VOLTEI15`
 
-O job `reactivation_90d` envia esse código. Criar via SQL:
+O job `reactivation_90d` envia esse código. Criar pela aba **Cupons** do admin ou via SQL:
 
 ```sql
 insert into public.coupons (code, discount_type, discount_value, valid_until, max_uses, active)
@@ -106,7 +111,7 @@ Hoje: `loading="lazy"` + `decoding="async"` + Tailwind `aspect-ratio` evitam CLS
 2. Trocar URLs `https://<projeto>.supabase.co/storage/...` por `https://imagens.profamarciarcardoso.com.br/<path>?w=400&fm=webp`
 3. Adicionar `srcset` + `sizes` em `ProductGrid.jsx`, `HomePage.jsx`, `ProductDetailsPage.jsx`
 
-**Mitigação imediata:** guard rail no `ProductWizard.jsx` bloqueando upload > 500kB por imagem.
+**Mitigação imediata:** ✅ **Entregue (2026-05-30)** — guard rail no `ProductWizard.jsx` bloqueando upload > 500kB por imagem.
 
 ### 3.3 Lighthouse CI GitHub App (5 min, opcional)
 
@@ -114,22 +119,22 @@ Workflow já roda. Sem token, relatórios vão para `temporary-public-storage`. 
 1. [github.com/apps/lighthouse-ci](https://github.com/apps/lighthouse-ci) → Install
 2. GitHub Settings → Secrets → Actions → `LHCI_GITHUB_APP_TOKEN`
 
-### 3.4 Wizards admin (sem isso os dados ficam vazios via UI)
+### 3.4 Wizards admin — ✅ ENTREGUE (2026-05-30)
 
-- **Editar `faq`/`reviews`/`benefits`** em `ProductWizard.jsx` — hoje só por SQL
-- **CRUD de cupons** — hoje só por SQL (modelo em §2.6)
-
-Sem isso, página de produto renderiza sem benefícios/FAQ/reviews quando esses arrays estão vazios.
+- ✅ **Editar `faq`/`reviews`/`benefits`** — aba "Conversão" no `ProductWizard.jsx` com editores de benefícios, FAQ e depoimentos; gravado por `api/admin-products.js`.
+- ✅ **CRUD de cupons** — aba "Cupons" no painel (`CouponsTab` + `CouponWizard`) com endpoint `api/admin-coupons.js` (GET/POST/PUT/DELETE). Validação no checkout segue em `validate-coupon.js`.
 
 ### 3.5 Validar Google OAuth em produção
 
-Botão "Continuar com Google" no Checkout já está wirado. Precisa testar callback com domínio real — Supabase exige URL no `uri_allow_list` (ver `scripts/configure-auth.js`).
+> ℹ️ **O código está completo de ponta a ponta** — botão "Continuar com Google" + `signInWithOAuth` + callback `/api/auth/customer/google/callback` (`api/auth/customer/google/callback.js`) que valida o token no Supabase e crava cookie HttpOnly. Não é "só wirado".
+
+Resta apenas **validar em produção**: o Supabase exige a URL no `uri_allow_list` (ver `scripts/configure-auth.js`) — config de runtime, não código.
 
 ### 3.6 Acessibilidade WCAG (Fase 2 finalização)
 
-- ⏳ Áreas de toque ≥ 44×44 px no menu mobile e CTAs (regra B9) — botão do carrinho já passou
-- ⏳ Line-clamp em títulos de cards de produto (já parcial em `ProductGrid.jsx`)
-- ⏳ Hierarquia visual reduzida no menu mobile
+- ✅ Áreas de toque ≥ 44×44 px no menu mobile e CTAs (regra B9) — hambúrguer, links do menu mobile e CTAs dos cards com `min-h-[44px]` (2026-05-30)
+- ✅ Line-clamp em títulos de cards de produto (`ProductGrid.jsx`, `HomePage.jsx`, `CrossSellSection.jsx`, `CartDrawer.jsx`)
+- ✅ Hierarquia visual reduzida no menu mobile — primários em peso cheio, secundários atenuados sob rótulo "Navegar" (2026-05-30)
 - ✅ Contraste WCAG AA validado pelo Lighthouse CI (regra B10)
 
 ### 3.7 Login admin com Google (OAuth) — futuro
@@ -137,8 +142,8 @@ Botão "Continuar com Google" no Checkout já está wirado. Precisa testar callb
 Hoje o painel só aceita e-mail + senha + 2FA opcional (`api/admin-login.js`). Cliente já tem Google OAuth funcionando — dá pra reusar a infra.
 
 **Para implementar:**
-1. Botão "Entrar com Google" em `AdminPage.jsx` reusando `signInWithOAuth({ provider: 'google' })` de `src/services/customer-auth.js`
-2. Novo callback `/auth/admin/google/callback` em `routes/auth.routes.js` que:
+1. Botão "Entrar com Google" em `AdminLoginPage.jsx` reusando `signInWithOAuth({ provider: 'google' })` de `src/services/customer-auth.js`
+2. Novo callback `/api/auth/admin/google/callback` (função em `api/`, espelhada em dev via `routes/api-compat.routes.js`) que:
    - Valida o `access_token` Google via Supabase
    - Exige `profile.role ∈ {ADMIN, MASTER}` (mesma checagem de hoje em `admin-login.js`)
    - **Manter 2FA (TOTP/PIN) obrigatório** mesmo no fluxo Google — senão um Gmail comprometido entra direto no painel
@@ -147,7 +152,12 @@ Hoje o painel só aceita e-mail + senha + 2FA opcional (`api/admin-login.js`). C
 
 **Decisão pendente:** restringir a domínio corporativo (ex: `@oqtem.com`) ou aceitar qualquer Gmail desde que o profile tenha role admin?
 
-### 3.8 LGPD self-service: direito ao esquecimento
+### 3.8 LGPD self-service: direito ao esquecimento — ✅ IMPLEMENTADO
+
+> **Entregue.** Fluxo ponta a ponta em `api/me-delete-account.js` (anonimização,
+> limpeza de tokens, unsubscribe, confirmação por e-mail em 2 passos), rota com
+> rate-limit em `routes/api-compat.routes.js`, UI em `src/pages/CustomerAuthPage.jsx`
+> e client em `src/services/customer-auth.js`. Mantido abaixo como registro histórico.
 
 Hoje a exclusão de conta é feita via admin (regra H7). Implementar endpoint público:
 - `/api/me/delete-account` (auth required) que:
@@ -159,9 +169,19 @@ Hoje a exclusão de conta é feita via admin (regra H7). Implementar endpoint p�
 - Página em `/conta` com botão "Excluir minha conta"
 - Confirmação por email antes de executar
 
-### 3.9 Admin audit log
+### 3.9 Admin audit log — ✅ IMPLEMENTADO
+
+> **Entregue.** `lib/admin-audit.js` (`logAdminAction`) + migrations phase4/phase5,
+> chamado nos endpoints admin de escrita. Mantido abaixo como registro histórico.
 
 Tabela `admin_audit_log` (regra I1): `admin_id, action, target_type, target_id, before, after, created_at`. Adicionar trigger em todos os endpoints admin que escrevem.
+
+### 3.10 Placeholders do Dashboard (descobertos na varredura 2026-05-30)
+
+Dois cards `PendingDataCard` em `DashboardTab.jsx` aguardam instrumentação de backend:
+
+- **Vendas por região** — exige coluna `orders.shipping_state` + captura do UF no checkout
+- **Funil de conversão (card interno do Dashboard)** — exige rastreamento de eventos (`analytics_events`/`page_views`); distinto da aba Funil, que já existe
 
 ---
 
@@ -201,7 +221,7 @@ Auditoria fechada em código (A1–A16, ver histórico). Resta o **recorrente hu
 | 🎯 Pen-test focado | Anual | [08-SEGURANCA §11.3](./08-SEGURANCA.md) |
 | 📧 DKIM/SPF/DMARC no Resend | Único — §2.4 acima | — |
 | 🔔 `SECURITY_ALERT_WEBHOOK_URL` (Slack/Discord/Sentry) | Opcional | env var |
-| 📋 Checklist pré-produção (15 itens) | Cada release maior | [08-SEGURANCA §12](./08-SEGURANCA.md) |
+| 📋 Checklist pré-produção (17 itens) | Cada release maior | [08-SEGURANCA §12](./08-SEGURANCA.md) |
 | 🛒 Vigiar R8 (carrinho localStorage) | Quando mexer em desconto/frete no front | — |
 
 ---
@@ -224,7 +244,7 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 - [ ] Lighthouse Performance ≥ 90 mobile, SEO ≥ 95
 
 ### Fase 2 — UX/Conversão
-- [ ] Pelo menos 1 produto com FAQ + 3 depoimentos visíveis (depende de §3.4)
+- [ ] Pelo menos 1 produto com FAQ + 3 depoimentos visíveis (§3.4 entregue — criar pela aba "Conversão" do `ProductWizard`)
 - [ ] Carrinho drawer não navega para `/checkout`
 - [ ] Cupom de teste valida server-side (criar via SQL primeiro)
 - [ ] Taxa de conversão `begin_checkout → purchase` ≥ 20% acima do baseline (medir após 30d de dados)
@@ -248,11 +268,17 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 | 2026-05-24 | **Auditoria de segurança fechada (A1–A16).** Histórico do git auditado, webhook exige assinatura, segredos validados no boot, fallbacks inseguros removidos, CORS wildcard tirado, `serviceRoleHelpers` força opt-in pra service-role, `order_code` com 128 bits + email obrigatório em `/verify-payment`, `Referrer-Policy: no-referrer` no download, `/privacidade` + `/termos` publicadas, `.env.example` migrado de Gmail para Resend, `purge_old_logs()` com `pg_cron`, CSP estrita, Zod do produto bloqueia `javascript:`/`data:`, rate-limit dedicado em `/verify-payment`, log estruturado em `security_events`. |
 | 2026-05-24 | **Fase 0 entregue** — GA4 + Meta Pixel + UTM + `analytics_events` + funil admin + Lighthouse CI + banner LGPD |
 | 2026-05-24 | **Fase 1 entregue** — slugs + meta tags + JSON-LD + sitemap + robots + fontes trim |
-| 2026-05-24 | **Fase 2 entregue** — refactor ProductsPage + TrustBadge + Skeleton + página produto convertendo + CartDrawer + cupons |
+| 2026-05-24 | **Fase 2 entregue** — refactor ProductsPage + selos de confiança (checkout + SocialProofStrip) + Skeleton + página produto convertendo + CartDrawer + cupons |
 | 2026-05-24 | **Fase 3 entregue** — double opt-in + 8 templates + sequência D+0/3/15/45 + abandoned cart + reactivation 90d + cron + aba Segmentos |
 | 2026-05-24 | **Fase 4 entregue** — Curva ABC produtos + clientes + coorte mensal + KPIs (LTV, recompra, LTV/CAC) + aba Análise com Pareto + heatmap + export CSV |
 | 2026-05-24 | **Decisão registrada:** stack 100% gratuito até Fase 4; Fase 5 (mídia paga) só quando dados justificarem |
 | 2026-05-24 | **Documentação consolidada** em `docs/ProjectDocs/` — 13 documentos numerados como fonte única |
+| 2026-05-30 | **§3.4 fechada — Wizards admin** — aba "Conversão" no `ProductWizard` (FAQ/depoimentos/benefícios) + CRUD de cupons no painel (`CouponsTab`/`CouponWizard`/`api/admin-coupons.js`). Produtos e cupons deixam de depender de SQL bruto. |
+| 2026-05-30 | **§3.2 e §3.6 fechadas — Acessibilidade + guard rail** — toques ≥ 44px (hambúrguer, menu mobile, CTAs dos cards), hierarquia reduzida no menu mobile, line-clamp confirmado e bloqueio de upload de imagem > 500kB. |
+| 2026-05-30 | **Reconciliação de documentação** — features já no código mas ausentes do histórico mapeadas: CRUD de Categorias, Vitrine configurável, abas Faturamento/Desempenho/Comparativo/Segurança (2FA pela UI), Cross-sell, upload assinado, cleanup manual de analytics. §3.5 (Google OAuth do cliente) reclassificada de "wirado" para "código completo, falta validar em prod". |
+| 2026-07-01 | **Hardening Fase 5** — `admin_audit_log` append-only (revoke + triggers anti update/delete), dedup + UNIQUE `(order_id, product_id)` em `download_tokens` (webhooks MP reentregues) e `increment_coupon_usage()` atômico respeitando `max_uses`. |
+| 2026-07-02 | **Hardening de RLS (Fase 6)** — baseline versionado em migration: RLS habilitado nas 17 tabelas, trigger guard de `profiles` (anti-escalonamento), remoção de escrita pública em `abandoned_carts`/`page_views`, `handle_new_user()` versionado, `purge_old_logs()` v3 + `purge_stale_email_subscribers()` agendados via `pg_cron`. |
+| 2026-07-03 | **Índices de performance** — 5 índices para as consultas quentes do painel/cron (`orders`, `email_sent_log`, `abandoned_carts`) em `20260703000000_perf_indexes.sql`. |
 
 ---
 
@@ -260,8 +286,8 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 
 **Fases 0-4 estão com código pronto.** Bloqueio agora é operacional:
 
-1. ✅ Aplicar as 5 migrations principais no Supabase — 15 min
-2. ✅ Plugar credenciais grátis (GA4 ID, Pixel ID, `CRON_SECRET`, Resend já está) — 1-2h
+1. ⏳ Aplicar as 13 migrations no Supabase — 15 min (§1; aplicação em prod não confirmada)
+2. ⏳ Plugar credenciais grátis (GA4 ID, Pixel ID, `CRON_SECRET`, Resend já está) — 1-2h
 3. ⏳ Autenticar domínio no Resend (DNS — propagação até 24h)
 4. ⏳ Criar `public/og-default.png` 1200×630 — 30 min
 5. ⏳ Validar Lighthouse no preview Vercel (se SEO < 95, decidir sobre prerender)

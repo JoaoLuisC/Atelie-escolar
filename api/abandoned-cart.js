@@ -2,6 +2,7 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { getTableRow, insertIntoTable, updateTable },
 } = require('../lib/supabase');
+const { sanitizeAttribution } = require('../lib/attribution-sanitize');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_ITEMS = 20;
@@ -14,17 +15,6 @@ function sanitizeItems(items) {
     price: Number(item.price || 0),
     quantity: Math.max(1, Math.min(99, Number(item.quantity || 1))),
   })).filter((item) => item.productId);
-}
-
-function sanitizeAttribution(input) {
-  if (!input || typeof input !== 'object') return {};
-  const out = {};
-  for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'session_id']) {
-    if (typeof input[key] === 'string' && input[key].trim()) {
-      out[key] = input[key].slice(0, 200);
-    }
-  }
-  return out;
 }
 
 /**

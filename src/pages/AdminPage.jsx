@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ADMIN_LOGIN_PATH } from '../constants/routes';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { ProductWizard } from '../components/ProductWizard';
@@ -8,6 +10,7 @@ import { DashboardTab } from '../components/admin/tabs/DashboardTab';
 import { ProductsTab } from '../components/admin/tabs/ProductsTab';
 import { CategoriesTab } from '../components/admin/tabs/CategoriesTab';
 import { OrdersTab } from '../components/admin/tabs/OrdersTab';
+import { CouponsTab } from '../components/admin/tabs/CouponsTab';
 import { UsersTab } from '../components/admin/tabs/UsersTab';
 import { FinanceTab } from '../components/admin/tabs/FinanceTab';
 import { ComparisonTab } from '../components/admin/tabs/ComparisonTab';
@@ -73,9 +76,13 @@ const EMPTY_DASHBOARD = {
 };
 
 export function AdminPage() {
-  const { logoutAdmin, setAdminAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const { logoutAdmin, setAdminAuthenticated, adminAuthenticated } = useAuth();
   const { pushToast } = useToast();
-  const allowAdminBypass = import.meta.env.DEV || import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
+  // Só em DEV: em produção a flag é inerte (ver ProtectedRoute).
+  const allowAdminBypass = import.meta.env.DEV
+    && import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
+  const showBypassBanner = allowAdminBypass && !adminAuthenticated;
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [dashboardData, setDashboardData] = useState(EMPTY_DASHBOARD);
@@ -188,6 +195,8 @@ export function AdminPage() {
       pushToast('Sessão administrativa encerrada.', 'info');
     } catch (error) {
       pushToast(error?.message || 'Erro ao encerrar sessão.', 'error');
+    } finally {
+      navigate('/login', { replace: true });
     }
   }
 
@@ -225,6 +234,9 @@ export function AdminPage() {
         productType: product.productType || 'individual',
         active: product.active !== false,
         featured: product.featured === true,
+        faq: Array.isArray(product.faq) ? product.faq : [],
+        reviews: Array.isArray(product.reviews) ? product.reviews : [],
+        benefits: Array.isArray(product.benefits) ? product.benefits : [],
       };
 
       if (payload.id) {
@@ -355,7 +367,10 @@ export function AdminPage() {
     try {
       setSecuritySaving(true);
       await saveAdminSetting({ key: 'adminConfig', value: nextConfig });
-      setAdminConfig(nextConfig);
+      // Re-busca para refletir as flags redigidas (has2FA/hasPin) sem manter
+      // segredos no estado do cliente.
+      const fresh = await fetchAdminSetting('adminConfig');
+      setAdminConfig(fresh?.value || {});
       pushToast('Configurações de segurança salvas.', 'success');
     } catch (error) {
       handleAdminError(error, 'Erro ao salvar configurações.');
@@ -427,6 +442,8 @@ export function AdminPage() {
             onOpenOrder={setOrderDetail}
           />
         );
+      case 'cupons':
+        return <CouponsTab />;
       case 'usuarios':
         return (
           <UsersTab
@@ -474,6 +491,18 @@ export function AdminPage() {
         userLabel="Administrador"
         onLogout={onLogout}
       >
+        {showBypassBanner ? (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <i className="bi bi-exclamation-triangle-fill mt-0.5 shrink-0 text-amber-600" />
+            <div>
+              <p className="font-semibold">Modo de desenvolvimento (bypass) — sem sessão admin real.</p>
+              <p className="mt-0.5 text-amber-800">
+                O painel abre sem login, mas as APIs exigem sessão: por isso o Dashboard fica vazio e abas como Segmentos, Cupons e Usuários mostram “sessão expirada”.{' '}
+                <a href={ADMIN_LOGIN_PATH} className="font-semibold underline">Faça login</a> para carregar os dados.
+              </p>
+            </div>
+          </div>
+        ) : null}
         {renderActiveTab()}
       </AdminLayout>
 

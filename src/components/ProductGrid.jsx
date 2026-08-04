@@ -63,13 +63,13 @@ function ProductCard({ onAddToCart, product }) {
           <button
             type="button"
             onClick={() => onAddToCart(product)}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
           >
             <i className="bi bi-cart-plus" /> Adicionar
           </button>
           <Link
             to={`/produtos/${product.slug || product.id}`}
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             Detalhes
           </Link>

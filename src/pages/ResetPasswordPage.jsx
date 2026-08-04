@@ -66,7 +66,7 @@ export function ResetPasswordPage() {
           pushToast('Abra o link enviado por e-mail para concluir a redefinição.', 'warning');
         }
       } catch (error) {
-        const message = error?.message || 'Nao foi possivel validar o link de recuperação.';
+        const message = error?.message || 'Não foi possível validar o link de recuperação.';
         pushToast(message, 'error');
       } finally {
         if (!cancelled) {
@@ -85,13 +85,18 @@ export function ResetPasswordPage() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!newPassword || newPassword.length < 6) {
-      pushToast('A nova senha deve ter pelo menos 6 caracteres.', 'warning');
+    if (!newPassword || newPassword.length < 8) {
+      pushToast('A nova senha precisa ter ao menos 8 caracteres.', 'warning');
+      return;
+    }
+
+    if (!/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      pushToast('A senha deve ter letra maiúscula, minúscula e número.', 'warning');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      pushToast('As senhas digitadas nao conferem.', 'warning');
+      pushToast('As senhas digitadas não conferem.', 'warning');
       return;
     }
 
@@ -111,7 +116,7 @@ export function ResetPasswordPage() {
       pushToast('Senha redefinida com sucesso.', 'success');
       navigate(redirectTo, { replace: true });
     } catch (error) {
-      const message = error?.message || 'Nao foi possivel atualizar a senha.';
+      const message = error?.message || 'Não foi possível atualizar a senha.';
       pushToast(message, 'error');
     } finally {
       setLoading(false);
@@ -138,18 +143,26 @@ export function ResetPasswordPage() {
             <input
               id="new-password"
               type="password"
+              required
+              minLength={8}
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
-              placeholder="Mínimo de 6 caracteres"
+              placeholder="Sua nova senha"
               disabled={loading}
+              aria-describedby="new-password-help"
               className={inputClass}
             />
+            <p id="new-password-help" className="mt-1 text-xs text-slate-500">
+              Use ao menos 8 caracteres, com letra maiúscula, minúscula e número.
+            </p>
           </div>
           <div>
             <label htmlFor="confirm-password" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Confirmar nova senha</label>
             <input
               id="confirm-password"
               type="password"
+              required
+              minLength={8}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               placeholder="Digite a senha novamente"

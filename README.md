@@ -2,7 +2,7 @@
 
 Plataforma de vendas de materiais educativos digitais (banners, painéis, atividades pedagógicas) com download imediato após pagamento aprovado.
 
-**Stack**: React 19 + Vite + Tailwind + Express + Supabase + Mercado Pago.
+**Stack**: React 19 + Vite + Tailwind + Express 5 + Supabase + Mercado Pago.
 
 ---
 
@@ -30,19 +30,24 @@ Abra http://localhost:5173
 | **[docs/SETUP.md](./docs/SETUP.md)** | Setup detalhado de Supabase, Google OAuth, Mercado Pago, deploy |
 | **[docs/SECURITY.md](./docs/SECURITY.md)** | Modelo de ameaça, RLS, secrets, auditoria |
 | [docs/SUPABASE-SETUP.md](./docs/SUPABASE-SETUP.md) | Setup específico Supabase (legado) |
-| [docs/E2E-CHECKLIST-SANDBOX.md](./docs/E2E-CHECKLIST-SANDBOX.md) | Testes end-to-end (sandbox MP) |
 | [docs/RELEASE-CHECKLIST.md](./docs/RELEASE-CHECKLIST.md) | Pré-deploy |
+| [docs/SPRING-SECURITY-BFF.md](./docs/SPRING-SECURITY-BFF.md) | Referência: BFF de auth do cliente em Spring Boot |
+| [docs/REVIEW-PROMPTS.md](./docs/REVIEW-PROMPTS.md) | Prompts de review profundo por área |
+| [docs/REVIEW-RESULTS.md](./docs/REVIEW-RESULTS.md) | Resultados dos reviews (área 9 em [REVIEW-AREA-9-TESTES.md](./docs/REVIEW-AREA-9-TESTES.md)) |
 
 ---
 
 ## Para que serve
 
-- ✅ Visitante navega catálogo, busca, filtra e adiciona ao carrinho
+- ✅ Visitante navega catálogo, filtra (categoria, preço, novidades/mais vendidos), ordena e adiciona ao carrinho
 - ✅ Cliente faz checkout integrado com Mercado Pago (cartão, pix, boleto)
 - ✅ Após aprovação, libera download automático dos arquivos comprados
-- ✅ Admin gerencia produtos (com galeria + vídeos), categorias, pedidos, vitrine, usuários
+- ✅ Admin gerencia produtos (galeria + vídeos + FAQ/depoimentos/benefícios), categorias, **cupons**, pedidos, vitrine, usuários
+- ✅ Painéis de análise: funil, segmentos de e-mail, Curva ABC (produtos/clientes), coorte de retenção, faturamento, comparativo
+- ✅ E-mails automáticos: newsletter com double opt-in, carrinho abandonado (1h/24h), pós-compra (D+3/D+15/D+45) e reativação — cron horário via GitHub Actions
 - ✅ Auth com Supabase (e-mail/senha + Google OAuth) + recuperação por e-mail
-- ✅ Admin com 2FA opcional (TOTP + PIN de recuperação)
+- ✅ Admin com 2FA opcional (TOTP + PIN de recuperação) + **audit log** das ações de escrita
+- ✅ LGPD: cliente pode excluir a própria conta (auto-serviço com confirmação por e-mail)
 
 ---
 
@@ -54,8 +59,10 @@ Abra http://localhost:5173
 | `npm run dev:api` | API Express em :3000 |
 | `npm run dev:all` | Os dois em paralelo |
 | `npm run build` | Build de produção |
+| `npm run preview` | Serve o build de produção localmente |
 | `npm run test` | Vitest |
 | `npm run check` | test + build (usado em CI) |
+| `npm run supabase:db:push` | Aplica migrações no Supabase remoto (há também `supabase:login`, `supabase:link`, `supabase:db:pull`, `supabase:migration:new`) |
 
 ### Scripts utilitários (`scripts/`)
 
@@ -68,7 +75,7 @@ Abra http://localhost:5173
 | `check-utf8.js` | Audita encoding nos textos do banco (sem alterar) |
 | `db-inspect.js` | Inventário de tabelas via REST |
 
-Necessitam variáveis: `SUPABASE_PAT=sbp_...` e `SUPABASE_PROJECT_REF=<ref>`.
+Os scripts de Management API (`check-advisor`, `configure-auth`, `check-utf8`, `fix-utf8`) necessitam `SUPABASE_PAT=sbp_...` e `SUPABASE_PROJECT_REF=<ref>`; `db-inspect.js` usa `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`.
 
 ---
 

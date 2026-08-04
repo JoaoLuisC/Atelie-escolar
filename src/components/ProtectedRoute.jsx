@@ -6,7 +6,12 @@ import { ADMIN_LOGIN_PATH } from '../constants/routes';
 export function ProtectedRoute({ children }) {
   const location = useLocation();
   const { authReady, adminAuthenticated } = useAuth();
-  const allowAdminBypass = import.meta.env.DEV || import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
+  // Bypass do painel só em DEV e quando explicitamente ligado por env.
+  // `import.meta.env.DEV` garante que a flag fica INERTE em builds de
+  // produção mesmo que VITE_ALLOW_ADMIN_BYPASS=true vaze para o deploy
+  // (variáveis VITE_* são inlined no bundle público).
+  const allowAdminBypass = import.meta.env.DEV
+    && import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
 
   if (!authReady) {
     return (

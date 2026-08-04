@@ -22,63 +22,75 @@ Por isso o plano é **gratuito até a Fase 4** (mensuração + SEO + UX + email 
 
 | Etapa | Evento GA4 | Evento Meta Pixel | Onde dispara |
 |---|---|---|---|
+| Ver catálogo | `view_catalog` | — | `ProductsPage.jsx` (uma vez por montagem) |
 | Ver produto | `view_item` | `ViewContent` | `ProductDetailsPage.jsx` |
-| Adicionar ao carrinho | `add_to_cart` | `AddToCart` | `CartProvider.jsx` (action `addItem`) |
+| Adicionar ao carrinho | `add_to_cart` | `AddToCart` | `CartProvider.jsx` (`addToCart`; `removeFromCart` dispara `remove_from_cart`) |
 | Iniciar checkout | `begin_checkout` | `InitiateCheckout` | `CheckoutPage.jsx` (mount) |
-| Compra confirmada | `purchase` | `Purchase` | `DownloadsPage.jsx` **somente após confirmação real** (regra A2) |
+| Compra confirmada | `purchase` | `Purchase` | `DownloadsPage.jsx` via `trackPurchaseOnce` (dedup por `orderId`) **somente após confirmação real** (regra A2) |
+
+A lista canônica completa do cliente (`src/utils/analytics.js`) tem 7 eventos: `view_item`, `add_to_cart`, `remove_from_cart`, `view_cart`, `view_catalog`, `begin_checkout`, `purchase` (`view_cart` está na lista, mas hoje nenhum componente o dispara). O mapa para Meta cobre `view_item`→ViewContent, `add_to_cart`→AddToCart, `view_cart`→ViewCart, `begin_checkout`→InitiateCheckout, `purchase`→Purchase.
 
 **Padrão (regra A1):** todo novo touchpoint do funil deve disparar o evento canônico correspondente em ambos os trackers + `track-event` no `analytics_events`.
 
 ### Implementação
 
 ```js
-// src/utils/analytics.js (pseudo)
+// src/utils/analytics.js (simplificado)
 export function trackEvent(name, params = {}) {
-  if (!consent.granted) return;       // LGPD gate
-  window.gtag?.('event', name, params);
-  window.fbq?.('track', mapToFbqName(name), params);
-  fetch('/api/track-event', { method: 'POST', body: JSON.stringify({ event_name: name, properties: params, session_id }) });
+  if (!CANONICAL_EVENTS.has(name)) return;          // só eventos canônicos
+  const clean = sanitizeProperties(params);          // remove email/cpf/phone
+  // Backend (analytics_events): essenciais (todos exceto purchase) sempre;
+  // demais só com consentimento — via navigator.sendBeacon (fallback fetch keepalive)
+  if (isEssential(name) || hasMarketingConsent()) postEventToBackend(name, clean);
+  if (!hasMarketingConsent()) return;                // GA4 e Pixel: só com consent
+  window.gtag?.('event', name, clean);
+  window.fbq?.('track', META_EVENT_MAP[name], metaPayload);
 }
 ```
 
 ### Whitelist no backend
 
-`api/track-event.js` valida o `event_name` contra uma whitelist (`view_item`, `add_to_cart`, `begin_checkout`, `purchase`, `view_category`, `search`, `add_to_wishlist`, etc.). Eventos fora da lista retornam 400.
+`api/track-event.js` valida o `event_name` via `isClientEventAllowed` (`lib/analytics-events.js`). Eventos de cliente permitidos: `view_item`, `add_to_cart`, `remove_from_cart`, `view_cart`, `view_catalog`, `begin_checkout`, `client_error`. Eventos fora da lista são **descartados em silêncio** (o endpoint sempre responde 204 — tracking nunca quebra a UX).
+
+`purchase` do cliente **não** entra no `analytics_events`: as compras entram server-side pela allowlist de servidor — `checkout_initiated` (gravado em `create-payment`) e `payment_approved` / `payment_rejected` / `payment_cancelled` (gravados no `webhook`). A allowlist de servidor também inclui `webhook_received`, mas nenhum handler grava esse evento hoje.
 
 ### Dados pessoais
-**Nunca** envie email, telefone ou CPF como propriedade de evento (regra A5). Use hash sha256 se precisar correlacionar.
+**Nunca** envie email, telefone ou CPF como propriedade de evento (regra A5). No backend, o `sanitizeProperties` de `lib/analytics-events.js` remove, em qualquer nível de aninhamento, qualquer chave cujo nome **contenha** `email`, `cpf`, `phone`, `telefone`, `password` ou `senha`. No frontend, o `sanitizeProperties` de `src/utils/analytics.js` é mais raso: só deleta as chaves exatas de topo `email`, `customer_email`, `cpf` e `phone` — a defesa robusta é a do servidor. Use hash sha256 se precisar correlacionar.
+
+### Retenção
+`analytics_events` guarda no máximo **180 dias**: purge mensal via `pg_cron` (`cleanup_old_analytics_events`, migration phase0_analytics_retention) e sob demanda pelo admin via `POST /api/admin-cleanup-events`.
 
 ---
 
 ## 2. UTM e atribuição
 
-Toda primeira visita com `utm_*` na URL grava em `localStorage` via `utils/attribution.js` com TTL de 30 dias. Quando o cliente faz checkout, as UTMs são anexadas a `orders.attribution_data` (JSONB):
+Toda primeira visita com `utm_*` na URL grava em `localStorage` (chave `attribution_data`) via `src/utils/attribution.js`, com TTL de 30 dias e política **first-touch wins** (UTMs já capturadas não são sobrescritas — Curva ABC e receita de aquisição refletem a origem inicial). Quando o cliente faz checkout, `create-payment` anexa o payload a `orders.attribution_data` (JSONB), filtrado pela whitelist canônica de 9 campos de `lib/attribution-sanitize.js`:
 
 ```json
 {
-  "first_touch": {
-    "utm_source": "google",
-    "utm_medium": "cpc",
-    "utm_campaign": "alfabetizacao_q1",
-    "referrer": "https://google.com",
-    "timestamp": "2026-05-24T..."
-  },
-  "last_touch": { ... }
+  "utm_source": "google",
+  "utm_medium": "cpc",
+  "utm_campaign": "alfabetizacao_q1",
+  "utm_content": "...",
+  "utm_term": "...",
+  "referrer": "https://google.com",
+  "landing_path": "/produtos/painel-alfabeto",
+  "first_touch_at": "2026-05-24T...",
+  "session_id": "s_..."
 }
 ```
 
-Permite atribuição correta de receita: o pedido sabe de qual campanha veio. A aba **Funil** + **Análise** usa isso para reportar ROAS por canal.
+O mesmo payload sanitizado também é persistido em `abandoned_carts.attribution_data` e `email_subscribers.attribution_data`. Permite atribuição correta de receita: o pedido sabe de qual campanha veio. A aba **Funil** usa isso para reportar pedidos, receita e share por origem (`utm_source`, com breakdown por medium/campaign).
 
 ---
 
 ## 3. Consentimento LGPD
 
-`ConsentBanner.jsx` aparece na primeira visita com 3 opções:
-- **Aceitar** — habilita GA4 + Meta Pixel
-- **Rejeitar** — bloqueia
-- **Personalizar** — futuro (modal granular)
+`ConsentBanner.jsx` aparece na primeira visita com 2 opções:
+- **Aceitar todos** — habilita GA4 + Meta Pixel
+- **Apenas essenciais** — bloqueia os trackers de marketing
 
-Estado em `localStorage` via `utils/consent.js`. Eventos essenciais (carrinho, checkout, `purchase`) podem rodar como "first-party only" sem consent — não vão para Google/Meta, mas vão para `analytics_events`.
+Estado em `localStorage` (chave `lgpd_consent`) via `utils/consent.js` (`CONSENT_POLICY_VERSION = '2026-05-24'`). Eventos essenciais (todos os canônicos, exceto `purchase`) rodam como "first-party only" sem consent — não vão para Google/Meta, mas vão para `analytics_events`. O `purchase` do cliente só dispara com consentimento (GA4/Pixel); no `analytics_events`, a compra entra server-side como `payment_approved` via webhook, independente de consent.
 
 ---
 
@@ -93,7 +105,7 @@ Resumo do que está implementado:
 - **Sitemap dinâmico** em `/sitemap.xml` (gerado por `api/sitemap.xml.js`)
 - **robots.txt** em `public/robots.txt` com `Sitemap:` declarado
 - **Canonical URLs** em todas as páginas
-- **OG tags** com `og-default.png` (1200×630) — ⚠️ imagem ainda não criada, pendência §13
+- **OG tags** com fallback `/favicon.svg` como imagem default (`SEO.jsx` só emite `og:image`/`twitter:image` para asset que existe; o antigo `og-default.png` nunca foi versionado) — páginas de produto sobrescrevem com a imagem do produto
 
 ### Submeter sitemap (pós-deploy)
 1. [search.google.com/search-console](https://search.google.com/search-console) → adicionar domínio
@@ -106,81 +118,84 @@ Resumo do que está implementado:
 - Best Practices ≥ 90
 - SEO ≥ 95
 
-CI bloqueia PR que derrube qualquer um.
+O que a CI efetivamente cobra hoje (`lighthouse.yml` + `lighthouserc.json`, LHCI rodando estático sobre `dist/`, preset desktop): performance ≥ 0.80 (erro), accessibility ≥ 0.90 (erro), SEO ≥ 0.90 (erro), best-practices ≥ 0.90 (só warn, não bloqueia).
 
 ---
 
 ## 5. Curva ABC
 
-A Curva ABC é central para tomada de decisão (regra I3). Implementação em `lib/abc-classification.js` (compartilhada entre produtos e clientes).
+A Curva ABC é central para tomada de decisão (regra I3). Implementação em `lib/abc-classification.js` (compartilhada entre os endpoints server-side e o widget do Dashboard via `derive.js`). Classificação por receita acumulada (`classifyByCumulative`): **A** = itens até 80% da receita acumulada, **B** = até 95%, **C** = o restante. Todos os endpoints abaixo têm cache in-memory de 1h (regra F5) e aceitam `?nocache=1`.
 
 ### Produtos
 
-`GET /api/admin-abc-products?period=90d&category=alfabetizacao`
+`GET /api/admin-abc-products?period=month|quarter|year&categoryId=<uuid>` (default `month`)
 
-Classifica:
-- **Classe A** — top 20% de produtos = ~80% receita
-- **Classe B** — próximos 30% = ~15% receita
-- **Classe C** — últimos 50% = ~5% receita
+Curva ABC de produtos por receita, baseada em `order_items` de pedidos aprovados; retorna `items` (rank, share, % acumulado, classe) + `summary {A,B,C}`.
 
 Cuidado: produto C **pode ser produto de entrada** (baixo ticket, alta conversão de novos). Não descontinuar cego (regra anti-pattern em [11-REGRAS-NEGOCIO](./11-REGRAS-NEGOCIO.md)).
 
 ### Clientes
 
-`GET /api/admin-abc-customers?period=12m`
+`GET /api/admin-abc-customers?period=month|quarter|year|all` (default `quarter`)
 
-Segmenta:
-- **VIP** — top 20% por receita acumulada
-- **Recorrente** — ≥ 2 pedidos
-- **Eventual** — 1 pedido
+Agrupa pedidos aprovados por `customer_email`, aplica a mesma curva ABC e acrescenta classificação de relacionamento:
+- **vip** — 5+ pedidos OU classe A da curva
+- **recorrente** — 2-4 pedidos
+- **eventual** — 1 pedido
 
-Email **mascarado** (`m***@gmail.com`) para LGPD. Detalhe completo (não mascarado) só via "Exportar CSV" assinado.
+Email **mascarado** (`cli***@dominio.com`) para LGPD — inclusive no export CSV da aba **Análise**. O parâmetro `?includePII=1` existe no endpoint para export interno, mas o frontend não o usa.
 
 ### Coorte
 
-`GET /api/admin-cohort?period=12m`
+`GET /api/admin-cohort?months=12` (1-36)
 
-Matriz: linhas = mês de aquisição, colunas = meses subsequentes, células = % que voltou a comprar.
+Matriz: linhas = mês da primeira compra (coorte), colunas = índice de meses subsequentes (M+0, M+1, ...), células = % da coorte ativa naquele mês relativo.
 
-Detecta retenção cedendo (drop entre meses 1-3 indica problema de pós-venda).
+Detecta retenção cedendo (drop entre meses 1-3 indica problema de pós-venda) e separa sazonalidade do ano letivo (volta às aulas = pico).
+
+As três visões ficam na aba **Análise** do admin, cada uma com botão de export CSV (`utils/csv-export.js`).
 
 ---
 
-## 6. Segmentação para campanhas (RFM)
+## 6. Segmentação para campanhas
 
-Implementação em `lib/customer-segmentation.js`. Segmentos pré-definidos:
+Implementação em `lib/customer-segmentation.js`: tags calculadas a partir dos pedidos com `payment_status='approved'` de cada subscriber confirmado de `email_subscribers`:
 
-| Segmento | Critério | Para que serve |
+| Tag | Critério | Para que serve |
 |---|---|---|
-| VIP | top 20% receita | Lookalike de mídia paga, lançamentos exclusivos |
-| Recorrentes | ≥ 2 pedidos | Cross-sell baseado em categoria comprada |
-| Eventuais | 1 pedido | Segunda compra (D+15, D+30) |
-| Inativos 60-90d | sem compra entre 60 e 90d | Lembrete de continuidade |
-| Inativos 90-180d | sem compra entre 90 e 180d | **Cupom de reativação `VOLTEI15`** (regra D8) |
-| Inativos > 180d | sem compra > 180d | **NÃO ENVIAR** (regra D7) |
-| Carrinho abandonado | `abandoned_carts.recovered_at IS NULL` | Lembrete por e-mail |
+| `cliente_vip` | 5+ pedidos OU LTV > `VIP_LTV_THRESHOLD` (default R$ 300) | Lookalike de mídia paga, lançamentos exclusivos |
+| `cliente_recorrente` | ≥ 2 pedidos | Cross-sell baseado em categoria comprada |
+| `cliente_ativo` | compra nos últimos 90 dias | Base saudável para newsletter |
+| `inativo_30d` | último pedido há mais de 30 e menos de 90 dias (31–89) | Lembrete de continuidade |
+| `inativo_90d` | último pedido entre 90 e 179 dias | **Cupom de reativação `VOLTEI15`** (regra D8) |
+| `inativo_180d` | sem compra ≥ 180d | **NÃO ENVIAR** (regra D7) |
+| `categoria:<slug>` | uma por categoria já comprada | Segmentar campanhas por interesse |
 
-Acessível na aba **Segmentos** do admin + export CSV para envio externo (regra I4).
+Carrinho abandonado não é tag: é tratado direto pelo cron sobre `abandoned_carts` (`recovered_at IS NULL`), com lembretes ~1h e ~24h.
+
+Acessível na aba **Segmentos** do admin via `GET /api/admin-segments` (cache 30 min): relatório **agregado** (totais de confirmados/pendentes/desinscritos + contagem por tag), sem lista bruta de e-mails. O export CSV para envio externo (regra I4) ainda não existe — o código prevê endpoint dedicado com confirmação.
 
 ---
 
 ## 7. Email marketing
 
-Detalhes em [05-FLUXOS §9](./05-FLUXOS.md) e regras em [11-REGRAS-NEGOCIO §D](./11-REGRAS-NEGOCIO.md).
+Detalhes em [05-FLUXOS §8-9](./05-FLUXOS.md) (carrinho abandonado/reativação e newsletter) e regras em [11-REGRAS-NEGOCIO §D](./11-REGRAS-NEGOCIO.md).
 
 ### Templates (`lib/email-templates.js`)
 
 8 templates HTML mobile-friendly:
-1. `confirmation` — D+0, transacional (após pagamento)
-2. `download_link` — re-envio de link de download
-3. `password_reset` — wrapped pelo Supabase Auth SMTP
-4. `signup_confirm` — wrapped pelo Supabase Auth SMTP
-5. `post_purchase_d3` — D+3, pesquisa de satisfação
-6. `post_purchase_d15` — D+15, cross-sell
-7. `abandoned_cart_reminder` — lembrete 1-2h após abandono
-8. `reactivation_90d` — campanha de reativação com cupom
+1. `orderConfirmation` — D+0, transacional (após pagamento; inclui bloco "conta criada para você" quando a conta é provisionada)
+2. `optInConfirmation` — double opt-in da newsletter (`/confirmar-inscricao?token=`, regra D1)
+3. `postPurchaseD3` — D+3, pedido de avaliação
+4. `postPurchaseD15` — D+15, cross-sell por categoria comprada
+5. `postPurchaseD45` — D+45, novidades da mesma categoria
+6. `abandonedCart` — lembrete de carrinho abandonado, variantes `1h` e `24h`
+7. `reactivation90` — reativação com cupom (default `VOLTEI15`, 15%)
+8. `unsubscribeSuccess` — confirmação de descadastro (transacionais continuam)
 
-Todos com **link de descadastro 1-clique** em todo footer (regra D2).
+Reset de senha e confirmação de cadastro ficam a cargo do SMTP do Supabase Auth (não são templates deste módulo).
+
+O footer com **link de descadastro 1-clique** (regra D2) é auto-appendado por `lib/email-sender.js` em todos os kinds de marketing, junto com os headers RFC 8058 `List-Unsubscribe`/`List-Unsubscribe-Post`; transacionais não levam footer de descadastro.
 
 ### Sequência pós-compra
 
@@ -188,22 +203,25 @@ Todos com **link de descadastro 1-clique** em todo footer (regra D2).
 Compra aprovada
    │
    ▼ D+0
-[confirmation] ─── enviada inline
+[orderConfirmation] ─── enviada inline (webhook)
    │
    ▼ D+3
-[post_purchase_d3] ─── pesquisa de satisfação / review
+[postPurchaseD3] ─── pedido de avaliação / review
    │
    ▼ D+15
-[post_purchase_d15] ─── cross-sell baseado em categoria
+[postPurchaseD15] ─── cross-sell baseado em categoria
    │
-   ▼ D+90 (se sem nova compra)
-[reactivation_90d] ─── cupom VOLTEI15
+   ▼ D+45
+[postPurchaseD45] ─── novidades da mesma categoria
+   │
+   ▼ D+90 a D+180 (se sem nova compra)
+[reactivation90] ─── cupom VOLTEI15 (janela REACTIVATION_DAYS_MIN/MAX, default 90/180)
    │
    ▼ D+180+
 PARAR (regra D7) ─── inativos não recebem mais
 ```
 
-Cron `/api/cron-email-jobs` chamado de hora em hora.
+Cron `/api/cron-email-jobs` chamado de hora em hora pelo GitHub Actions (`email-cron.yml`, `0 * * * *` UTC) via POST com header `X-Cron-Secret` (= `CRON_SECRET`, comparação timing-safe). Idempotência via `email_sent_log`; máx. 100 candidatos por sub-job por execução.
 
 ### Frequência e qualidade
 - Máximo **1 newsletter manual/semana** para o mesmo segmento (regra D3)
@@ -214,29 +232,33 @@ Cron `/api/cron-email-jobs` chamado de hora em hora.
 - Free: 3.000 emails/mês (~100/dia)
 - Pro: 50.000/mês (US$ 20/mês) — só quando lista > 5k inscritos
 
-Setup em [03-SETUP §5](./03-SETUP.md).
+Setup em [03-SETUP §2.5 e §5](./03-SETUP.md).
 
 ---
 
 ## 8. Funil de conversão
 
-`GET /api/admin-funnel?period=30d&category=...&utm_source=...`
+`GET /api/admin-funnel?days=30` (1-180; a aba oferece 7/30/90 dias; cache 1h, `?nocache=1` invalida)
 
-Retorna:
+Conta **sessões únicas** por etapa em `analytics_events`; a etapa `purchase` vem da contagem de pedidos aprovados do período (não de evento de cliente). Retorna:
 ```json
 {
-  "stages": [
-    { "name": "page_view", "count": 10000, "rate": 1.0 },
-    { "name": "view_item", "count": 5000, "rate": 0.50 },
-    { "name": "add_to_cart", "count": 1000, "rate": 0.20 },
-    { "name": "begin_checkout", "count": 500, "rate": 0.50 },
-    { "name": "purchase", "count": 150, "rate": 0.30 }
+  "success": true,
+  "windowDays": 30,
+  "funnel": [
+    { "key": "view_catalog", "label": "Visitas ao catálogo", "count": 10000, "conversionFromPrevious": 1.0 },
+    { "key": "view_item", "label": "Visualizou produto", "count": 5000, "conversionFromPrevious": 0.50 },
+    { "key": "add_to_cart", "label": "Adicionou ao carrinho", "count": 1000, "conversionFromPrevious": 0.20 },
+    { "key": "begin_checkout", "label": "Iniciou checkout", "count": 500, "conversionFromPrevious": 0.50 },
+    { "key": "purchase", "label": "Compra aprovada", "count": 150, "conversionFromPrevious": 0.30 }
   ],
-  "overallConversion": 0.015
+  "attribution": { "items": [], "totalRevenue": 0, "totalApproved": 0 },
+  "dailyPurchases": [],
+  "totals": { "sessions": 0, "events": 0, "approvedOrders": 0, "revenue": 0 }
 }
 ```
 
-Aba **Funil** renderiza com drop-off por etapa + comparação período anterior.
+Aba **Funil** renderiza com drop-off por etapa + tabela de atribuição por origem (pedidos, receita, share) + compras diárias.
 
 ---
 
@@ -248,6 +270,8 @@ Aba **Funil** renderiza com drop-off por etapa + comparação período anterior.
 | **Conversão** | Taxa geral · Por etapa · Ticket médio · Abandono de carrinho | > 1.5% geral |
 | **Retenção** | Recompra · LTV 12m · Frequência · Tempo entre compras | Recompra > 20% |
 | **Saúde** | ROAS por canal · **LTV/CAC ≥ 3** · Aprovação MP · NPS | LTV/CAC ≥ 3 |
+
+Parte disso já é servido por `GET /api/admin-kpis?window=12` (1-36 meses, cache 1h): receita MTD vs mês anterior, ticket médio, pedidos, LTV médio e taxa de recompra — `CAC` retorna `null` até existir mídia paga (Fase 5). Consumido pela aba **Dashboard**.
 
 Glossário em [11-REGRAS-NEGOCIO §glossário](./11-REGRAS-NEGOCIO.md).
 
@@ -340,14 +364,14 @@ Hotjar / GrowthBook Cloud só se Clarity ficar pequeno.
 
 ### Curto prazo (1-3 meses pós Fase 4 entregue)
 - [ ] Migrations aplicadas → `analytics_events` populada
-- [ ] GA4 + Pixel disparando os 4 eventos canônicos
+- [ ] GA4 + Pixel disparando os eventos canônicos do funil
 - [ ] Domínio autenticado no Resend (SPF/DKIM/DMARC)
 - [ ] Sitemap submetido no Search Console
 - [ ] Lighthouse ≥ 90/95
 - [ ] Conversão `add_to_cart → purchase` baseline medida (30+ dias de dados)
 
 ### Médio prazo (3-6 meses)
-- [ ] Recompra ≥ 20% (visível na aba **Análise** → KPIs)
+- [ ] Recompra ≥ 20% (visível nos KPIs da aba **Dashboard**, via `/api/admin-kpis`)
 - [ ] LTV 12m subindo
 - [ ] Curva ABC com 50+ pedidos → dá pra planejar Fase 5
 - [ ] Taxa de carrinhos recuperados > 10%

@@ -10,7 +10,8 @@ Arquivo principal: `.env.local` (não comitar; templates em `.env.example` e `.e
 SUPABASE_URL=https://<seu-ref>.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_xxxxxxxxxxx
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxxxxxxxxxx   # ⚠️ NUNCA expor publicamente
-SUPABASE_STORAGE_BUCKET=public                    # opcional, padrão "public"
+SUPABASE_STORAGE_BUCKET=product-files             # opcional; se vazio, o código usa "public"
+SUPABASE_DB_URL=postgresql://postgres:<senha>@db.<seu-ref>.supabase.co:5432/postgres  # opcional, connection string direta
 
 VITE_SUPABASE_URL=<igual ao SUPABASE_URL>
 VITE_SUPABASE_ANON_KEY=<igual ao SUPABASE_ANON_KEY>
@@ -21,6 +22,39 @@ VITE_SUPABASE_ANON_KEY=<igual ao SUPABASE_ANON_KEY>
 - URL: aba "Project URL" ou Project ID
 - ANON_KEY: aba "Publishable key" (formato novo) ou "anon public" (legado)
 - SERVICE_ROLE_KEY: aba "Secret keys" → clique no olho 👁
+
+### Analytics + Pixel (opcional — Fase 0)
+
+```env
+VITE_GA4_ID=G-XXXXXXXXXX             # Google Analytics 4 (analytics.google.com)
+VITE_META_PIXEL_ID=1234567890123456  # Meta Pixel (business.facebook.com/events_manager)
+```
+
+Sem esses IDs o site funciona normalmente — os eventos do funil ficam só em `analytics_events`.
+Setar nos dois lugares: `.env.local` (dev) + Vercel Environment Variables (prod).
+
+### Cron de e-mail (Fase 3)
+
+```env
+# Gerar: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+CRON_SECRET=<segredo>
+APP_URL=https://seu-dominio.com.br    # usado pelo cron e pelos links de e-mail
+```
+
+O workflow `.github/workflows/email-cron.yml` (a cada hora, UTC) chama `/api/cron-email-jobs` com
+esse segredo no header `X-Cron-Secret`. Setar `CRON_SECRET` **e** `APP_URL` tanto na Vercel quanto
+em GitHub → Settings → Secrets → Actions. Sem isso o cron falha 401.
+Ver [13-ROADMAP-PENDENCIAS §2.5](./ProjectDocs/13-ROADMAP-PENDENCIAS.md).
+
+Ajustes opcionais dos jobs (defaults já embutidos no código):
+
+```env
+ABANDONED_CART_FIRST_HOURS=1      # janela do 1º lembrete de carrinho abandonado
+ABANDONED_CART_SECOND_HOURS=24    # janela do 2º lembrete
+REACTIVATION_DAYS_MIN=90          # inatividade mínima p/ e-mail de reativação
+REACTIVATION_DAYS_MAX=180         # inatividade máxima
+VIP_LTV_THRESHOLD=300             # limiar de LTV (R$) p/ marcar cliente VIP na segmentação
+```
 
 ### Mercado Pago
 
@@ -51,12 +85,17 @@ WEBHOOK_SECRET=<copie do dashboard MP>
 
 # Tokens de download (válidos por algumas horas)
 DOWNLOAD_TOKEN_SECRET=<64 chars hex>
+
+# Opcional — coletor de eventos de segurança (Slack/Discord/Sentry webhook).
+# Em branco, os eventos vão só pro stdout e pra tabela public.security_events
+# (ver lib/security-logger.js)
+SECURITY_ALERT_WEBHOOK_URL=
 ```
 
 ### Servidor + URLs
 
 ```env
-APP_URL=http://localhost:5173                     # base URL pública (frontend)
+APP_URL=http://localhost:3000                     # base URL pública da aplicação (links de e-mail, back_urls/notification_url do MP)
 APP_ENV=development                                # development | test | production
 NODE_ENV=development
 
@@ -198,6 +237,14 @@ Isso adiciona `http://localhost:5173`, `5174`, `5175`, `5176` e `3000` ao `uri_a
 2. **Segurança** — cole `supabase/security-hardening.sql` (RLS + policies + funções)
 3. **Dados de exemplo** (opcional) — cole `supabase/seed-sample-data.sql`
 
+Alternativa via Supabase CLI (aplica as migrations versionadas de `supabase/migrations/`):
+
+```bash
+npm run supabase:login
+npm run supabase:link
+npm run supabase:db:push
+```
+
 Ou via Management API com PAT:
 
 ```bash
@@ -208,15 +255,21 @@ SUPABASE_PAT='sbp_xxx' SUPABASE_PROJECT_REF='abc' node scripts/check-advisor.js
 SUPABASE_PAT='sbp_xxx' SUPABASE_PROJECT_REF='abc' node scripts/configure-auth.js
 ```
 
+Diagnóstico de conexão e inventário de tabelas (usa as credenciais do `.env.local`):
+
+```bash
+node scripts/db-inspect.js
+```
+
 ### Criar usuário admin
 
 O fluxo padrão é:
-1. Usuário se cadastra normalmente via `/login` → trigger `handle_new_user` cria profile com `role='customer'`
+1. Usuário se cadastra normalmente via `/login` → trigger `handle_new_user` cria profile com `role='CUSTOMER'`
 2. Promover via SQL no dashboard:
    ```sql
    update public.profiles set role = 'ADMIN' where email = 'voce@example.com';
    ```
-3. Logar em `/painel-acesso-privado-atelie` (URL obscurecida) — também acessível pelo link "· admin ·" no rodapé do `/login`
+3. Logar em `/painel-acesso-privado-atelie` (URL obscurecida) — a rota `/admin-login` redireciona para lá
 
 **Atalho via Management API** (cria usuário direto, sem precisar passar pelo signup):
 
@@ -241,24 +294,27 @@ curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
 |---------|------|-----|
 | HIBP password check | ❌ | ✅ |
 | Auto-pause após 7 dias inativo | ✅ | ❌ |
-| Backup automático | 7 dias | 30 dias |
+| Backup automático | ❌ | Diário (retenção 7 dias) |
 | Storage | 1 GB | 100 GB |
 
-Sem HIBP, a proteção é via regra de senha: mín 8 chars com letra maiúscula, minúscula e número (já configurado).
+Sem HIBP, a proteção é via regra de senha: mín 8 chars com letra maiúscula, minúscula e número —
+configure no dashboard do projeto hospedado (Authentication → Policies). O backend valida 8+ chars
+(`lib/customer-auth-handlers.js`); o `supabase/config.toml` local usa mínimo 6, então a regra completa
+vale só se estiver setada no projeto remoto.
 
 ---
 
 ## Testar pagamento (sandbox MP)
 
-Veja [E2E-CHECKLIST-SANDBOX.md](./E2E-CHECKLIST-SANDBOX.md).
+Checklist de smoke test em [12-DEPLOY-OPERACAO.md](./ProjectDocs/12-DEPLOY-OPERACAO.md).
 
 ### Cartões de teste
 
 | Bandeira | Número |
 |----------|--------|
-| Visa | `4509 9535 6623 3704` |
-| Mastercard | `5031 4332 1540 6351` |
-| Amex | `3711 803032 57522` |
+| Visa | `4235 6477 2802 5682` |
+| Mastercard | `5480 8328 0103 3311` |
+| Amex | `3753 651535 56885` |
 
 | Titular | Resultado |
 |---------|-----------|
@@ -269,7 +325,7 @@ Veja [E2E-CHECKLIST-SANDBOX.md](./E2E-CHECKLIST-SANDBOX.md).
 | `SECU` | ❌ CVV inválido |
 | `EXPI` | ❌ Cartão vencido |
 
-CPF: `12345678909` · CVV: `123` · Validade: qualquer data futura.
+CPF: `12345678909` · CVV: `123` (Amex: `1234`) · Validade: qualquer data futura.
 
 ---
 
@@ -320,8 +376,8 @@ Reinicie `npm run dev:all`. O `notification_url` passado ao MP agora é a URL do
 
 Configurado em `vercel.json`:
 - Frontend: build em `dist/`, servido como estático
-- API: cada arquivo em `api/*.js` vira função serverless
-- Routes: `/api/*` → função; resto → SPA fallback
+- API: cada arquivo em `api/**/*.js` vira função serverless
+- Routes: `/api/*` → função; `/sitemap.xml` → `api/sitemap.xml.js` (sitemap dinâmico); `/api/*` inexistente → 404 JSON (`api/_notfound.js`); resto → SPA fallback
 
 ### Variáveis no Vercel
 

@@ -1,11 +1,12 @@
 # Spring Boot BFF para Auth do Cliente (Supabase)
 
-Este material traz blocos completos para implementar o fluxo BFF no Spring Boot:
-- login/cadastro via backend
-- cookie `HttpOnly`, `Secure`, `SameSite=Strict`
-- callback OAuth Google
+Este material traz blocos completos para implementar o fluxo BFF no Spring Boot, espelhando o BFF Express real do projeto (`lib/customer-auth-handlers.js` + `lib/customer-session.js`, montados por `api/auth/customer/**/*.js` na Vercel e por `routes/auth.routes.js` em dev):
+- login/cadastro via backend (`/api/auth/customer/login|register`)
+- cookie `customer_session` `HttpOnly`, `SameSite=Strict` (`Secure` fora de dev/test), assinado com HMAC-SHA256, TTL 8h
+- OAuth Google (`google/start` + `google/callback`)
+- sessão/logout (`session`; `logout` exige request same-origin — anti-CSRF; no projeto real essa checagem existe na função Vercel `api/auth/customer/logout.js`, não na rota dev do Express)
 - filtro de sessão
-- rate limiting com Caffeine (5 falhas)
+- rate limiting com Caffeine (5 tentativas em 10 min, como o limiter de login do Express em dev)
 
 ## 1) Dependencias (pom.xml)
 
@@ -43,6 +44,7 @@ Este material traz blocos completos para implementar o fluxo BFF no Spring Boot:
 
 ```yaml
 app:
+  url: ${APP_URL}
   security:
     customer-session-cookie-name: customer_session
     customer-session-ttl-seconds: 28800
@@ -73,7 +75,7 @@ public record CustomerLoginRequest(
 public record CustomerRegisterRequest(
         @NotBlank @Size(min = 2, max = 120) String name,
         @Email @NotBlank String email,
-        @NotBlank @Size(min = 6, max = 120) String password
+        @NotBlank @Size(min = 8, max = 120) String password
 ) {}
 
 public record GoogleCallbackRequest(
@@ -83,7 +85,8 @@ public record GoogleCallbackRequest(
 public record CustomerUserResponse(
         String uid,
         String email,
-        String name
+        String name,
+        String role
 ) {}
 
 public record AuthResponse(
@@ -198,6 +201,9 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
 
+// Mesmo formato de token de lib/customer-session.js: payload JSON base64url + "." +
+// assinatura HMAC-SHA256 (base64url). No BFF Express a flag Secure liga fora de
+// dev/test (shouldUseSecureCookie); aqui é derivada da request (isSecure/X-Forwarded-Proto).
 @Service
 public class CustomerSessionCookieService {
     private final String cookieName;
@@ -228,6 +234,7 @@ public class CustomerSessionCookieService {
                 "uid", user.uid(),
                 "email", user.email(),
                 "name", user.name() == null ? "" : user.name(),
+                "role", user.role() == null ? "" : user.role(),
                 "iat", now,
                 "exp", now + ttlSeconds
         );
@@ -273,7 +280,8 @@ public class CustomerSessionCookieService {
         return new CustomerUserResponse(
                 String.valueOf(data.get("uid")),
                 String.valueOf(data.get("email")),
-                String.valueOf(data.getOrDefault("name", ""))
+                String.valueOf(data.getOrDefault("name", "")),
+                String.valueOf(data.getOrDefault("role", ""))
         );
     }
 
@@ -333,6 +341,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 
+// Espelha o rate limit de login do Express (express-rate-limit: 5 req/10 min em
+// POST /api/auth/customer/login, resposta "Credenciais invalidas."). No projeto real
+// esse limiter só roda em dev; na Vercel serverless ainda não há rate limit de login
+// (dependeria de store compartilhado/KV — pendência "API-03" em routes/auth.routes.js).
 @Service
 public class LoginAttemptService {
     private static final int MAX_FAILED_ATTEMPTS = 5;
@@ -367,10 +379,11 @@ import com.example.auth.session.CustomerSessionCookieService;
 import com.example.auth.supabase.SupabaseAuthClient;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @RestController
 @RequestMapping("/api/auth/customer")
@@ -378,15 +391,21 @@ public class CustomerAuthController {
     private final SupabaseAuthClient supabase;
     private final CustomerSessionCookieService cookieService;
     private final LoginAttemptService attempts;
+    private final String appUrl;
+    private final String supabaseUrl;
 
     public CustomerAuthController(
             SupabaseAuthClient supabase,
             CustomerSessionCookieService cookieService,
-            LoginAttemptService attempts
+            LoginAttemptService attempts,
+            @Value("${app.url}") String appUrl,
+            @Value("${app.supabase.url}") String supabaseUrl
     ) {
         this.supabase = supabase;
         this.cookieService = cookieService;
         this.attempts = attempts;
+        this.appUrl = appUrl.replaceAll("/+$", "");
+        this.supabaseUrl = supabaseUrl.replaceAll("/+$", "");
     }
 
     @PostMapping("/login")
@@ -403,10 +422,14 @@ public class CustomerAuthController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.invalidCredentials());
             }
 
+            // role: o BFF Express resolve consultando a tabela profiles com service role
+            // (services/supabase-auth.js#getProfileRoleByUserId, id → fallback user_id);
+            // aqui deixado vazio por simplicidade.
             var user = new CustomerUserResponse(
                     token.user().id(),
                     token.user().email(),
-                    String.valueOf(token.user().userMetadata() == null ? "" : token.user().userMetadata().getOrDefault("full_name", ""))
+                    String.valueOf(token.user().userMetadata() == null ? "" : token.user().userMetadata().getOrDefault("full_name", "")),
+                    ""
             );
 
             attempts.onSuccess(key);
@@ -434,7 +457,8 @@ public class CustomerAuthController {
             var user = new CustomerUserResponse(
                     token.user().id(),
                     token.user().email(),
-                    String.valueOf(token.user().userMetadata() == null ? "" : token.user().userMetadata().getOrDefault("full_name", request.name()))
+                    String.valueOf(token.user().userMetadata() == null ? "" : token.user().userMetadata().getOrDefault("full_name", request.name())),
+                    "" // ver nota sobre role no login
             );
 
             return ResponseEntity.ok()
@@ -443,6 +467,26 @@ public class CustomerAuthController {
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(AuthResponse.invalidCredentials());
         }
+    }
+
+    // Espelha customerGoogleStart do BFF Express: 302 para o authorize do Supabase,
+    // com callback <APP_URL>/login?oauth=google&redirect=<caminho relativo sanitizado>.
+    @GetMapping("/google/start")
+    public ResponseEntity<Void> googleStart(@RequestParam(name = "redirect", required = false) String redirect) {
+        String safeRedirect = sanitizeRelativeRedirect(redirect, "/checkout");
+        String callback = UriComponentsBuilder.fromHttpUrl(appUrl)
+                .path("/login")
+                .queryParam("oauth", "google")
+                .queryParam("redirect", safeRedirect)
+                .build().toUriString();
+
+        String authorizeUrl = UriComponentsBuilder.fromHttpUrl(supabaseUrl)
+                .path("/auth/v1/authorize")
+                .queryParam("provider", "google")
+                .queryParam("redirect_to", callback)
+                .build().toUriString();
+
+        return ResponseEntity.status(HttpStatus.FOUND).header("Location", authorizeUrl).build();
     }
 
     @PostMapping("/google/callback")
@@ -456,7 +500,8 @@ public class CustomerAuthController {
             var user = new CustomerUserResponse(
                     userData.id(),
                     userData.email(),
-                    String.valueOf(userData.userMetadata() == null ? "" : userData.userMetadata().getOrDefault("full_name", ""))
+                    String.valueOf(userData.userMetadata() == null ? "" : userData.userMetadata().getOrDefault("full_name", "")),
+                    "" // ver nota sobre role no login
             );
 
             return ResponseEntity.ok()
@@ -478,9 +523,50 @@ public class CustomerAuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<AuthResponse> logout(HttpServletRequest http) {
+        // Anti-CSRF em profundidade (espelha isSameOriginRequest de lib/admin-session.js,
+        // aplicado pela função Vercel api/auth/customer/logout.js; a rota dev do Express
+        // monta customerLogout sem essa checagem): além do SameSite=Strict, exige Origin
+        // (ou Referer) same-origin; sem nenhum dos dois, bloqueia (fail-closed).
+        if (!isSameOrigin(http)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new AuthResponse(false, false, false, "Origem não permitida (possível CSRF).", null));
+        }
+
         return ResponseEntity.ok()
                 .header("Set-Cookie", cookieService.clearCookie(isSecure(http)).toString())
                 .body(new AuthResponse(true, false, false, null, null));
+    }
+
+    // Anti open redirect (espelha sanitizeRelativeRedirect do Express): só caminho
+    // relativo same-site; rejeita "http://…", "//…" e qualquer valor com "://".
+    private String sanitizeRelativeRedirect(String value, String fallback) {
+        String raw = value == null ? "" : value.trim();
+        if (raw.isEmpty() || !raw.startsWith("/") || raw.startsWith("//") || raw.contains("://")) {
+            return fallback;
+        }
+        return raw;
+    }
+
+    // Como no real: compara o ORIGIN exato (não prefixo — "https://app.com" não pode
+    // casar com "https://app.com.evil.com"). Origin presente decide sozinho; senão
+    // tenta o origin do Referer; sem nenhum dos dois, nega (fail-closed).
+    private boolean isSameOrigin(HttpServletRequest request) {
+        String origin = request.getHeader("Origin");
+        if (origin != null && !origin.isBlank()) {
+            return appUrl.equals(origin.trim().replaceAll("/+$", ""));
+        }
+
+        String referer = request.getHeader("Referer");
+        if (referer != null && !referer.isBlank()) {
+            try {
+                var uri = java.net.URI.create(referer.trim());
+                return appUrl.equals(uri.getScheme() + "://" + uri.getAuthority());
+            } catch (Exception ex) {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     private String clientKey(HttpServletRequest request) {

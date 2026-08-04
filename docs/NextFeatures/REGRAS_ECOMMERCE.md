@@ -63,10 +63,10 @@ Toda página, componente ou endpoint que toque o funil de compra deve disparar o
 
 | Etapa | Evento GA4 | Evento Meta Pixel | Onde |
 |---|---|---|---|
-| Ver produto | `view_item` | `ViewContent` | [ProductDetailsPage.jsx](../src/pages/ProductDetailsPage.jsx) |
-| Adicionar ao carrinho | `add_to_cart` | `AddToCart` | [CartProvider.jsx](../src/providers/CartProvider.jsx) |
-| Iniciar checkout | `begin_checkout` | `InitiateCheckout` | [CheckoutPage.jsx](../src/pages/CheckoutPage.jsx) |
-| Compra confirmada | `purchase` | `Purchase` | [DownloadsPage.jsx](../src/pages/DownloadsPage.jsx) (após aprovação real) |
+| Ver produto | `view_item` | `ViewContent` | [ProductDetailsPage.jsx](../../src/pages/ProductDetailsPage.jsx) |
+| Adicionar ao carrinho | `add_to_cart` | `AddToCart` | [CartProvider.jsx](../../src/providers/CartProvider.jsx) |
+| Iniciar checkout | `begin_checkout` | `InitiateCheckout` | [CheckoutPage.jsx](../../src/pages/CheckoutPage.jsx) |
+| Compra confirmada | `purchase` | `Purchase` | [DownloadsPage.jsx](../../src/pages/DownloadsPage.jsx) (após aprovação real) |
 
 #### A2. Disparo de `purchase` apenas após confirmação real
 Nunca disparar `purchase` no redirect do Mercado Pago. Disparar apenas quando o backend confirmar status `approved`.
@@ -86,7 +86,7 @@ Eventos só disparam após consentimento. Eventos essenciais (carrinho, checkout
 Nunca enviar email, telefone ou CPF como propriedade de evento. Use ID hasheado se precisar correlacionar.
 
 #### A6. Logs de auditoria no backend
-Eventos críticos (pagamento, login admin, alteração de produto) ficam em `analytics_events` ou tabelas dedicadas. Não confiar apenas em GA4 para histórico oficial.
+Eventos críticos (pagamento, login admin, alteração de produto) ficam em `analytics_events`, `security_events` ou `admin_audit_log`. Não confiar apenas em GA4 para histórico oficial.
 
 ---
 
@@ -235,7 +235,7 @@ CI bloqueia PR que derrube qualquer um.
 - INP < 200ms
 
 #### F3. Bundle inicial < 200kB gzipped
-Rotas pesadas (admin, ProductsPage com filtros) são `lazy()`. Vide [vite.config.js](../vite.config.js).
+Rotas pesadas (admin, ProductsPage com filtros) são `lazy()`. Vide [vite.config.js](../../vite.config.js).
 
 #### F4. Imagens otimizadas
 WebP/AVIF, lazy load fora da dobra, srcset responsivo. CDN se volume crescer.
@@ -257,13 +257,13 @@ Frontend nunca decide "compra aprovada". Sempre via `verify-payment` ou webhook.
 Webhook do Mercado Pago pode ser disparado múltiplas vezes. Processar com `idempotency_key` (id do pagamento) para evitar duplicação.
 
 #### G3. Assinatura de webhook validada
-HMAC-SHA256 com `WEBHOOK_SECRET`. Sem validação = rejeitar. Já implementado em [lib/mercadopago-config.js](../lib/mercadopago-config.js); não remover.
+HMAC-SHA256 com `WEBHOOK_SECRET`. Sem validação = rejeitar. Já implementado em [lib/mercadopago-config.js](../../lib/mercadopago-config.js); não remover.
 
 #### G4. Polling como fallback, não como principal
-Polling em [CheckoutPage.jsx](../src/pages/CheckoutPage.jsx) e [DownloadsPage.jsx](../src/pages/DownloadsPage.jsx) existe para cobrir webhook que não chega. Em produção, webhook é o caminho oficial.
+Polling em [CheckoutPage.jsx](../../src/pages/CheckoutPage.jsx) e [DownloadsPage.jsx](../../src/pages/DownloadsPage.jsx) existe para cobrir webhook que não chega. Em produção, webhook é o caminho oficial.
 
 #### G5. Download via token efêmero
-Nunca expor URL direta do arquivo. Sempre token com TTL e validação. Tabelas `download_tokens` e `download_logs` no [schema.sql](../supabase/schema.sql).
+Nunca expor URL direta do arquivo. Sempre token com TTL e validação. Tabelas `download_tokens` e `download_logs` no [schema.sql](../../supabase/schema.sql).
 
 #### G6. Cupom validado no backend
 Frontend pode pré-validar para UX, mas validação real é server-side. Nunca confiar no cliente.
@@ -276,7 +276,7 @@ Mercado Pago Checkout Pro já entrega Pix, cartão e boleto. Não desabilitar op
 ### H. Segurança e privacidade
 
 #### H1. Service role nunca exposta
-Confere em [SECURITY.md](./SECURITY.md). Browser jamais tem acesso a `SUPABASE_SERVICE_ROLE_KEY`.
+Confere em [SECURITY.md](../SECURITY.md). Browser jamais tem acesso a `SUPABASE_SERVICE_ROLE_KEY`.
 
 #### H2. RLS habilitado em todas as tabelas
 Sem exceção. Toda tabela nova nasce com RLS ativo.
@@ -285,10 +285,10 @@ Sem exceção. Toda tabela nova nasce com RLS ativo.
 Sessões de cliente e admin via cookie assinado HMAC. JS não acessa.
 
 #### H4. Rate limit em endpoints públicos
-Helmet + express-rate-limit já configurados. Reforçar para endpoints novos sensíveis (login, recuperação de senha, cupom).
+Helmet + express-rate-limit já configurados no BFF Express (dev); na Vercel serverless o rate limit depende de store compartilhado (pendência). Reforçar para endpoints novos sensíveis (login, recuperação de senha, cupom).
 
 #### H5. Senhas seguindo política
-Mínimo 8 chars + maiúscula + minúscula + número. Validação em [CustomerAuthPage.jsx](../src/pages/CustomerAuthPage.jsx) + no backend (defense in depth).
+Mínimo 8 chars + maiúscula + minúscula + número. Política completa validada no frontend em [CustomerAuthPage.jsx](../../src/pages/CustomerAuthPage.jsx); o backend (`lib/customer-auth-handlers.js`) revalida o mínimo de 8 caracteres (defense in depth) — a checagem de classes de caracteres é só do frontend hoje.
 
 #### H6. Dados pessoais minimizados
 Coletar apenas o necessário (nome, email para compra). Endereço só se for produto físico (não é nosso caso).
@@ -304,7 +304,7 @@ Supabase Pro tem 30 dias de backup. Free, 7 dias. Manter no mínimo Pro em produ
 ### I. Painel admin
 
 #### I1. Tudo que admin faz é auditado
-Tabela `admin_audit_log` (futuro): admin_id, action, target_type, target_id, before, after, created_at.
+Tabela `admin_audit_log` (já implementada, append-only): admin_id, action, target_type, target_id, before, after, ip, created_at.
 
 #### I2. 2FA opcional, mas recomendado
 Já implementado. Conta principal do admin deve ter 2FA ativo em produção.
@@ -409,7 +409,7 @@ Para cada PR que toque o fluxo do cliente, fluxo de pagamento ou admin:
 ### Documentação
 - [ ] [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md) atualizado se mudou roadmap
 - [ ] Este documento atualizado se criou nova regra
-- [ ] [ARCHITECTURE.md](./ARCHITECTURE.md) atualizado se mudou estrutura
+- [ ] [ARCHITECTURE.md](../ARCHITECTURE.md) atualizado se mudou estrutura
 
 ---
 
@@ -451,4 +451,4 @@ Sem isso, é só achismo. E e-commerce é caro demais para ser tocado por achism
 - **MARQUEZ, W. T. et al.** Estratégias de marketing digital para a alavancagem em e-commerce. REAVI, 2018.
 - **GILIOLI, R. M.; GHIGGI, T.** E-commerce: reflexões sobre estratégias e desafios. Revista Eletrônica Gestão e Serviços, 2020.
 - **KOTLER, P.; KELLER, K. L.** Marketing Management. Pearson, 2016.
-- Documentação interna: [ARCHITECTURE.md](./ARCHITECTURE.md), [SECURITY.md](./SECURITY.md), [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md), [PENDENCIAS.md](./PENDENCIAS.md).
+- Documentação interna: [ARCHITECTURE.md](../ARCHITECTURE.md), [SECURITY.md](../SECURITY.md), [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md), [PENDENCIAS.md](./PENDENCIAS.md).

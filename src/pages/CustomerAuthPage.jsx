@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { ADMIN_LOGIN_PATH } from '../constants/routes';
 import { buildPasswordResetRedirectUrl, getSupabaseBrowserClient } from '../services/supabase-browser';
+import { confirmAccountDeletion, requestAccountDeletion } from '../services/customer-auth';
 
 function getMode(search) {
   const params = new URLSearchParams(search);
@@ -22,10 +22,18 @@ function getMode(search) {
 
 function useCustomerAuthHandlers({ loginCustomer, loginCustomerGoogle, registerCustomer, pushToast, navigate, redirectTo }) {
   const [loading, setLoading] = useState(false);
+  // Erros persistentes inline no formulário (o toast some em ~2.4s e o usuário
+  // pode não chegar a lê-lo). Mantemos ambos: toast para chamar atenção e o
+  // texto inline para o erro ficar visível enquanto o usuário corrige.
+  const [loginError, setLoginError] = useState('');
+  const [registerError, setRegisterError] = useState('');
 
   async function submitLogin(loginForm) {
+    setLoginError('');
     if (!loginForm.email.trim() || !loginForm.password) {
-      pushToast('Informe e-mail e senha para entrar.', 'warning');
+      const message = 'Informe e-mail e senha para entrar.';
+      setLoginError(message);
+      pushToast(message, 'warning');
       return;
     }
 
@@ -39,27 +47,36 @@ function useCustomerAuthHandlers({ loginCustomer, loginCustomerGoogle, registerC
       pushToast('Login realizado com sucesso.', 'success');
       navigate(redirectTo);
     } catch (error) {
-      pushToast(error?.message || 'E-mail ou senha incorretos.', 'error');
+      const message = error?.message || 'E-mail ou senha incorretos.';
+      setLoginError(message);
+      pushToast(message, 'error');
     } finally {
       setLoading(false);
     }
   }
 
   async function submitRegister(registerForm) {
+    setRegisterError('');
     const name = registerForm.name.trim();
     const email = registerForm.email.trim();
     const password = registerForm.password;
 
     if (!name || !email || !password) {
-      pushToast('Preencha nome, e-mail e senha para cadastrar.', 'warning');
+      const message = 'Preencha nome, e-mail e senha para cadastrar.';
+      setRegisterError(message);
+      pushToast(message, 'warning');
       return;
     }
     if (password.length < 8) {
-      pushToast('A senha precisa ter ao menos 8 caracteres.', 'warning');
+      const message = 'A senha precisa ter ao menos 8 caracteres.';
+      setRegisterError(message);
+      pushToast(message, 'warning');
       return;
     }
     if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) {
-      pushToast('Senha deve ter letra maiúscula, minúscula e número.', 'warning');
+      const message = 'A senha deve ter letra maiúscula, minúscula e número.';
+      setRegisterError(message);
+      pushToast(message, 'warning');
       return;
     }
 
@@ -76,7 +93,9 @@ function useCustomerAuthHandlers({ loginCustomer, loginCustomerGoogle, registerC
       pushToast('Conta criada com sucesso.', 'success');
       navigate(redirectTo);
     } catch (error) {
-      pushToast(error?.message || 'Não foi possível criar a conta.', 'error');
+      const message = error?.message || 'Não foi possível criar a conta.';
+      setRegisterError(message);
+      pushToast(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -121,7 +140,7 @@ function useCustomerAuthHandlers({ loginCustomer, loginCustomerGoogle, registerC
       const message = 'Enviamos um link de recuperação. Verifique sua caixa de entrada.';
       pushToast(message, 'success');
     } catch {
-      const message = 'Nao foi possivel enviar o link de recuperação.';
+      const message = 'Não foi possível enviar o link de recuperação.';
       pushToast(message, 'error');
     } finally {
       setLoading(false);
@@ -130,6 +149,8 @@ function useCustomerAuthHandlers({ loginCustomer, loginCustomerGoogle, registerC
 
   return {
     loading,
+    loginError,
+    registerError,
     submitLogin,
     submitGoogleLogin,
     submitRegister,
@@ -141,14 +162,66 @@ function useCustomerAuthHandlers({ loginCustomer, loginCustomerGoogle, registerC
 export function CustomerAuthPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { customerSession, loginCustomer, loginCustomerGoogle, registerCustomer } = useAuth();
+  const { customerSession, loginCustomer, loginCustomerGoogle, registerCustomer, logoutCustomer } = useAuth();
   const { pushToast } = useToast();
 
   const redirectTo = new URLSearchParams(location.search).get('redirect') || '/checkout';
+  const deleteToken = new URLSearchParams(location.search).get('delete_token') || '';
+  const [deleting, setDeleting] = useState(false);
+  const [deleteRequested, setDeleteRequested] = useState(false);
+
+  async function handleRequestDeletion() {
+    if (typeof globalThis.window !== 'undefined'
+      && !globalThis.window.confirm?.('Tem certeza? Enviaremos um e-mail para confirmar a exclusão definitiva da sua conta.')) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const result = await requestAccountDeletion();
+      setDeleteRequested(true);
+      pushToast(result?.message || 'Enviamos um e-mail de confirmação.', 'success');
+      if (result?.devConfirmUrl) {
+        // eslint-disable-next-line no-console
+        console.info('[dev] link de confirmação de exclusão:', result.devConfirmUrl);
+      }
+    } catch (error) {
+      pushToast(error?.message || 'Erro ao solicitar exclusão.', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleConfirmDeletion() {
+    setDeleting(true);
+    try {
+      await confirmAccountDeletion(deleteToken);
+      pushToast('Conta excluída. Sentiremos sua falta.', 'success');
+      try {
+        await logoutCustomer();
+      } catch {
+        /* sessão já encerrada no backend */
+      }
+      navigate('/');
+    } catch (error) {
+      pushToast(error?.message || 'Erro ao excluir conta.', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const [mode, setMode] = useState(() => getMode(location.search));
+
+  // Re-sincroniza o modo (login/register/forgot) quando a query muda — antes
+  // ficava congelado no valor do primeiro render, ignorando navegações que só
+  // alteram ?mode=... (ex.: link "Cadastrar" vindo de outra página).
+  useEffect(() => {
+    setMode(getMode(location.search));
+  }, [location.search]);
+
   const {
     loading,
+    loginError,
+    registerError,
     submitLogin,
     submitGoogleLogin,
     submitRegister,
@@ -215,16 +288,19 @@ export function CustomerAuthPage() {
           <span className="h-px flex-1 bg-slate-200" />
         </div>
 
-        <form onSubmit={submitLoginForm} className="flex flex-col gap-3">
+        <form onSubmit={submitLoginForm} noValidate className="flex flex-col gap-3">
           <div>
             <label htmlFor="customer-login-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">E-mail</label>
             <input
               id="customer-login-email"
               type="email"
+              required
               value={loginForm.email}
               onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))}
               placeholder="seu@email.com"
               disabled={loading}
+              aria-invalid={Boolean(loginError)}
+              aria-describedby={loginError ? 'customer-login-error' : undefined}
               className={inputClass}
             />
           </div>
@@ -233,13 +309,21 @@ export function CustomerAuthPage() {
             <input
               id="customer-login-password"
               type="password"
+              required
               value={loginForm.password}
               onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
               placeholder="Sua senha"
               disabled={loading}
+              aria-invalid={Boolean(loginError)}
+              aria-describedby={loginError ? 'customer-login-error' : undefined}
               className={inputClass}
             />
           </div>
+          {loginError ? (
+            <p id="customer-login-error" role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
+              {loginError}
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={() => changeMode('forgot')}
@@ -256,12 +340,13 @@ export function CustomerAuthPage() {
     );
   } else if (mode === 'forgot') {
     authForm = (
-      <form onSubmit={submitRecoveryForm} className="flex flex-col gap-3">
+      <form onSubmit={submitRecoveryForm} noValidate className="flex flex-col gap-3">
         <div>
           <label htmlFor="customer-recovery-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">E-mail</label>
           <input
             id="customer-recovery-email"
             type="email"
+            required
             value={recoveryForm.email}
             onChange={(event) => setRecoveryForm((prev) => ({ ...prev, email: event.target.value }))}
             placeholder="seu@email.com"
@@ -284,16 +369,19 @@ export function CustomerAuthPage() {
     );
   } else {
     authForm = (
-      <form onSubmit={submitRegisterForm} className="flex flex-col gap-3">
+      <form onSubmit={submitRegisterForm} noValidate className="flex flex-col gap-3">
         <div>
           <label htmlFor="customer-register-name" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nome</label>
           <input
             id="customer-register-name"
             type="text"
+            required
             value={registerForm.name}
             onChange={(event) => setRegisterForm((prev) => ({ ...prev, name: event.target.value }))}
             placeholder="Seu nome"
             disabled={loading}
+            aria-invalid={Boolean(registerError)}
+            aria-describedby={registerError ? 'customer-register-error' : undefined}
             className={inputClass}
           />
         </div>
@@ -302,10 +390,13 @@ export function CustomerAuthPage() {
           <input
             id="customer-register-email"
             type="email"
+            required
             value={registerForm.email}
             onChange={(event) => setRegisterForm((prev) => ({ ...prev, email: event.target.value }))}
             placeholder="seu@email.com"
             disabled={loading}
+            aria-invalid={Boolean(registerError)}
+            aria-describedby={registerError ? 'customer-register-error' : undefined}
             className={inputClass}
           />
         </div>
@@ -314,13 +405,25 @@ export function CustomerAuthPage() {
           <input
             id="customer-register-password"
             type="password"
+            required
+            minLength={8}
             value={registerForm.password}
             onChange={(event) => setRegisterForm((prev) => ({ ...prev, password: event.target.value }))}
-            placeholder="Mín. 8 caracteres, com maiúscula, minúscula e número"
+            placeholder="Sua senha"
             disabled={loading}
+            aria-invalid={Boolean(registerError)}
+            aria-describedby={registerError ? 'customer-register-error customer-register-password-help' : 'customer-register-password-help'}
             className={inputClass}
           />
+          <p id="customer-register-password-help" className="mt-1 text-xs text-slate-500">
+            Use ao menos 8 caracteres, com letra maiúscula, minúscula e número.
+          </p>
         </div>
+        {registerError ? (
+          <p id="customer-register-error" role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
+            {registerError}
+          </p>
+        ) : null}
         <button type="submit" disabled={loading} className={primaryBtnClass}>
           {loading ? 'Cadastrando…' : 'Criar conta'}
         </button>
@@ -341,15 +444,53 @@ export function CustomerAuthPage() {
           </Link>
         </header>
 
-        {customerSession?.email ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-            <h3 className="font-bold text-emerald-900">Você já está conectado</h3>
-            <p className="mt-1 text-sm text-emerald-800">
-              Sessão ativa para <strong>{customerSession.email}</strong>.
+        {deleteToken ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+            <h3 className="font-bold text-rose-900">Confirmar exclusão de conta</h3>
+            <p className="mt-1 text-sm text-rose-800">
+              Esta ação remove seus dados pessoais de forma <strong>permanente e irreversível</strong>.
+              Seus pedidos são mantidos anonimizados apenas para fins fiscais.
             </p>
-            <Link to="/checkout" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">
-              Ir para checkout <i className="bi bi-arrow-right" />
-            </Link>
+            <button
+              type="button"
+              onClick={handleConfirmDeletion}
+              disabled={deleting}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:bg-rose-300"
+            >
+              <i className="bi bi-trash" /> {deleting ? 'Excluindo…' : 'Excluir permanentemente'}
+            </button>
+          </div>
+        ) : customerSession?.email ? (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <h3 className="font-bold text-emerald-900">Você já está conectado</h3>
+              <p className="mt-1 text-sm text-emerald-800">
+                Sessão ativa para <strong>{customerSession.email}</strong>.
+              </p>
+              <Link to="/checkout" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">
+                Ir para checkout <i className="bi bi-arrow-right" />
+              </Link>
+            </div>
+
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4">
+              <h3 className="text-sm font-bold text-rose-900">Excluir minha conta</h3>
+              <p className="mt-1 text-xs text-rose-700">
+                Remove seus dados pessoais (LGPD). Pedidos são mantidos de forma anonimizada para fins fiscais. Ação irreversível.
+              </p>
+              <button
+                type="button"
+                onClick={handleRequestDeletion}
+                disabled={deleting || deleteRequested}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+              >
+                <i className="bi bi-trash" /> {deleting ? 'Enviando…' : 'Excluir minha conta'}
+              </button>
+              {deleteRequested ? (
+                <p className="mt-2 text-xs font-semibold text-rose-700">
+                  Verifique seu e-mail para confirmar a exclusão.
+                </p>
+              ) : null}
+            </div>
           </div>
         ) : (
           <>
@@ -377,16 +518,6 @@ export function CustomerAuthPage() {
             ) : null}
 
             {authForm}
-
-            <div className="mt-6 border-t border-slate-100 pt-3 text-center">
-              <Link
-                to={ADMIN_LOGIN_PATH}
-                className="text-[10px] font-medium uppercase tracking-widest text-slate-300 transition hover:text-slate-500"
-                title="Acesso restrito"
-              >
-                · admin ·
-              </Link>
-            </div>
           </>
         )}
       </article>

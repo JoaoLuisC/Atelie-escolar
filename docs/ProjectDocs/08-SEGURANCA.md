@@ -26,9 +26,9 @@
 
 Configurado em `lib/security-headers.js` + `server.js`:
 
-- `helmet()` — CSP **estrita explícita** (script-src whitelist GA4/Meta/MP), HSTS, X-Frame-Options DENY, X-Content-Type-Options nosniff
-- `cors()` — allowlist explícita em prod; permissivo só para `localhost:*` em dev
-- `express-rate-limit` global — 250 req / 15 min global; 30 req / 15 min em `/auth/*`
+- `helmet()` — CSP **estrita explícita** (script-src whitelist GA4/Meta/MP), HSTS, X-Frame-Options DENY, X-Content-Type-Options nosniff. Em produção (Vercel), headers equivalentes são aplicados pela rota `/(.*)` do `vercel.json` — com uma diferença: lá o `X-Frame-Options` é `SAMEORIGIN` (na prática o `frame-ancestors 'none'` da CSP, presente nos dois ambientes, prevalece nos browsers modernos).
+- `cors()` — allowlist explícita em prod (`CORS_ORIGINS`); permissivo só para `localhost:*` em dev
+- `express-rate-limit` global — 250 req / 15 min global (`RATE_LIMIT_MAX`); 30 req / 15 min em `/auth/*` (`AUTH_RATE_LIMIT_MAX`)
 - **HTTPS obrigatório em produção:** o boot em `server.js` **falha** se `APP_URL` não começar com `https://` quando `APP_ENV=production`. Cookies `Secure` dependem disso.
 
 ### 2.2 Rate limits específicos
@@ -42,28 +42,34 @@ Configurado em `lib/security-headers.js` + `server.js`:
 | `/verify-payment` | 60 / min | Anti enumeração de `order_code` |
 | `/track-event` | 120 / min | Permite uso normal sem permitir flood |
 | `/validate-coupon` | 20 / min | Anti enumeração de códigos |
+| `/abandoned-cart` | 30 / min | Chamado a cada keystroke debounced |
+| `/subscribe` | 5 / min | Anti enumeração de e-mails |
+| `/unsubscribe` | 20 / min | Uso normal do 1-click |
+| `/me-delete-account` | 5 / min | Ação rara e sensível |
+
+> ⚠️ Os limiters rodam no Express (`server.js` + `routes/`), ou seja, **em dev**. Na Vercel cada função serverless é isolada e o `express-rate-limit` em memória não vale entre invocações — rate limit por endpoint em produção depende de store compartilhado (KV), pendência **API-03**. `/cron-email-jobs` não tem limiter (autentica por `CRON_SECRET` timing-safe).
 
 ### 2.3 Autenticação
 
 - **Cookies HttpOnly** — `customer_session` e `admin_session`. JavaScript não acessa.
-- **SameSite=Strict** no cookie de cliente (CSRF mitigation).
-- **HMAC-SHA256** com secrets de 32 bytes (rotacionáveis).
+- **SameSite=Strict** em ambos os cookies (CSRF mitigation). Além disso, escritas admin e logouts exigem request **same-origin** (`isSameOriginRequest` checa `Origin`/`Referer` contra allowlist; sem os dois headers → bloqueia, fail-closed).
+- **HMAC-SHA256** com secrets de 32 bytes (rotacionáveis; `lib/env-secret.js` é fail-closed — fora de dev/test, secret ausente derruba o boot em vez de cair em fallback).
 - **TTL 8h** em ambos cookies.
-- **Senhas** — mín 8 chars + maiúscula + minúscula + dígito (validação client + server, defense in depth).
-- **2FA opcional para admin** (TOTP + PIN de recuperação em hash bcrypt).
-- **Google OAuth com PKCE** — `code_verifier` protege contra interceptação.
+- **Senhas** — mín 8 chars (server) + maiúscula + minúscula + dígito (client; o Supabase Auth rejeita senha fraca, mapeada para mensagem amigável — defense in depth).
+- **2FA opcional para admin** (TOTP com janela ±1 step + PIN de recuperação; challenge token HMAC com TTL 5 min; `totpSecret`/`fallbackPin` ficam em `settings.adminConfig`, nunca são devolvidos no GET e a comparação é timing-safe).
+- **Google OAuth com PKCE** — `code_verifier` protege contra interceptação (`flowType: 'pkce'` em `src/services/supabase-browser.js`).
 
 ### 2.4 Autorização (RLS no Postgres)
 
-14 tabelas. Resumo (detalhes em [04-BANCO-DE-DADOS §RLS](./04-BANCO-DE-DADOS.md)):
+17 tabelas, todas com RLS habilitado (baseline versionado na migration `20260702000000_phase6_db_rls_hardening.sql`, espelhado em `supabase/security-hardening.sql`). Resumo (detalhes em [04-BANCO-DE-DADOS §RLS](./04-BANCO-DE-DADOS.md)):
 
 | Tabela | Quem lê | Quem escreve |
 |---|---|---|
 | `categories` | anon + auth (active=true) | service_role |
 | `products` | anon + auth (active=true) | service_role |
-| `orders` | auth (próprios) | service_role |
+| `orders` | auth (próprios: `customer_id` ou `customer_email` do JWT) | service_role |
 | `order_items` | auth (via parent order) | service_role |
-| `profiles` | auth (próprio) | auth (só `display_name`) + service_role |
+| `profiles` | auth (próprio) | auth (linha própria; `id`/`email`/`role`/`provider` travados por trigger) + service_role |
 | `user_products` | auth (próprios) | service_role |
 | `download_tokens` | — | service_role |
 | `download_logs` | — | service_role |
@@ -72,8 +78,9 @@ Configurado em `lib/security-headers.js` + `server.js`:
 | `coupons` | — | service_role |
 | `abandoned_carts` | — | service_role |
 | `email_subscribers` / `email_sent_log` | — | service_role |
-| `analytics_events` | — | anon + auth (whitelist) |
-| `page_views` | — | anon + auth (path NOT NULL) |
+| `admin_audit_log` | — | service_role, só INSERT (append-only: UPDATE/DELETE bloqueados até para service_role) |
+| `analytics_events` | — | anon + auth (INSERT com whitelist de eventos, sem `order_id`/`customer_email`) |
+| `page_views` | — | service_role (INSERT público removido — RLS-04) |
 
 **Princípio**: `service_role` bypassa RLS, então o **backend pode tudo**. Browser usando anon key fica restrito ao que está nas policies.
 
@@ -82,25 +89,26 @@ Configurado em `lib/security-headers.js` + `server.js`:
 ```sql
 alter function public.set_updated_at()  set search_path = public, pg_temp;
 alter function public.handle_new_user() set search_path = public, pg_temp;
-alter function public.purge_old_logs()  set search_path = public, pg_temp;
 
 -- Não podem ser executadas diretamente pela API pública
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 ```
 
+As demais funções privilegiadas — `purge_old_logs()`, `cleanup_old_analytics_events()`, `cleanup_old_email_logs()`, `purge_stale_email_subscribers()` e `increment_coupon_usage()` — já nascem nas migrations como `SECURITY DEFINER` com `set search_path = public, pg_temp` **e** `revoke execute` de `public/anon/authenticated` (`increment_coupon_usage` só executa via service_role).
+
 ### 2.6 Privilege escalation bloqueado em `profiles`
 
-RLS sozinho não impede um cliente autenticado de fazer `UPDATE profiles SET role='ADMIN' WHERE id=auth.uid()` — a policy `profiles_own_update` libera a linha mas não as colunas. Por isso usamos grants de coluna:
+RLS sozinho não impede um cliente autenticado de fazer `UPDATE profiles SET role='ADMIN' WHERE id=auth.uid()` — a policy `profiles_own_update` libera a linha mas não as colunas. Por isso usamos um trigger guard (RLS-01, `supabase/security-hardening.sql` / migration phase6):
 
 ```sql
-revoke update on public.profiles from authenticated;
-revoke update on public.profiles from anon;
-
--- Cliente só pode atualizar o próprio display_name
-grant update (display_name) on public.profiles to authenticated;
+create trigger profiles_guard_privileged_cols
+  before update on public.profiles
+  for each row execute function public.profiles_guard_privileged_cols();
+-- A função (invoker) preserva OLD.id/email/role/provider quando
+-- current_user não é service_role/postgres/supabase_admin.
 ```
 
-Resultado: `role`, `email`, `provider`, `id`, `created_at` só podem ser modificados via `service_role` (backend). Cliente não consegue se promover.
+Resultado: `role`, `email`, `provider`, `id` só podem ser modificados via `service_role` (backend); o cliente só consegue alterar o próprio `display_name`. Cliente não consegue se promover.
 
 ### 2.7 `auth.users.instance_id` em projetos hospedados
 
@@ -117,14 +125,16 @@ where instance_id is null;
 ### 2.8 Validação de input com Zod
 
 Schemas em `validation/`:
-- `payment.schemas.js` — `customer`, `items`, `cupom`, `attribution`
-- `product.schemas.js` — campos de produto na criação/edição (também valida URLs contra `javascript:`/`data:` em fases recentes)
+- `payment.schemas.js` — `processPaymentSchema` (`items` 1–100, `customer`, `externalReference`); exercitado pela suíte de fuzz em `validation/__tests__/`
+- `product.schemas.js` — `createProductSchema`: campos de produto na criação (URLs só aceitam `http(s)://` — bloqueia `javascript:`/`data:`/`file:`)
 
-Aplicado via `middleware/validate.middleware.js`:
+Aplicado via `middleware/validate.middleware.js` (rota Express-only de dev):
 
 ```js
-router.post('/produtos', validateBody(productSchema), createProduct);
+router.post('/produtos', validateBody(createProductSchema), createProduct);
 ```
+
+No caminho serverless, `api/create-payment.js` valida manualmente: `productId` obrigatório, quantidade inteira 1–99, máx. 100 itens (anti-DoS) e **preço sempre do banco** (nunca do client). A atribuição passa por `lib/attribution-sanitize.js` (whitelist de 9 campos, strings clipadas a 200 chars).
 
 ---
 
@@ -140,8 +150,8 @@ router.post('/produtos', validateBody(productSchema), createProduct);
 | `DOWNLOAD_TOKEN_SECRET` | idem | ❌ |
 | `CRON_SECRET` | idem | ❌ |
 | `RESEND_API_KEY` (via SMTP_PASS) | idem | ❌ |
-| `settings.adminConfig.totpSecret` | tabela `settings` | ❌ (RLS service-only) |
-| `settings.adminConfig.fallbackPin` (hash bcrypt) | tabela `settings` | ❌ (RLS service-only) |
+| `settings.adminConfig.totpSecret` | tabela `settings` | ❌ (RLS service-only; redigido no GET e no audit log) |
+| `settings.adminConfig.fallbackPin` | tabela `settings` | ❌ (RLS service-only; redigido no GET e no audit log; comparação timing-safe) |
 | `VITE_SUPABASE_ANON_KEY` | `.env` frontend | ✅ (por design, pública) |
 | `VITE_SUPABASE_URL` | `.env` frontend | ✅ (por design, pública) |
 | `VITE_GA4_ID` / `VITE_META_PIXEL_ID` | `.env` frontend | ✅ (por design, públicas) |
@@ -160,14 +170,14 @@ const expectedHash = crypto
   .digest('hex');
 
 if (!timingSafeEqual(hash, expectedHash)) {
-  await logSecurityEvent('webhook_invalid_signature', { ip, paymentId });
-  return res.status(401).send();
+  await recordSecurityEvent({ eventName: 'webhook_invalid_signature', ... });
+  return res.status(401).json({ error: 'Invalid signature' });
 }
 ```
 
 Sem assinatura válida → 401 + evento em `security_events`.
 
-Em `APP_ENV=test` a validação é relaxada (apenas para testes integrados).
+A validação é **fail-closed**: sem `WEBHOOK_SECRET` configurado, toda requisição é rejeitada (nunca reutiliza o `MERCADOPAGO_ACCESS_TOKEN` como chave HMAC).
 
 ---
 
@@ -197,14 +207,14 @@ Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Res
 
 ## 6. Download tokens (proteção dos arquivos)
 
-- Gerados pelo backend após pagamento aprovado
-- Salvos em `download_tokens` com `expires_at` (TTL default 7 dias)
+- Gerados pelo backend após pagamento aprovado (`crypto.randomBytes(32)` em hex — token opaco de 256 bits)
+- Salvos em `download_tokens` com `expires_at` (TTL 72h); UNIQUE `(order_id, product_id)` torna a criação idempotente em webhooks reentregues
 - URL pública: `/api/download?token=XYZ`
-- Backend valida: token existe + não expirou + (sinaliza `used`)
-- Marca `used=true` após primeiro download bem-sucedido (auditoria; não bloqueia re-download dentro do TTL)
+- Backend valida: token existe + não expirou + não usado
+- **Uso único atômico**: o claim `used=false → true` é feito no próprio UPDATE condicionado; requisições concorrentes ou repetidas recebem 401 "Token já utilizado"
 - Loga em `download_logs` (IP + user agent + timestamp)
-- Gera signed URL temporária do Supabase Storage (não expõe URL direta)
-- Resposta inclui `Referrer-Policy: no-referrer` antes do pipe — token não vaza no `Referer` para destino externo
+- Gera signed URL temporária do Supabase Storage (5 min; não expõe URL direta); arquivos externos (Drive etc.) caem no redirect legado
+- Resposta inclui `Referrer-Policy: no-referrer` + `Cache-Control: no-store` antes do redirect — token não vaza no `Referer` para destino externo
 
 ---
 
@@ -222,15 +232,19 @@ Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Res
 
 ## 8. Retenção de logs (LGPD princípio da minimização)
 
-Migration [`20260526100000_phase2_log_retention.sql`](../../supabase/migrations/20260526100000_phase2_log_retention.sql) cria a função `public.purge_old_logs()` e agenda via `pg_cron`:
+A função `public.purge_old_logs()` nasceu na migration [`20260526100000_phase2_log_retention.sql`](../../supabase/migrations/20260526100000_phase2_log_retention.sql); a versão final está na [`20260702000000_phase6_db_rls_hardening.sql`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql):
 
-| Tabela | Retenção | Justificativa |
+| Tabela | Retenção | Purga por |
 |---|---|---|
-| `download_logs` | 12 meses | Cobre auditoria de fraude e disputas |
-| `analytics_events` | 24 meses | Permite comparação YoY |
-| `security_events` | 6 meses | Suficiente para investigar incidentes recentes |
+| `download_logs` | 12 meses | `purge_old_logs()` — cobre auditoria de fraude e disputas |
+| `security_events` | 6 meses | `purge_old_logs()` — suficiente para investigar incidentes recentes |
+| `page_views` | 6 meses | `purge_old_logs()` |
+| `admin_audit_log` | 18 meses | `purge_old_logs()` |
+| `analytics_events` | 180 dias | `cleanup_old_analytics_events()` (regra D7), job mensal |
+| `email_sent_log` | 90 dias | `cleanup_old_email_logs()`, job mensal |
+| `email_subscribers` (não confirmados >30d / desinscritos >90d) | — | `purge_stale_email_subscribers()`, job mensal |
 
-Job agendado diariamente às 03:00 UTC. Se `pg_cron` não estiver habilitado no Supabase (`create extension pg_cron;`), a migration cai num `notice` e o purge precisa ser rodado manualmente:
+Jobs `pg_cron`: `purge_old_logs_daily` (diário 03:00 UTC), `cleanup-analytics-events` (mensal), `cleanup-email-logs-monthly` (mensal) e `purge-stale-subscribers-monthly` (mensal). Se `pg_cron` não estiver habilitado no Supabase (`create extension pg_cron;`), a migration cai num `notice` e o purge precisa ser rodado manualmente:
 
 ```sql
 select public.purge_old_logs();
@@ -243,16 +257,18 @@ select public.purge_old_logs();
 Eventos passam por `lib/security-logger.js` que escreve em **três** destinos:
 
 1. **stdout estruturado JSON** (`{ level, event, severity, ip, ... }`) — Vercel/Supabase captura.
-2. **Tabela `public.security_events`** (RLS service-role only) — queryable do admin via SQL ou aba **Segurança**.
+2. **Tabela `public.security_events`** (RLS service-role only) — queryable via SQL no Supabase. (A aba **Segurança** do admin só configura o 2FA — não existe endpoint/tela que liste esses eventos.)
 3. **`SECURITY_ALERT_WEBHOOK_URL`** (env opcional) — POST JSON pra Slack/Discord/Sentry. Em branco → pula.
 
 ### Eventos emitidos hoje
 
 | `event_name` | Origem | Severidade | Quando dispara |
 |---|---|---|---|
-| `webhook_invalid_signature` | `api/webhook.js` | warn | HMAC do MP não bate fora de `APP_ENV=test` |
-| `admin_login_failed` | `api/admin-login.js` | warn | Senha errada **ou** sessão sem `role=admin` |
+| `webhook_invalid_signature` | `api/webhook.js` | warn | HMAC do MP não bate (ou header ausente) |
+| `admin_login_failed` | `api/admin-login.js` | warn | Credencial inválida **ou** conta sem role `admin`/`master` (resposta HTTP idêntica nos dois casos) |
 | `verify_payment_email_mismatch` | `api/verify-payment.js` | warn | Order existe mas email não bate |
+| `account_self_deleted` | `api/me-delete-account.js` | info | Exclusão de conta LGPD confirmada pelo cliente |
+| `admin_audit_write_failed` | `lib/admin-audit.js` | error | Insert no `admin_audit_log` falhou (para não passar silencioso) |
 
 Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 16)` para correlação cross-event sem violar LGPD.
 
@@ -264,8 +280,8 @@ Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 
 - **Finalidade declarada** — Política de Privacidade em `/privacidade`
 - **Minimização** — coletamos nome + email no checkout. CPF apenas se necessário para nota futura. Endereço não coletado (produto digital, regra H6)
 - **Consentimento informado** — banner com Aceitar / Rejeitar / Personalizar (`ConsentBanner.jsx`)
-- **Direito de oposição** — link de descadastro 1-clique em todo e-mail
-- **Direito de exclusão** — implementado via admin (ainda não self-service para o usuário — pendência §13)
+- **Direito de oposição** — link de descadastro 1-clique em todo e-mail de marketing (+ headers RFC 8058 `List-Unsubscribe`)
+- **Direito de exclusão** — self-service via `/api/me-delete-account` (2 passos: solicitação autenticada por cookie → confirmação por link no e-mail com token HMAC de 1h). Exclui o usuário do Supabase Auth, anonimiza o PII dos pedidos (histórico fiscal preservado), apaga tokens de download e desinscreve da newsletter
 - **Retenção limitada** — logs purgam automaticamente
 - **Transferência internacional** — Supabase em região `sa-east-1`, Resend em US — disclosed nos termos
 
@@ -291,7 +307,7 @@ Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 
 ### Banner de consentimento
 - Bloqueia GA4 e Meta Pixel até consentimento
 - Eventos essenciais (carrinho, checkout, `purchase`) podem rodar como `first-party only` sem consent
-- Estado em `localStorage` via `utils/consent.js`
+- Estado em `localStorage` via `src/utils/consent.js`
 
 ---
 
@@ -303,7 +319,7 @@ Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 
 SUPABASE_PAT='sbp_xxx' SUPABASE_PROJECT_REF='abc' node scripts/check-advisor.js
 ```
 
-Deve retornar **0 CRITICAL**. Os INFO "RLS Enabled No Policy" em `settings`, `download_tokens`, `download_logs`, `security_events`, `coupons`, `abandoned_carts`, `email_*` são **intencionais** (apenas service role acessa).
+Deve retornar **0 CRITICAL**. Os INFO "RLS Enabled No Policy" em `settings`, `download_tokens`, `download_logs`, `security_events`, `page_views`, `coupons`, `abandoned_carts`, `email_*`, `admin_audit_log` são **intencionais** (apenas service role acessa).
 
 ### 11.2 Rotação de secrets
 
@@ -366,7 +382,7 @@ Antes de cada release maior:
 - [ ] `MERCADOPAGO_ACCESS_TOKEN` é de PRODUÇÃO (`APP_USR-...` não `TEST-...`)
 - [ ] `CORS_ORIGINS` lista exatamente os domínios de produção
 - [ ] `APP_URL` é `https://...` (não localhost)
-- [ ] `NODE_ENV=production`
+- [ ] `APP_ENV=production` (o runtime usa `APP_ENV || NODE_ENV`)
 - [ ] Security Advisor: 0 CRITICAL
 - [ ] 2FA habilitado para conta admin
 - [ ] Backup do banco testado (Supabase Pro)
@@ -385,19 +401,21 @@ Antes de cada release maior:
 ## 13. Resumo rápido (poster do dev)
 
 ```
-✅ HttpOnly cookies + HMAC-SHA256 + SameSite=Strict
-✅ RLS em TODAS as 14 tabelas
+✅ HttpOnly cookies + HMAC-SHA256 + SameSite=Strict + same-origin em escritas
+✅ RLS em TODAS as 17 tabelas
 ✅ Service role NUNCA no frontend
-✅ CSP estrita + HSTS + X-Frame-Options DENY
-✅ Rate-limit em endpoints sensíveis
-✅ Webhook MP com HMAC + idempotência
-✅ Download token com TTL + signed URL Supabase + Referrer-Policy
+✅ CSP estrita + HSTS + frame-ancestors 'none' (X-Frame-Options: DENY no dev, SAMEORIGIN na Vercel)
+✅ Rate-limit em endpoints sensíveis (Express/dev; serverless pendente — API-03)
+✅ Webhook MP com HMAC fail-closed + idempotência
+✅ Download token de uso único (claim atômico) + TTL 72h + signed URL Supabase + Referrer-Policy
 ✅ Senha: 8+ chars, upper, lower, digit (client + server)
 ✅ 2FA admin opcional (TOTP + PIN)
 ✅ Email mascarado em logs (sha256.slice(0,16))
-✅ Logs com retenção: 12m (download), 24m (analytics), 6m (security)
+✅ Logs com retenção: 12m (download), 180d (analytics), 6m (security/page views), 18m (audit)
+✅ Audit log de admin append-only (nem service_role altera/apaga)
+✅ Exclusão de conta LGPD self-service em 2 passos
 ✅ Banner LGPD bloqueando GA4/Pixel sem consent
-✅ Privilege escalation bloqueado por GRANT de coluna em profiles
+✅ Privilege escalation bloqueado por trigger guard de colunas em profiles
 ✅ Privilege definer functions com search_path fixo + revoke execute
 
 🔁 Rotação de secrets: trimestral

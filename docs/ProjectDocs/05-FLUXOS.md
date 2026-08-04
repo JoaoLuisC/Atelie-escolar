@@ -29,18 +29,18 @@ flowchart TD
     C --> C1[Backend chama Supabase Auth<br/>POST /auth/v1/token grant_type=password]
     C1 -->|200 OK| C2[Backend cria cookie HttpOnly<br/>customer_session HMAC-SHA256]
     C2 --> C3[Frontend recebe user<br/>navega para redirect ou /checkout]
-    C1 -->|401| C4[Mensagem específica:<br/>email não confirmado / credenciais inválidas]
+    C1 -->|401| C4[Mensagem genérica 'E-mail ou senha incorretos'<br/>dica de 'não confirmado' só se o Supabase sinalizar]
 
     D --> D1{Senha válida?<br/>mín 8 chars + maiúscula + minúscula + número}
     D1 -->|Não| D2[Toast de erro local]
     D1 -->|Sim| D3[Backend chama Supabase Auth<br/>POST /auth/v1/signup]
     D3 -->|200 OK + access_token| D4[Cookie criado + navega]
     D3 -->|200 OK sem token| D5[verificationRequired=true<br/>Toast 'verifique seu email']
-    D3 -->|400| D6[Mensagem específica<br/>email já cadastrado / senha fraca]
+    D3 -->|400| D6[Mensagem neutra anti-enumeração<br/>não revela se o email já existe]
 ```
 
 **Pontos:**
-- A política de senha é validada **no client e no backend** (defense in depth).
+- A política completa de senha (8+ chars, maiúscula, minúscula, número) é validada **no client**; o backend revalida o mínimo de 8 chars e mapeia erros de senha fraca do Supabase (defense in depth).
 - O cookie HttpOnly do nosso backend é **separado** da sessão do Supabase Client.
 - "verificationRequired" depende do toggle "Confirm email" no Supabase Auth.
 
@@ -58,7 +58,7 @@ sequenceDiagram
     participant API as Express API
 
     U->>FE: Clica "Entrar com Google"
-    FE->>SB: supabase.auth.signInWithOAuth({provider:'google',<br/>redirectTo: /login?oauth=google})
+    FE->>SB: supabase.auth.signInWithOAuth({provider:'google',<br/>redirectTo: /login?oauth=google&redirect=...})
     Note over FE: code_verifier salvo em localStorage
     SB-->>U: 302 redirect → Google
     U->>G: Autoriza permissões
@@ -73,14 +73,14 @@ sequenceDiagram
     SB-->>API: { id, email, user_metadata }
     API->>API: Cria cookie HttpOnly<br/>customer_session (HMAC-SHA256)
     API-->>FE: { user: { uid, email, name } }
-    FE->>FE: setCustomerSession(user)<br/>limpa ?code= da URL
+    FE->>FE: setCustomerSession(user)<br/>signOut({scope:'local'}) remove tokens do localStorage<br/>limpa ?code= da URL
     FE-->>U: Redireciona para /checkout ou /
 ```
 
 **Pontos críticos:**
 - O **Supabase Client é o único responsável** pelo OAuth — não fazemos a request pro Google manualmente.
 - O `redirectTo` precisa estar no `uri_allow_list` do Supabase (`scripts/configure-auth.js` cuida disso).
-- O cookie HttpOnly do nosso backend é **separado** da sessão do Supabase Client. Os dois coexistem.
+- O cookie HttpOnly do nosso backend é **separado** da sessão do Supabase Client. Após o callback, os tokens do Supabase são **removidos do localStorage** (`signOut({scope:'local'})`) — a sessão passa a viver só no cookie.
 - `code_verifier` (PKCE) protege contra interceptação do `code` por extensões maliciosas.
 
 ---
@@ -89,15 +89,15 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[Usuário em /login → 'Esqueci minha senha'] --> B[supabase.auth.resetPasswordForEmail<br/>email + redirectTo=/reset-password]
+    A[Usuário em /login → 'Esqueci minha senha'] --> B[supabase.auth.resetPasswordForEmail<br/>email + redirectTo=/reset-password?redirect=...]
     B --> C[Supabase Auth → SMTP Resend<br/>envia e-mail com link<br/>https://app.com/reset-password?code=...]
     C --> D[Usuário clica no link]
     D --> E[ResetPasswordPage carrega]
-    E --> F[supabase.auth.exchangeCodeForSession code]
+    E --> F[?code= → supabase.auth.exchangeCodeForSession<br/>tokens no #hash → supabase.auth.setSession]
     F -->|sucesso| G[Form: nova senha + confirmação]
     F -->|erro / expirado| H[Erro: peça novo link]
     G --> I[supabase.auth.updateUser { password }]
-    I -->|sucesso| J[Toast 'senha atualizada' + redirect /login]
+    I -->|sucesso| J[Toast 'senha atualizada'<br/>+ redirect /checkout ou /downloads]
     I -->|fraca| K[Toast erro: política de senha]
 ```
 
@@ -116,25 +116,25 @@ flowchart TD
     B --> C[Valida via Supabase Auth<br/>password grant]
     C -->|inválido| C1[401 + log security_events.admin_login_failed]
     C -->|válido| D[Lê profile.role]
-    D -->|role NOT IN ADMIN,MASTER| D1[401 + log admin_login_failed]
-    D -->|role OK| E{adminConfig.totpEnabled?}
+    D -->|role NOT IN admin,master| D1[401 idêntico ao de credencial inválida<br/>+ log admin_login_failed]
+    D -->|role OK| E{adminConfig exige 2FA?<br/>requireSecondFactor / require2FA / twoFactorEnabled}
 
-    E -->|false| F[Emite cookie admin_session HMAC<br/>TTL 8h SameSite=Strict]
+    E -->|não| F[Emite cookie admin_session HMAC<br/>TTL 8h SameSite=Strict]
     F --> Z[Redirect /admin]
 
-    E -->|true| G[Retorna challengeId<br/>frontend pede código]
-    G --> H[POST /api/admin-login<br/>challengeId + totpCode]
-    H -->|código OK| F
-    H -->|código falha + tem PIN| I[Frontend pede PIN<br/>POST /api/admin-login<br/>challengeId + fallbackPin]
-    I -->|PIN OK| F
-    I -->|PIN errado| I1[401 + log + bloqueia 10min após 5 tentativas]
+    E -->|sim| G[Retorna requiresSecondFactor=true<br/>+ methods + challengeToken - TTL 5 min<br/>frontend pede código]
+    G --> H[POST /api/admin-login<br/>email + password + challengeToken + factorCode]
+    H -->|factorCode bate TOTP OU PIN de fallback| F
+    H -->|código inválido| I1[401 'Código de verificação inválido']
+    H -->|challengeToken inválido/expirado| I2[401 'Desafio de 2FA inválido ou expirado']
 ```
 
 **Notas:**
-- Rate-limit em `/admin-login`: **5 tentativas falhas / 10 min** (`skipSuccessfulRequests: true`).
-- `totpSecret` e `fallbackPin` (hash bcrypt) ficam em `settings.adminConfig` (RLS service-only).
+- Rate-limit em `/admin-login`: **5 tentativas falhas / 10 min** (`skipSuccessfulRequests: true`) — aplicado pelo Express em dev; na Vercel serverless não há store compartilhado (pendência API-03).
+- `totpSecret` e `fallbackPin` ficam em `settings.adminConfig` (RLS service-only); as comparações de código/PIN são timing-safe (`safeCompare`).
+- O mesmo campo `factorCode` serve para TOTP **ou** PIN de fallback — vale se bater com qualquer um dos métodos habilitados.
 - TOTP usa janelas de ±1 (30s antes/depois) para tolerar drift de clock.
-- Falha de login **sempre** gera `security_events.admin_login_failed` com IP + UA + email hash.
+- Senha inválida ou conta sem role admin/master geram `security_events.admin_login_failed` com IP + UA + hash do e-mail; a resposta HTTP é idêntica nos dois casos (anti-enumeração).
 
 ---
 
@@ -144,7 +144,7 @@ flowchart TD
 flowchart TD
     A[Cliente adiciona ao carrinho<br/>localStorage] --> B[/checkout/]
     B --> C[Preenche nome + email<br/>cupom opcional]
-    C --> D[POST /api/create-payment<br/>{ items, customer, coupon }]
+    C --> D[POST /api/create-payment<br/>{ items, customer, attribution, couponCode }]
 
     D --> D1[Backend valida produtos<br/>SELECT FROM products WHERE id IN ...]
     D1 --> D1a[Re-calcula total<br/>aplica cupom se válido]
@@ -153,33 +153,33 @@ flowchart TD
     D3 --> D4[UPDATE orders SET preference_id]
     D4 --> D5{Retorna initPoint para o frontend}
 
-    D5 --> E[Frontend abre Mercado Pago<br/>em nova aba via window.open]
-    D5 --> F[Salva pendingOrderId no state<br/>useEffect inicia polling]
+    D5 --> E[Frontend abre Mercado Pago<br/>em nova aba via window.open<br/>fallback: botão com o link se o popup for bloqueado]
+    D5 --> F[Salva pendingOrderId no state<br/>+ lastOrderId/lastOrderEmail no localStorage<br/>useEffect inicia polling]
 
     F --> F1[A cada 4s: GET /api/verify-payment?orderId=X&email=Y]
     F1 --> F2{paymentStatus?}
-    F2 -->|approved| G[Limpa carrinho + dispara purchase event<br/>navega para /downloads]
+    F2 -->|approved| G[Limpa carrinho<br/>navega para /downloads?order=X&email=Y]
     F2 -->|rejected/cancelled| H[Toast erro + polling para]
     F2 -->|pending| F1
-    F2 -->|150x sem resposta| I[Timeout 10min<br/>usuário pode verificar em Downloads depois]
+    F2 -->|150 tentativas| I[Timeout 10min<br/>usuário pode verificar em Downloads depois]
 
-    G --> J[/downloads?order=X/]
+    G --> J[/downloads?order=X&email=Y/]
     J --> J1[GET /api/verify-payment?orderId=X&email=Y]
     J1 --> J2{Status approved?}
-    J2 -->|Sim| K[Lista download_tokens]
+    J2 -->|Sim| K[Lista download_tokens - expiram em 72h<br/>dispara purchase event - trackPurchaseOnce]
     J2 -->|Não| L[Continua polling a cada 10s<br/>até max 12 tentativas]
 
     K --> M[Para cada arquivo:<br/>href = /api/download?token=Y]
-    M --> N[Backend valida token<br/>gera signed URL Supabase Storage<br/>faz pipe arquivo→browser]
-    N --> O[INSERT INTO download_logs<br/>marca token como used]
+    M --> N[Backend valida token<br/>claim ATÔMICO used=false→true<br/>uso único mesmo sob concorrência]
+    N --> O[INSERT INTO download_logs<br/>302 redirect: signed URL do Storage - 5 min<br/>ou URL externa - Referrer-Policy: no-referrer]
 
-    G -.->|paralelo| P[POST /api/send-confirmation-email<br/>nodemailer → Resend]
-    P --> Q[Email transacional<br/>'Pagamento confirmado']
+    G -.->|paralelo, na 1ª aprovação| P[Webhook/verify-payment provisionam<br/>conta Supabase p/ comprador convidado]
+    P --> Q[Email de definição de senha<br/>resetPasswordForEmail]
 ```
 
-**Webhook paralelo:** ver fluxo #6. Polling cobre o caso de webhook não chegar (dev sem ngrok, lag em prod).
+**Webhook paralelo:** ver fluxo #6. Polling cobre o caso de webhook não chegar (dev sem ngrok, lag em prod). O `verify-payment` também consulta o Mercado Pago e cria os tokens se o webhook ainda não criou (corrida resolvida pela UNIQUE `(order_id, product_id)`).
 
-**Email de confirmação:** se `SMTP_HOST/USER/PASS` não estiverem no `.env.local`, o backend loga warning e segue (não falha checkout).
+**Email "Pagamento confirmado":** existe o endpoint `POST /api/send-confirmation-email` (nodemailer → Resend; idempotente via `email_sent_log`; o destinatário é **sempre** o e-mail gravado no pedido — o do body é ignorado), mas ele não é disparado automaticamente pelo fluxo hoje. O envio de e-mails é best-effort: sem `SMTP_HOST/USER/PASS` no `.env.local`, registra `skipped` e segue (não falha checkout).
 
 ---
 
@@ -202,16 +202,19 @@ sequenceDiagram
     MP-->>API: { status, external_reference, transaction_amount }
     API->>DB: SELECT FROM orders WHERE order_code = external_reference
     alt Aprovado e order existe
-        API->>DB: UPDATE orders SET<br/>payment_status='approved',<br/>completed_at=now,<br/>mercadopago_payment_id
-        API->>DB: INSERT INTO download_tokens<br/>(token, order_id, product_id, expires_at)<br/>para cada item
-        API->>DB: INSERT INTO user_products<br/>(user_id, product_id, order_id)<br/>se customer_id não-NULL
-        API->>API: Dispara send-confirmation-email (best-effort)
+        API->>DB: UPDATE orders SET<br/>payment_status='approved', status='completed',<br/>completed_at=now, payment_id<br/>(atômico: só quem transiciona !approved→approved)
+        API->>DB: INSERT INTO download_tokens em lote<br/>(token 32 bytes hex, order_id, product_id,<br/>expires_at=+72h) para cada item
+        API->>API: Se 1ª aprovação:<br/>provisiona conta Supabase p/ convidado<br/>(ensureCustomerAccountFromCheckout, best-effort)<br/>+ registra evento payment_approved
+    end
+    alt Rejeitado/cancelado
+        API->>DB: UPDATE orders SET<br/>payment_status=rejected|cancelled, status='failed'
+        API->>API: Registra evento payment_rejected/cancelled
     end
     API-->>MP: 200 OK
     Note over MP,DB: Polling do cliente vai pegar<br/>esse update na próxima iteração
 ```
 
-**Idempotência:** o handler é seguro a múltiplas chamadas com o mesmo `paymentId`. Re-emitir download_tokens não duplica porque o backend verifica se já existe `user_products` para o par (user, product, order).
+**Idempotência:** o handler é seguro a múltiplas chamadas com o mesmo `paymentId`. A transição de status é um UPDATE condicional atômico (`payment_status neq approved`) — só a primeira notificação "vence"; re-emitir download_tokens não duplica porque o INSERT em lote colide na UNIQUE `(order_id, product_id)` (409 tratado como sucesso, recarrega os tokens persistidos).
 
 **Em dev sem ngrok**: webhook nunca chega → polling no frontend cobre o gap.
 
@@ -225,24 +228,23 @@ flowchart LR
     B --> C[Clica 'Novo produto'<br/>OU 'Editar' em existente]
     C --> D[ProductWizard abre - ModalWizard]
 
-    D --> D1[Step 1: Básico<br/>nome + categoria + descrição + tags]
-    D1 --> D2[Step 2: Mídia<br/>multi-images + multi-videos + downloadUrl]
-    D2 --> D3[Step 3: Preço<br/>price + originalPrice + product_type + is_kit]
-    D3 --> E[Submit do form]
+    D --> D1[Step 1: Básico<br/>nome + categoria + descrição]
+    D1 --> D2[Step 2: Mídia<br/>multi-images + multi-videos + arquivo de download<br/>upload via POST /api/admin-upload-url<br/>→ signed upload URL do Supabase Storage<br/>limites: 500kB img / 50MB vídeo-arquivo]
+    D2 --> D3[Step 3: Preço & Variações<br/>price + originalPrice + productType individual/kit]
+    D3 --> D4[Step 4: Conversão<br/>benefits + faq + reviews]
+    D4 --> E[Submit do form]
 
-    E --> F[AdminPage.handleProductSave<br/>monta payload com images[] e videos[]]
+    E --> F["AdminPage.handleProductSave<br/>monta payload com images[] e videos[]"]
     F --> G{Tem ID?}
-    G -->|Sim| H[PUT /api/admin-products<br/>updateProduct]
-    G -->|Não| I[POST /api/admin-products<br/>createProduct]
+    G -->|Sim| H[PUT /api/admin-products<br/>updateAdminProduct]
+    G -->|Não| I[POST /api/admin-products<br/>createAdminProduct]
 
     H --> J[Backend valida sessão admin<br/>ensureAdminSession]
     I --> J
-    J --> K[toProductPayload normaliza<br/>image_url = images[0]<br/>images: jsonb array<br/>videos: jsonb array<br/>slug gerado automaticamente]
-    K --> L[INSERT/UPDATE em public.products]
+    J --> K["toProductPayload normaliza<br/>image_url = images[0]<br/>images: jsonb array<br/>videos: jsonb array<br/>slug gerado automaticamente - trigger no banco"]
+    K --> L[INSERT/UPDATE em public.products<br/>+ audit log - logAdminAction]
     L --> M[Refresh dashboard<br/>fechar wizard<br/>toast sucesso]
 ```
-
-> ⚠️ Editar `faq`, `reviews` e `benefits` ainda é feito por SQL direto — wizard pendente. Ver [13-ROADMAP §3.4](./13-ROADMAP-PENDENCIAS.md).
 
 ---
 
@@ -250,19 +252,18 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A[Cliente preenche email no checkout] --> B[POST /api/abandoned-cart<br/>{ email, items, total, attribution }]
-    B --> C[INSERT INTO abandoned_carts<br/>session_id único]
+    A[Cliente preenche email no checkout<br/>debounce 1500ms] --> B[POST /api/abandoned-cart<br/>{ email, items, sessionId, attribution }]
+    B --> C[Upsert em abandoned_carts<br/>por email + session_id<br/>total recalculado no backend<br/>atualização reseta reminder_sent_at]
 
-    A2[Cliente finaliza compra<br/>na mesma sessão] -.->|UPDATE recovered_at=now| C
-
-    D[GitHub Actions cron de hora em hora] --> E[POST /api/cron-email-jobs<br/>Authorization: Bearer CRON_SECRET]
-    E --> F[SELECT abandoned_carts<br/>WHERE recovered_at IS NULL<br/>AND reminder_sent_at IS NULL<br/>AND created_at > now - 24h]
-    F --> G[Para cada cart:<br/>enviar email 'esqueceu algo?'<br/>com link de retorno ao checkout]
+    D[GitHub Actions email-cron.yml<br/>de hora em hora] --> E[POST /api/cron-email-jobs<br/>header X-Cron-Secret: CRON_SECRET]
+    E --> F[1º lembrete: abandoned_carts<br/>updated_at entre 1h e 2h atrás<br/>recovered_at IS NULL<br/>reminder_sent_at IS NULL<br/>pula desinscritos]
+    F --> G[Para cada cart:<br/>email 'esqueceu algo?' - kind abandoned_cart_1h<br/>com link de retorno ao checkout]
     G --> H[UPDATE reminder_sent_at = now<br/>INSERT email_sent_log]
+    H --> H2[2º lembrete 24h depois<br/>por reminder_sent_at<br/>kind abandoned_cart_24h]
 
-    I[Cron diário] --> J[Reativação 90d<br/>SELECT clientes último pedido<br/>entre 90 e 180 dias]
-    J --> K[Enviar email 'sentimos sua falta'<br/>com cupom VOLTEI15]
-    K --> L[INSERT email_sent_log<br/>campaign=reactivation_90d]
+    E --> J[Reativação: SELECT último pedido aprovado<br/>por email, janela 90 a 180 dias]
+    J --> K[Enviar email 'sentimos sua falta'<br/>com cupom VOLTEI15 - 15%, configurável via env]
+    K --> L[INSERT email_sent_log<br/>kind=reactivation_90d<br/>entityId = mês corrente → máx 1x/mês]
 ```
 
 **Regras (ver [11-REGRAS-NEGOCIO §D](./11-REGRAS-NEGOCIO.md)):**
@@ -270,31 +271,36 @@ flowchart TD
 - D7: não enviar para inativos > 180 dias.
 - D8: cupom de reativação só para a janela 90-180d (evitar dar desconto a quem ia comprar).
 
+**Notas:**
+- O mesmo cron horário também processa a sequência pós-compra **D+3 / D+15 / D+45** (avaliação, sugestões complementares, novidades da categoria), tudo idempotente via `email_sent_log`.
+- Janelas configuráveis por env: `ABANDONED_CART_FIRST_HOURS` (1), `ABANDONED_CART_SECOND_HOURS` (24), `REACTIVATION_DAYS_MIN/MAX` (90/180).
+- A coluna `recovered_at` é respeitada pelo cron (cart recuperado não recebe lembrete), mas **nada a marca hoje** no fluxo de compra.
+
 ---
 
 ## 9. Inscrição em newsletter (double opt-in)
 
 ```mermaid
 flowchart TD
-    A[NewsletterSignup form<br/>footer ou popup] --> B[POST /api/subscribe<br/>{ email, source }]
+    A[NewsletterSignup form<br/>footer ou popup] --> B[POST /api/subscribe<br/>{ email, source, attribution }]
     B --> C{Já existe?}
-    C -->|status=confirmed| C1[Resposta 'já inscrito'<br/>idempotente]
-    C -->|status=unsubscribed| C2[Reativa: status=pending<br/>novo confirmation_token]
-    C -->|não existe| C3[INSERT email_subscribers<br/>status=pending<br/>confirmation_token]
+    C -->|confirmed=true e não desinscrito| C1[Resposta 'já inscrito'<br/>idempotente]
+    C -->|desinscrito| C2[Reativa: unsubscribed_at=null<br/>novo confirmation_token<br/>reaproveita token se enviado < 1h]
+    C -->|não existe| C3[INSERT email_subscribers<br/>confirmed=false<br/>confirmation_token]
     C2 --> D
     C3 --> D[Envio de email de confirmação<br/>link /confirmar-inscricao?token=XYZ]
 
     E[Cliente clica no link] --> F[GET /api/confirm-subscription?token=XYZ]
-    F --> G{Token válido?}
-    G -->|Sim| H[UPDATE status='confirmed'<br/>confirmed_at=now]
+    F --> G{Token válido?<br/>TTL 72h}
+    G -->|Sim| H[UPDATE confirmed=true<br/>confirmed_at=now<br/>confirmation_token=null - uso único]
     G -->|Não/expirado| I[Página de erro<br/>'link expirado, peça novo']
 
-    J[Cliente clica 'descadastrar' em qualquer email] --> K[GET /api/unsubscribe?token=XYZ]
-    K --> L[UPDATE status='unsubscribed'<br/>unsubscribed_at=now]
-    L --> M[Página de confirmação<br/>'você foi descadastrado']
+    J[Cliente clica 'descadastrar' em qualquer email<br/>link /desinscrever?token=XYZ] --> K[GET ou POST /api/unsubscribe?token=XYZ<br/>RFC 8058 One-Click<br/>fallback: POST { email }]
+    K --> L[UPDATE unsubscribed_at=now<br/>+ email de confirmação de descadastro]
+    L --> M[Resposta sempre neutra<br/>'se o email estava cadastrado, foi removido']
 ```
 
-**Idempotência:** mesmo email enviado várias vezes não cria duplicatas. Mesmo token de unsubscribe pode ser clicado múltiplas vezes sem erro.
+**Idempotência:** mesmo email enviado várias vezes não cria duplicatas. Mesmo token de unsubscribe pode ser clicado múltiplas vezes sem erro, e a resposta nunca revela se o e-mail existe (anti-enumeração).
 
 ---
 
@@ -310,7 +316,7 @@ graph TB
         E[Supabase JS Client<br/>auth only]
     end
 
-    subgraph Express :3000
+    subgraph "Express :3000"
         F[Routes: auth, products, payment, api-compat]
         G[Middleware: helmet, cors, rate-limit, auth]
         H[lib: supabase, customer-session,<br/>admin-session, mercadopago]
@@ -344,5 +350,5 @@ graph TB
 - O **Express é BFF** (Backend for Frontend): browser não fala direto com Supabase para dados (só Auth).
 - **Service role nunca sai do servidor** — fica em variáveis de env do backend.
 - **`utils/api.js`** centraliza fetch, timeout (15s) e parsing de erro.
-- **Supabase JS Client no browser**: usado **apenas** para `signInWithOAuth`, `signOut`, `getSession`, `updateUser` (reset de senha), `exchangeCodeForSession`. Toda CRUD em tabelas vai via backend.
-- **GA4/Pixel** só disparam após `consent.granted === true` (ver `utils/consent.js` + `ConsentBanner.jsx`).
+- **Supabase JS Client no browser**: usado **apenas** para auth — `signInWithOAuth`, `signOut`, `getSession`, `resetPasswordForEmail`, `exchangeCodeForSession`/`setSession` e `updateUser` (reset de senha). Toda CRUD em tabelas vai via backend. Exceção pontual: o upload de mídia do admin faz PUT direto no Storage via **signed upload URL** emitida pelo backend (`/api/admin-upload-url`).
+- **GA4/Pixel** só disparam após consentimento LGPD concedido — `getConsentState() === 'granted'` / `hasMarketingConsent()` (ver `utils/consent.js` + `ConsentBanner.jsx`).

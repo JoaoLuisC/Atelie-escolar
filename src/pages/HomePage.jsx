@@ -15,7 +15,7 @@ const HOME_JSON_LD = [
     '@type': 'Organization',
     name: 'Profa. Marciar Cardoso · Ateliê da Escola',
     url: 'https://profamarciarcardoso.com.br',
-    logo: 'https://profamarciarcardoso.com.br/og-default.png',
+    logo: 'https://profamarciarcardoso.com.br/favicon.svg',
     sameAs: [
       'https://www.instagram.com/profamarciarcardoso',
       'https://www.tiktok.com/@profamarciarcardoso',
@@ -60,6 +60,22 @@ const TESTIMONIALS = [
   { initial: 'J', name: 'Juliana F.', role: 'Coord. Pedagógica, RJ', text: '"Recebi os arquivos na hora e consegui organizar tudo sem complicação!"', avatarBg: 'bg-gradient-to-br from-accent-yellow to-accent-pink' },
 ];
 
+// Respeita prefers-reduced-motion: desliga animações infinitas (float) que só
+// podem ser controladas via JS por usarem `style` inline. O marquee usa
+// `motion-reduce:animate-none` diretamente na classe (Tailwind).
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!mq) return undefined;
+    setReduced(mq.matches);
+    const handler = (event) => setReduced(event.matches);
+    mq.addEventListener?.('change', handler);
+    return () => mq.removeEventListener?.('change', handler);
+  }, []);
+  return reduced;
+}
+
 function Marquee({ items, dark = false, reverse = false }) {
   const doubled = [...items, ...items, ...items, ...items];
   return (
@@ -69,7 +85,7 @@ function Marquee({ items, dark = false, reverse = false }) {
         dark ? 'border-slate-700 bg-slate-900 text-white' : 'border-brand-100 bg-brand-50 text-brand-700'
       }`}
     >
-      <div className={`flex w-max whitespace-nowrap font-display text-sm font-bold uppercase tracking-widest ${reverse ? 'animate-marquee-reverse' : 'animate-marquee'}`}>
+      <div className={`flex w-max whitespace-nowrap font-display text-sm font-bold uppercase tracking-widest motion-reduce:animate-none ${reverse ? 'animate-marquee-reverse' : 'animate-marquee'}`}>
         {doubled.map((item, i) => (
           <span key={`${item}-${i}`} className="inline-flex items-center gap-8 pr-8">
             {item}
@@ -85,6 +101,7 @@ export function HomePage() {
   const [homeSections, setHomeSections] = useState([]);
   const [homeSectionsStatus, setHomeSectionsStatus] = useState('');
   const laneRefs = useRef({});
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     let mounted = true;
@@ -140,7 +157,9 @@ export function HomePage() {
             <span
               key={i}
               className={`absolute text-3xl opacity-60 ${icon.position}`}
-              style={{ animation: `float ${5 + i * 0.5}s ease-in-out infinite`, animationDelay: `${i * 0.3}s` }}
+              style={prefersReducedMotion
+                ? undefined
+                : { animation: `float ${5 + i * 0.5}s ease-in-out infinite`, animationDelay: `${i * 0.3}s` }}
             >
               {icon.emoji}
             </span>

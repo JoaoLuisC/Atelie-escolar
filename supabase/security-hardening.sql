@@ -3,6 +3,11 @@
 -- Corrige todas as issues CRITICAL do Security Advisor.
 -- Ajustado ao schema REAL do banco (profiles.id é uuid e bate com
 -- auth.uid(); user_products tem user_id, não email; etc).
+--
+-- ⚠ Este baseline de RLS agora também é versionado como migration
+--   supabase/migrations/20260702000000_phase6_db_rls_hardening.sql
+--   (review Área 3, RLS-03). Mantenha os dois em sincronia; a migration
+--   é a fonte de verdade para deploy/DR.
 -- ════════════════════════════════════════════════════════════════════
 
 -- ─── 1. Habilitar Row Level Security em todas as tabelas públicas ─
@@ -46,6 +51,30 @@ create policy profiles_own_update
   using (id = auth.uid())
   with check (id = auth.uid());
 
+-- RLS-01: RLS não filtra COLUNAS. Sem a trava abaixo, o dono do perfil
+-- poderia gravar profiles.role='ADMIN' (escalonamento). O trigger (invoker)
+-- preserva id/email/role/provider para qualquer papel que não seja backend.
+create or replace function public.profiles_guard_privileged_cols()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if current_user not in ('service_role', 'postgres', 'supabase_admin') then
+    new.id       := old.id;
+    new.email    := old.email;
+    new.role     := old.role;
+    new.provider := old.provider;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_guard_privileged_cols on public.profiles;
+create trigger profiles_guard_privileged_cols
+  before update on public.profiles
+  for each row execute function public.profiles_guard_privileged_cols();
+
 
 -- ─── 4. Pedidos do próprio cliente ────────────────────────────────
 -- Match por customer_id (uuid, bate com auth.uid()) OU customer_email
@@ -81,12 +110,12 @@ create policy user_products_own_read
   using (user_id = auth.uid());
 
 
--- ─── 6. Tracking anônimo: page_views aceita INSERT de qualquer um ─
+-- ─── 6. page_views: SEM escrita pública (RLS-04) ──────────────────
+-- Antes havia policy anon INSERT `with check(true)`, que permitia forjar
+-- IP/UA/path (envenenamento de log). Nenhum código grava page_views pelo
+-- client; a escrita deve ser feita pelo backend (service-role, IP do
+-- servidor). Sem policy = service-role only.
 drop policy if exists page_views_public_insert on public.page_views;
-create policy page_views_public_insert
-  on public.page_views for insert
-  to anon, authenticated
-  with check (true);
 
 
 -- ─── 7. settings, download_tokens, download_logs ───────────────────

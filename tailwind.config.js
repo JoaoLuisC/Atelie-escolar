@@ -2,8 +2,13 @@
 module.exports = {
   content: [
     './index.html',
-    './src/**/*.{js,jsx,ts,tsx}',
+    './src/**/*.{js,jsx}',
   ],
+  // O HomePage aplica a animação `float` via `style` inline (com durações/delays
+  // escalonados por ícone), então a classe `animate-float` nunca aparece no
+  // conteúdo escaneado — sem isto o JIT não emitiria `@keyframes float` e a
+  // animação (referenciada pelo inline style) não resolveria.
+  safelist: ['animate-float'],
   theme: {
     extend: {
       colors: {
@@ -55,5 +60,5 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/typography')],
 };

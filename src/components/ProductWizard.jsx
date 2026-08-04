@@ -4,6 +4,17 @@ import { ModalWizard } from './ModalWizard';
 import { useToast } from '../hooks/useToast';
 import { uploadProductAsset } from '../services/admin-panel';
 
+const EMPTY_PRODUCT_FORM = {
+  id: '',
+  name: '',
+  category: '',
+  description: '',
+  downloadUrl: '',
+  price: '',
+  originalPrice: '',
+  productType: 'individual',
+};
+
 export function ProductWizard({
   isOpen,
   onClose,
@@ -15,16 +26,10 @@ export function ProductWizard({
   const [currentStep, setCurrentStep] = useState(0);
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
-  const [formData, setFormData] = useState({
-    id: '',
-    name: '',
-    category: '',
-    description: '',
-    downloadUrl: '',
-    price: '',
-    originalPrice: '',
-    productType: 'individual',
-  });
+  const [benefits, setBenefits] = useState([]);
+  const [faq, setFaq] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [formData, setFormData] = useState({ ...EMPTY_PRODUCT_FORM });
 
   useEffect(() => {
     if (initialProduct) {
@@ -47,6 +52,9 @@ export function ProductWizard({
         ? initialProduct.images
         : (initialProduct.image ? [initialProduct.image] : ['']));
       setVideos(initialProduct.videos || []);
+      setBenefits(normalizeBenefits(initialProduct.benefits));
+      setFaq(normalizeFaq(initialProduct.faq));
+      setReviews(normalizeReviews(initialProduct.reviews));
       setCurrentStep(0);
     } else {
       resetForm();
@@ -55,18 +63,12 @@ export function ProductWizard({
   }, [initialProduct, isOpen]);
 
   const resetForm = () => {
-    setFormData({
-      id: '',
-      name: '',
-      category: '',
-      description: '',
-      downloadUrl: '',
-      price: '',
-      originalPrice: '',
-      productType: 'individual',
-    });
+    setFormData({ ...EMPTY_PRODUCT_FORM });
     setImages(['']);
     setVideos([]);
+    setBenefits([]);
+    setFaq([]);
+    setReviews([]);
     setCurrentStep(0);
   };
 
@@ -154,8 +156,15 @@ export function ProductWizard({
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (!validateStep(2)) {
-      return;
+    // Ao salvar, valida os campos obrigatórios de TODOS os steps (não só o
+    // atual). Se algum falhar, leva ao primeiro step incompleto e bloqueia o
+    // save — evita persistir produto incompleto a partir de qualquer step.
+    const REQUIRED_STEPS = [0, 1, 2];
+    for (const step of REQUIRED_STEPS) {
+      if (!validateStep(step)) {
+        setCurrentStep(step);
+        return;
+      }
     }
 
     const validImages = images.filter((img) => img.trim());
@@ -165,6 +174,9 @@ export function ProductWizard({
       ...formData,
       images: validImages,
       videos: validVideos,
+      benefits: cleanBenefits(benefits),
+      faq: cleanFaq(faq),
+      reviews: cleanReviews(reviews),
     };
 
     onSubmit(completeProduct);
@@ -177,6 +189,7 @@ export function ProductWizard({
     { id: 'basic', label: 'Básico' },
     { id: 'media', label: 'Mídia' },
     { id: 'pricing', label: 'Preço & Variações' },
+    { id: 'conversion', label: 'Conversão' },
   ];
 
   return (
@@ -238,7 +251,7 @@ export function ProductWizard({
           <Field
             label="Imagens do produto *"
             htmlFor="product-images"
-            hint="Selecione cada imagem do seu computador. JPG, PNG ou WebP até 10MB."
+            hint="Selecione cada imagem do seu computador. JPG, PNG ou WebP até 500kB — imagens leves deixam a loja rápida."
           >
             <div id="product-images" className="flex flex-col gap-3">
               {images.map((image, idx) => (
@@ -353,12 +366,262 @@ export function ProductWizard({
           </Field>
         </div>
       ) : null}
+
+      {currentStep === 3 ? (
+        <div className="flex flex-col gap-6">
+          <BenefitsEditor value={benefits} onChange={setBenefits} />
+          <FaqEditor value={faq} onChange={setFaq} />
+          <ReviewsEditor value={reviews} onChange={setReviews} />
+        </div>
+      ) : null}
     </ModalWizard>
   );
 }
 
 const INPUT_CLASS = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
 const SECONDARY_BTN_CLASS = 'inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50';
+const IMAGE_MAX_BYTES = 500 * 1024; // §3.2 guard rail: 500kB por imagem
+
+// ─── Normalização ao carregar um produto existente para edição ────────
+function normalizeBenefits(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => (typeof item === 'string'
+    ? { icon: '', label: item }
+    : { icon: String(item?.icon || '').trim(), label: String(item?.label || '').trim() }));
+}
+
+function normalizeFaq(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    question: String(item?.question || '').trim(),
+    answer: String(item?.answer || '').trim(),
+  }));
+}
+
+function normalizeReviews(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    author: String(item?.author || '').trim(),
+    role: String(item?.role || '').trim(),
+    location: String(item?.location || '').trim(),
+    text: String(item?.text || '').trim(),
+    rating: item?.rating == null || item?.rating === '' ? '' : String(item.rating),
+  }));
+}
+
+// ─── Limpeza no submit: descarta linhas vazias e converte tipos ───────
+function cleanBenefits(items) {
+  return items
+    .map((item) => ({ icon: String(item.icon || '').trim(), label: String(item.label || '').trim() }))
+    .filter((item) => item.label);
+}
+
+function cleanFaq(items) {
+  return items
+    .map((item) => ({ question: String(item.question || '').trim(), answer: String(item.answer || '').trim() }))
+    .filter((item) => item.question && item.answer);
+}
+
+function cleanReviews(items) {
+  return items
+    .map((item) => ({
+      author: String(item.author || '').trim(),
+      role: String(item.role || '').trim(),
+      location: String(item.location || '').trim(),
+      text: String(item.text || '').trim(),
+      rating: item.rating === '' || item.rating == null ? null : Number(item.rating),
+    }))
+    .filter((item) => item.author && item.text);
+}
+
+const EDITOR_PROP_TYPES = {
+  value: PropTypes.array.isRequired,
+  onChange: PropTypes.func.isRequired,
+};
+
+function RemoveRowButton({ onClick, label }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-rose-50 hover:text-rose-700"
+    >
+      <i className="bi bi-trash" />
+    </button>
+  );
+}
+
+RemoveRowButton.propTypes = {
+  onClick: PropTypes.func.isRequired,
+  label: PropTypes.string.isRequired,
+};
+
+function BenefitsEditor({ value, onChange }) {
+  const update = (index, patch) => onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const add = () => onChange([...value, { icon: '', label: '' }]);
+  const remove = (index) => onChange(value.filter((_, i) => i !== index));
+
+  return (
+    <Field
+      label="Benefícios"
+      htmlFor="product-benefits"
+      hint="Bullets curtos exibidos na página do produto. Ícone Bootstrap opcional (ex.: printer-fill, file-pdf-fill). Se ficar vazio, a loja mostra 4 benefícios padrão."
+    >
+      <div id="product-benefits" className="flex flex-col gap-2">
+        {value.map((item, idx) => (
+          <div key={`benefit-${idx}`} className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            <input
+              type="text"
+              value={item.icon}
+              onChange={(e) => update(idx, { icon: e.target.value })}
+              placeholder="ícone (opcional)"
+              aria-label={`Ícone do benefício ${idx + 1}`}
+              className={`${INPUT_CLASS} sm:w-44`}
+            />
+            <div className="flex flex-1 items-start gap-2">
+              <input
+                type="text"
+                value={item.label}
+                onChange={(e) => update(idx, { label: e.target.value })}
+                placeholder="Ex: PDF em alta resolução"
+                aria-label={`Texto do benefício ${idx + 1}`}
+                className={INPUT_CLASS}
+              />
+              <RemoveRowButton onClick={() => remove(idx)} label={`Remover benefício ${idx + 1}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <button type="button" onClick={add} className={`${SECONDARY_BTN_CLASS} mt-2`}>
+        <i className="bi bi-plus-lg" /> Adicionar benefício
+      </button>
+    </Field>
+  );
+}
+
+BenefitsEditor.propTypes = EDITOR_PROP_TYPES;
+
+function FaqEditor({ value, onChange }) {
+  const update = (index, patch) => onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const add = () => onChange([...value, { question: '', answer: '' }]);
+  const remove = (index) => onChange(value.filter((_, i) => i !== index));
+
+  return (
+    <Field
+      label="Perguntas frequentes (FAQ)"
+      htmlFor="product-faq"
+      hint="Aparecem em accordion na página do produto. Pergunta + resposta. Linhas vazias são descartadas."
+    >
+      <div id="product-faq" className="flex flex-col gap-3">
+        {value.map((item, idx) => (
+          <div key={`faq-${idx}`} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <div className="flex items-start gap-2">
+              <input
+                type="text"
+                value={item.question}
+                onChange={(e) => update(idx, { question: e.target.value })}
+                placeholder="Pergunta"
+                aria-label={`Pergunta ${idx + 1}`}
+                className={INPUT_CLASS}
+              />
+              <RemoveRowButton onClick={() => remove(idx)} label={`Remover pergunta ${idx + 1}`} />
+            </div>
+            <textarea
+              value={item.answer}
+              onChange={(e) => update(idx, { answer: e.target.value })}
+              placeholder="Resposta"
+              rows="2"
+              aria-label={`Resposta ${idx + 1}`}
+              className={`${INPUT_CLASS} mt-2`}
+            />
+          </div>
+        ))}
+      </div>
+      <button type="button" onClick={add} className={`${SECONDARY_BTN_CLASS} mt-2`}>
+        <i className="bi bi-plus-lg" /> Adicionar pergunta
+      </button>
+    </Field>
+  );
+}
+
+FaqEditor.propTypes = EDITOR_PROP_TYPES;
+
+function ReviewsEditor({ value, onChange }) {
+  const update = (index, patch) => onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const add = () => onChange([...value, { author: '', role: '', location: '', text: '', rating: '' }]);
+  const remove = (index) => onChange(value.filter((_, i) => i !== index));
+
+  return (
+    <Field
+      label="Depoimentos"
+      htmlFor="product-reviews"
+      hint="Depoimentos reais (não inventar — regra B6). Autor e texto são obrigatórios; o resto é opcional."
+    >
+      <div id="product-reviews" className="flex flex-col gap-3">
+        {value.map((item, idx) => (
+          <div key={`review-${idx}`} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <div className="flex items-start gap-2">
+              <input
+                type="text"
+                value={item.author}
+                onChange={(e) => update(idx, { author: e.target.value })}
+                placeholder="Autor *"
+                aria-label={`Autor do depoimento ${idx + 1}`}
+                className={INPUT_CLASS}
+              />
+              <RemoveRowButton onClick={() => remove(idx)} label={`Remover depoimento ${idx + 1}`} />
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <input
+                type="text"
+                value={item.role}
+                onChange={(e) => update(idx, { role: e.target.value })}
+                placeholder="Cargo (ex.: Professora)"
+                aria-label={`Cargo ${idx + 1}`}
+                className={INPUT_CLASS}
+              />
+              <input
+                type="text"
+                value={item.location}
+                onChange={(e) => update(idx, { location: e.target.value })}
+                placeholder="Local (ex.: SP)"
+                aria-label={`Local ${idx + 1}`}
+                className={INPUT_CLASS}
+              />
+              <select
+                value={item.rating}
+                onChange={(e) => update(idx, { rating: e.target.value })}
+                aria-label={`Nota ${idx + 1}`}
+                className={INPUT_CLASS}
+              >
+                <option value="">Sem nota</option>
+                <option value="5">★★★★★ (5)</option>
+                <option value="4">★★★★ (4)</option>
+                <option value="3">★★★ (3)</option>
+                <option value="2">★★ (2)</option>
+                <option value="1">★ (1)</option>
+              </select>
+            </div>
+            <textarea
+              value={item.text}
+              onChange={(e) => update(idx, { text: e.target.value })}
+              placeholder="Depoimento *"
+              rows="2"
+              aria-label={`Texto do depoimento ${idx + 1}`}
+              className={`${INPUT_CLASS} mt-2`}
+            />
+          </div>
+        ))}
+      </div>
+      <button type="button" onClick={add} className={`${SECONDARY_BTN_CLASS} mt-2`}>
+        <i className="bi bi-plus-lg" /> Adicionar depoimento
+      </button>
+    </Field>
+  );
+}
+
+ReviewsEditor.propTypes = EDITOR_PROP_TYPES;
 
 function Field({ label, htmlFor, children, hint, className = '' }) {
   return (
@@ -399,6 +662,18 @@ function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToa
     const file = e.target.files?.[0];
     e.target.value = ''; // permite re-selecionar o mesmo arquivo depois
     if (!file) return;
+
+    // Guard rail de performance (pendência §3.2): imagens pesadas degradam
+    // LCP/CLS na vitrine. Bloqueia no front antes de gastar o upload. Vídeos
+    // e arquivos continuam limitados só pelo bucket (50MB) no backend.
+    if (kind === 'image' && file.size > IMAGE_MAX_BYTES) {
+      const sizeKb = Math.round(file.size / 1024);
+      const limitKb = Math.round(IMAGE_MAX_BYTES / 1024);
+      const msg = `Imagem de ${sizeKb}kB excede o limite de ${limitKb}kB. Otimize (ex.: squoosh.app ou tinypng.com) antes de subir.`;
+      setError(msg);
+      pushToast(msg, 'error');
+      return;
+    }
 
     setUploading(true);
     setProgress(0);
@@ -551,5 +826,8 @@ ProductWizard.propTypes = {
     images: PropTypes.arrayOf(PropTypes.string),
     videos: PropTypes.arrayOf(PropTypes.string),
     productType: PropTypes.string,
+    faq: PropTypes.array,
+    reviews: PropTypes.array,
+    benefits: PropTypes.array,
   }),
 };

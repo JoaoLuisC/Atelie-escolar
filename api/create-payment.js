@@ -1,43 +1,52 @@
 const crypto = require('node:crypto');
 const { createPaymentPreference } = require('../lib/mercadopago-config');
-const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, insertIntoTable, updateTable } } = require('../lib/supabase');
+const { getSupabaseConfig, serviceRoleHelpers: { listTableRows, insertIntoTable, updateTable }, supabaseRequest } = require('../lib/supabase');
 const { recordEvent } = require('../lib/analytics-events');
-const { helpers: couponHelpers } = require('./validate-coupon');
-
-const ATTRIBUTION_FIELDS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'referrer', 'landing_path', 'first_touch_at', 'session_id'];
-
-function sanitizeAttribution(input) {
-  if (!input || typeof input !== 'object') return {};
-  const out = {};
-  for (const field of ATTRIBUTION_FIELDS) {
-    const value = input[field];
-    if (typeof value === 'string' && value.trim()) {
-      out[field] = value.slice(0, 200);
-    }
-  }
-  return out;
-}
+const { sanitizeAttribution } = require('../lib/attribution-sanitize');
+const couponHelpers = require('../lib/coupons');
 
 function round2(value) {
   return Math.round(Number(value) * 100) / 100;
 }
 
 /**
- * Aplica desconto proporcionalmente a cada item para que a soma final
- * bata com (subtotal - desconto). Mercado Pago não aceita item com preço
- * negativo, então não dá pra adicionar uma "linha de desconto".
+ * Aplica o desconto proporcionalmente APENAS aos itens elegíveis, de modo que
+ * a soma final bata com (subtotal - desconto). Mercado Pago não aceita item com
+ * preço negativo, então não dá pra adicionar uma "linha de desconto".
  *
- * Drift de arredondamento é absorvido pelo último item.
+ * `eligibleItemIds` = null → cupom não-restrito (todos os itens elegíveis).
+ * `eligibleItemIds` = Set(ids) → só esses itens são rateados; os demais mantêm
+ * o preço cheio (a semântica do cupom restrito fica correta na preference do MP).
+ *
+ * Drift de arredondamento é absorvido pelo último item elegível.
  */
-function applyDiscountToItems(items, subtotal, discount) {
-  if (discount <= 0 || subtotal <= 0) return items;
-  const factor = (subtotal - discount) / subtotal;
-  const scaled = items.map((item) => ({ ...item, price: round2(item.price * factor) }));
-  const newTotal = scaled.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const drift = round2((subtotal - discount) - newTotal);
-  if (Math.abs(drift) > 0.001 && scaled.length > 0) {
-    const last = scaled[scaled.length - 1];
-    last.price = round2(last.price + drift / last.quantity);
+function applyDiscountToItems(items, discount, eligibleItemIds = null) {
+  if (discount <= 0) return items;
+  const isEligible = (item) => eligibleItemIds === null || eligibleItemIds.has(item.id);
+
+  const eligibleSubtotal = items.reduce(
+    (sum, item) => sum + (isEligible(item) ? item.price * item.quantity : 0),
+    0,
+  );
+  if (eligibleSubtotal <= 0) return items;
+
+  const factor = (eligibleSubtotal - discount) / eligibleSubtotal;
+  const scaled = items.map((item) => (
+    isEligible(item) ? { ...item, price: round2(item.price * factor) } : { ...item }
+  ));
+
+  const newEligibleTotal = scaled.reduce(
+    (sum, item) => sum + (isEligible(item) ? item.price * item.quantity : 0),
+    0,
+  );
+  const drift = round2((eligibleSubtotal - discount) - newEligibleTotal);
+  if (Math.abs(drift) > 0.001) {
+    for (let i = scaled.length - 1; i >= 0; i -= 1) {
+      if (isEligible(scaled[i])) {
+        scaled[i].price = round2(scaled[i].price + drift / scaled[i].quantity);
+        break;
+      }
+    }
   }
   return scaled;
 }
@@ -59,6 +68,11 @@ module.exports = async function createPaymentHandler(req, res) {
       return res.status(400).json({ error: 'Items são obrigatórios' });
     }
 
+    // Teto de itens: sem isto, um array gigante vira N SELECTs sequenciais (DoS).
+    if (items.length > 100) {
+      return res.status(400).json({ error: 'Quantidade de itens inválida.' });
+    }
+
     if (!customer?.email) {
       return res.status(400).json({ error: 'Email do cliente é obrigatório' });
     }
@@ -70,21 +84,45 @@ module.exports = async function createPaymentHandler(req, res) {
     const validatedItems = [];
     let subtotal = 0;
 
+    // 1ª passada (sem I/O): valida o shape de cada item e coleta os ids.
+    const normalizedItems = [];
     for (const item of items) {
-      const product = await getTableRow('products', {
-        select: 'id,name,description,price,download_url,active,category_id',
-        filters: [{ column: 'id', value: item.productId }],
-      });
+      // productId é obrigatório: sem ele o filtro por id seria omitido e a query
+      // devolveria um produto arbitrário (buildTableQuery ignora value undefined).
+      if (!item || item.productId == null || String(item.productId).trim() === '') {
+        return res.status(400).json({ error: 'Item inválido: productId é obrigatório.' });
+      }
+
+      // Quantidade tem que ser inteiro em 1..99 (o schema zod não roda neste path).
+      const quantity = item.quantity == null ? 1 : Number(item.quantity);
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+        return res.status(400).json({ error: 'Quantidade inválida.' });
+      }
+
+      normalizedItems.push({ productId: String(item.productId).trim(), quantity });
+    }
+
+    // Um único SELECT em lote (id=in.(...)) em vez de 1 por item — elimina o N+1.
+    const uniqueProductIds = [...new Set(normalizedItems.map((i) => i.productId))];
+    const productRows = await listTableRows('products', {
+      select: 'id,name,description,price,download_url,active,category_id',
+      filters: [{ column: 'id', operator: 'in', value: `(${uniqueProductIds.join(',')})` }],
+    });
+    const productById = new Map((productRows || []).map((row) => [String(row.id), row]));
+
+    // 2ª passada: valida cada item contra o mapa carregado (existe + active) e
+    // monta os itens já com preço do banco (fonte de verdade — nunca do client).
+    for (const { productId, quantity } of normalizedItems) {
+      const product = productById.get(productId);
 
       if (!product) {
-        return res.status(404).json({ error: `Produto ${item.productId} não encontrado` });
+        return res.status(404).json({ error: `Produto ${productId} não encontrado` });
       }
 
       if (product.active === false) {
         return res.status(400).json({ error: `Produto ${product.name} não está disponível` });
       }
 
-      const quantity = Number(item.quantity || 1);
       const price = Number(product.price || 0);
       subtotal += price * quantity;
 
@@ -104,6 +142,7 @@ module.exports = async function createPaymentHandler(req, res) {
     let appliedCouponCode = null;
     let discountAmount = 0;
     let appliedCouponId = null;
+    let eligibleItemIds = null; // null = cupom não-restrito (todos elegíveis)
 
     if (couponCode) {
       const normalizedCode = couponHelpers.normalizeCode(couponCode);
@@ -124,19 +163,22 @@ module.exports = async function createPaymentHandler(req, res) {
           discountAmount = couponHelpers.computeDiscount(coupon, subtotal, eligibleSubtotal);
           appliedCouponCode = coupon.code;
           appliedCouponId = coupon.id;
+          if (restricted) {
+            eligibleItemIds = new Set(eligible.map((item) => item.id));
+          }
         }
       }
     }
 
     const totalAmount = round2(Math.max(0, subtotal - discountAmount));
-    const itemsForMP = applyDiscountToItems(validatedItems, subtotal, discountAmount);
+    const itemsForMP = applyDiscountToItems(validatedItems, discountAmount, eligibleItemIds);
 
     // 128 bits de entropia (16 bytes) — torna enumeração inviável.
     const orderCode = `ORD-${Date.now()}-${crypto.randomBytes(16).toString('hex')}`;
     const [createdOrder] = await insertIntoTable('orders', {
       order_code: orderCode,
       customer_name: customer.name || '',
-      customer_email: customer.email,
+      customer_email: String(customer.email).trim().toLowerCase(),
       customer_cpf: customer.cpf || null,
       customer_phone: customer.phone || null,
       total_amount: totalAmount,
@@ -150,27 +192,25 @@ module.exports = async function createPaymentHandler(req, res) {
     // Gravamos os items com o preço **original** (sem o desconto rateado).
     // O total do pedido (`orders.total_amount`) já reflete o desconto.
     // Isso preserva o histórico para Curva ABC e relatórios por produto.
-    for (const item of validatedItems) {
-      await insertIntoTable('order_items', {
-        order_id: createdOrder.id,
-        product_id: item.id,
-        product_name: item.title,
-        unit_price: item.price,
-        quantity: item.quantity,
-        total_price: item.price * item.quantity,
-      });
-    }
+    // INSERT em lote (array) em vez de N INSERTs sequenciais.
+    await insertIntoTable('order_items', validatedItems.map((item) => ({
+      order_id: createdOrder.id,
+      product_id: item.id,
+      product_name: item.title,
+      unit_price: item.price,
+      quantity: item.quantity,
+      total_price: item.price * item.quantity,
+    })));
 
-    // Incrementa o uso do cupom (best-effort; race condition tolerável
-    // porque o limite é apenas indicativo, validação real é o estado).
+    // Incremento ATÔMICO do uso do cupom via função SECURITY DEFINER: o próprio
+    // UPDATE respeita max_uses (used_count < max_uses), eliminando a corrida
+    // read-modify-write que permitia furar o limite sob concorrência.
     if (appliedCouponId) {
       try {
-        const fresh = await getTableRow('coupons', {
-          select: 'used_count',
-          filters: [{ column: 'id', value: appliedCouponId }],
-        });
-        await updateTable('coupons', { id: `eq.${appliedCouponId}` }, {
-          used_count: Number(fresh?.used_count || 0) + 1,
+        await supabaseRequest('rpc/increment_coupon_usage', {
+          method: 'POST',
+          useServiceRole: true,
+          body: JSON.stringify({ p_coupon_id: appliedCouponId }),
         });
       } catch (couponErr) {
         console.warn('[create-payment] falha ao incrementar cupom:', couponErr.message);

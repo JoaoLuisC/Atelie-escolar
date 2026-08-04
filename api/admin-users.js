@@ -1,4 +1,5 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
+const { logAdminAction } = require('../lib/admin-audit');
 const { getSupabaseConfig, serviceRoleHelpers: { deleteFromTable, getTableRow, listTableRows, updateTable } } = require('../lib/supabase');
 
 function normalizeEmail(value) {
@@ -77,9 +78,20 @@ async function updateUser(body) {
     return { status: 403, body: { success: false, error: 'Não é permitido editar usuário admin por este endpoint.' } };
   }
 
+  // Roles que este endpoint pode ATRIBUIR. 'admin'/'master' são deliberadamente
+  // omitidos: promover a admin por aqui seria escalada de privilégio (a
+  // autorização do painel é decidida por profiles.role).
+  const ASSIGNABLE_ROLES = ['customer', 'cliente', 'seller', 'vendedor'];
+
   const payload = {};
   if (body.name !== undefined) payload.display_name = String(body.name || '').trim();
-  if (body.role !== undefined) payload.role = String(body.role || '').trim().toLowerCase();
+  if (body.role !== undefined) {
+    const requestedRole = String(body.role || '').trim().toLowerCase();
+    if (!ASSIGNABLE_ROLES.includes(requestedRole)) {
+      return { status: 400, body: { success: false, error: 'Role inválida. Não é permitido atribuir admin/master por este endpoint.' } };
+    }
+    payload.role = requestedRole;
+  }
   if (body.provider !== undefined) payload.provider = String(body.provider || '').trim().toLowerCase();
 
   if (Object.keys(payload).length === 0) {
@@ -140,6 +152,21 @@ module.exports = async function adminUsersHandler(req, res) {
     }
 
     const result = await handler();
+
+    // Auditoria de escrita (regra I1) — best-effort.
+    if (result.status >= 200 && result.status < 300 && req.method !== 'GET') {
+      const actionByMethod = { POST: 'create', PUT: 'update', PATCH: 'patch', DELETE: 'delete' };
+      await logAdminAction({
+        req,
+        action: actionByMethod[req.method] || String(req.method).toLowerCase(),
+        targetType: 'user',
+        targetId: req.method === 'DELETE'
+          ? String(req.query?.id || req.body?.id || '').trim()
+          : (req.body?.id ?? result.body?.id ?? null),
+        after: req.method === 'DELETE' ? null : (req.body || null),
+      });
+    }
+
     return res.status(result.status).json(result.body);
   } catch (error) {
     console.error('Admin users error:', error);

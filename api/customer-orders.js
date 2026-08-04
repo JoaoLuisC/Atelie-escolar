@@ -1,4 +1,5 @@
 const { getSupabaseConfig, serviceRoleHelpers: { listTableRows } } = require('../lib/supabase');
+const { getCustomerSessionFromRequest } = require('../lib/customer-session');
 
 function mapOrder(order, itemsByOrder, tokensByOrder) {
   const orderIdKey = String(order.id);
@@ -50,11 +51,19 @@ module.exports = async function customerOrdersHandler(req, res) {
       return res.status(500).json({ error: 'Supabase não configurado' });
     }
 
-    const email = String(req.query?.email || '').trim().toLowerCase();
-    if (!email?.includes('@')) {
-      return res.status(400).json({ error: 'email é obrigatório' });
+    // AuthZ: o solicitante SÓ vê os próprios pedidos. O e-mail vem da sessão de
+    // cliente (cookie HttpOnly), NUNCA de um parâmetro arbitrário — do contrário
+    // qualquer um listaria pedidos e tokens de download de qualquer cliente (IDOR).
+    const session = getCustomerSessionFromRequest(req);
+    const email = String(session?.email || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      return res.status(401).json({ error: 'Autenticação necessária.' });
     }
 
+    // ilike (case-insensitive) e não eq: pedidos novos já gravam customer_email
+    // normalizado (lowercase), mas o histórico anterior pode ter e-mails em
+    // maiúsculas/mistas — trocar por eq quebraria o acesso a esses pedidos.
+    // O índice funcional lower(customer_email) que sustenta isto vem noutra lane.
     const ordersRows = await listTableRows('orders', {
       select: 'id,order_code,total_amount,status,payment_status,created_at,customer_email',
       filters: [{ column: 'customer_email', operator: 'ilike', value: email }],
@@ -66,25 +75,27 @@ module.exports = async function customerOrdersHandler(req, res) {
       return res.status(200).json({ success: true, orders: [] });
     }
 
+    // Filtra por order_id NA QUERY (in.(...)), em vez de baixar as tabelas
+    // inteiras e filtrar em memória (evita carregar itens/tokens de terceiros).
     const orderIds = ordersRows.map((order) => String(order.id));
-    const orderIdSet = new Set(orderIds);
+    const orderIdFilter = `(${orderIds.join(',')})`;
+
     const itemsRows = await listTableRows('order_items', {
       select: 'order_id,product_id,product_name,unit_price,quantity',
+      filters: [{ column: 'order_id', operator: 'in', value: orderIdFilter }],
       orderBy: 'order_id',
       ascending: false,
     });
 
     const tokensRows = await listTableRows('download_tokens', {
       select: 'order_id,product_id,product_name,token,used,expires_at',
+      filters: [{ column: 'order_id', operator: 'in', value: orderIdFilter }],
       orderBy: 'created_at',
       ascending: false,
     });
 
-    const filteredItemsRows = itemsRows.filter((row) => orderIdSet.has(String(row.order_id)));
-    const filteredTokensRows = tokensRows.filter((row) => orderIdSet.has(String(row.order_id)));
-
-    const groupedItems = groupBy(filteredItemsRows, 'order_id');
-    const groupedTokens = groupBy(filteredTokensRows, 'order_id');
+    const groupedItems = groupBy(itemsRows, 'order_id');
+    const groupedTokens = groupBy(tokensRows, 'order_id');
 
     const orders = ordersRows.map((order) => mapOrder(order, groupedItems, groupedTokens));
     return res.status(200).json({ success: true, orders });

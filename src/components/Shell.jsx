@@ -17,6 +17,19 @@ function staticLinkClass() {
   return 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-brand-700';
 }
 
+// Menu mobile (regra B9): toque >= 44px (min-h-[44px]) e hierarquia visual
+// reduzida — links primários em peso cheio, secundários (âncoras da home)
+// atenuados sob um rótulo de seção.
+function mobileNavLinkClass({ isActive }) {
+  return `flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-[15px] font-medium transition ${
+    isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-800 hover:bg-slate-100 hover:text-brand-700'
+  }`;
+}
+
+function mobileSecondaryLinkClass() {
+  return 'flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-700';
+}
+
 export function Shell({ children }) {
   const navigate = useNavigate();
   const { customerSession, logoutCustomer } = useAuth();
@@ -72,7 +85,7 @@ export function Shell({ children }) {
             <li>
               <NavLink to="/produtos" className={navLinkClass}>Produtos</NavLink>
             </li>
-            {customerSession?.email ? (
+            {customerSession?.email && !isAdminRole ? (
               <li>
                 <NavLink to="/downloads" className={navLinkClass}>
                   <i className="bi bi-bag-heart" /> Meus produtos
@@ -94,21 +107,23 @@ export function Shell({ children }) {
           </ul>
 
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={openCart}
-              aria-label={cartCount > 0 ? `Abrir carrinho com ${cartCount} ${cartCount === 1 ? 'item' : 'itens'}` : 'Abrir carrinho'}
-              aria-haspopup="dialog"
-              aria-expanded={cartDrawerOpen}
-              className="relative inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 hover:text-brand-700"
-            >
-              <i className="bi bi-cart3 text-xl" aria-hidden="true" />
-              {cartCount > 0 ? (
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-bold text-white">
-                  {cartCount}
-                </span>
-              ) : null}
-            </button>
+            {!isAdminRole ? (
+              <button
+                type="button"
+                onClick={openCart}
+                aria-label={cartCount > 0 ? `Abrir carrinho com ${cartCount} ${cartCount === 1 ? 'item' : 'itens'}` : 'Abrir carrinho'}
+                aria-haspopup="dialog"
+                aria-expanded={cartDrawerOpen}
+                className="relative inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 hover:text-brand-700"
+              >
+                <i className="bi bi-cart3 text-xl" aria-hidden="true" />
+                {cartCount > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-bold text-white">
+                    {cartCount}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
 
             <NavLink
               to="/login"
@@ -131,9 +146,10 @@ export function Shell({ children }) {
 
             <button
               type="button"
-              aria-label="Abrir menu"
+              aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+              aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen((value) => !value)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 lg:hidden"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 lg:hidden"
             >
               <i className={`bi text-xl ${mobileMenuOpen ? 'bi-x-lg' : 'bi-list'}`} />
             </button>
@@ -143,33 +159,38 @@ export function Shell({ children }) {
         {mobileMenuOpen ? (
           <div className="border-t border-slate-200 bg-white lg:hidden">
             <ul className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3">
-              <li><NavLink to="/" end onClick={() => setMobileMenuOpen(false)} className={navLinkClass}>Início</NavLink></li>
-              <li><a href="/#como-funciona" onClick={() => setMobileMenuOpen(false)} className={staticLinkClass()}>Como Funciona</a></li>
-              <li><a href="/#contato" onClick={() => setMobileMenuOpen(false)} className={staticLinkClass()}>Contato</a></li>
-              <li><NavLink to="/produtos" onClick={() => setMobileMenuOpen(false)} className={navLinkClass}>Produtos</NavLink></li>
-              {customerSession?.email ? (
-                <li><NavLink to="/downloads" onClick={() => setMobileMenuOpen(false)} className={navLinkClass}><i className="bi bi-bag-heart" /> Meus produtos</NavLink></li>
+              <li><NavLink to="/" end onClick={() => setMobileMenuOpen(false)} className={mobileNavLinkClass}>Início</NavLink></li>
+              <li><NavLink to="/produtos" onClick={() => setMobileMenuOpen(false)} className={mobileNavLinkClass}>Produtos</NavLink></li>
+              {customerSession?.email && !isAdminRole ? (
+                <li><NavLink to="/downloads" onClick={() => setMobileMenuOpen(false)} className={mobileNavLinkClass}><i className="bi bi-bag-heart" aria-hidden="true" /> Meus produtos</NavLink></li>
               ) : null}
               {isAdminRole ? (
                 <li>
                   <NavLink
                     to="/admin"
                     onClick={() => setMobileMenuOpen(false)}
-                    className={({ isActive }) => `inline-flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                    className={({ isActive }) => `flex min-h-[44px] w-full items-center gap-2 rounded-lg px-3 text-[15px] font-semibold transition ${
                       isActive ? 'bg-amber-100 text-amber-800' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
                     }`}
                   >
-                    <i className="bi bi-shield-lock" /> Painel admin
+                    <i className="bi bi-shield-lock" aria-hidden="true" /> Painel admin
                   </NavLink>
                 </li>
               ) : null}
-              <li><NavLink to="/login" onClick={() => setMobileMenuOpen(false)} className={navLinkClass}><i className="bi bi-person-circle" /> {customerSession?.email ? 'Conta' : 'Entrar'}</NavLink></li>
+
+              <li className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Navegar</li>
+              <li><a href="/#como-funciona" onClick={() => setMobileMenuOpen(false)} className={mobileSecondaryLinkClass()}>Como Funciona</a></li>
+              <li><a href="/#contato" onClick={() => setMobileMenuOpen(false)} className={mobileSecondaryLinkClass()}>Contato</a></li>
+
+              <li className="mt-2 border-t border-slate-100 pt-2">
+                <NavLink to="/login" onClick={() => setMobileMenuOpen(false)} className={mobileNavLinkClass}><i className="bi bi-person-circle" aria-hidden="true" /> {customerSession?.email ? 'Conta' : 'Entrar'}</NavLink>
+              </li>
               {customerSession?.email ? (
                 <li>
                   <button
                     type="button"
                     onClick={handleCustomerLogout}
-                    className="w-full rounded-lg bg-rose-50 px-3 py-2 text-left text-sm font-semibold text-rose-700"
+                    className="flex min-h-[44px] w-full items-center rounded-lg bg-rose-50 px-3 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
                   >
                     Sair
                   </button>

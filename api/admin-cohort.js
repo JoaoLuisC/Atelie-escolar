@@ -66,7 +66,11 @@ module.exports = async function adminCohortHandler(req, res) {
       }
     }
 
-    const since = new Date(Date.now() - (months + 1) * 30 * 24 * 60 * 60 * 1000);
+    // Janela por MÊS DE CALENDÁRIO (alinha com monthsBetween, que itera meses
+    // reais). Aproximar mês=30 dias encurtava a janela e subcontava as coortes
+    // mais antigas. +1 mês de folga para cobrir a coorte de borda.
+    const nowDate = new Date();
+    const since = new Date(Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth() - (months + 1), 1));
 
     const orders = await listTableRows('orders', {
       select: 'customer_email,completed_at,total_amount',

@@ -1,4 +1,4 @@
-import { createContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { getAdminSession, loginAdmin, logoutAdmin } from '../services/admin-auth';
 import {
@@ -16,14 +16,20 @@ export function AuthProvider({ children }) {
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [customerSession, setCustomerSession] = useState(null);
+  // Garante que o consumo do callback OAuth rode uma única vez (evita
+  // dupla execução em React StrictMode, que dispararia o POST 2x).
+  const oauthCallbackConsumedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrap() {
       try {
-        const data = await getAdminSession();
-        const customer = await fetchCustomerSession();
+        // Paraleliza as duas consultas de sessão para cortar 1 RTT no boot.
+        const [data, customer] = await Promise.all([
+          getAdminSession(),
+          fetchCustomerSession(),
+        ]);
         if (!cancelled) {
           setAdminAuthenticated(data.authenticated === true);
           setCustomerSession(customer);
@@ -48,6 +54,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    if (oauthCallbackConsumedRef.current) {
+      return undefined;
+    }
+    oauthCallbackConsumedRef.current = true;
+
     let cancelled = false;
 
     async function hydrateFromOAuthCallback() {
@@ -74,8 +85,14 @@ export function AuthProvider({ children }) {
       authReady,
       adminAuthenticated,
       async loginAdmin(credentials) {
-        await loginAdmin(credentials);
-        setAdminAuthenticated(true);
+        const data = await loginAdmin(credentials);
+        // Só autentica de fato quando NÃO há segundo fator pendente. Quando
+        // há 2FA, devolvemos o `data` para o AdminLoginPage tratar o desafio
+        // (requiresSecondFactor / challengeToken / methods) sem marcar sessão.
+        if (!data?.requiresSecondFactor) {
+          setAdminAuthenticated(true);
+        }
+        return data;
       },
       async logoutAdmin() {
         await logoutAdmin();

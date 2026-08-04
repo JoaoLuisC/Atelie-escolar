@@ -8,6 +8,20 @@ const BUCKETS = {
   download: { name: 'product_files', isPublic: false, maxSize: 50 * 1024 * 1024, mimes: null },
 };
 
+// Extensões aceitas por bucket com whitelist (image/video). Para 'download'
+// usamos denylist das extensões web-renderáveis/executáveis (o bucket é
+// privado, mas defesa em profundidade).
+const EXT_ALLOW = {
+  image: new Set(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']),
+  video: new Set(['mp4', 'webm', 'mov', 'quicktime']),
+};
+const EXT_DENY = new Set(['svg', 'svgz', 'html', 'htm', 'xhtml', 'shtml', 'xml', 'js', 'mjs', 'php', 'phtml', 'phar', 'htaccess', 'exe', 'bat', 'cmd', 'sh']);
+
+function getExtension(name) {
+  const match = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match ? match[1] : '';
+}
+
 function slugifyFilename(name) {
   const cleaned = String(name || '').toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -28,8 +42,30 @@ module.exports = async function handler(req, res) {
   const bucket = BUCKETS[kind];
   if (!bucket) return res.status(400).json({ success: false, error: 'kind inválido (image|video|download)' });
   if (!filename || typeof filename !== 'string') return res.status(400).json({ success: false, error: 'filename obrigatório' });
-  if (bucket.mimes && mimeType && !bucket.mimes.includes(String(mimeType).toLowerCase())) {
+
+  const ext = getExtension(filename);
+  const normalizedMime = String(mimeType || '').toLowerCase();
+
+  // Validação por EXTENSÃO (sempre roda — não depende do mimeType, que o cliente
+  // pode omitir). Buckets com whitelist exigem extensão permitida; 'download'
+  // apenas barra extensões perigosas.
+  if (EXT_ALLOW[kind]) {
+    if (!ext || !EXT_ALLOW[kind].has(ext)) {
+      return res.status(400).json({ success: false, error: `Extensão de arquivo não suportada para ${kind}.` });
+    }
+  } else if (ext && EXT_DENY.has(ext)) {
+    return res.status(400).json({ success: false, error: 'Tipo de arquivo não permitido.' });
+  }
+
+  // Se o mimeType for enviado, ele também precisa bater com a whitelist do bucket.
+  if (bucket.mimes && normalizedMime && !bucket.mimes.includes(normalizedMime)) {
     return res.status(400).json({ success: false, error: `Tipo de arquivo não suportado: ${mimeType}` });
+  }
+
+  // Cinturão e suspensório: nunca deixar SVG/HTML entrar no bucket público
+  // (renderizados pelo navegador executam <script> → stored XSS no domínio do storage).
+  if (bucket.isPublic && (ext === 'svg' || ext === 'svgz' || normalizedMime === 'image/svg+xml' || normalizedMime.includes('html'))) {
+    return res.status(400).json({ success: false, error: 'Tipo de arquivo não permitido em bucket público.' });
   }
 
   const config = getSupabaseConfig();

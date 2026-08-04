@@ -16,7 +16,7 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             if (id.includes('react-router')) return 'router';
             if (id.includes('@supabase')) return 'supabase';
-            if (id.includes('react-hook-form') || id.includes('zod')) return 'forms';
+            if (id.includes('react-hook-form')) return 'forms';
             if (id.includes('react-dom') || id.includes('react/jsx') || id.includes('/react/')) return 'react';
             return 'vendor';
           }

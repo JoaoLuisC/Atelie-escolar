@@ -88,7 +88,7 @@ describe('webhook signature regression', () => {
     expect(res.body).toMatchObject({ error: 'Invalid signature' });
   });
 
-  it('aceita request sem assinatura valida quando APP_ENV=test (somente nesse ambiente)', async () => {
+  it('rejeita request sem assinatura mesmo quando APP_ENV=test (bypass removido)', async () => {
     process.env.APP_ENV = 'test';
     process.env.NODE_ENV = 'test';
     const handler = (await import('../webhook.js')).default;
@@ -96,14 +96,15 @@ describe('webhook signature regression', () => {
     const req = {
       method: 'POST',
       headers: {},
-      body: { type: 'unknown-event', data: { id: 'noop' } },
+      body: { type: 'payment', data: { id: 'noop' } },
     };
     const res = createMockRes();
 
     await handler(req, res);
 
-    // No type=payment, retorna 200 "event type not handled".
-    expect(res.statusCode).toBe(200);
+    // Bypass por ambiente removido: sem assinatura válida, 401 em qualquer env.
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toMatchObject({ error: 'Invalid signature' });
   });
 
   it('rejeita GET (Method Not Allowed)', async () => {

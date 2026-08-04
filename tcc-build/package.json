@@ -1,0 +1,8 @@
+{
+  "name": "tcc-build",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "docx": "^9.5.0"
+  }
+}

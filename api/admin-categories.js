@@ -1,4 +1,5 @@
 const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
+const { logAdminAction } = require('../lib/admin-audit');
 const {
   getSupabaseConfig,
   serviceRoleHelpers: {
@@ -155,6 +156,21 @@ module.exports = async function adminCategoriesHandler(req, res) {
     }
 
     const result = await handler();
+
+    // Auditoria de escrita (regra I1) — best-effort.
+    if (result.status >= 200 && result.status < 300 && req.method !== 'GET') {
+      const actionByMethod = { POST: 'create', PUT: 'update', PATCH: 'patch', DELETE: 'delete' };
+      await logAdminAction({
+        req,
+        action: actionByMethod[req.method] || String(req.method).toLowerCase(),
+        targetType: 'category',
+        targetId: req.method === 'DELETE'
+          ? String(req.query?.id || req.body?.id || '').trim()
+          : (req.body?.id ?? result.body?.id ?? null),
+        after: req.method === 'DELETE' ? null : (req.body || null),
+      });
+    }
+
     return res.status(result.status).json(result.body);
   } catch (error) {
     console.error('Admin categories error:', error);

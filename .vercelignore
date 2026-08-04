@@ -1,0 +1,3 @@
+# Testes não vão para o deploy (as funções serverless em api/ não os importam).
+api/__tests__
+**/*.test.js

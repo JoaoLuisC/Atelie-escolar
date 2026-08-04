@@ -49,19 +49,31 @@ export function SecurityTab({ config, onSave, saving = false }) {
   const [fallbackPin, setFallbackPin] = useState('');
   const [enabled, setEnabled] = useState(false);
 
+  // O GET redige os segredos e só expõe flags de "está configurado".
+  const has2FA = Boolean(config?.has2FA);
+  const hasPin = Boolean(config?.hasPin);
+
   useEffect(() => {
-    setTotpSecret(String(config?.totpSecret || ''));
-    setFallbackPin(String(config?.fallbackPin || ''));
+    // Campos começam vazios: deixar em branco preserva o segredo já guardado;
+    // digitar um novo valor o substitui (o backend faz o merge "pegajoso").
+    setTotpSecret('');
+    setFallbackPin('');
     setEnabled(config?.twoFactorEnabled !== false);
   }, [config]);
 
   function handleSave() {
-    onSave({
-      ...config,
-      totpSecret: totpSecret.trim(),
-      fallbackPin: fallbackPin.trim(),
-      twoFactorEnabled: enabled,
-    });
+    const payload = { twoFactorEnabled: enabled };
+    if (config && typeof config === 'object') {
+      // Preserva demais campos do adminConfig, sem as flags/segredos do GET.
+      const { has2FA: _h, hasPin: _p, totpSecret: _t, fallbackPin: _f, ...rest } = config;
+      Object.assign(payload, rest);
+    }
+    const nextTotp = totpSecret.trim();
+    const nextPin = fallbackPin.trim();
+    if (nextTotp) payload.totpSecret = nextTotp; // só envia quando há valor novo
+    if (nextPin) payload.fallbackPin = nextPin;
+    payload.twoFactorEnabled = enabled;
+    onSave(payload);
   }
 
   return (
@@ -88,8 +100,10 @@ export function SecurityTab({ config, onSave, saving = false }) {
             label="TOTP secret (Base32)"
             value={totpSecret}
             onChange={setTotpSecret}
-            placeholder="Ex: JBSWY3DPEHPK3PXP"
-            hint="Use um app autenticador (Google Authenticator, 1Password, Authy). Gere uma chave Base32 de 16+ caracteres."
+            placeholder={has2FA ? '•••••••• — configurado' : 'Ex: JBSWY3DPEHPK3PXP'}
+            hint={has2FA
+              ? 'Já configurado. Digite um novo segredo para substituir, ou deixe em branco para manter o atual.'
+              : 'Use um app autenticador (Google Authenticator, 1Password, Authy). Gere uma chave Base32 de 16+ caracteres.'}
           />
 
           <SecretField
@@ -97,8 +111,10 @@ export function SecurityTab({ config, onSave, saving = false }) {
             label="PIN de recuperação"
             value={fallbackPin}
             onChange={setFallbackPin}
-            placeholder="Ex: 487239"
-            hint="PIN numérico (6+ dígitos) para uso emergencial caso o TOTP não esteja disponível."
+            placeholder={hasPin ? '•••••• — configurado' : 'Ex: 487239'}
+            hint={hasPin
+              ? 'Já configurado. Digite um novo PIN para substituir, ou deixe em branco para manter o atual.'
+              : 'PIN numérico (6+ dígitos) para uso emergencial caso o TOTP não esteja disponível.'}
           />
 
           <div className="flex justify-end">

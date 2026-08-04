@@ -2,20 +2,13 @@ const crypto = require('node:crypto');
 const { serviceRoleHelpers: { getTableRow } } = require('../lib/supabase');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 const { safeCompare, setAdminCorsHeaders, setSessionCookie } = require('../lib/admin-session');
+const { resolveSecret } = require('../lib/env-secret');
 const { getAnonClient, getProfileRoleByEmail } = require('../services/supabase-auth');
 
 const FACTOR_CHALLENGE_TTL_SECONDS = 5 * 60;
 
 function getChallengeSecret() {
-  const secret = String(process.env.ADMIN_SESSION_SECRET || '').trim();
-  if (secret) return secret;
-
-  const runtimeEnv = String(process.env.APP_ENV || process.env.NODE_ENV || '').toLowerCase();
-  if (runtimeEnv === 'production') {
-    throw new Error('ADMIN_SESSION_SECRET é obrigatório em produção.');
-  }
-
-  return 'dev-admin-session-secret-change-me';
+  return resolveSecret('ADMIN_SESSION_SECRET', 'dev-admin-session-secret-change-me');
 }
 
 function toBase64Url(input) {
@@ -201,14 +194,14 @@ module.exports = async function adminLoginHandler(req, res) {
   const challengeToken = String(req.body?.challengeToken || '').trim();
 
   if (!email || !password) {
-    return res.status(400).json({ success: false, error: 'E-mail e senha sao obrigatorios.' });
+    return res.status(400).json({ success: false, error: 'E-mail e senha são obrigatórios.' });
   }
 
   const supabase = getAnonClient();
   if (!supabase) {
     return res.status(500).json({
       success: false,
-      error: 'Configuracao do Supabase indisponivel no servidor.',
+      error: 'Configuração do Supabase indisponível no servidor.',
     });
   }
 
@@ -225,7 +218,7 @@ module.exports = async function adminLoginHandler(req, res) {
       userAgent: req.headers['user-agent'],
       properties: { reason: 'invalid_credentials', email_hash: crypto.createHash('sha256').update(email).digest('hex').slice(0, 16) },
     });
-    return res.status(401).json({ success: false, error: 'Credenciais invalidas.' });
+    return res.status(401).json({ success: false, error: 'Credenciais inválidas.' });
   }
 
   const role = await getProfileRoleByEmail(authData.user.email || email);
@@ -239,10 +232,10 @@ module.exports = async function adminLoginHandler(req, res) {
       userAgent: req.headers['user-agent'],
       properties: { reason: 'non_admin_role', role: normalizedRole || 'none', email_hash: crypto.createHash('sha256').update(email).digest('hex').slice(0, 16) },
     });
-    return res.status(403).json({
-      success: false,
-      error: 'Acesso restrito ao perfil master/admin.',
-    });
+    // Resposta HTTP idêntica ao caso de credencial inválida (mesmo status e
+    // mensagem) para não vazar que a senha está correta em conta não-admin.
+    // O motivo distinto ('non_admin_role') fica apenas no log de segurança.
+    return res.status(401).json({ success: false, error: 'Credenciais inválidas.' });
   }
 
   const adminConfig = await readAdminConfig();
@@ -251,7 +244,7 @@ module.exports = async function adminLoginHandler(req, res) {
     if (methods.length === 0) {
       return res.status(500).json({
         success: false,
-        error: '2FA ativado sem metodo configurado no adminConfig.',
+        error: '2FA ativado sem método configurado no adminConfig.',
       });
     }
 
@@ -268,7 +261,7 @@ module.exports = async function adminLoginHandler(req, res) {
     if (!challenge.valid) {
       return res.status(401).json({
         success: false,
-        error: 'Desafio de 2FA invalido ou expirado.',
+        error: 'Desafio de 2FA inválido ou expirado.',
       });
     }
 
@@ -276,7 +269,7 @@ module.exports = async function adminLoginHandler(req, res) {
     if (!code) {
       return res.status(401).json({
         success: false,
-        error: 'Codigo de verificacao obrigatorio.',
+        error: 'Código de verificação obrigatório.',
       });
     }
 
@@ -288,11 +281,12 @@ module.exports = async function adminLoginHandler(req, res) {
     if (!totpValid && !pinValid) {
       return res.status(401).json({
         success: false,
-        error: 'Codigo de verificacao invalido.',
+        error: 'Código de verificação inválido.',
       });
     }
   }
 
-  setSessionCookie(res);
+  // Grava a identidade individual no cookie de sessão (não-repúdio no audit).
+  setSessionCookie(res, { email: authData.user.email || email, role: normalizedRole });
   return res.status(200).json({ success: true, user: { role: normalizedRole || 'admin', email } });
 };

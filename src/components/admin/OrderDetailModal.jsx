@@ -1,10 +1,86 @@
 import PropTypes from 'prop-types';
+import { useEffect, useRef } from 'react';
 import { formatPrice } from '../../utils/currency';
 import { formatDateTime } from './utils/format';
 import { StatusChip } from './ui/StatusChip';
 import { Button } from './ui/Button';
 
 export function OrderDetailModal({ order, onClose }) {
+  const dialogRef = useRef(null);
+  const open = Boolean(order);
+
+  // Esc fecha, foco preso dentro do dialog e devolvido ao gatilho ao fechar.
+  useEffect(() => {
+    if (!open) return undefined;
+    const doc = globalThis.document;
+    if (!doc) return undefined;
+
+    const previouslyFocused = doc.activeElement;
+    const dialog = dialogRef.current;
+
+    const getFocusable = () => {
+      if (!dialog) return [];
+      return Array.from(
+        dialog.querySelectorAll(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+    };
+
+    const focusables = getFocusable();
+    if (focusables.length > 0) {
+      focusables[0].focus();
+    } else if (dialog) {
+      dialog.focus();
+    }
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = getFocusable();
+      if (items.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = doc.activeElement;
+      if (event.shiftKey) {
+        if (active === first || !dialog?.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !dialog?.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    doc.addEventListener('keydown', onKeyDown);
+    return () => {
+      doc.removeEventListener('keydown', onKeyDown);
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus();
+      }
+    };
+  }, [open, onClose]);
+
+  // Trava o scroll do body enquanto o modal está aberto.
+  useEffect(() => {
+    if (!open) return undefined;
+    const body = globalThis.document?.body;
+    if (!body) return undefined;
+    const previous = body.style.overflow;
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.overflow = previous;
+    };
+  }, [open]);
+
   if (!order) return null;
 
   return (
@@ -16,8 +92,11 @@ export function OrderDetailModal({ order, onClose }) {
         onClick={onClose}
       />
       <dialog
+        ref={dialogRef}
         open
-        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+        tabIndex={-1}
+        aria-modal="true"
+        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl focus:outline-none"
         aria-labelledby="order-detail-title"
       >
         <div className="mb-3 flex items-start justify-between gap-3">

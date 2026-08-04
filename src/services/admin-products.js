@@ -6,7 +6,7 @@ export async function fetchAdminProducts() {
   });
 
   if (response.status === 401) {
-    throw new Error('Sessao admin expirada. Faca login novamente.');
+    throw new Error('Sessão admin expirada. Faça login novamente.');
   }
 
   if (!response.ok || !data.success) {

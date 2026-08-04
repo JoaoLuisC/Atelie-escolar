@@ -3,7 +3,9 @@ import { Helmet } from 'react-helmet-async';
 
 const DEFAULT_SITE_NAME = 'Ateliê da Escola';
 const DEFAULT_DESCRIPTION = 'Materiais educativos digitais para professores: banners, painéis e atividades pedagógicas em PDF, com download imediato após pagamento aprovado.';
-const DEFAULT_IMAGE = '/og-default.png';
+// Aponta para um asset que existe de fato (o antigo og-default.png nunca foi
+// versionado). Páginas com imagem própria (ex.: produto) sobrescrevem via prop.
+const DEFAULT_IMAGE = '/favicon.svg';
 
 function readBaseUrl() {
   try {
@@ -48,7 +50,12 @@ export function SEO({
 }) {
   const canonical = buildCanonical(pathname);
   const fullTitle = title ? `${title} · ${DEFAULT_SITE_NAME}` : DEFAULT_SITE_NAME;
-  const absoluteImage = image && image.startsWith('http') ? image : `${readBaseUrl()}${image || DEFAULT_IMAGE}`;
+  const resolvedImage = image || DEFAULT_IMAGE;
+  // Só emite og:image/twitter:image quando há um asset real para apontar —
+  // nunca deixa a tag referenciando um arquivo inexistente.
+  const absoluteImage = resolvedImage
+    ? (resolvedImage.startsWith('http') ? resolvedImage : `${readBaseUrl()}${resolvedImage}`)
+    : null;
 
   return (
     <Helmet>
@@ -64,13 +71,13 @@ export function SEO({
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:url" content={canonical} />
-      <meta property="og:image" content={absoluteImage} />
+      {absoluteImage ? <meta property="og:image" content={absoluteImage} /> : null}
 
       {/* Twitter Card */}
-      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:card" content={absoluteImage ? 'summary_large_image' : 'summary'} />
       <meta name="twitter:title" content={fullTitle} />
       <meta name="twitter:description" content={description} />
-      <meta name="twitter:image" content={absoluteImage} />
+      {absoluteImage ? <meta name="twitter:image" content={absoluteImage} /> : null}
 
       {/* JSON-LD opcional para Schema.org */}
       {jsonLd ? (

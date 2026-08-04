@@ -1,26 +1,11 @@
 const express = require('express');
-const createPaymentHandler = require('../api/create-payment');
-const verifyPaymentHandler = require('../api/verify-payment');
-const { validateBody } = require('../middleware/validate.middleware');
-const { processPaymentSchema } = require('../validation/payment.schemas');
 
+// Os aliases /api/payments/process e /api/payments/verify foram removidos:
+// eram Express-only (quebravam na Vercel, que não tem função api/payments/*) e
+// não eram usados pelo frontend, que chama os caminhos canônicos /api/create-payment
+// e /api/verify-payment (montados em routes/api-compat.routes.js, este último com
+// rate-limit dedicado). Manter dois caminhos para o mesmo efeito permitia burlar
+// o verifyPaymentLimiter. Router mantido vazio para não alterar o mount no server.js.
 const router = express.Router();
-
-router.post('/payments/process', validateBody(processPaymentSchema), async (req, res, next) => {
-  try {
-    req.body = req.validatedBody;
-    return await createPaymentHandler(req, res);
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.get('/payments/verify', async (req, res, next) => {
-  try {
-    return await verifyPaymentHandler(req, res);
-  } catch (error) {
-    return next(error);
-  }
-});
 
 module.exports = router;

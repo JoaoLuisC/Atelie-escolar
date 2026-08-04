@@ -44,33 +44,36 @@ async function loadDownloadTokens(orderInternalId) {
 }
 
 async function createTokensForOrder(order, items, paymentId) {
-  const downloadTokens = [];
-
   for (const item of items) {
     const token = crypto.randomBytes(32).toString('hex');
-    await insertIntoTable('download_tokens', {
-      token,
-      order_id: order.id,
-      product_id: item.product_id,
-      product_name: item.product_name,
-      used: false,
-      expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date().toISOString(),
-    });
-
-    downloadTokens.push({
-      productId: String(item.product_id),
-      productName: item.product_name,
-      token,
-    });
+    try {
+      await insertIntoTable('download_tokens', {
+        token,
+        order_id: order.id,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        used: false,
+        expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+        created_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      // 409 / 23505 = corrida com o webhook (ou outra chamada de verify): a
+      // constraint UNIQUE(order_id, product_id) garante 1 token por par.
+      if (err?.statusCode !== 409 && err?.details?.code !== '23505') {
+        throw err;
+      }
+    }
   }
 
-  await updateTable('orders', { id: `eq.${order.id}` }, {
-    payment_status: 'approved',
-    status: 'completed',
-    payment_id: paymentId,
-    completed_at: new Date().toISOString(),
-  });
+  // Transição idempotente: só marca completed quem ainda não estava approved.
+  await updateTable('orders',
+    { id: `eq.${order.id}`, payment_status: 'neq.approved' },
+    {
+      payment_status: 'approved',
+      status: 'completed',
+      payment_id: paymentId,
+      completed_at: new Date().toISOString(),
+    });
 
   try {
     await ensureCustomerAccountFromCheckout({
@@ -81,7 +84,8 @@ async function createTokensForOrder(order, items, paymentId) {
     console.error('[verify-payment] Falha ao provisionar conta de cliente:', provisionErr.message);
   }
 
-  return downloadTokens;
+  // Devolve o conjunto canônico efetivamente persistido (cobre a corrida).
+  return mapTokenRows(await loadDownloadTokens(order.id));
 }
 
 function mapTokenRows(rows) {
@@ -125,6 +129,8 @@ async function refreshApprovedOrderData(order, orderId) {
       payment_id: approvedPayment.id,
       completed_at: new Date().toISOString(),
       downloadTokens,
+      // Reaproveitado no handler para não recarregar order_items na mesma chamada.
+      orderItems,
     };
   } catch (mpErr) {
     console.error('[verify-payment] Erro ao consultar MercadoPago:', mpErr.message);
@@ -184,7 +190,9 @@ module.exports = async function verifyPaymentHandler(req, res) {
     const orderData = await refreshApprovedOrderData(order, orderId);
     const downloadTokens = orderData.downloadTokens || mapTokenRows(await loadDownloadTokens(order.id));
 
-    const items = await loadOrderItems(order.id);
+    // Reaproveita os itens já carregados no refresh (quando houve); só recarrega
+    // se a chamada não passou pelo caminho que os buscou.
+    const items = orderData.orderItems || await loadOrderItems(order.id);
 
     return res.status(200).json({
       success: true,

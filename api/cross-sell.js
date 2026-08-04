@@ -141,7 +141,7 @@ module.exports = async function crossSellHandler(req, res) {
     }
 
     // Cache curto: dados mudam quando há novas compras aprovadas
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=3600');
 
     return res.status(200).json({
       success: true,

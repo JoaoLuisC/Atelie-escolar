@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
+import { Link } from 'react-router-dom';
 import { formatToday } from './utils/format';
 
 const NAV_SECTIONS = [
@@ -25,6 +26,12 @@ const NAV_SECTIONS = [
     id: 'pedidos',
     label: 'Pedidos',
     icon: 'receipt',
+  },
+  {
+    type: 'item',
+    id: 'cupons',
+    label: 'Cupons',
+    icon: 'ticket-perforated-fill',
   },
   {
     type: 'group',
@@ -163,7 +170,7 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:sticky lg:top-0 lg:translate-x-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:flex`}
       >
@@ -178,6 +185,14 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3">
+          <Link
+            to="/"
+            className="mb-2 flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+          >
+            <i className="bi bi-shop text-base" />
+            <span className="truncate">Ver loja</span>
+            <i className="bi bi-arrow-up-right ml-auto text-xs opacity-60" />
+          </Link>
           <div className="flex flex-col gap-1">
             {NAV_SECTIONS.map((section) => {
               if (section.type === 'group') {

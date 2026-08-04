@@ -24,6 +24,8 @@ cd Projeto-mae
 npm install
 ```
 
+> O repo versiona um `.npmrc` com `legacy-peer-deps=true` (React 19 vs peer deps do `react-helmet-async`) — o `npm install` funciona sem flags extras.
+
 ---
 
 ## 2. Variáveis de ambiente
@@ -48,9 +50,10 @@ Variáveis com prefixo `VITE_` são expostas ao bundle do frontend pelo Vite. Va
 SUPABASE_URL=https://<seu-ref>.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_xxxxxxxxxxx
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxxxxxxxxxx    # ⚠️ NUNCA expor no front
-SUPABASE_STORAGE_BUCKET=public                      # padrão "public"
+SUPABASE_DB_URL=postgresql://postgres:...           # connection string direta (só tooling; app não usa)
+SUPABASE_STORAGE_BUCKET=product-files               # presente no template; os buckets reais são fixos no código (ver §3.5)
 
-# Idem expostas ao browser (devem espelhar)
+# Idem expostas ao browser (devem espelhar; NÃO estão no .env.example — acrescente à mão)
 VITE_SUPABASE_URL=<igual ao SUPABASE_URL>
 VITE_SUPABASE_ANON_KEY=<igual ao SUPABASE_ANON_KEY>
 ```
@@ -86,18 +89,18 @@ ADMIN_SESSION_SECRET=<64 chars hex>
 CUSTOMER_SESSION_SECRET=<64 chars hex>
 DOWNLOAD_TOKEN_SECRET=<64 chars hex>
 
-# Você cria no painel do Mercado Pago e copia
+# Você cria no painel do Mercado Pago e copia (assinatura secreta do webhook)
 WEBHOOK_SECRET=<copie do dashboard MP>
 
-# GitHub Actions cron (gerar com base64url)
-# node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
-CRON_SECRET=<base64url>
+# GitHub Actions cron — o MESMO valor precisa estar na Vercel (env) e no GitHub (Secrets → Actions)
+# node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+CRON_SECRET=<64 chars hex>
 ```
 
 ### 2.4 Servidor + URLs + CORS
 
 ```env
-APP_URL=http://localhost:5173                     # base pública (frontend)
+APP_URL=http://localhost:3000                     # base usada em webhook MP, back_urls e links de e-mail; em prod: URL pública https do site
 APP_ENV=development                                # development | test | production
 NODE_ENV=development
 
@@ -144,6 +147,18 @@ SECURITY_ALERT_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../...
 
 Vazio = não envia. Os eventos seguem sendo gravados em `security_events` e `stdout`.
 
+### 2.8 Tuning do cron de e-mail marketing (opcional — defaults no código)
+
+```env
+ABANDONED_CART_FIRST_HOURS=1      # janela do 1º lembrete de carrinho abandonado
+ABANDONED_CART_SECOND_HOURS=24    # janela do 2º lembrete
+REACTIVATION_DAYS_MIN=90          # mínimo de dias de inatividade p/ e-mail de reativação
+REACTIVATION_DAYS_MAX=180         # máximo de dias p/ reativação
+VIP_LTV_THRESHOLD=300             # limiar de LTV (R$) p/ marcar cliente VIP na segmentação
+```
+
+Usadas por `api/cron-email-jobs.js` e `lib/customer-segmentation.js`.
+
 ---
 
 ## 3. Banco de dados (Supabase)
@@ -170,7 +185,7 @@ npm run supabase:db:push           # aplica todas as migrations em ordem
 
 ### 3.3 Aplicar migrations pendentes
 
-Há 8 migrations em `supabase/migrations/` (ver lista em [04-BANCO-DE-DADOS §migrations](./04-BANCO-DE-DADOS.md)). Aplicar **todas**:
+Há 13 migrations em `supabase/migrations/` (ver lista em [04-BANCO-DE-DADOS §migrations](./04-BANCO-DE-DADOS.md)). Aplicar **todas**:
 
 - `20260524000000_phase0_analytics.sql`
 - `20260525000000_phase1_product_slugs.sql`
@@ -180,18 +195,23 @@ Há 8 migrations em `supabase/migrations/` (ver lista em [04-BANCO-DE-DADOS §mi
 - `20260526120000_phase2_enable_pg_cron.sql`
 - `20260527000000_phase0_analytics_retention.sql`
 - `20260528000000_phase3_email_marketing.sql`
+- `20260530000000_phase4_admin_audit_log.sql`
+- `20260701000000_phase5_audit_immutability.sql`
+- `20260701000001_phase5_payment_hardening.sql`
+- `20260702000000_phase6_db_rls_hardening.sql`
+- `20260703000000_perf_indexes.sql`
 
 ### 3.4 Criar usuário admin
 
 **Fluxo padrão:**
-1. Cadastre-se normalmente via `/login` (trigger `handle_new_user` cria profile com `role='customer'`)
+1. Cadastre-se normalmente via `/login` (trigger `handle_new_user` cria profile com `role='CUSTOMER'`)
 2. Promova via SQL no Dashboard:
    ```sql
    update public.profiles set role = 'ADMIN' where email = 'voce@example.com';
    ```
-3. Acesse `/painel-acesso-privado-atelie` (também via link "· admin ·" no rodapé do `/login`)
+3. Acesse `/painel-acesso-privado-atelie` (`/admin-login` redireciona para lá)
 
-**Atalho via Management API** (cria direto sem signup):
+**Atalho via Auth Admin API** (cria direto sem signup; usa a service-role key, não o PAT):
 ```bash
 curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
   -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
@@ -200,17 +220,23 @@ curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
   -d '{"email":"admin@example.com","password":"SenhaForte123!","email_confirm":true}'
 ```
 
-> ⚠️ **Nunca insira direto em `auth.users` via SQL.** Sem o trigger Admin API, `instance_id` fica NULL e o GoTrue ignora o usuário. Ver [08-SEGURANCA §4c](./08-SEGURANCA.md).
+> ⚠️ **Nunca insira direto em `auth.users` via SQL.** Sem passar pelo signup ou pela Admin API, campos gerenciados pelo GoTrue (ex: `instance_id`) ficam NULL e o usuário é ignorado. Ver [08-SEGURANCA §4c](./08-SEGURANCA.md).
 
-### 3.5 Storage para downloads
+### 3.5 Storage para uploads e downloads
 
-1. Dashboard → Storage → New bucket
-2. Nome: `public` (ou o nome que setou em `SUPABASE_STORAGE_BUCKET`)
-3. **Public bucket**: marque (signed URLs cuidam da proteção)
-4. Faça upload dos PDFs/imagens dos produtos
-5. Em cada produto, configure `download_url` apontando para o path no bucket (ex: `produtos/alfabeto-cursivo.zip`)
+O upload do painel admin (`POST /api/admin-upload-url`, usado pelo wizard de produto) usa 3 buckets com nomes **fixos no código**:
 
-A URL real entregue ao cliente é sempre signed e expira (ver [08-SEGURANCA §8](./08-SEGURANCA.md)).
+| Bucket | Visibilidade | Limite | Conteúdo |
+|--------|--------------|--------|----------|
+| `product_images` | Público | 10 MB | Imagens de produto (SVG/HTML bloqueados) |
+| `product_videos` | Privado | 50 MB | Vídeos de produto |
+| `product_files` | Privado | 50 MB | Arquivos entregues ao cliente (PDF/ZIP) |
+
+1. Dashboard → Storage → New bucket → crie os 3 acima (marque **Public bucket** só em `product_images`)
+2. Faça upload das mídias e arquivos pelo próprio painel admin (wizard de produto) — ou manualmente pelo Dashboard
+3. Em cada produto, `download_url` aceita `product_files/<path>` (formato curto), URL completa do Storage ou URL externa (ex: Google Drive — redirect direto, sem signed URL)
+
+Para arquivos no Storage, a URL real entregue ao cliente é sempre signed e expira em 5 min (ver [08-SEGURANCA §8](./08-SEGURANCA.md)).
 
 ---
 
@@ -253,7 +279,7 @@ Necessita PAT (Personal Access Token Supabase). Script automatizado:
 SUPABASE_PAT='sbp_xxx' SUPABASE_PROJECT_REF='abc' node scripts/configure-auth.js
 ```
 
-Adiciona `http://localhost:5173`, `5174`, `5175`, `5176`, `3000` ao allow list.
+Define `site_url` (`http://localhost:5173`) e adiciona `http://localhost:5173`, `5174`, `5175`, `5176`, `3000` ao allow list.
 
 ---
 
@@ -329,7 +355,7 @@ npm run check            # test + build (usado em CI)
 
 1. `npm run dev:all`
 2. Abra http://localhost:5173 → deve carregar a home
-3. Abra http://localhost:3000/health → deve retornar `{ "status": "ok" }`
+3. Abra http://localhost:3000/health → deve retornar `{ "ok": true, "service": "api", "port": 3000 }`
 4. Cadastre-se em `/login`
 5. Adicione um produto ao carrinho → vá ao checkout → use cartão de teste MP (ver §7)
 6. Confirme polling de pagamento e tela de downloads carregando
@@ -342,9 +368,9 @@ npm run check            # test + build (usado em CI)
 
 | Bandeira | Número |
 |----------|--------|
-| Visa | `4509 9535 6623 3704` |
-| Mastercard | `5031 4332 1540 6351` |
-| Amex | `3711 803032 57522` |
+| Visa | `4235 6477 2802 5682` |
+| Mastercard | `5480 8328 0103 3311` |
+| Amex | `3753 651535 56885` |
 
 ### Titular do cartão controla o resultado
 
@@ -357,7 +383,7 @@ npm run check            # test + build (usado em CI)
 | `SECU` | ❌ CVV inválido |
 | `EXPI` | ❌ Cartão vencido |
 
-CPF: `12345678909` · CVV: `123` · Validade: qualquer data futura.
+CPF: `12345678909` · CVV: `123` (Amex: `1234`) · Validade: qualquer data futura.
 
 Checklist E2E em [12-DEPLOY-OPERACAO §smoke-test](./12-DEPLOY-OPERACAO.md).
 
@@ -392,8 +418,8 @@ Sem ngrok, o polling de pagamento cobre o gap. Webhook nunca chega, mas a UX con
 |--------|-----|----------------------|
 | `node scripts/check-advisor.js` | Lê Security Advisor do Supabase | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF` |
 | `node scripts/configure-auth.js` | Atualiza URLs OAuth permitidas | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF` |
-| `node scripts/db-inspect.js` | Inventário de tabelas via REST | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
-| `node scripts/check-utf8.js` | Audita encoding de textos no banco | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `node scripts/db-inspect.js` | Inventário de tabelas via REST | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `node scripts/check-utf8.js` | Audita encoding de textos no banco (Management API) | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF` |
 | `node scripts/fix-utf8.js` | Corrige encoding corrompido | idem |
 | `pwsh scripts/fix-dns.ps1` (admin) | Conserta DNS Windows quando `*.supabase.co` não resolve | — |
 
@@ -447,6 +473,6 @@ taskkill /F /PID <pid>
 - Configurar GA4 ID + Meta Pixel ID em `.env.local` (e Vercel)
 - Submeter sitemap no Search Console pós-deploy
 - Autenticar domínio no Resend (DKIM + SPF + DMARC) para liberar e-mail marketing
-- Criar `public/og-default.png` (1200×630) — referenciado em `SEO.jsx`
+- Criar uma imagem OG dedicada (1200×630) — hoje o `SEO.jsx` usa `/favicon.svg` como imagem default
 
 Lista completa de itens operacionais pendentes: [13-ROADMAP-PENDENCIAS](./13-ROADMAP-PENDENCIAS.md).

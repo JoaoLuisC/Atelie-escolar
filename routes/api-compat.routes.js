@@ -7,6 +7,7 @@ const adminAbcProductsHandler = require('../api/admin-abc-products');
 const adminCategoriesHandler = require('../api/admin-categories');
 const adminCleanupEventsHandler = require('../api/admin-cleanup-events');
 const adminCohortHandler = require('../api/admin-cohort');
+const adminCouponsHandler = require('../api/admin-coupons');
 const adminDashboardHandler = require('../api/admin-dashboard');
 const adminFunnelHandler = require('../api/admin-funnel');
 const adminKpisHandler = require('../api/admin-kpis');
@@ -27,6 +28,7 @@ const createPaymentHandler = require('../api/create-payment');
 const crossSellHandler = require('../api/cross-sell');
 const customerOrdersHandler = require('../api/customer-orders');
 const downloadHandler = require('../api/download');
+const meDeleteAccountHandler = require('../api/me-delete-account');
 const homeSectionsHandler = require('../api/home-sections');
 const productDetailsHandler = require('../api/product-details');
 const productsHandler = require('../api/products');
@@ -75,6 +77,7 @@ router.all('/admin-abc-products', wrapCompatHandler(adminAbcProductsHandler));
 router.all('/admin-categories', wrapCompatHandler(adminCategoriesHandler));
 router.all('/admin-cleanup-events', wrapCompatHandler(adminCleanupEventsHandler));
 router.all('/admin-cohort', wrapCompatHandler(adminCohortHandler));
+router.all('/admin-coupons', wrapCompatHandler(adminCouponsHandler));
 router.all('/admin-dashboard', wrapCompatHandler(adminDashboardHandler));
 router.all('/admin-funnel', wrapCompatHandler(adminFunnelHandler));
 router.all('/admin-kpis', wrapCompatHandler(adminKpisHandler));
@@ -95,7 +98,6 @@ router.all('/admin-session', wrapCompatHandler(adminSessionHandler));
 router.all('/admin-settings', wrapCompatHandler(adminSettingsHandler));
 router.all('/admin-upload-url', wrapCompatHandler(adminUploadUrlHandler));
 router.all('/admin-users', wrapCompatHandler(adminUsersHandler));
-router.all('/admin/users', wrapCompatHandler(adminUsersHandler));
 router.all('/confirm-subscription', wrapCompatHandler(confirmSubscriptionHandler));
 router.all('/create-payment', wrapCompatHandler(createPaymentHandler));
 // /cron-email-jobs autoriza por CRON_SECRET no header (não usa rate-limit
@@ -103,6 +105,16 @@ router.all('/create-payment', wrapCompatHandler(createPaymentHandler));
 router.all('/cron-email-jobs', wrapCompatHandler(cronEmailJobsHandler));
 router.all('/cross-sell', wrapCompatHandler(crossSellHandler));
 router.all('/customer-orders', wrapCompatHandler(customerOrdersHandler));
+// LGPD self-service (§3.8): exclusão de conta com confirmação por e-mail.
+// Rate-limit apertado: é uma ação rara e sensível.
+const meDeleteAccountLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Muitas tentativas. Aguarde 1 minuto.' },
+});
+router.all('/me-delete-account', meDeleteAccountLimiter, wrapCompatHandler(meDeleteAccountHandler));
 router.all('/download', wrapCompatHandler(downloadHandler));
 router.all('/home-sections', wrapCompatHandler(homeSectionsHandler));
 router.all('/product-details', wrapCompatHandler(productDetailsHandler));

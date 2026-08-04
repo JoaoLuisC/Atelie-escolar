@@ -22,8 +22,7 @@
     "supabase:link": "npx supabase link",
     "supabase:db:pull": "npx supabase db pull",
     "supabase:db:push": "npx supabase db push",
-    "supabase:migration:new": "npx supabase migration new",
-    "supabase:types": "npx supabase gen types typescript --linked --schema public > src/types/supabase.ts"
+    "supabase:migration:new": "npx supabase migration new"
   },
   "keywords": [
     "banners",
@@ -41,7 +40,7 @@
     "express-rate-limit": "^8.4.1",
     "helmet": "^8.1.0",
     "mercadopago": "^2.0.0",
-    "nodemailer": "^8.0.1",
+    "nodemailer": "^9.0.3",
     "prop-types": "^15.8.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -51,12 +50,16 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.20",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.0",
     "concurrently": "^9.2.1",
+    "eslint": "^10.6.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
     "jsdom": "^29.0.1",
     "postcss": "^8.5.10",
     "supabase": "^2.88.1",

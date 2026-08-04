@@ -12,14 +12,9 @@ const CANONICAL_EVENTS = new Set([
   'purchase',
 ]);
 
-const ESSENTIAL_EVENTS = new Set([
-  'view_item',
-  'add_to_cart',
-  'begin_checkout',
-  'view_catalog',
-  'view_cart',
-  'remove_from_cart',
-]);
+// Eventos essenciais = todos os canônicos exceto `purchase` (derivado para não
+// haver duas listas manuais que possam divergir — ver review Área 8, CON-06).
+const ESSENTIAL_EVENTS = new Set([...CANONICAL_EVENTS].filter((event) => event !== 'purchase'));
 
 const META_EVENT_MAP = {
   view_item: 'ViewContent',

@@ -36,25 +36,32 @@ module.exports = async function sendConfirmationEmailHandler(req, res) {
       filters: [{ column: 'order_code', value: orderId }],
     });
 
-    const orderItems = order
-      ? await listTableRows('order_items', {
-          select: 'order_id,product_name,unit_price,quantity',
-          filters: [{ column: 'order_id', value: order.id }],
-          orderBy: 'id',
-          ascending: true,
-        })
-      : [];
+    // Não envia para pedido inexistente (evita e-mail "pagamento confirmado"
+    // forjado). Best-effort: 200 sem falhar o checkout.
+    if (!order || !order.customer_email) {
+      return res.status(200).json({ success: true, sent: false, reason: 'order_not_found' });
+    }
+
+    const orderItems = await listTableRows('order_items', {
+      select: 'order_id,product_name,unit_price,quantity',
+      filters: [{ column: 'order_id', value: order.id }],
+      orderBy: 'id',
+      ascending: true,
+    });
 
     const { subject, html } = orderConfirmation({
       orderId,
       customerName,
       items: orderItems.map((i) => ({ name: i.product_name, price: i.unit_price })),
-      totalAmount: order?.total_amount || 0,
+      totalAmount: order.total_amount || 0,
       isNewAccount: Boolean(isNewAccount),
     });
 
+    // Destinatário SEMPRE o e-mail do pedido — nunca o do body — para que
+    // conhecer um order_code não permita exfiltrar itens/total para um e-mail
+    // arbitrário do atacante. (customerEmail do body é ignorado de propósito.)
     const result = await sendEmail({
-      to: customerEmail,
+      to: order.customer_email,
       subject,
       html,
       kind: 'order_confirmation',
@@ -69,7 +76,7 @@ module.exports = async function sendConfirmationEmailHandler(req, res) {
     });
   } catch (error) {
     console.error('[send-confirmation-email] Erro:', error.message);
-    // Não falha o checkout por causa do email
-    return res.status(200).json({ success: true, sent: false, error: error.message });
+    // Não falha o checkout por causa do email; sem vazar detalhe interno ao client.
+    return res.status(200).json({ success: true, sent: false, reason: 'internal_error' });
   }
 };

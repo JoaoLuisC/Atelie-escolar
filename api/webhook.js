@@ -31,28 +31,40 @@ async function loadExistingTokens(orderInternalId) {
 }
 
 async function createDownloadTokens(order, items) {
-  const downloadTokens = [];
-
-  for (const item of items) {
-    const token = crypto.randomBytes(32).toString('hex');
-    await insertIntoTable('download_tokens', {
-      token,
+  if (items.length) {
+    const now = Date.now();
+    const payload = items.map((item) => ({
+      token: crypto.randomBytes(32).toString('hex'),
       order_id: order.id,
       product_id: item.product_id,
       product_name: item.product_name,
       used: false,
-      expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+      expires_at: new Date(now + 72 * 60 * 60 * 1000).toISOString(),
       created_at: new Date().toISOString(),
-    });
+    }));
 
-    downloadTokens.push({
-      productId: String(item.product_id),
-      productName: item.product_name,
-      token,
-    });
+    try {
+      // INSERT em lote (uma única statement, atômica) em vez de N INSERTs.
+      await insertIntoTable('download_tokens', payload);
+    } catch (err) {
+      // 409 / 23505 = corrida: outro webhook (ou o polling do verify-payment) já
+      // criou os tokens deste pedido. Como este handler só chega aqui quando NÃO
+      // havia nenhum token, e o lote é tudo-ou-nada, o processo vencedor cobre
+      // todos os itens — tratamos a colisão como sucesso e recarregamos abaixo.
+      if (err?.statusCode !== 409 && err?.details?.code !== '23505') {
+        throw err;
+      }
+    }
   }
 
-  return downloadTokens;
+  // Recarrega o conjunto canônico: cobre a corrida em que outro processo inseriu
+  // os tokens "vencedores" — devolvemos sempre os tokens efetivamente persistidos.
+  const rows = await loadExistingTokens(order.id);
+  return rows.map((token) => ({
+    productId: String(token.product_id),
+    productName: token.product_name,
+    token: token.token,
+  }));
 }
 
 module.exports = async function webhookHandler(req, res) {
@@ -66,8 +78,7 @@ module.exports = async function webhookHandler(req, res) {
     }
 
     const isValid = validateWebhookSignature(req);
-    const runtimeEnv = String(process.env.APP_ENV || process.env.NODE_ENV || '').toLowerCase();
-    if (!isValid && runtimeEnv !== 'test') {
+    if (!isValid) {
       await recordSecurityEvent({
         eventName: 'webhook_invalid_signature',
         severity: 'warn',
@@ -101,6 +112,20 @@ module.exports = async function webhookHandler(req, res) {
     }
 
     if (payment.status === 'approved') {
+      // Transição idempotente e ATÔMICA: só a primeira notificação que muda o
+      // pedido de !approved → approved "vence". Reentregas/webhooks concorrentes
+      // veem 0 linhas afetadas e apenas devolvem os tokens já existentes, sem
+      // sobrescrever completed_at nem re-emitir eventos.
+      const transitioned = await updateTable('orders',
+        { id: `eq.${order.id}`, payment_status: 'neq.approved' },
+        {
+          payment_status: 'approved',
+          payment_id: payment.id,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        });
+      const isFirstApproval = Array.isArray(transitioned) && transitioned.length > 0;
+
       const orderItems = await loadOrderItems(order.id);
       const existingTokens = await loadExistingTokens(order.id);
       const downloadTokens = existingTokens.length
@@ -111,35 +136,30 @@ module.exports = async function webhookHandler(req, res) {
           }))
         : await createDownloadTokens(order, orderItems);
 
-      await updateTable('orders', { id: `eq.${order.id}` }, {
-        payment_status: 'approved',
-        payment_id: payment.id,
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      });
+      if (isFirstApproval) {
+        try {
+          await ensureCustomerAccountFromCheckout({
+            email: order.customer_email,
+            name: order.customer_name,
+          });
+        } catch (provisionErr) {
+          console.error('[webhook] Falha ao provisionar conta de cliente:', provisionErr.message);
+        }
 
-      try {
-        await ensureCustomerAccountFromCheckout({
-          email: order.customer_email,
-          name: order.customer_name,
+        await recordEvent({
+          eventName: 'payment_approved',
+          customerEmail: order.customer_email,
+          orderId: order.id,
+          properties: {
+            order_code: order.order_code,
+            value: Number(order.total_amount || 0),
+            currency: 'BRL',
+            payment_id: payment.id,
+            payment_method: payment.payment_method_id || null,
+          },
+          source: 'webhook',
         });
-      } catch (provisionErr) {
-        console.error('[webhook] Falha ao provisionar conta de cliente:', provisionErr.message);
       }
-
-      await recordEvent({
-        eventName: 'payment_approved',
-        customerEmail: order.customer_email,
-        orderId: order.id,
-        properties: {
-          order_code: order.order_code,
-          value: Number(order.total_amount || 0),
-          currency: 'BRL',
-          payment_id: payment.id,
-          payment_method: payment.payment_method_id || null,
-        },
-        source: 'webhook',
-      });
 
       return res.status(200).json({
         message: 'Webhook processed successfully',

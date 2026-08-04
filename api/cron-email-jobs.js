@@ -26,7 +26,8 @@ const {
  *
  * Autenticação:
  * - Cabeçalho `X-Cron-Secret` deve bater com `CRON_SECRET` env
- *   (igual ao padrão Vercel Cron) OU sessão admin válida.
+ *   (comparação timing-safe). Não há fallback por sessão admin nem por
+ *   query string — o segredo só é aceito via header.
  */
 
 const ABANDONED_FIRST_H = Number(process.env.ABANDONED_CART_FIRST_HOURS || 1);
@@ -34,10 +35,17 @@ const ABANDONED_SECOND_H = Number(process.env.ABANDONED_CART_SECOND_HOURS || 24)
 const REACTIVATION_MIN = Number(process.env.REACTIVATION_DAYS_MIN || 90);
 const REACTIVATION_MAX = Number(process.env.REACTIVATION_DAYS_MAX || 180);
 
+// Teto de candidatos processados por execução, por sub-job. O cron roda de hora
+// em hora e cada envio é idempotente (email_sent_log), então execuções sucessivas
+// drenam a fila sem risco de reenvio — mantendo o job dentro do timeout da função.
+const MAX_PER_RUN = 100;
+
 function isAuthorized(req) {
   const expected = String(process.env.CRON_SECRET || '').trim();
   if (!expected) return false;
-  const header = String(req.headers['x-cron-secret'] || req.query?.secret || '').trim();
+  // Segredo APENAS via header. Aceitar via query string vazaria o CRON_SECRET
+  // em logs de acesso, histórico e cabeçalho Referer dos e-mails enviados.
+  const header = String(req.headers['x-cron-secret'] || '').trim();
   if (!header) return false;
   try {
     return crypto.timingSafeEqual(
@@ -49,29 +57,24 @@ function isAuthorized(req) {
   }
 }
 
-async function isUnsubscribed(email) {
-  if (!email) return true;
+// Uma única leitura da linha do subscriber traz o status de descadastro e o token
+// juntos. Antes eram duas queries (isUnsubscribed + getUnsubscribeToken) batendo
+// na mesma linha da mesma tabela por destinatário.
+async function loadSubscriberState(email) {
+  if (!email) return { unsubscribed: true, token: null };
   try {
     const sub = await getTableRow('email_subscribers', {
-      select: 'id,unsubscribed_at',
+      select: 'unsubscribed_at,unsubscribe_token',
       filters: [{ column: 'email', value: String(email).toLowerCase() }],
     });
     // Se não está na lista, ainda assim respeita unsub explícito.
-    return Boolean(sub?.unsubscribed_at);
+    return {
+      unsubscribed: Boolean(sub?.unsubscribed_at),
+      token: sub?.unsubscribe_token || null,
+    };
   } catch {
-    return false;
-  }
-}
-
-async function getUnsubscribeToken(email) {
-  try {
-    const sub = await getTableRow('email_subscribers', {
-      select: 'unsubscribe_token',
-      filters: [{ column: 'email', value: String(email).toLowerCase() }],
-    });
-    return sub?.unsubscribe_token || null;
-  } catch {
-    return null;
+    // Falha de leitura não bloqueia o envio (comportamento anterior), sem token.
+    return { unsubscribed: false, token: null };
   }
 }
 
@@ -92,7 +95,9 @@ async function processAbandonedCarts() {
       { column: 'updated_at', operator: 'gte', value: firstWindowStart },
       { column: 'updated_at', operator: 'lt', value: firstWindowEnd },
     ],
-    limit: 500,
+    orderBy: 'updated_at',
+    ascending: true,
+    limit: MAX_PER_RUN,
   });
 
   for (const cart of firstCandidates) {
@@ -100,7 +105,8 @@ async function processAbandonedCarts() {
       results.skipped += 1;
       continue;
     }
-    if (await isUnsubscribed(cart.email)) {
+    const sub = await loadSubscriberState(cart.email);
+    if (sub.unsubscribed) {
       results.skipped += 1;
       continue;
     }
@@ -111,7 +117,7 @@ async function processAbandonedCarts() {
       continue;
     }
 
-    const unsubToken = await getUnsubscribeToken(cart.email);
+    const unsubToken = sub.token;
     const { subject, html } = abandonedCart({ items, step: '1h' });
     const result = await sendEmail({
       to: cart.email,
@@ -139,7 +145,9 @@ async function processAbandonedCarts() {
       { column: 'reminder_sent_at', operator: 'gte', value: secondWindowStart },
       { column: 'reminder_sent_at', operator: 'lt', value: secondWindowEnd },
     ],
-    limit: 500,
+    orderBy: 'reminder_sent_at',
+    ascending: true,
+    limit: MAX_PER_RUN,
   });
 
   for (const cart of secondCandidates) {
@@ -147,14 +155,15 @@ async function processAbandonedCarts() {
       results.skipped += 1;
       continue;
     }
-    if (await isUnsubscribed(cart.email)) {
+    const sub = await loadSubscriberState(cart.email);
+    if (sub.unsubscribed) {
       results.skipped += 1;
       continue;
     }
     const items = Array.isArray(cart.items) ? cart.items : [];
     if (items.length === 0) continue;
 
-    const unsubToken = await getUnsubscribeToken(cart.email);
+    const unsubToken = sub.token;
     const { subject, html } = abandonedCart({ items, step: '24h' });
     const result = await sendEmail({
       to: cart.email,
@@ -238,12 +247,15 @@ async function processPostPurchaseStep({ daysAgo, kind, templateFn, lookbackHour
       { column: 'completed_at', operator: 'gte', value: windowStart },
       { column: 'completed_at', operator: 'lt', value: windowEnd },
     ],
-    limit: 500,
+    orderBy: 'completed_at',
+    ascending: true,
+    limit: MAX_PER_RUN,
   });
 
   let sent = 0;
   for (const order of orders) {
-    if (await isUnsubscribed(order.customer_email)) continue;
+    const sub = await loadSubscriberState(order.customer_email);
+    if (sub.unsubscribed) continue;
 
     const items = await loadOrderItems(order.id);
     const { category, suggestions } = await inferCategoryAndSuggestions(items);
@@ -259,7 +271,7 @@ async function processPostPurchaseStep({ daysAgo, kind, templateFn, lookbackHour
       continue;
     }
 
-    const unsubToken = await getUnsubscribeToken(order.customer_email);
+    const unsubToken = sub.token;
     const result = await sendEmail({
       to: order.customer_email,
       subject: payload.subject,
@@ -301,18 +313,24 @@ async function processReactivation() {
   const couponCode = String(process.env.REACTIVATION_COUPON_CODE || 'VOLTEI15');
   const discountPct = Number(process.env.REACTIVATION_COUPON_PCT || 15);
   let sent = 0;
+  let processed = 0;
 
   for (const [email, lastOrder] of lastByEmail) {
     const days = Math.floor((Date.now() - new Date(lastOrder.completed_at).getTime()) / (24 * 60 * 60 * 1000));
     if (days < REACTIVATION_MIN || days >= REACTIVATION_MAX) continue;
-    if (await isUnsubscribed(email)) continue;
+    // Teto de trabalho por execução: como o entityId é o bucket mensal, quem
+    // ficar de fora é reprocessado na próxima hora dentro do mesmo mês (idempotente).
+    if (processed >= MAX_PER_RUN) break;
+    processed += 1;
+    const sub = await loadSubscriberState(email);
+    if (sub.unsubscribed) continue;
 
     const { subject, html } = reactivation90({
       customerName: lastOrder.customer_name,
       couponCode,
       discountPct,
     });
-    const unsubToken = await getUnsubscribeToken(email);
+    const unsubToken = sub.token;
     const result = await sendEmail({
       to: email,
       subject,
@@ -363,7 +381,14 @@ module.exports = async function cronEmailJobsHandler(req, res) {
     console.log('[cron-email-jobs]', JSON.stringify(report));
     return res.status(200).json(report);
   } catch (error) {
+    // Detalhe só no log server-side; ao cliente vai mensagem genérica para não
+    // vazar mensagens internas do Supabase/PostgREST (nomes de tabela/coluna etc.).
     console.error('[cron-email-jobs] erro fatal:', error.message);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: 'Erro interno.' });
   }
 };
+
+// Best-effort: pede à Vercel até 60s de execução. O teto real depende do plano
+// (Hobby costuma limitar a 10s), por isso o processamento é BOUNDED por MAX_PER_RUN
+// e idempotente — execuções horárias drenam a fila com segurança.
+module.exports.config = { maxDuration: 60 };

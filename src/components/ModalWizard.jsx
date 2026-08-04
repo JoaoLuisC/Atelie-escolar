@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { useEffect, useRef } from 'react';
 
 const SIZE_CLASSES = {
   'modal-small': 'max-w-md',
@@ -19,6 +20,77 @@ export function ModalWizard({
   size = 'modal-large',
 }) {
   const sizeClass = SIZE_CLASSES[size] || SIZE_CLASSES['modal-large'];
+  const dialogRef = useRef(null);
+
+  // Esc fecha, foco preso dentro do dialog e devolvido ao gatilho ao fechar.
+  useEffect(() => {
+    const doc = globalThis.document;
+    if (!doc) return undefined;
+
+    const previouslyFocused = doc.activeElement;
+    const dialog = dialogRef.current;
+
+    const getFocusable = () => {
+      if (!dialog) return [];
+      return Array.from(
+        dialog.querySelectorAll(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+    };
+
+    const focusables = getFocusable();
+    if (focusables.length > 0) {
+      focusables[0].focus();
+    } else if (dialog) {
+      dialog.focus();
+    }
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = getFocusable();
+      if (items.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = doc.activeElement;
+      if (event.shiftKey) {
+        if (active === first || !dialog?.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !dialog?.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    doc.addEventListener('keydown', onKeyDown);
+    return () => {
+      doc.removeEventListener('keydown', onKeyDown);
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus();
+      }
+    };
+  }, [onClose]);
+
+  // Trava o scroll do body enquanto o modal está aberto.
+  useEffect(() => {
+    const body = globalThis.document?.body;
+    if (!body) return undefined;
+    const previous = body.style.overflow;
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.overflow = previous;
+    };
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
@@ -30,12 +102,16 @@ export function ModalWizard({
       />
 
       <dialog
+        ref={dialogRef}
         open
-        className={`relative z-10 flex w-full max-h-[90vh] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl ${sizeClass}`}
+        tabIndex={-1}
+        aria-modal="true"
+        aria-labelledby="modal-wizard-title"
+        className={`relative z-10 flex w-full max-h-[90vh] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl focus:outline-none ${sizeClass}`}
       >
         <header className="border-b border-slate-200 px-5 py-4">
           <div className="flex items-start justify-between gap-3">
-            <h2 className="font-heading text-lg font-bold text-slate-900">{title}</h2>
+            <h2 id="modal-wizard-title" className="font-heading text-lg font-bold text-slate-900">{title}</h2>
             <button
               type="button"
               onClick={onClose}
@@ -47,7 +123,7 @@ export function ModalWizard({
           </div>
 
           {showProgress && steps && steps.length > 1 ? (
-            <ol role="tablist" className="mt-4 flex items-center gap-2">
+            <ol aria-label="Progresso do formulário" className="mt-4 flex items-center gap-2">
               {steps.map((step, idx) => {
                 const isActive = currentStep === idx;
                 const isCompleted = idx < currentStep;

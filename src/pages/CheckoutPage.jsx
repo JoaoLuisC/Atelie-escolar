@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { CouponField } from '../components/CouponField';
@@ -17,17 +17,32 @@ import {
 } from '../utils/analytics';
 import { getSessionId } from '../utils/attribution';
 
+// Debounce da captura de carrinho abandonado ao digitar o e-mail.
+const ABANDONED_CART_DEBOUNCE_MS = 1500;
+// Polling de confirmação do pagamento: 150 tentativas × 4s ≈ 10 minutos.
+const PAYMENT_POLL_INTERVAL_MS = 4000;
+const PAYMENT_POLL_MAX_ATTEMPTS = 150;
+
 export function CheckoutPage() {
   const navigate = useNavigate();
-  const { customerSession, setCustomerSession, loginCustomerGoogle } = useAuth();
+  const { customerSession, loginCustomerGoogle } = useAuth();
   const { cart, total, removeFromCart, clearCart } = useCart();
   const { pushToast } = useToast();
   const [status, setStatus] = useState('');
+  // Tom do status para diferenciar erro (vermelho) de sucesso/info.
+  const [statusTone, setStatusTone] = useState('info');
   const [processing, setProcessing] = useState(false);
   const [pendingOrderId, setPendingOrderId] = useState('');
   const [pendingOrderEmail, setPendingOrderEmail] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  // URL da cobrança gerada — mantida em estado para renderizar SEMPRE um
+  // link visível "Abrir pagamento" (fallback quando o popup é bloqueado no
+  // iOS/Safari e o window.open não abre).
+  const [paymentUrl, setPaymentUrl] = useState('');
+  // E-mail informado por convidado no checkout. Guardado localmente para não
+  // forjar uma sessão de autenticação (setCustomerSession) para quem não logou.
+  const [guestEmail, setGuestEmail] = useState('');
   const {
     formState: { errors },
     handleSubmit,
@@ -70,7 +85,7 @@ export function CheckoutPage() {
       }).catch(() => {
         /* silencioso — não pode quebrar checkout */
       });
-    }, 1500);
+    }, ABANDONED_CART_DEBOUNCE_MS);
 
     return () => clearTimeout(timeoutId);
   }, [watchedEmail, cart]);
@@ -83,6 +98,21 @@ export function CheckoutPage() {
       setValue('name', customerSession.name, { shouldValidate: true });
     }
   }, [customerSession, setValue]);
+
+  // Revalida o cupom quando o conteúdo do carrinho muda: zera o desconto
+  // aplicado para o valor exibido não divergir do que será cobrado em
+  // create-payment (o servidor recalcula a elegibilidade com o cart novo).
+  const cartSignature = useMemo(
+    () => cart.map((item) => `${item.id}:${item.quantity || 1}`).join('|'),
+    [cart],
+  );
+  const previousCartSignatureRef = useRef(cartSignature);
+  useEffect(() => {
+    if (previousCartSignatureRef.current !== cartSignature) {
+      previousCartSignatureRef.current = cartSignature;
+      setAppliedCoupon(null);
+    }
+  }, [cartSignature]);
 
   useEffect(() => {
     if (!cart.length) return;
@@ -97,7 +127,7 @@ export function CheckoutPage() {
 
     let cancelled = false;
     let attempts = 0;
-    const maxAttempts = 150;
+    const maxAttempts = PAYMENT_POLL_MAX_ATTEMPTS;
 
     const interval = setInterval(async () => {
       if (cancelled) return;
@@ -109,6 +139,8 @@ export function CheckoutPage() {
           setProcessing(false);
           setPendingOrderId('');
           setPendingOrderEmail('');
+          setPaymentUrl('');
+          setStatusTone('info');
           setStatus('Demorou mais do que esperávamos para confirmar. Você pode acompanhar a qualquer momento em Meus Downloads — ninguém perde o pedido.');
         }
         return;
@@ -126,6 +158,8 @@ export function CheckoutPage() {
           setProcessing(false);
           setPendingOrderId('');
           setPendingOrderEmail('');
+          setPaymentUrl('');
+          setStatusTone('success');
           pushToast('Pagamento aprovado.', 'success');
           setStatus('Tudo certo! Pagamento aprovado. Levando você para a área de downloads…');
           navigate(`/downloads?order=${encodeURIComponent(pendingOrderId)}&email=${encodeURIComponent(pendingOrderEmail)}&success=1`);
@@ -137,6 +171,8 @@ export function CheckoutPage() {
           setProcessing(false);
           setPendingOrderId('');
           setPendingOrderEmail('');
+          setPaymentUrl('');
+          setStatusTone('error');
           setStatus('Não conseguimos confirmar este pagamento. Você pode tentar de novo com outro método sem perder o carrinho.');
           pushToast('Pagamento não confirmado.', 'warning');
         }
@@ -145,7 +181,7 @@ export function CheckoutPage() {
           console.warn('[checkout] verify-payment falhou, tentando novamente:', pollError.message);
         }
       }
-    }, 4000);
+    }, PAYMENT_POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
@@ -162,11 +198,11 @@ export function CheckoutPage() {
 
   const stepperDescription = useMemo(() => {
     if (processing) {
-      return 'Estamos preparando seu pagamento e abrindo a cobrança em uma nova aba.';
+      return 'Estamos preparando seu pagamento. Se a cobrança não abrir sozinha, use o botão "Abrir pagamento".';
     }
 
     if (status.includes('Aguardando')) {
-      return 'Acompanhando a confirmação do pagamento em tempo real. Pode fechar a outra aba quando terminar de pagar.';
+      return 'Acompanhando a confirmação do pagamento em tempo real. Se a cobrança não abriu, use o botão "Abrir pagamento".';
     }
 
     if (status.includes('aprovado')) {
@@ -181,11 +217,14 @@ export function CheckoutPage() {
     const email = formData.email.trim();
 
     if (!cart.length) {
+      setStatusTone('error');
       setStatus('Seu carrinho está vazio. Volte ao catálogo para escolher seus materiais.');
       return;
     }
 
     setProcessing(true);
+    setStatusTone('info');
+    setPaymentUrl('');
     setStatus('Estamos preparando seu pagamento…');
 
     try {
@@ -196,11 +235,10 @@ export function CheckoutPage() {
         couponCode: appliedCoupon?.code || null,
       };
 
+      // Convidado: guardamos o e-mail apenas localmente. NÃO forjamos uma
+      // sessão de autenticação (setCustomerSession) para quem não fez login.
       if (email && customerSession?.email !== email) {
-        setCustomerSession({
-          email,
-          name,
-        });
+        setGuestEmail(email);
       }
 
       const response = await fetch(`${getApiBaseUrl()}/create-payment`, {
@@ -218,26 +256,44 @@ export function CheckoutPage() {
       localStorage.setItem('lastOrderId', String(data.orderId || ''));
       localStorage.setItem('lastOrderEmail', email);
 
-      const paymentUrl = data.initPoint || data.sandboxInitPoint;
-      if (!paymentUrl) {
-        throw new Error('URL de pagamento nao retornada pela API.');
+      const nextPaymentUrl = data.initPoint || data.sandboxInitPoint;
+      if (!nextPaymentUrl) {
+        throw new Error('URL de pagamento não retornada pela API.');
       }
 
-      window.open(paymentUrl, '_blank');
+      // Guarda a URL para o botão de fallback e tenta abrir o popup. Em iOS/
+      // Safari o popup pode ser bloqueado — por isso o link fica sempre visível.
+      setPaymentUrl(nextPaymentUrl);
+      window.open(nextPaymentUrl, '_blank', 'noopener,noreferrer');
       pushToast('Pagamento gerado. Estamos aguardando a confirmação.', 'info');
-      setStatus('Aguardando confirmação do pagamento. Pode finalizar pela aba que abrimos — vamos te avisar aqui assim que aprovar.');
+      setStatusTone('info');
+      setStatus('Aguardando confirmação do pagamento. Use o botão "Abrir pagamento" caso a cobrança não tenha aberto — vamos te avisar aqui assim que aprovar.');
       setPendingOrderEmail(email);
       setPendingOrderId(String(data.orderId || ''));
     } catch (submitError) {
       setProcessing(false);
+      setStatusTone('error');
       const message = submitError.message || 'Erro ao processar checkout.';
       setStatus(message);
       pushToast(message, 'error');
     }
   }
 
-  const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50 disabled:text-slate-500';
+  // text-base (16px) no mobile evita o zoom automático do iOS ao focar o input;
+  // sm:text-sm mantém o visual compacto no desktop.
+  const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base sm:text-sm transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50 disabled:text-slate-500';
   const errorInputClass = 'border-rose-300 focus:border-rose-500 focus:ring-rose-100';
+
+  // Cancela a espera de confirmação: zera o pedido pendente e reabilita o form
+  // para o cliente revisar os dados e tentar novamente sem perder o carrinho.
+  function cancelProcessing() {
+    setProcessing(false);
+    setPendingOrderId('');
+    setPendingOrderEmail('');
+    setPaymentUrl('');
+    setStatusTone('info');
+    setStatus('Você pode revisar seus dados e tentar de novo. Seu carrinho continua salvo.');
+  }
 
   const discount = appliedCoupon?.discount || 0;
   const displayTotal = Math.max(0, total - discount);
@@ -276,9 +332,15 @@ export function CheckoutPage() {
             </header>
 
             {cart.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 py-6 text-center text-sm text-slate-500">
-                Seu carrinho está vazio.
-              </p>
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-500">
+                <p>Seu carrinho está vazio.</p>
+                <Link
+                  to="/produtos"
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                >
+                  <i className="bi bi-bag" aria-hidden="true" /> Ver produtos
+                </Link>
+              </div>
             ) : (
               <ul className="flex flex-col gap-2">
                 {cart.map((item) => (
@@ -359,6 +421,11 @@ export function CheckoutPage() {
                 <p className="mb-2 text-xs text-slate-600">
                   Acelere preenchendo seus dados pela sua conta Google — ou continue como convidado preenchendo nome e e-mail abaixo.
                 </p>
+                {guestEmail ? (
+                  <p className="mb-2 text-xs text-slate-600">
+                    Comprando como convidado: <strong className="text-slate-800">{guestEmail}</strong>
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -437,6 +504,27 @@ export function CheckoutPage() {
                   )}
                 </button>
 
+                {paymentUrl ? (
+                  <a
+                    href={paymentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-300 bg-white px-5 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
+                  >
+                    <i className="bi bi-box-arrow-up-right" aria-hidden="true" /> Abrir pagamento
+                  </a>
+                ) : null}
+
+                {processing ? (
+                  <button
+                    type="button"
+                    onClick={cancelProcessing}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                  >
+                    <i className="bi bi-x-circle" aria-hidden="true" /> Cancelar e tentar de novo
+                  </button>
+                ) : null}
+
                 <div aria-label="Selos de confiança" className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                   <span className="inline-flex items-center gap-1"><i className="bi bi-shield-lock-fill text-emerald-600" /> Compra segura</span>
                   <span className="inline-flex items-center gap-1"><i className="bi bi-credit-card-2-front-fill text-brand-600" /> Pagamento verificado</span>
@@ -446,7 +534,18 @@ export function CheckoutPage() {
             </form>
 
             {status ? (
-              <output className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{status}</output>
+              <output
+                role={statusTone === 'error' ? 'alert' : undefined}
+                className={`rounded-lg px-3 py-2 text-xs ${
+                  statusTone === 'error'
+                    ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-200'
+                    : statusTone === 'success'
+                      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                      : 'bg-slate-50 text-slate-600'
+                }`}
+              >
+                {status}
+              </output>
             ) : null}
           </article>
         </div>

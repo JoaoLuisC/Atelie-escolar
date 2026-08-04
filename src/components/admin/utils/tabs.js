@@ -3,6 +3,7 @@ export const TAB_LABELS = {
   produtos: 'Produtos',
   categorias: 'Categorias',
   pedidos: 'Pedidos',
+  cupons: 'Cupons',
   'prod-saida': 'Desempenho dos produtos',
   faturamento: 'Faturamento',
   comparativo: 'Comparativo mensal',

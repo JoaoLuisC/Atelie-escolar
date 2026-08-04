@@ -99,7 +99,7 @@ Fase 6  — Otimização contínua e expansão         🟡 Mix free/pago  ⏳ n
 
 **Por que importa:** sem Curva ABC, decisões de produto/estoque/campanha são intuição. Kwong validou que essa ferramenta foi decisiva para definir prioridades.
 
-**Código entregue:** [api/admin-abc-products.js](../api/admin-abc-products.js) (filtro por período + categoria), [api/admin-abc-customers.js](../api/admin-abc-customers.js) (VIP/recorrente/eventual com email mascarado), [api/admin-cohort.js](../api/admin-cohort.js) (matriz mensal), [api/admin-kpis.js](../api/admin-kpis.js) (LTV/recompra/LTV-CAC ratio), aba **Análise** em [src/components/admin/tabs/AnalysisTab.jsx](../src/components/admin/tabs/AnalysisTab.jsx) com Pareto + heatmap de coorte + filtros + **export CSV** ([src/utils/csv-export.js](../src/utils/csv-export.js)), KPIs no Dashboard principal. Classificação ABC compartilhada em [lib/abc-classification.js](../lib/abc-classification.js). Cache server-side de 1h em todos os endpoints (regra F5).
+**Código entregue:** [api/admin-abc-products.js](../../api/admin-abc-products.js) (filtro por período + categoria), [api/admin-abc-customers.js](../../api/admin-abc-customers.js) (VIP/recorrente/eventual com email mascarado), [api/admin-cohort.js](../../api/admin-cohort.js) (matriz mensal), [api/admin-kpis.js](../../api/admin-kpis.js) (LTV/recompra/LTV-CAC ratio), aba **Análise** em [src/components/admin/tabs/AnalysisTab.jsx](../../src/components/admin/tabs/AnalysisTab.jsx) com Pareto + heatmap de coorte + filtros + **export CSV** ([src/utils/csv-export.js](../../src/utils/csv-export.js)), KPIs no Dashboard principal. Classificação ABC compartilhada em [lib/abc-classification.js](../../lib/abc-classification.js). Cache server-side de 1h em todos os endpoints (regra F5).
 
 **Falta validar em produção:**
 - [ ] Aba `Análise` carrega em < 2s com dados reais
@@ -172,9 +172,9 @@ Fase 6  — Otimização contínua e expansão         🟡 Mix free/pago  ⏳ n
 
 ## Próximo passo concreto
 
-**Fases 0-3 estão com código pronto. O bloqueio agora é operacional, não técnico** (detalhes em [PENDENCIAS.md](./PENDENCIAS.md)):
+**Fases 0-4 estão com código pronto. O bloqueio agora é operacional, não técnico** (detalhes em [PENDENCIAS.md](./PENDENCIAS.md)):
 
-1. Aplicar as 5 migrations no Supabase — 15 min
+1. Aplicar as 13 migrations no Supabase (`supabase/migrations/`, via `npm run supabase:db:push` ou SQL Editor) — 15 min
 2. Plugar credenciais grátis (GA4 ID, Pixel ID, `CRON_SECRET`, Resend já está) — 1-2h
 3. Autenticar domínio no Resend (DNS — propagação até 24h)
 4. Criar `public/og-default.png` 1200×630 — 30 min
@@ -192,8 +192,8 @@ Fase 6  — Otimização contínua e expansão         🟡 Mix free/pago  ⏳ n
 | 2026-05-24 | Versão inicial — 7 fases priorizadas com 5 referências acadêmicas |
 | 2026-05-24 | Fase 0 entregue: GA4 + Meta Pixel + UTM + `analytics_events` + funil admin + Lighthouse CI + banner LGPD |
 | 2026-05-24 | Fase 1 entregue: slugs + meta tags + JSON-LD + sitemap + robots + fontes trim |
-| 2026-05-24 | Fase 2 entregue: refactor ProductsPage + TrustBadge + Skeleton + página produto convertendo + CartDrawer + cupons |
+| 2026-05-24 | Fase 2 entregue: refactor ProductsPage + selos de confiança (checkout + SocialProofStrip) + Skeleton + página produto convertendo + CartDrawer + cupons |
 | 2026-05-24 | Fase 3 entregue: double opt-in + 8 templates + sequência D+0/3/15/45 + abandoned cart + reactivation 90d + cron + aba Segmentos |
 | 2026-05-24 | Fase 4 entregue: Curva ABC produtos + clientes + coorte mensal + KPIs (LTV, recompra, LTV/CAC) + aba Análise com Pareto + heatmap + export CSV (regra I4) |
 | 2026-05-24 | Decisão registrada: stack 100% gratuito até Fase 4; Fase 5 (mídia paga) só quando dados justificarem |
-| 2026-05-24 | **Doc compactado** — listas detalhadas de "Já entregue" das Fases 0-3 colapsadas; detalhes operacionais migrados para [PENDENCIAS.md](./PENDENCIAS.md) e implementação para [SECURITY.md](./SECURITY.md) / código |
+| 2026-05-24 | **Doc compactado** — listas detalhadas de "Já entregue" das Fases 0-3 colapsadas; detalhes operacionais migrados para [PENDENCIAS.md](./PENDENCIAS.md) e implementação para [SECURITY.md](../SECURITY.md) / código |

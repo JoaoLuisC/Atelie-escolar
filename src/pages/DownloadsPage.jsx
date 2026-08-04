@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { SkeletonDownloadList } from '../components/Skeleton';
@@ -92,17 +91,6 @@ export function DownloadsPage() {
   const [searchingByEmail, setSearchingByEmail] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [pollingStatus, setPollingStatus] = useState('');
-  const [searchedEmail, setSearchedEmail] = useState('');
-  const {
-    formState: { errors },
-    handleSubmit,
-    register,
-  } = useForm({
-    defaultValues: {
-      email: '',
-    },
-    mode: 'onSubmit',
-  });
 
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order') || localStorage.getItem('lastOrderId') || '';
@@ -114,9 +102,9 @@ export function DownloadsPage() {
   ).trim().toLowerCase();
   const hasSuccessFlag = params.get('success') === '1';
 
-  async function loadOrder() {
+  const loadOrder = useCallback(async (signal) => {
     if (!orderId) {
-      setStatus('Nenhum pedido para exibir agora. Use a busca por e-mail abaixo para encontrar seus downloads.');
+      setStatus('Nenhum pedido selecionado. Entre na sua conta para ver o histórico de pedidos e downloads.');
       setOrder(null);
       setOrderError('');
       setLoading(false);
@@ -134,8 +122,11 @@ export function DownloadsPage() {
     setStatus('Carregando as informações do seu pedido…');
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${encodeURIComponent(orderId)}&email=${encodeURIComponent(orderEmail)}`);
+      const response = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${encodeURIComponent(orderId)}&email=${encodeURIComponent(orderEmail)}`, { signal });
       const data = await response.json();
+      // Requisição substituída por outra (troca de pedido) ou desmontagem:
+      // descarta o resultado para não sobrescrever o estado atual.
+      if (signal?.aborted) return;
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Não foi possível verificar o pedido agora.');
@@ -164,20 +155,22 @@ export function DownloadsPage() {
         setStatus('Não conseguimos confirmar este pagamento. Tente novamente em alguns minutos ou nos chame pelo e-mail.');
       }
     } catch (error) {
+      if (error?.name === 'AbortError' || signal?.aborted) return;
       const message = error.message || 'Erro ao carregar downloads.';
       setStatus(message);
       setOrderError(message);
       pushToast(message, 'error');
       setOrder(null);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  }
+  }, [orderId, orderEmail, pushToast]);
 
   useEffect(() => {
-    loadOrder();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
+    const controller = new AbortController();
+    loadOrder(controller.signal);
+    return () => controller.abort();
+  }, [loadOrder]);
 
   usePendingOrderPolling({
     orderId,
@@ -189,34 +182,58 @@ export function DownloadsPage() {
     pushToast,
   });
 
-  async function loadOrdersByEmail(formData) {
-    const email = formData.email.trim().toLowerCase();
+  // Histórico de pedidos: SÓ os do cliente logado. O backend deriva o e-mail da
+  // sessão (cookie HttpOnly) — não passamos e-mail arbitrário. `credentials`
+  // envia o cookie de sessão.
+  const loadMyOrders = useCallback(async (signal) => {
+    if (!customerSession?.email) return;
     setSearchingByEmail(true);
-    setEmailStatus('Buscando historico...');
-    setSearchedEmail(email);
+    setEmailStatus('Carregando seus pedidos...');
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/customer-orders?email=${encodeURIComponent(email)}`);
-      const data = await response.json();
+      const response = await fetch(`${getApiBaseUrl()}/customer-orders`, {
+        credentials: 'include',
+        signal,
+      });
 
+      if (signal?.aborted) return;
+
+      if (response.status === 401) {
+        setOrders([]);
+        setEmailStatus('Sua sessão expirou. Faça login novamente para ver seus pedidos.');
+        return;
+      }
+
+      const data = await response.json();
+      if (signal?.aborted) return;
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Nao foi possivel carregar os pedidos.');
+        throw new Error(data.error || 'Não foi possível carregar os pedidos.');
       }
 
       setOrders(data.orders || []);
-
-      if ((data.orders || []).length === 0) {
-        setEmailStatus('Nenhum pedido encontrado para este e-mail.');
-      } else {
-        setEmailStatus(`Encontramos ${(data.orders || []).length} pedido(s).`);
-      }
+      setEmailStatus(
+        (data.orders || []).length === 0
+          ? 'Nenhum pedido encontrado na sua conta.'
+          : `Encontramos ${(data.orders || []).length} pedido(s).`,
+      );
     } catch (error) {
+      if (error?.name === 'AbortError' || signal?.aborted) return;
       setOrders([]);
       setEmailStatus(error.message || 'Erro ao buscar pedidos.');
     } finally {
-      setSearchingByEmail(false);
+      if (!signal?.aborted) setSearchingByEmail(false);
     }
-  }
+  }, [customerSession?.email]);
+
+  useEffect(() => {
+    if (!customerSession?.email) {
+      setOrders([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    loadMyOrders(controller.signal);
+    return () => controller.abort();
+  }, [customerSession?.email, loadMyOrders]);
 
   function openOrder(orderCode, internalOrderId, customerEmail) {
     const id = orderCode || internalOrderId;
@@ -267,7 +284,7 @@ export function DownloadsPage() {
             </div>
             <button
               type="button"
-              onClick={loadOrder}
+              onClick={() => loadOrder()}
               disabled={loading}
               className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
             >
@@ -285,37 +302,36 @@ export function DownloadsPage() {
             ]}
           />
 
-          <form onSubmit={handleSubmit(loadOrdersByEmail)} noValidate className="mt-5">
-            <label htmlFor="downloads-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Buscar pedidos por e-mail
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="downloads-email"
-                type="email"
-                placeholder="seu@email.com"
-                disabled={searchingByEmail}
-                aria-invalid={Boolean(errors.email)}
-                aria-describedby={errors.email ? 'downloads-email-error' : undefined}
-                className={inputClass}
-                {...register('email', {
-                  required: 'Informe o e-mail usado na compra.',
-                  pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Digite um e-mail válido.' },
-                })}
-              />
-              <button
-                type="submit"
-                disabled={searchingByEmail}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:bg-brand-300"
-              >
-                {searchingByEmail ? 'Buscando…' : 'Buscar'}
-              </button>
+          {customerSession?.email ? (
+            <div className="mt-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Seus pedidos <span className="normal-case text-slate-400">({customerSession.email})</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => loadMyOrders()}
+                  disabled={searchingByEmail}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-60"
+                >
+                  {searchingByEmail ? 'Atualizando…' : 'Atualizar'}
+                </button>
+              </div>
+              {emailStatus ? <p className="mt-2 text-xs text-slate-500">{emailStatus}</p> : null}
             </div>
-            {errors.email ? (
-              <p id="downloads-email-error" role="alert" className="mt-1 text-xs text-rose-700">{errors.email.message}</p>
-            ) : null}
-            {emailStatus ? <p className="mt-2 text-xs text-slate-500">{emailStatus}</p> : null}
-          </form>
+          ) : (
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm text-slate-700">
+                Para ver o histórico dos seus pedidos e baixar os arquivos, entre na sua conta.
+              </p>
+              <Link
+                to="/login?redirect=/downloads"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+              >
+                <i className="bi bi-box-arrow-in-right" aria-hidden="true" /> Entrar
+              </Link>
+            </div>
+          )}
 
           {orderError ? (
             <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
@@ -366,7 +382,7 @@ export function DownloadsPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => openOrder(entry.orderId, entry.internalOrderId, searchedEmail)}
+                      onClick={() => openOrder(entry.orderId, entry.internalOrderId, customerSession?.email)}
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                     >
                       Abrir pedido
@@ -389,22 +405,29 @@ export function DownloadsPage() {
                   <SkeletonDownloadList count={Math.max(1, (order.items || []).length || 1)} />
                 </div>
               ) : (
-                <ul className="flex flex-col gap-2">
-                  {(order.downloadTokens || []).map((item) => (
-                    <li key={item.token} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-br from-brand-50 to-white p-3 ring-1 ring-brand-100">
-                      <div className="min-w-0">
-                        <strong className="block text-sm text-slate-800">{item.productName || `Produto ${item.productId}`}</strong>
-                        <p className="text-xs text-slate-500">Token vinculado ao pedido aprovado.</p>
-                      </div>
-                      <a
-                        href={`/api/download?token=${item.token}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
-                      >
-                        <i className="bi bi-download" /> Baixar
-                      </a>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="flex flex-col gap-2">
+                    {(order.downloadTokens || []).map((item) => (
+                      <li key={item.token} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-br from-brand-50 to-white p-3 ring-1 ring-brand-100">
+                        <div className="min-w-0">
+                          <strong className="block text-sm text-slate-800">{item.productName || `Produto ${item.productId}`}</strong>
+                          <p className="text-xs text-slate-500">Token vinculado ao pedido aprovado.</p>
+                        </div>
+                        <a
+                          href={`${getApiBaseUrl()}/download?token=${encodeURIComponent(item.token)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                        >
+                          <i className="bi bi-download" /> Baixar
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Cada link é de uso único e expira por segurança. Se um download não abrir ou o link já tiver sido usado, clique em <strong>Atualizar</strong> acima para gerar novos links — ou nos chame por e-mail.
+                  </p>
+                </>
               )}
             </div>
           ) : null}

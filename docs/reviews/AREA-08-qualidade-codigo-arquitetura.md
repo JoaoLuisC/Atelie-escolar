@@ -1,0 +1,772 @@
+> Review READ-ONLY — Area 8 (Qualidade de Codigo & Arquitetura). Gerado por auditoria multi-agente (9 dimensoes, 83 agentes, verificacao adversarial por achado). Data: 2026-07-01.
+> Achados: 73 brutos | 72 confirmados | 1 refutado.
+
+# Review Area 8 — Qualidade de Codigo & Arquitetura
+
+Consolidação READ-ONLY dos achados de dívida técnica já confirmados por verificação adversarial. Achados que apareciam em mais de uma dimensão foram fundidos, mantendo todas as `locations`. IDs reatribuídos por tema.
+
+---
+
+## 1. Achados (detalhados)
+
+### Arquitetura & Camadas
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ARQ-01** (funde D1-01 + D6-07 + nota Vercel de D7) |
+| Severidade | ALTO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/services/admin-panel.js:77,81,89` · `routes/api-compat.routes.js:100,101` · `vercel.json:17` · `api/admin-users.js` |
+| Problema | O frontend chama `/api/admin/users` **com barra** (fetch/update/delete de usuários). No Express, o alias `router.all('/admin/users', ...)` (linha 101) resolve; na Vercel, `/api/(.*) -> /api/$1` mapeia para o arquivo inexistente `api/admin/users.js` (só existe `api/admin-users.js` com hífen), gerando **404 em produção**. Todos os outros endpoints admin usam hífen e batem 1:1 com os arquivos. O alias duplicado existe apenas para acomodar essa inconsistência de nomeação. |
+| Impacto | Bug silencioso: a aba Usuários funciona em dev e **quebra em produção**; o alias mascara a divergência estrutural arquivo=rota da Vercel. Superfície de API ambígua (dois caminhos para o mesmo recurso). |
+| Correção | Trocar as 3 chamadas em `admin-panel.js` para `/admin-users` (mesmo handler) e remover o alias `router.all('/admin/users')` da linha 101, para dev e prod usarem o path idêntico. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ARQ-02** (funde D1-02; relaciona D1-06 refutado, ver §5) |
+| Severidade | ALTO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `routes/products.routes.js:32` · `routes/payment.routes.js:9,18` · `routes/auth.routes.js:88` · `middleware/auth.middleware.js:42` · `middleware/validate.middleware.js:3` |
+| Problema | Segundo stack BFF paralelo e majoritariamente morto: `POST /api/produtos`, `POST /api/payments/process`, `GET /api/payments/verify` e `GET /api/auth/me` existem em `routes/*` mas o frontend não chama nenhum. Usam modelo de auth (Bearer + `checkRole` lendo `profiles.role`) e validação (Zod/`validateBody`) que o stack real (`api/*` com cookie HMAC + validação inline) **não** usa. `POST /produtos` grava em `products` colunas divergentes de `admin-products.js`. |
+| Impacto | Duas verdades para criar produto / verificar pagamento / autenticar. Mantenedor pode corrigir/confiar no caminho errado; middleware `authenticate`/`checkRole` e schemas existem só para servir código morto, inflando manutenção. |
+| Correção | Remover `products.routes.js`, `payment.routes.js` e os endpoints `/auth/me` + `/produtos` não usados (com o middleware/validation exclusivos deles) **OU**, se forem a direção futura, migrar o frontend e aposentar os `api/*` equivalentes. Não manter os dois. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ARQ-03** (D1-03) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `lib/supabase.js:85` · `services/supabase-auth.js:51` · `routes/auth.routes.js:45` · `api/admin-login.js:2,6` · `api/me-delete-account.js:5,7` |
+| Problema | Três mecanismos de acesso ao Supabase coexistem: (a) `lib/supabase.js` (REST via fetch, service-role, ~37 handlers); (b) `services/supabase-auth.js` (cliente `@supabase/supabase-js`); (c) `routes/auth.routes.js` (`supabaseAuthRequest` próprio). Handlers como `admin-login.js` e `me-delete-account.js` importam (a) **e** (b) no mesmo arquivo. Leitura de env do Supabase triplicada. |
+| Impacto | Não há porta única de dados: cada mudança de config/header/erro precisa ser replicada em até 3 lugares. Aumenta acoplamento e custo de refactor da camada de dados. |
+| Correção | Eleger `lib/supabase.js` como camada única server-side; mover `getAdminClient/getAnonClient/getProfileRole*` e `supabaseAuthRequest` para dentro dela (ou `services/` reexportando dela), removendo a leitura duplicada de env. Divisão legítima (helpers REST vs GoTrue admin API) pode ficar, mas com fronteira clara. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ARQ-04** (D1-05) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `api/create-payment.js:5` · `api/validate-coupon.js:150` |
+| Problema | `create-payment.js` faz `require('./validate-coupon')` e usa `module.exports.helpers` (loadCoupon/validateCouponState/buildEligibleSet/computeDiscount/normalizeCode). A lógica de cupom vive dentro de um handler HTTP e é reexportada como lib — dependência handler→handler, violando a fronteira `api/` (handlers) vs `lib/` (lógica reutilizável). |
+| Impacto | Acoplamento entre endpoints; carregar `validate-coupon` arrasta seu handler default inteiro; dificulta testar a regra de cupom isoladamente. |
+| Correção | Extrair regras para `lib/coupons.js`; `validate-coupon.js` e `create-payment.js` importam de lá. O handler fica só com transporte HTTP. (Habilita também a correção de CUP-01/D9-01.) |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ARQ-05** (funde D1-07 + D2-02 — auth admin inline / boilerplate de guard) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `api/admin-*.js` (15 handlers) — `admin-kpis.js:47`, `admin-orders.js:117`, `admin-products.js:247`, `admin-coupons.js:190`, `admin-users.js:117`, `admin-upload-url.js:22`, `admin-cleanup-events.js:16`, … · `routes/api-compat.routes.js:75` · `lib/admin-session.js:181,195` |
+| Problema | `wrapCompatHandler` só mexe em headers CORS; cada handler admin repete quase verbatim o bloco `setAdminCorsHeaders → OPTIONS → 405 → ensureAdminSession`, sem middleware de grupo `/admin-*`. Inconsistências reais já existem: OPTIONS `200` vs `204` (`admin-upload-url.js:23`), `{error}` sem `success:false` (`admin-products.js:272`), e **ordem** divergente (405 antes/depois de `ensureAdminSession`). Não há ordem canônica nem `withAdminGuard`. |
+| Impacto | Auth admin espalhada por 15 arquivos: handler novo pode esquecer `ensureAdminSession` (buraco de acesso silencioso); mudar política CORS/CSRF/formato 405 exige tocar 15 pontos. |
+| Correção | Criar `lib/admin-handler.js` com `withAdminGuard(handler, { methods })` que aplica CORS, trata OPTIONS, valida método e chama `ensureAdminSession` antes de delegar. Migrar handlers para `module.exports = withAdminGuard(...)`. Mantém o modelo Vercel (checagem continua no handler exportado). |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ARQ-06** (D1-08) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `api/webhook.js:33,110` · `api/create-payment.js:36` · `docs/ProjectDocs/02-ARQUITETURA.md:86` |
+| Problema | A doc chama `lib/` de "camada de serviço backend", mas a orquestração de domínio (transição atômica de pedido, emissão de `download_tokens`, rateio de desconto, provisionamento de conta) vive nos handlers `api/*`; `lib/` é majoritariamente helper fino. Drift terminológico (padrão handler-gordo/lib-fina é internamente coerente). |
+| Impacto | Baixo hoje; conforme handlers crescem (`create-payment` 265, `webhook` 193, `cron-email-jobs` 369 linhas), a ausência de camada de serviço dificulta reuso/teste da regra fora do HTTP. |
+| Correção | Ajustar a doc para descrever `lib/` como "utilitários/adapters", **ou** promover domínios reusados por 2+ handlers a `lib/` — começando pelo cupom (ARQ-04). |
+
+---
+
+### Duplicação no Backend (DRY)
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DRY-01** (D2-01) |
+| Severidade | ALTO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `api/create-payment.js:7,9` · `api/abandoned-cart.js:19` · `api/subscribe.js:15` · `src/utils/attribution.js:108` |
+| Problema | `sanitizeAttribution` duplicada em 3 handlers com **conjuntos de campos divergentes**: `create-payment.js` aceita 9 campos (inclui `referrer`, `landing_path`, `first_touch_at`); `abandoned-cart.js` e `subscribe.js` aceitam só 6. O cliente (`buildAttributionPayload`) emite os 9, então 3 campos são **silenciosamente descartados** em `abandoned_carts` e `email_subscribers`, mas preservados em `orders`. |
+| Impacto | Mesmo payload produz `attribution_data` diferente por endpoint, degradando relatórios de aquisição/ROAS (Curva ABC/funil leem esses campos). Corrigir bug de sanitização exige lembrar de 3 lugares — **propaga bug de dados**. |
+| Correção | Extrair `lib/attribution-sanitize.js` com `sanitizeAttribution(input, { fields })` e um `ATTRIBUTION_FIELDS` canônico (superset de 9). Decidir explicitamente o conjunto por tabela. *(Nota: `sanitizeProperties` de `analytics-events.js:31` é filtro PII por blacklist — semântica diferente, não fundir.)* |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DRY-02** (funde D2-03 + D6-02 — cache TTL em memória) |
+| Severidade | MEDIO |
+| Confiança | Alta (Média sobre a homogeneidade exata; ver nota) |
+| Esforço | M |
+| Local | `api/admin-kpis.js:26` · `api/admin-abc-customers.js:20` · `api/admin-abc-products.js:16` · `api/admin-cohort.js:22` · `api/admin-segments.js:6` · `api/admin-funnel.js:17` |
+| Problema | Cache TTL em memória replicado em 6 handlers analíticos. `getCached/setCached` sobre `Map` com `{data,expiresAt}` e `CACHE_TTL_MS` são **byte-idênticos** em kpis/abc-customers/abc-products; cohort (escalar single-slot), funnel (Map keyed + `invalidate`) e segments (inline, TTL 30min) são variantes. `Cache-Control: private, max-age=3600` hardcoded inline 2× por arquivo, com o `3600` acoplado manualmente ao `CACHE_TTL_MS`. Nenhum cache tem limite de tamanho/eviction (memory-leak potencial em processo long-running). |
+| Impacto | Ajustar TTL/eviction/headers exige editar 6 arquivos; `max-age` e TTL podem divergir. `admin-segments` já diverge (TTL 30min, e **não** emite `Cache-Control`). |
+| Correção | Extrair `lib/response-cache.js` com `createTtlCache({ ttlMs, maxKeys })` e `sendCached(res, data, hit)` derivando `max-age` do `ttl` (elimina o `3600` hardcoded). Contemplar as 3 variantes (Map keyed, escalar, com invalidação). |
+| Nota | O reporter de D6-02 superestimou ("6 idênticos"): identidade estrita só em 3; e a "evidência de drift" citada (segments emitindo max-age=3600) é **falsa** — segments não emite `Cache-Control`. A dívida em si (boilerplate + `3600` acoplado ao TTL em 5 handlers) permanece MEDIO. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DRY-03** (D2-04) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `lib/admin-session.js:8,16,101` · `lib/customer-session.js:8,16,26` |
+| Problema | Maquinaria de token HMAC quase-idêntica: `toBase64Url`/`fromBase64Url` byte-a-byte iguais; `buildCookieHeader`, `create/verifySessionToken` (HMAC-sha256 sobre payload base64url, checagem exp/sub, `safeCompare`) e `set/clearSessionCookie` estruturalmente iguais, diferindo só em nome do cookie, secret e `sub`. `customer-session` já importa `parseCookies/safeCompare` de `admin-session` (extração parcial iniciada). |
+| Impacto | Correção de bug de assinatura/verificação/padding precisa ser feita 2×; risco de as sessões divergirem em política de segurança; rotação de secret exige mexer nos dois. |
+| Correção | Extrair `lib/hmac-token.js` (base64url + `createSignedToken`/`verifySignedToken({expectSub})`) e `lib/cookie.js` (`buildCookieHeader({name,value,maxAge})`). `admin-session`/`customer-session` passam a só configurar nome/secret/sub. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DRY-04** (D2-05) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `api/admin-segments.js:13,19` · `api/admin-kpis.js:49,54` · `api/subscribe.js:41,45` · `api/abandoned-cart.js:48` |
+| Problema | Envelope de erro (`"Method not allowed"`, `"Supabase nao configurado."`, shape `{success:false,error}`) escrito inline em ~26–37 arquivos, sem helper. Divergências: OPTIONS `200` vs `204`; Supabase indisponível `500` vs `204` vazio (`abandoned-cart.js:52`); acentuação/idioma variam. |
+| Impacto | Dívida cosmética de alto volume; sem ponto único para padronizar códigos/formato. |
+| Correção | `lib/http.js` com `methodNotAllowed(res, allowed)`, `supabaseUnavailable(res)`, `ok(res,data)`, `fail(res,status,msg)`. Adotar incrementalmente. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DRY-05** (D2-06) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `api/admin-kpis.js:57` · `api/admin-cohort.js:57` · `api/admin-funnel.js:39` · `api/home-sections.js:19` |
+| Problema | Clamp de query-param `Math.max(min, Math.min(max, parseInt(x||default)||default))` repetido para `window`/`months`/`days`; `home-sections` tem variante (`clampLimit`). Não há paginação real (o "seed de paginação" foi refutado — os `limit` são tetos hardcoded, não parametrizáveis). |
+| Impacto | Baixo; validação de bounds reinventada e pode divergir. |
+| Correção | `lib/query.js` com `clampInt(value, { min, max, fallback })`. Não criar abstração de paginação. |
+
+---
+
+### Tratamento de Erro & Consistência de Resposta (Backend)
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ERR-01** (funde D3-01 + D3-05 + D3-08 — envelope de erro incoerente) |
+| Severidade | ALTO |
+| Confiança | Alta |
+| Esforço | G |
+| Local | `middleware/error.middleware.js:15-27,19` · `utils/app-error.js:7` · `api/products.js:13,97` · `api/download.js:86` · `api/verify-payment.js:207` · `api/admin-products.js:259-272` · `api/admin-coupons.js:236-239` · `api/validate-coupon.js:109` · `src/utils/api.js:8-12` |
+| Problema | Múltiplas formas de envelope de erro coexistem no mesmo `/api`: **(a)** `errorHandler` central emite `error` como **objeto** `{message,code}`, mas os ~35 handlers emitem `error` como **string**; **(b)** um grupo responde `{error:'...'}` (sem `success`), outro `{success:false,error:'...'}` — sem critério (handlers-irmãos `admin-products` vs `admin-coupons` divergem); **(c)** `error.code` semântico só existe no central; inline só `validate-coupon` emite `code` (em snake_case, fora do enum). O front teve que criar achatamento em `src/utils/api.js:8-12`, provando o contrato ambíguo. |
+| Impacto | Todo consumidor (front/testes/integrações) lida com 2–3 formas. `if(data.success===false)` nunca dispara no grupo `{error}`. Refactor que migre um handler de inline→middleware muda silenciosamente o shape. Front compara strings de mensagem em pt-BR (frágil). |
+| Correção | Definir UM envelope: `{ success:false, error:{ message, code, details? } }`, com `success` sempre presente e `code` de um enum documentado (`VALIDATION_ERROR`, `NOT_FOUND`, `COUPON_EXPIRED`, `INTERNAL_ERROR`…). Handlers lançam `AppError` e delegam ao `errorHandler`, e/ou usam `sendError(res, appError)`. Remover o achatamento de `src/utils/api.js` depois. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ERR-02** (funde D3-02 + D3-03 — errorHandler não governa + sem rede serverless) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | G |
+| Local | `middleware/error.middleware.js:7-33` · `routes/api-compat.routes.js:43-63` · `server.js:143-152` · `utils/app-error.js:1-13` · `api/products.js:7-99` · `api/verify-payment.js:148-208` |
+| Problema | `AppError`/`errorHandler` são adotados de fato só por `routes/products.routes.js`; os ~35 `api/*.js` capturam tudo em try/catch próprio e respondem inline, então `wrapCompatHandler`→`next(error)` quase nunca aciona o central. Pior no serverless (Vercel): cada `api/*` roda standalone sem `errorHandler`; código **fora do `try`** (checagens de `req.method`/`query` antes do `try` em `products.js:8-14`, `verify-payment.js:140-146`) devolveria o 500 genérico da plataforma. Dev (Express) e prod (Vercel) divergem para erro capturado **e** não-capturado. |
+| Impacto | Infra central de erro não governa 97% dos endpoints; melhorias (correlation id, mascarar produção) não os alcançam. Bugs de erro só aparecem em prod; difícil reproduzir localmente. |
+| Correção | `withErrorEnvelope(handler)` compartilhado que captura exceções e produz o mesmo envelope (ERR-01), usado tanto pelo `api-compat` quanto pela export default serverless — convergindo os dois runtimes. Alternativa mínima: helper `sendError/sendSuccess` e proibir `res.status(500).json` ad hoc. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ERR-03** (D3-04) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `api/cron-email-jobs.js:367` · `api/send-confirmation-email.js:73` |
+| Problema | Dois endpoints devolvem `error.message` cru ao cliente no catch (`cron-email-jobs` em 500; `send-confirmation-email` em 200). `error.message` de Supabase/Postgres/fetch pode conter detalhe interno (coluna, SQL, host). São a exceção inconsistente — os demais usam mensagem genérica. |
+| Impacto | Risco de vazamento + inconsistência de contrato (consumidor não sabe se `error` é amigável ou dump interno). |
+| Correção | Substituir por mensagem genérica estável e manter o detalhe só em `console.error`. Ao adotar o envelope central, ele já mascara `message` de status ≥500 em produção (`error.middleware.js:18`). |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ERR-04** (D3-06) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `api/validate-coupon.js:108-124` · `api/send-confirmation-email.js:64-73` |
+| Problema | Erro de negócio como HTTP 200: `validate-coupon.js:109,119` retorna `status(200)` com `{success:false,error,code}` para cupom inválido/não-elegível; no mesmo arquivo, erros análogos usam 400/500. `send-confirmation-email.js:73` responde 200 num catch de falha real (200 aqui é parcialmente intencional — email best-effort — mas coloca `error.message` de exceção num body `success:true`). |
+| Impacto | Consumidor não pode confiar no status HTTP; ferramentas (retries/monitoria/cache) veem 200 como sucesso. |
+| Correção | Critério: 4xx para erro de cliente/negócio (cupom inválido → 422/400), 200 só para sucesso real. Onde 200 for intencional, documentar e nunca colocar `error` de exceção no body. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ERR-05** (D3-07) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `api/admin-coupons.js:41-67,128-165` · `api/admin-categories.js:74-115` · `middleware/validate.middleware.js:3-19` |
+| Problema | `admin-coupons` e `admin-categories` validam via `throw new Error('...')` genérico dentro de `toCouponPayload`/`toCategoryPayload` e capturam em cada operação (create/update) convertendo à mão para `{status:400,body}` — 4 blocos quase-idênticos. `validate.middleware.js` (Zod) + `AppError(400)` existem e **já são usados** em `routes/products.routes.js`/`payment.routes.js`, mas ignorados aqui. |
+| Impacto | Validação acoplada ao handler, duplicada por operação; mudar o relato de erro exige editar N handlers; Zod já no projeto é ignorado. |
+| Correção | Migrar para schemas Zod (ou, no mínimo, `AppError(400,{details})` capturado por wrapper único), eliminando os try/catch repetidos. *(Handlers admin usam despacho por objeto-resultado `{status,body}`, então `validateBody` não é drop-in direto — usar helper compartilhado.)* |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **ERR-06** (D3-09) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `api/products.js:96` · `api/validate-coupon.js:141` · `api/me-delete-account.js:137-244` · `api/cron-email-jobs.js:366` · `middleware/error.middleware.js:11-13` |
+| Problema | Logging inconsistente: uns `console.error(error)` (objeto inteiro), outros só `error.message` com tag; `me-delete-account` mistura `warn` (best-effort) e `error` (crítico); prefixos variam (inglês sem colchete vs `[tag]`). O central só loga status ≥500. |
+| Impacto | Observabilidade irregular; difícil rastrear erro ponta a ponta em produção. |
+| Correção | Logger util padrão (prefixo `[api:<rota>]`, sempre com objeto de erro para 500), centralizado no wrapper de ERR-02. |
+
+---
+
+### Componentes/Funções Gigantes (Front)
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-01** (D4-01) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | G |
+| Local | `src/components/ProductWizard.jsx:7-833` |
+| Problema | Um único módulo (833 linhas) exporta `ProductWizard` e define inline 3 editores, `RemoveRowButton`, `Field`, `AssetUploader`, 6 funções `normalize*/clean*` e `deriveDisplayName`; mistura estado de formulário, validação por step, upload, montagem dos 4 painéis e transformação de payload. |
+| Impacto | Qualquer mudança exige navegar 800+ linhas acopladas; impossível testar um editor/validação isoladamente; alto risco de regressão. |
+| Correção | Quebrar em `src/components/product-wizard/`: `ProductWizard.jsx` (orquestra), `hooks/useProductForm.js`, `StepBasic/StepMedia/StepPricing/StepConversion.jsx`, `normalize.js`. `Field`/`RemoveRowButton` para UI compartilhada. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-02** (funde D4-02 + metade "editores" de D5-06 + D4-04) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/components/ProductWizard.jsx:460-501,505-548,550-624,386-435` |
+| Problema | `BenefitsEditor`/`FaqEditor`/`ReviewsEditor` são estruturalmente idênticos — `update`/`remove` **byte-idênticos** nos três (só `add` difere no shape), mesmo esqueleto `Field + map + botão Adicionar`. Além disso, os pares `normalize*/clean*` (386-435) repetem `String(x||'').trim()` campo a campo, com `normalize/cleanReviews` quase duplicando a lista de campos. |
+| Impacto | Bug em `update`/`remove` ou comportamento novo (reordenar/limite) exige editar 3 blocos; renomear campo de review/faq exige 2 pontos em sincronia (risco de divergência carga↔submit). |
+| Correção | Extrair hook `useRowEditor(value,onChange)` (ou `<RepeatableList renderRow newRow>`); definir um schema por entidade (campos + coerção) e derivar `normalize`/`clean` dele. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-03** (D4-03) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/components/ProductWizard.jsx:646-780,383,669-676` |
+| Problema | `AssetUploader` (~135 linhas) junta 3 `useState`, chamada `uploadProductAsset`, regra de limite `IMAGE_MAX_BYTES=500*1024` (magic number em 383, aplicado em 669) e ~75 linhas de JSX. Regra de negócio presa na UI. |
+| Impacto | Limite/mensagem não testáveis nem reutilizáveis; lógica de upload não exercitável sem renderizar; mexer no visual arrisca a lógica. |
+| Correção | Extrair `useAssetUpload({kind,onChange,pushToast})` com estado/validação; mover o limite para constante/derivada por `kind`; `AssetUploader` vira apresentação. (Relaciona UPL-01/D9-05.) |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-04** (D4-05) |
+| Severidade | ALTO |
+| Confiança | Alta |
+| Esforço | G |
+| Local | `src/pages/AdminPage.jsx:78-524` (`87-104`, `121-168`, `170-181`, `203-377`, `397-479`) |
+| Problema | God-container: ~17 `useState`, um `useEffect` condicional por `activeTab` que carrega dashboard/usuarios/pedidos/seguranca acoplados, 12 `useMemo`, ~14 handlers CRUD e switch `renderActiveTab` de 15 casos. (Mitigado: cada aba já é componente próprio e derivações moram em `utils/derive` — é camada de wiring, não JSX inline.) |
+| Impacto | Toda aba nova/mudança de fluxo passa por este arquivo; `useEffect` condicional acopla abas não relacionadas; testar handler exige montar a página inteira. |
+| Correção | Extrair hooks por domínio: `useAdminDashboardData` (fetch + memos), `useAdminProducts`, `useAdminCategories`, `useAdminUsers`, `useAdminSettings`. Mapa `tab→componente/loader` para eliminar `useEffect`/switch gigantes. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-05** (D4-06) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/components/admin/tabs/DashboardTab.jsx:51-285,154-212,218-285,445-452` |
+| Problema | Arquivo de 644 linhas com 9 subcomponentes, incluindo 3 primitivas de gráfico SVG (`Sparkline`, `RevenueLineChart`, `CategoryDonut` com `polarToCartesian`/`arcPath`), e ainda faz `fetchAdminKpis` num `useEffect` — mistura data-fetch com layout. |
+| Impacto | Matemática de path/ângulos sem teste e re-embutida por chart; dupla responsabilidade (fetch+render); editar um gráfico obriga ler o dashboard inteiro. |
+| Correção | Mover `Sparkline/RevenueLineChart/CategoryDonut/HeroCard/MiniStat` para `src/components/admin/charts/`; extrair `useAdvancedKpis()`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-06** (D4-07) |
+| Severidade | MEDIO |
+| Confiança | **Média** |
+| Esforço | M |
+| Local | `src/components/admin/tabs/AnalysisTab.jsx:35-107,356-410,312-347` |
+| Problema | `EXPLANATIONS` (35-107, ~73 linhas de copy editorial pt-BR) embutido no módulo de UI; 9 `useState` + `Promise.all` de fetch no mesmo componente. *(Parcialmente refutado: os 3 exports CSV NÃO são "quase idênticos" — compartilham só 1 linha de guard; `exportCohortCsv` é estruturalmente diferente. `downloadCsv` já parametriza colunas.)* |
+| Impacto | Editar textos recompila o componente e infla diff; componente acumula fetch+estado+exports+render. |
+| Correção | Mover `EXPLANATIONS` para `analysis-explanations.js`; extrair `useAnalysisData()`. **Não** vale unificar os exports (ganho baixo). |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-07** (D4-09) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/pages/CheckoutPage.jsx:20-237` (`49-76`, `95-154`, `156-177`, `179-237`) |
+| Problema | 6 `useState` + react-hook-form e 4 `useEffect` entrelaçados: abandoned-cart com debounce (49-76), sync de sessão, `begin_checkout`, e polling de `verify-payment` com contador/`maxAttempts` (95-154), + `onSubmit` e ~200 linhas de JSX. Diferente de `DownloadsPage`, o polling **não** foi extraído para hook. |
+| Impacto | Lógica de polling/abandoned-cart (timers, limites) presa no componente, sem teste; alto risco ao mexer no checkout. |
+| Correção | Extrair `usePaymentPolling({orderId,email})` (espelhando `usePendingOrderPolling` de DownloadsPage) e `useAbandonedCartCapture(email,cart)`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-08** (D4-10) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/pages/CustomerAuthPage.jsx:140-465,239-371,386-461` |
+| Problema | 465 linhas com `eslint-disable sonarjs/cognitive-complexity` (140) — complexidade já reconhecida. Monta `authForm` por if/else (login/forgot/register) e ramifica render entre deleteToken / sessão ativa / formulários, misturando **exclusão de conta (LGPD)** com auth. Handlers já extraídos para `useCustomerAuthHandlers` (bom), formulários/deleção seguem inline. |
+| Impacto | Supressor mascara a dívida; adicionar modo/campo exige entender toda a árvore; LGPD e auth evoluem acopladas. |
+| Correção | Extrair `LoginForm/RegisterForm/RecoveryForm` e `AccountDeletionPanel`; o `eslint-disable` cai. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-09** (D4-11) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/pages/DownloadsPage.jsx:81-424,229-234,330-410` |
+| Problema | `eslint-disable sonarjs/cognitive-complexity` (81). Polling já bem extraído (`usePendingOrderPolling`), mas ainda concentra `loadOrder`, `loadOrdersByEmail`, cálculo de `statusStep` e ~5 blocos condicionais de render por `paymentStatus`/loading. |
+| Impacto | Exibição por estado difícil de seguir, sem teste; supressor esconde complexidade. |
+| Correção | Extrair `OrderStatusPanel`, `DownloadList`, helper `deriveStatusStep(order,pollingStatus)` e hook `useCustomerOrders`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CMP-10** (D4-13) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/hooks/useProductFilters.js:33-181,40-42,159-180` |
+| Problema | Hook junta fetch de produtos, derivação/filtragem/ordenação e estado puramente visual da sidebar (`isSidebarOpen`/`isCategorySectionOpen`/`isPriceSectionOpen` + open/close/toggle), retornando objeto de 20 propriedades. Funções puras `sortProducts/matchesPreset` já estão no escopo de módulo. |
+| Impacto | Interface larga demais; lógica de filtro (testável) misturada com UI (não headless). |
+| Correção | Separar `useProductData` (fetch+categorias), `useProductFilterState` (filtros/ordenação) e `useSidebarState`. Testar as funções puras diretamente. |
+
+---
+
+### Duplicação & Estado no Front
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **FRT-01** (D5-01) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/components/admin/tabs/CouponsTab.jsx:42` · `FunnelTab.jsx:105` · `SegmentsTab.jsx:36` · `AnalysisTab.jsx:323` |
+| Problema | Padrão fetch+loading+erro duplicado: `useState(data/loading/error)` + `useEffect` com `let cancelled=false` + `.then/.catch/.finally` + a **mesma** marcação de spinner (`bi bi-arrow-clockwise mr-2 animate-spin`) e caixa de erro (`border-rose-200 bg-rose-50 …`), verbatim em 4 arquivos. *(DashboardTab é variante degenerada — sem estado de erro/spinner — não conta como 5º caso de UI idêntica.)* |
+| Impacto | Mudança no carregamento (retry/AbortController/skeleton/401) replicada em 4 lugares; devs copiam o bloco. |
+| Correção | Hook `useAdminResource(fetcher, deps)` → `{data,loading,error,reload}`; componentes `<TabLoading>`/`<TabError>`. Migrar as 4 abas. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **FRT-02** (D5-02) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | G |
+| Local | `src/pages/AdminPage.jsx:121,397` · `CouponsTab.jsx:34` · `FunnelTab.jsx:99` |
+| Problema | Duas arquiteturas de estado de aba coexistem sem regra: 10 abas são apresentacionais (dados/handlers via props do AdminPage); Coupons/Funnel/Segments/Analysis fazem auto-fetch. `DashboardTab` é híbrido (apresentacional, mas faz fetch próprio de KPIs em 446). Não há critério documentado. |
+| Impacto | Atrito cognitivo alto (abrir cada arquivo para saber onde mora o estado); aba nova não tem padrão; `refreshDashboard` só cobre o ramo via-props. |
+| Correção | Documentar limite único: abas que dependem do agregado `/admin-dashboard` ficam apresentacionais; abas com endpoint próprio usam o hook de FRT-01. Mover o fetch de KPIs do DashboardTab para o mesmo padrão (ou AdminPage) para o Dashboard não ser híbrido. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **FRT-03** (funde D4-08 + D5-03 — CURVE_STYLES + markup ABC) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/components/admin/tabs/DashboardTab.jsx:11-15,335-390,347-358` · `AnalysisTab.jsx:20-24,207-242,483-494` |
+| Problema | `CURVE_STYLES` (classes A/B/C, descrições "80%/15%/5% da receita") **byte-idêntico** nos dois arquivos; grid de 3 chips e barra horizontal por item (`ParetoList` vs corpo de `AbcCurveCard`) são quase a mesma marcação, divergindo em nome de campo (`item.revenue` vs `item.rev`) e `Math.max(4,…)` vs `Math.max(6,…)`. |
+| Impacto | Mudar paleta/label/layout da curva ABC exige editar 2 lugares; divergência latente `rev`↔`revenue` dificulta unificar; risco de as telas ficarem inconsistentes. |
+| Correção | Extrair `CURVE_STYLES` para `admin/utils` (ou ui) + componentes `<AbcSummary>` / `<ParetoBar>` compartilhados; normalizar o shape (`rev`→`revenue`) na camada `derive`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **FRT-04** (D5-04) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/providers/CartProvider.jsx:15,42,59` |
+| Problema | `addToCart`/`removeFromCart` usam `useCallback` com deps `[cart]` lendo `cart` do closure → recriados a cada alteração; `total` (59) recalculado fora de memo; o `useMemo` do `value` invalida sempre. Memoização ilusória (contrasta com AuthProvider/ToastProvider corretos). |
+| Impacto | Estabilidade pretendida não se cumpre; induz o próximo dev a confiar em estabilidade inexistente; risco de stale closure. |
+| Correção | Reescrever com atualização funcional `setCart(prev => …)` e deps `[]`; mover `total` para `useMemo([cart])`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **FRT-05** (D5-05) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/services/admin-products.js:3` · `src/services/admin-panel.js:3` |
+| Problema | `admin-panel.js` tem wrapper `request()` que centraliza `credentials`, 401→"Sessao admin expirada" e `!ok||success===false`. `admin-products.js` reimplementa o fluxo em 4 funções com blocos `if(!ok||!data.success) throw` repetidos e **sem** tratamento de 401 nas mutações (só o GET trata). Divergência extra: usa `!data.success` (qualquer falsy) vs `success===false`. `patchAdminProduct` já vive em `admin-panel` via `request`. |
+| Impacto | DELETE de produto com sessão expirada não produz mensagem padronizada; dois estilos de service para o mesmo recurso → correção aplicada só num. |
+| Correção | Exportar/mover `request` para `services/admin-http.js`; reescrever as 4 funções sobre ele; consolidar operações de produto num módulo. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **FRT-06** (funde D4-12 + metade "INPUT_CLASS" de D5-06) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/pages/CustomerAuthPage.jsx:236-237` · `CheckoutPage.jsx:239` · `DownloadsPage.jsx:236` · `ResetPasswordPage.jsx:121,164` · `src/components/CouponWizard.jsx:6` · `ProductWizard.jsx:381` · `CategoryWizard.jsx:107` |
+| Problema | `inputClass`/`primaryBtnClass`/`INPUT_CLASS`/`LABEL_CLASS` (strings Tailwind longas) duplicadas literalmente entre páginas de formulário e wizards; algumas já divergem (`CheckoutPage` acrescenta `transition`; `CategoryWizard` inline vs constante; `ProductWizard`/`CouponWizard` usam `py-2` sem `disabled:bg-slate-50`). |
+| Impacto | Ajuste de estilo de input/botão replicado em 4+ arquivos; divergência visual quando um é esquecido. |
+| Correção | Extrair `<TextField>`/`<PrimaryButton>` (ou constantes) em `src/components/ui`, reutilizados por páginas e wizards. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **FRT-07** (D5-07) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/components/admin/tabs/CouponsTab.jsx:89` · `AdminPage.jsx:269,313` · `UsersTab.jsx:126` · (extra: `CustomerAuthPage.jsx:154`) |
+| Problema | Confirmação de exclusão inconsistente: cupom/produto/categoria e exclusão de conta usam `window.confirm`; `UsersTab` implementa modal próprio. Não há componente único. |
+| Impacto | UX e código de confirmação divergentes; nova ação destrutiva sem padrão. |
+| Correção | Criar `useConfirm()`/`<ConfirmDialog>` reutilizável; aposentar os `window.confirm`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **FRT-08** (D5-08) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/services/products.js:3` · `src/utils/api.js:31` |
+| Problema | `products.js` chama `fetch()` cru em 3 funções com `if(!ok) throw` e `.json()` manual, ignorando `apiRequest`/`parseJson` (base URL, timeout via AbortController, parse tolerante) já usados por 4 outros services. |
+| Impacto | Rotas públicas de produto sem timeout/parse tolerante; correções no cliente HTTP não as alcançam. |
+| Correção | Reescrever `fetchProducts/fetchHomeSections/fetchProductByIdentifier` sobre `apiRequest`, preservando o tratamento de 404 (inspecionar `response`, pois `apiRequest` não lança por `!ok`). |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **FRT-09** (D5-09) |
+| Severidade | INFO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `src/providers/AuthProvider.jsx:15,80` |
+| Problema | `AuthContext` expõe simultaneamente domínio admin (`adminAuthenticated`/`loginAdmin`/…) e cliente (`customerSession`/`loginCustomer`/…), memoizado por `[authReady, adminAuthenticated, customerSession]`. Uma mudança em `customerSession` re-renderiza consumidores admin e vice-versa. |
+| Impacto | Baixo hoje (provider pequeno); superfície do `useAuth` cresce misturando responsabilidades. |
+| Correção | (Opcional) Separar `AdminAuthContext`/`CustomerAuthContext` ou derivar `useAdminAuth`/`useCustomerAuth` para limitar re-render e clarear domínios. |
+
+---
+
+### Consistência, Idioma & Números Mágicos
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CON-01** (D6-03) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `lib/abc-classification.js:13,23` · `src/components/admin/utils/derive.js:194,210` |
+| Problema | Lógica da Curva ABC duplicada entre backend e front: `buildAbcCurve` (lib) e `deriveAbcCurve` (derive) são quase verbatim (filtro `revenue>0`, sort, acumulado, limiares **80/95**, summary), diferindo só em `revenue` vs `rev`. O próprio comentário em `lib:10` admite o acoplamento por convenção. Números 80/95 mágicos nos dois lados. |
+| Impacto | Mudar o corte de Pareto exige editar 2 arquivos/camadas; esquecer um faz o widget divergir da API. |
+| Correção | Extrair `ABC_THRESHOLDS = { A:80, B:95 }` compartilhado e alinhar `rev`→`revenue`. *(Nota: `lib` é CommonJS e `derive` é ESM sob Vite — "só importar" não é trivial; extrair a constante/threshold é o caminho.)* |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CON-02** (D6-01) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `api/admin-login.js:197,204` · `api/admin-logout.js:16` · `api/home-sections.js:115` · `src/services/admin-panel.js:10,14,171` · `src/pages/CheckoutPage.jsx:223` · `ResetPasswordPage.jsx:94` · `src/services/admin-products.js:9` |
+| Problema | Acentuação inconsistente em mensagens ao usuário (com vs sem acento), às vezes no mesmo arquivo (`admin-panel.js:10` "Sessao/operacao" sem acento, mas `:171` "Arquivo não informado" com). String "Sessao admin expirada…" duplicada literalmente em `admin-panel.js:10` e `admin-products.js:9`. |
+| Impacto | Ortografia irregular passa impressão de baixa qualidade; dificulta i18n futura (duplicatas "Sessao"/"Sessão"). |
+| Correção | Padronizar tudo para pt-BR acentuado; varredura por `sao `/`nao `/`invalid`/`obrigatori`/`Sessao`/`operacao`. Centralizar mensagens repetidas em constante. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CON-03** (D6-04) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/pages/CheckoutPage.jsx:73,100,148` · `api/create-payment.js:15,85,109` · `routes/api-compat.routes.js:69` |
+| Problema | Números mágicos de tempo/tamanho/limite inline sem constante: polling `maxAttempts=150`, intervalo `4000ms`, debounce `1500ms`; cap 100 itens, `1..99`, `slice(0,200)`; `windowMs: 60*1000` repetido 7× nos rate-limiters. |
+| Impacto | Constantes de negócio (timeout ~10min = 150×4000ms) invisíveis; `60*1000` repetido convida a inconsistências. |
+| Correção | Nomear os literais carregados de semântica (`POLL_INTERVAL_MS`, `MAX_POLL_ATTEMPTS`, `CART_EMAIL_DEBOUNCE_MS`, `MAX_CART_ITEMS`, `ONE_MINUTE_MS`). |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CON-04** (D6-05) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/pages/CheckoutPage.jsx:156,163` |
+| Problema | `statusStep`/`stepperDescription` decidem o passo do fluxo via `status.includes('aprovado')`/`status.includes('Aguardando')` — inspecionam a **string exibida ao usuário** para inferir estado da máquina. |
+| Impacto | Qualquer edição de texto (ortografia/tradução/copy) quebra silenciosamente o stepper; acopla apresentação a controle de fluxo. |
+| Correção | Estado explícito (enum `'idle'|'processing'|'awaiting'|'approved'`) do qual se deriva texto **e** passo, em vez de parsing reverso. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CON-05** (D6-06) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/components/ProductWizard.jsx:21,64` |
+| Problema | Objeto `formData` default (8 campos) duplicado literalmente em `useState` inicial e em `resetForm` (e uma 3ª forma em `setFormData` no useEffect). |
+| Impacto | Adicionar/renomear campo exige editar 2–3 pontos; esquecer um deixa reset/init inconsistente. |
+| Correção | `const EMPTY_PRODUCT_FORM` no topo do módulo, usado nos dois pontos. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CON-06** (D6-08) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/utils/analytics.js:5,15` |
+| Problema | `ESSENTIAL_EVENTS` é, na prática, `CANONICAL_EVENTS` menos `'purchase'` (com ordem divergente), mas ambos são Sets listados manualmente. |
+| Impacto | Novo evento canônico exige lembrar de editar o 2º Set; drift silencioso. |
+| Correção | Derivar um do outro (`ESSENTIAL = new Set([...CANONICAL].filter(e => e!=='purchase'))`) ou usar um mapa único com flag `{essential:true}`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CON-07** (D6-09) |
+| Severidade | INFO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/components/admin/tabs/VitrineTab.jsx` (decl. em `:22`) |
+| Problema | `VitrineTab` é o único identificador pt no namespace de tabs (Dashboard/Analysis/Finance/Funnel/…). *(Refuta a hipótese geral de "pt/en misturado" — o resto é consistentemente inglês.)* |
+| Impacto | Mínimo; quebra a uniformidade do namespace. |
+| Correção | Opcional: renomear para `StorefrontTab`/`ShowcaseTab` ou aceitar conscientemente o termo de domínio. |
+
+---
+
+### Código Morto & Doc-Drift
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DOC-01** (funde D7-05 + D1-04 — árvore de 02-ARQUITETURA divergente) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `docs/ProjectDocs/02-ARQUITETURA.md:70,86,185` |
+| Problema | Doc canônica de arquitetura divergente: (a) lista `api/admin-vitrine.js` (70) que **não existe** (vitrine é servida por `admin-settings.js`); (b) lista `src/types/supabase.ts` (185), mas `src/types/` está vazio; (c) omite endpoints reais e montados: `admin-coupons.js`, `admin-upload-url.js`, `me-delete-account.js`; (d) lista `lib/` omite `admin-audit.js` e `env-secret.js` (importados por vários handlers). Inventário simultaneamente com item a mais e itens a menos. |
+| Impacto | Documento canônico deixa de ser mapa confiável; dev caça handler inexistente e desconhece endpoints de cupom/upload/exclusão. |
+| Correção | Trocar `admin-vitrine.js`→`admin-settings.js`; remover `src/types/supabase.ts` (185); adicionar os 3 endpoints em `api/` e `admin-audit.js`/`env-secret.js` em `lib/`. Idealmente gerar a árvore por script. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DOC-02** (D7-04) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `docs/README.md:131,132,133,144,146` |
+| Problema | Índice da doc aponta 5 links quebrados: `PLANO_ECOMMERCE.md`/`REGRAS_ECOMMERCE.md`/`PENDENCIAS.md` (movidos para `docs/NextFeatures/`) e `E2E-CHECKLIST-SANDBOX.md`/`analise-paginas-cliente.md` (não existem). |
+| Impacto | Porta de entrada da doc leva a 404; o próprio README manda "consultar antes de qualquer mudança" justamente os 3 docs de estratégia quebrados. |
+| Correção | Apontar os 3 para `./NextFeatures/`; remover/recriar os outros 2 links. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DOC-03** (D7-02) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `docs/ProjectDocs/13-ROADMAP-PENDENCIAS.md:162` · `07-DASHBOARD-ADMIN.md:378` · `11-REGRAS-NEGOCIO.md:304` |
+| Problema | Admin audit log documentado como "não implementado" em 3 lugares, mas está completo e plugado: `lib/admin-audit.js` (`logAdminAction`), migrations phase4/phase5, chamado em 6 endpoints de escrita. `README.md:46` já o anuncia como entregue — contradição interna. |
+| Impacto | Roadmap superestima trabalho; dev pode reimplementar feature de não-repúdio pronta; contradição README↔ProjectDocs corrói confiança. |
+| Correção | Mover §3.9 do roadmap para histórico; atualizar os 2 docs para "implementado (lib/admin-audit.js + migration phase4/phase5)". |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DOC-04** (D7-03) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `docs/ProjectDocs/13-ROADMAP-PENDENCIAS.md:150` |
+| Problema | Exclusão de conta LGPD documentada como pendente (§3.8), mas implementada ponta a ponta: `api/me-delete-account.js` (anonimização, limpeza de tokens, unsubscribe, confirmação por e-mail 2-passos), rota em `api-compat.routes.js:118` com rate-limit, UI em `CustomerAuthPage.jsx:414-432`, client em `customer-auth.js:167,186`. `README.md:47` já a lista como entregue. |
+| Impacto | Pendência fantasma; alguém pode reconstruir fluxo LGPD sensível já revisado; inconsistência README↔ProjectDocs. |
+| Correção | Reclassificar §3.8 para o histórico de entregue, apontando `api/me-delete-account.js` + `CustomerAuthPage`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **DOC-05** (funde D7-01 + D7-06 + D7-07 — doc-drift cosmético) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `docs/ProjectDocs/02-ARQUITETURA.md:145` · `06-FLUXO-COMPRA-VENDA.md:56` · `docs/README.md:42,39` · `02-ARQUITETURA.md:129,152` |
+| Problema | Vários drifts cosméticos: (a) `TrustBadgeRow.jsx` apagado mas citado em 02-ARQUITETURA:145 e 06-FLUXO:56; (b) `docs/README.md:42` anuncia link "· admin ·" no rodapé do /login, já removido (repetido em +5 docs); (c) contagem de abas do admin divergente (README diz 10, 02-ARQUITETURA diz 13, código tem **14** em `AdminLayout.jsx:6-82`). |
+| Impacto | Docs mentem sobre componentes/affordances/contagem que não existem mais; confunde dev novo. Cosmético. |
+| Correção | Remover `TrustBadgeRow` das linhas citadas; remover o trecho "· admin ·" da 42; padronizar contagem para 14 (ou substituir por "ver 07-DASHBOARD-ADMIN"). |
+
+---
+
+### Dependências & Config
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CFG-01** (D8-02) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `package.json:6,53` |
+| Problema | Nenhum lint/format configurado: sem `.eslintrc*`/`eslint.config.*`/`.prettierrc*`/`.editorconfig`, sem scripts `lint`/`format`, sem ESLint/Prettier nas devDeps. React 19 sem TS depende ainda mais de lint (deps de hooks, imports mortos, PropTypes). |
+| Impacto | Estilo inconsistente, bugs de React Hooks e imports mortos passam sem detecção; PRs sem gate além do Lighthouse; onboarding/revisão manuais. |
+| Correção | Adicionar ESLint (flat config) com `eslint-plugin-react-hooks` + `eslint-plugin-react`, e Prettier, com scripts `lint`/`format`; plugar `lint` na CI. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CFG-02** (funde D8-01 + D8-04 + faceta TS de DOC-01 — artefatos TS em projeto JS) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `package.json:26` · `tailwind.config.js:5` |
+| Problema | Projeto é 100% JS+PropTypes (sem tsconfig, sem `.ts/.tsx`), mas: (a) script `supabase:types` gera `src/types/supabase.ts` órfão/inerte que nada importa; (b) `tailwind.config.js:5` inclui globs `.ts,.tsx` inexistentes. Boilerplate não adaptado que sugere um pipeline TS inexistente. |
+| Impacto | Falsa impressão de type-safety; drift silencioso schema↔código; ruído de manutenção. |
+| Correção | Remover o script `supabase:types` (ou adotar TS de fato — decisão maior); reduzir os globs Tailwind para `.{js,jsx}`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CFG-03** (D8-03) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `package.json:64` |
+| Problema | CLI `vercel` (^33) em devDeps, mas nenhum script npm o invoca (deploy é via integração Git da Vercel). Pacote pesado baixado em todo `npm ci`. |
+| Impacto | Aumenta tempo de `npm ci`/CI e superfície de deps sem retorno. |
+| Correção | Remover das devDeps (usar `npx vercel` pontualmente) ou adicionar script que o justifique. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CFG-04** (D8-06) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `package.json:8,13,16` · `vite.config.js:28` |
+| Problema | `dev:web`/`build:web`/`test:web` são aliases idênticos a `dev`/`build`/`test`. `:web` sugere escopo front-only, mas `test` roda `vitest run` em **todos** os testes (inclusive backend `api/lib/validation`), sob `environment:jsdom` global. Não há `test:api`. |
+| Impacto | Nomes enganosos; testes de backend rodam em jsdom (acoplamento frágil); scripts redundantes. |
+| Correção | Remover os aliases redundantes, ou torná-los reais via `projects` do Vitest (node para api/lib/validation, jsdom para src). |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CFG-05** (D8-05) |
+| Severidade | INFO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `vite.config.js:19` |
+| Problema | `manualChunks` agrupa `react-hook-form || zod` no chunk 'forms', mas `zod` só é importado em `validation/*.js` (backend), nunca em `src/`. O ramo `id.includes('zod')` é morto no build do cliente. |
+| Impacto | Nenhum em runtime; config levemente enganosa. |
+| Correção | Remover a menção a `zod` do `manualChunks`; documentar que `zod` é backend-only. |
+
+---
+
+### Cupons & Upload (áreas "não auditadas" do HANDOFF)
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CUP-01** (D9-01) |
+| Severidade | ALTO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/providers/CartProvider.jsx:22` · `src/pages/CheckoutPage.jsx:304` · `src/components/CouponField.jsx:66` · `api/validate-coupon.js:27` |
+| Problema | `addToCart` monta o item com whitelist `{id,name,price,image,quantity}` — **sem `categoryId`**. `CheckoutPage:304` faz `item.categoryId || null` (sempre null); `CouponField:66` envia `categoryId:null`. Logo `buildEligibleSet` em `validate-coupon.js` nunca casa por `category_ids`: cupom com `applies_to.category_ids` reporta `not_eligible` na **prévia** do checkout mesmo com itens da categoria certa. **Correção do location original**: `create-payment.js:153` opera sobre `validatedItems` montados server-side (lê `product.category_id`, linha 137) e **honra** a categoria. Ou seja, o defeito é **divergência preview↔cobrança**: o usuário vê "não elegível"/sem desconto, mas `/create-payment` aplicaria o desconto. |
+| Impacto | Funcionalidade que parece existir e nunca funciona no preview; divergência confunde usuário e dev; esconde incompletude atrás de código aparentemente correto. |
+| Correção | Persistir `categoryId` no objeto de `addToCart` (`CartProvider.jsx:24-30`) e garantir que os call sites passem `product.categoryId/category_id`. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **CUP-02** (D9-04) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `api/admin-coupons.js:18,94` · `src/components/CouponWizard.jsx:9` |
+| Problema | `applies_to` (restrição por produto/categoria) e `valid_from` só editáveis via SQL. `toCouponPayload` sempre força `applies_to = existing.applies_to ?? {}` (94); `CouponWizard` não expõe campo de produto/categoria nem `validFrom` (só `validUntil`). Backend carrega lógica que a única UI não alcança. Combinado com CUP-01, restrição por categoria é inatingível pela UI **e** quebrada no preview. |
+| Impacto | Recurso meio-pronto; restrições só nascem por SQL bruto; confunde manutenção sobre o que é suportado. |
+| Correção | Expor `applies_to`/`validFrom` no `CouponWizard`, **ou** remover a lógica não usada e documentar. Mínimo: nota no README/HANDOFF de que são SQL-only. |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **UPL-01** (funde D9-02 + D9-03 — schemas zod não reusados no admin) |
+| Severidade | MEDIO |
+| Confiança | Alta |
+| Esforço | M |
+| Local | `api/admin-products.js:184` · `api/admin-coupons.js:47` · `validation/product.schemas.js:5,11,17` · `routes/products.routes.js:32` · `api/admin-upload-url.js:72` |
+| Problema | Escrita de produto/cupom no admin não reusa os schemas Zod. `createProductSchema` só é consumido por `routes/products.routes.js` (`POST /produtos`, não exercitado pelo front) e testes; o handler real (`admin-products.js:184`) valida à mão (só `name` e `price>0`). `admin-coupons.js:47` reimplementa validação inteira em JS puro; não existe `coupon.schemas.js`. **Conflito de contrato concreto**: upload `kind='download'` retorna path curto `product_files/<...>` (`admin-upload-url.js:72`), salvo em `download_url`, mas `createProductSchema.downloadUrl` exige `^https?://` — se o admin migrar para o schema Zod (o caminho "correto"), todo upload de download quebra com "URL deve usar http ou https". |
+| Impacto | Duas fontes de verdade divergentes; regra anti-XSS de URL nem roda no caminho real; regra nova precisa ser escrita 2×; armadilha latente ao "consertar" migrando para o schema. |
+| Correção | Adotar Zod no `admin-products.js` (via `validateBody` equivalente) e criar `validation/coupon.schemas.js` reusado por `admin-coupons.js`/`validate-coupon.js`, **ou** remover os schemas/rotas mortas. Alinhar o contrato de `downloadUrl` (aceitar `bucket/path` OU padronizar URL http completa). |
+
+| Campo | Conteúdo |
+|---|---|
+| ID | **UPL-02** (funde D9-05 + D9-06 — validação de upload divergente/fraca) |
+| Severidade | BAIXO |
+| Confiança | Alta |
+| Esforço | P |
+| Local | `src/components/ProductWizard.jsx:383,669` · `api/admin-upload-url.js:6,8,31` |
+| Problema | (a) Limite `IMAGE_MAX_BYTES=500kB` só existe no front; o backend assina upload para bucket `product_images` com `maxSize` 10MB e **não valida tamanho** (PUT vai direto ao Storage) — guard puramente cosmético, contornável. (b) MIME só é checado se `mimeType` for enviado (`bucket.mimes && mimeType && …`); se omitido, qualquer arquivo passa; `kind='download'` tem `mimes:null`. Sem validação de extensão. Validação server-side mais fraca que o padrão de `admin-categories`/`validate-coupon`. |
+| Impacto | Guard de performance (LCP/CLS) contornável; garantia de tipo depende do cliente colaborar. (Mitigado: endpoint é admin-only e o Storage aplica limites de bucket.) |
+| Correção | Aplicar o limite de imagem no backend (ou documentá-lo como sugestão de UX); exigir `mimeType` para kinds com lista de MIME e rejeitar se ausente; validar extensão do filename contra o kind. |
+
+---
+
+## 2. Tabela-resumo (ordenada por severidade)
+
+| ID | Sev. | Esf. | Tema | Título curto | Local principal |
+|---|---|---|---|---|---|
+| ARQ-01 | ALTO | P | Arquitetura | Aba Usuários chama `/admin/users` → 404 na Vercel | `src/services/admin-panel.js:77` |
+| ARQ-02 | ALTO | M | Arquitetura | Stack BFF paralelo morto (products/payments/auth) | `routes/products.routes.js:32` |
+| DRY-01 | ALTO | P | Dup. backend | `sanitizeAttribution` divergente perde dados de atribuição | `api/create-payment.js:7` |
+| ERR-01 | ALTO | G | Erros backend | Envelope de erro incoerente (objeto/string, `{error}` vs `{success}`) | `middleware/error.middleware.js:15` |
+| CMP-04 | ALTO | G | Componentes | `AdminPage.jsx` god-container | `src/pages/AdminPage.jsx:78` |
+| CUP-01 | ALTO | P | Cupons | Restrição por categoria: `categoryId` nunca no carrinho | `src/providers/CartProvider.jsx:22` |
+| ARQ-03 | MEDIO | M | Arquitetura | 3 camadas de acesso Supabase sem fronteira | `lib/supabase.js:85` |
+| ARQ-04 | MEDIO | P | Arquitetura | `create-payment` importa handler `validate-coupon` como lib | `api/create-payment.js:5` |
+| ARQ-05 | MEDIO | M | Arquitetura | Auth admin + guard boilerplate inline em 15 handlers | `routes/api-compat.routes.js:75` |
+| DRY-02 | MEDIO | M | Dup. backend | Cache TTL em memória replicado em 6 handlers | `api/admin-kpis.js:26` |
+| DRY-03 | MEDIO | M | Dup. backend | Token HMAC quase-idêntico admin/customer-session | `lib/admin-session.js:8` |
+| ERR-02 | MEDIO | G | Erros backend | `errorHandler` não governa `api/*` + sem rede serverless | `routes/api-compat.routes.js:43` |
+| ERR-03 | MEDIO | P | Erros backend | Vazamento de `error.message` cru ao cliente | `api/cron-email-jobs.js:367` |
+| ERR-04 | MEDIO | M | Erros backend | Erro de negócio como HTTP 200 | `api/validate-coupon.js:108` |
+| ERR-05 | MEDIO | M | Erros backend | Validação `throw Error`→400 ad hoc (Zod ignorado) | `api/admin-coupons.js:41` |
+| CMP-01 | MEDIO | G | Componentes | `ProductWizard.jsx` 833 linhas multiuso | `src/components/ProductWizard.jsx:7` |
+| CMP-02 | MEDIO | M | Componentes | 3 editores + normalize/clean duplicados | `src/components/ProductWizard.jsx:460` |
+| CMP-03 | MEDIO | M | Componentes | `AssetUploader` mistura fetch/validação/UI | `src/components/ProductWizard.jsx:646` |
+| CMP-05 | MEDIO | M | Componentes | `DashboardTab` embute gráficos SVG + fetch | `src/components/admin/tabs/DashboardTab.jsx:51` |
+| CMP-06 | MEDIO | M | Componentes | `AnalysisTab` copy inline + fetch (conf. Média) | `src/components/admin/tabs/AnalysisTab.jsx:35` |
+| CMP-07 | MEDIO | M | Componentes | `CheckoutPage` polling não extraído | `src/pages/CheckoutPage.jsx:20` |
+| CMP-08 | MEDIO | M | Componentes | `CustomerAuthPage` complexidade suprimida + LGPD/auth acoplados | `src/pages/CustomerAuthPage.jsx:140` |
+| FRT-01 | MEDIO | M | Dup./estado front | Padrão fetch+loading+erro duplicado em 4 abas | `.../CouponsTab.jsx:42` |
+| FRT-02 | MEDIO | G | Dup./estado front | Duas arquiteturas de aba sem regra | `src/pages/AdminPage.jsx:121` |
+| FRT-03 | MEDIO | M | Dup./estado front | `CURVE_STYLES`+markup ABC duplicados | `.../DashboardTab.jsx:11` |
+| FRT-04 | MEDIO | P | Dup./estado front | `CartProvider` memoização ilusória | `src/providers/CartProvider.jsx:15` |
+| FRT-05 | MEDIO | M | Dup./estado front | `admin-products` não reusa `request()` | `src/services/admin-products.js:3` |
+| CON-01 | MEDIO | M | Consistência | Lógica Curva ABC (80/95) duplicada back/front | `lib/abc-classification.js:13` |
+| DOC-01 | MEDIO | P | Doc-drift | Árvore 02-ARQUITETURA com item a mais e a menos | `docs/ProjectDocs/02-ARQUITETURA.md:70` |
+| DOC-02 | MEDIO | P | Doc-drift | `docs/README.md` 5 links quebrados | `docs/README.md:133` |
+| DOC-03 | MEDIO | P | Doc-drift | Audit log documentado como não feito, mas está pronto | `docs/ProjectDocs/13-ROADMAP-PENDENCIAS.md:162` |
+| DOC-04 | MEDIO | P | Doc-drift | Exclusão LGPD documentada como pendente, já implementada | `docs/ProjectDocs/13-ROADMAP-PENDENCIAS.md:150` |
+| CFG-01 | MEDIO | M | Config | Sem ESLint/Prettier/scripts de lint | `package.json:6` |
+| UPL-01 | MEDIO | M | Cupons & Upload | Schemas Zod não reusados; `downloadUrl` `http` vs path curto | `api/admin-products.js:184` |
+| ERR-06 | BAIXO | M | Erros backend | Logging inconsistente | `api/products.js:96` |
+| DRY-04 | BAIXO | P | Dup. backend | Envelope de erro inline sem helper | `api/admin-segments.js:13` |
+| DRY-05 | BAIXO | P | Dup. backend | Clamp de query-param repetido | `api/admin-kpis.js:57` |
+| CMP-09 | BAIXO | M | Componentes | `DownloadsPage` complexidade suprimida | `src/pages/DownloadsPage.jsx:81` |
+| CMP-10 | BAIXO | M | Componentes | `useProductFilters` 20 chaves (dados+UI) | `src/hooks/useProductFilters.js:33` |
+| FRT-06 | BAIXO | P | Dup./estado front | Strings Tailwind duplicadas entre formulários | `src/pages/CustomerAuthPage.jsx:236` |
+| FRT-07 | BAIXO | M | Dup./estado front | Confirmação de exclusão inconsistente | `.../CouponsTab.jsx:89` |
+| FRT-08 | BAIXO | P | Dup./estado front | `products.js` não usa `apiRequest` | `src/services/products.js:3` |
+| CON-02 | BAIXO | P | Consistência | Acentuação inconsistente em mensagens | `api/admin-login.js:197` |
+| CON-03 | BAIXO | P | Consistência | Números mágicos sem constantes | `src/pages/CheckoutPage.jsx:100` |
+| CON-04 | BAIXO | P | Consistência | Stepper derivado de substring de mensagem | `src/pages/CheckoutPage.jsx:156` |
+| CON-05 | BAIXO | P | Consistência | `formData` default duplicado | `src/components/ProductWizard.jsx:21` |
+| CON-06 | BAIXO | P | Consistência | `CANONICAL`/`ESSENTIAL_EVENTS` à mão | `src/utils/analytics.js:5` |
+| DOC-05 | BAIXO | P | Doc-drift | TrustBadgeRow/link admin/contagem de abas | `docs/ProjectDocs/02-ARQUITETURA.md:145` |
+| CFG-02 | BAIXO | P | Config | Artefatos/globs TS em projeto JS | `package.json:26` |
+| CFG-03 | BAIXO | P | Config | CLI `vercel` em devDeps sem uso | `package.json:64` |
+| CFG-04 | BAIXO | P | Config | Aliases `*:web` redundantes/enganosos | `package.json:8` |
+| CUP-02 | BAIXO | M | Cupons & Upload | `applies_to`/`valid_from` SQL-only | `api/admin-coupons.js:18` |
+| UPL-02 | BAIXO | P | Cupons & Upload | Validação de upload divergente/fraca | `api/admin-upload-url.js:31` |
+| FRT-09 | INFO | M | Dup./estado front | `AuthProvider` mistura admin+cliente | `src/providers/AuthProvider.jsx:15` |
+| CON-07 | INFO | P | Consistência | `VitrineTab` pt entre tabs em inglês | `.../VitrineTab.jsx:22` |
+| CFG-05 | INFO | P | Config | `manualChunks` referencia `zod` inexistente no front | `vite.config.js:19` |
+
+---
+
+## 3. Os 3 itens mais urgentes
+
+1. **CUP-01 — Restrição de cupom por categoria quebrada no preview (ALTO, esforço P).** É o único achado ALTO que combina *bug funcional em produção* com *baixíssimo custo de correção*. O carrinho nunca carrega `categoryId`, então a prévia de cupom por categoria sempre reporta "não elegível", enquanto `/create-payment` aplicaria o desconto — uma **divergência preview↔cobrança** que confunde cliente e dev e esconde incompletude atrás de código que parece correto. A correção é adicionar um campo em `CartProvider.jsx`. Máxima alavancagem: 1 linha destrava uma feature inteira e elimina a inconsistência.
+
+2. **ARQ-01 — `/admin/users` 404 na Vercel (ALTO, esforço P).** Bug silencioso de produção: a aba Usuários funciona em dev e quebra em prod porque o path com barra não mapeia para nenhum arquivo `api/`, e o alias Express mascara isso. Risco de esconder bug é alto justamente porque o ambiente de teste local não o revela. Correção trivial (3 chamadas + remover 1 alias) alinha dev e prod ao modelo arquivo=rota.
+
+3. **ERR-01 — Envelope de erro incoerente (ALTO, esforço G).** É a dívida de maior alavancagem estrutural: o contrato de erro tem 2–3 formas simultâneas (`error` objeto vs string, com/sem `success`, com/sem `code`), forçando achatamento no front e fazendo `if(data.success===false)` falhar em parte dos endpoints. Cada nova tela e cada teste de erro paga esse custo, e qualquer refactor inline→middleware muda o shape silenciosamente. Padronizar o envelope é pré-requisito para ERR-02/03/04/05/06 e destrava a evolução de todo o tratamento de erro.
+
+---
+
+## 4. Top 5 refactors de maior alavancagem
+
+| # | Refactor | Esforço | Retorno (o que destrava) |
+|---|---|---|---|
+| 1 | **Envelope de erro único + wrapper serverless compartilhado** — `{success:false,error:{message,code,details?}}`, `withErrorEnvelope(handler)` usado por `api-compat` e export default, `sendError/sendSuccess`, enum de códigos. | G | Resolve **ERR-01, ERR-02, ERR-03, ERR-06** e parte de ERR-04/DRY-04. Convergem dev↔prod; front remove achatamento; logging e mascaramento de produção passam a alcançar todos os endpoints. |
+| 2 | **`withAdminGuard` + `lib/admin-handler.js`** — CORS/OPTIONS/405/`ensureAdminSession` num wrapper único aplicado aos `/admin-*`. | M | Resolve **ARQ-05, DRY-04** (parte) e fecha o buraco de "handler novo esquece auth". Ordem/envelope canônicos em 15 handlers com uma edição. |
+| 3 | **Consolidar o stack de dados/auth e aposentar o BFF paralelo** — remover `products/payment.routes` + `/auth/me`, eleger `lib/supabase.js` como camada única, mover schemas Zod para o caminho real do admin. | M | Resolve **ARQ-02, ARQ-03, ERR-05, UPL-01** e o refutado D1-06. Elimina "duas verdades" de criar produto/verificar pagamento/autenticar; regra de validação (anti-XSS de URL) passa a rodar no caminho real. |
+| 4 | **Extrair `ProductWizard` + `AdminPage` em hooks/steps por domínio** — `product-wizard/` (steps + `useProductForm` + `normalize.js` + `useRowEditor` + `useAssetUpload`) e `useAdmin*` + mapa `tab→loader`. | G | Resolve **CMP-01, CMP-02, CMP-03, CMP-04, CON-05, FRT-06** (editores/classes). Torna testáveis validação, editores e handlers; reduz o god-container a wiring. |
+| 5 | **Kit de utilitários compartilhados do front/analytics** — `useAdminResource`+`<TabLoading>/<TabError>`, `CURVE_STYLES`/`ABC_THRESHOLDS` + `<AbcSummary>/<ParetoBar>`, `lib/response-cache.js`, `lib/attribution-sanitize.js`. | M | Resolve **FRT-01, FRT-02, FRT-03, CON-01, DRY-01, DRY-02**. Elimina boilerplate copiado, define padrão para aba nova, e **corrige o bug de dados de atribuição** (DRY-01) de uma vez. |
+
+*Refactors de doc (DOC-01..05) e config (CFG-01..05) são baratos (P) e independentes — recomenda-se um "sweep de documentação/config" em paralelo, especialmente DOC-03/DOC-04 (features prontas documentadas como pendentes) e CFG-01 (ESLint, que previne regressões futuras de hooks/imports).*
+
+---
+
+## 5. Inconclusivos / Refutados
+
+- **D1-06 — "Dois modelos de autorização admin sem ponte (cookie `sub:'admin'` vs role em `profiles`)" — REFUTADO como redigido.** A tese central não se sustenta no código atual:
+  1. *"cookie opaco, sem identidade individual"* é **falso**: `lib/admin-session.js:50-61` grava `email` e `role` no payload; `getAdminIdentity` (140-146) extrai o e-mail individual para o audit log (não-repúdio por indivíduo).
+  2. *"dois conceitos de admin que nunca se encontram"* é **falso**: há ponte no login — `api/admin-login.js:224` lê `profiles.role` via `getProfileRoleByEmail`, gateia o acesso e injeta o role no cookie. `profiles.role → cookie` no momento do login.
+  3. *"`checkRole` ligado a código morto"* é **parcialmente falso**: `checkRole('ADMIN')` é usado em `routes/products.routes.js:32`, montado vivo em `server.js:141` (endpoint redundante, não morto).
+
+  **O que resta de verdade** já está capturado por **ARQ-02** (duplicação do endpoint de criação de produto com dois mecanismos de enforcement para a mesma operação). O modelo de authz em si já é único e coerente (`profiles.role` decide no login, cookie carrega identidade+role), então não há um achado adicional de "ausência de ponte" — por isso D1-06 foi descartado como achado independente.
+
+*Observações de escopo registradas durante a verificação (não são achados, mas orientam a execução): em DRY-01, `sanitizeProperties` (`analytics-events.js:31`) é filtro PII por blacklist — semântica distinta, não deve ser fundido; em CMP-06, a alegação de "3 exports CSV quase idênticos" foi refutada (só compartilham 1 linha de guard) e por isso a confiança do achado é Média; em DRY-02, a "evidência de drift" de `admin-segments` emitindo `max-age=3600` é factualmente incorreta (segments não emite `Cache-Control`), embora a dívida de boilerplate permaneça.*
