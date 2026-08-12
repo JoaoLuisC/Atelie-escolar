@@ -10,6 +10,32 @@ function round2(value) {
 }
 
 /**
+ * Reserva um uso do cupom de forma atômica. A RPC devolve o novo `used_count`,
+ * ou null quando o cupom já bateu `max_uses` (ou não existe).
+ *
+ * @returns {Promise<boolean>} true se o uso foi efetivamente reservado.
+ *   Fail-closed: qualquer erro de rede/RPC devolve false (sem desconto), em vez
+ *   de conceder desconto sem contabilizar.
+ */
+async function claimCouponUsage(couponId) {
+  try {
+    const result = await supabaseRequest('rpc/increment_coupon_usage', {
+      method: 'POST',
+      useServiceRole: true,
+      body: JSON.stringify({ p_coupon_id: couponId }),
+    });
+
+    // PostgREST devolve o escalar da função (ou null). Alguns proxies embrulham
+    // em array de uma posição — normalizamos os dois formatos.
+    const value = Array.isArray(result) ? result[0] : result;
+    return Number.isFinite(Number(value));
+  } catch (err) {
+    console.warn('[create-payment] falha ao reservar uso do cupom:', err.message);
+    return false;
+  }
+}
+
+/**
  * Aplica o desconto proporcionalmente APENAS aos itens elegíveis, de modo que
  * a soma final bata com (subtotal - desconto). Mercado Pago não aceita item com
  * preço negativo, então não dá pra adicionar uma "linha de desconto".
@@ -141,7 +167,6 @@ module.exports = async function createPaymentHandler(req, res) {
     // Validação server-side de cupom (regra G6 — nunca confiar no client).
     let appliedCouponCode = null;
     let discountAmount = 0;
-    let appliedCouponId = null;
     let eligibleItemIds = null; // null = cupom não-restrito (todos elegíveis)
 
     if (couponCode) {
@@ -159,12 +184,22 @@ module.exports = async function createPaymentHandler(req, res) {
           0,
         );
 
+        // RESERVA o uso ANTES de aplicar o desconto. O UPDATE dentro de
+        // increment_coupon_usage é o que respeita max_uses de forma atômica; ele
+        // devolve o novo used_count, ou null se o cupom já estava esgotado.
+        // Antes esta chamada acontecia DEPOIS de criar o pedido e o retorno era
+        // descartado num catch — então um cupom esgotado seguia concedendo
+        // desconto indefinidamente (max_uses era decorativo sob concorrência).
+        // Se o pedido falhar mais adiante, perdemos um uso do cupom: erramos
+        // para o lado de contar demais, nunca de conceder de graça.
         if (!restricted || eligibleSubtotal > 0) {
-          discountAmount = couponHelpers.computeDiscount(coupon, subtotal, eligibleSubtotal);
-          appliedCouponCode = coupon.code;
-          appliedCouponId = coupon.id;
-          if (restricted) {
-            eligibleItemIds = new Set(eligible.map((item) => item.id));
+          const usageClaimed = await claimCouponUsage(coupon.id);
+          if (usageClaimed) {
+            discountAmount = couponHelpers.computeDiscount(coupon, subtotal, eligibleSubtotal);
+            appliedCouponCode = coupon.code;
+            if (restricted) {
+              eligibleItemIds = new Set(eligible.map((item) => item.id));
+            }
           }
         }
       }
@@ -202,20 +237,8 @@ module.exports = async function createPaymentHandler(req, res) {
       total_price: item.price * item.quantity,
     })));
 
-    // Incremento ATÔMICO do uso do cupom via função SECURITY DEFINER: o próprio
-    // UPDATE respeita max_uses (used_count < max_uses), eliminando a corrida
-    // read-modify-write que permitia furar o limite sob concorrência.
-    if (appliedCouponId) {
-      try {
-        await supabaseRequest('rpc/increment_coupon_usage', {
-          method: 'POST',
-          useServiceRole: true,
-          body: JSON.stringify({ p_coupon_id: appliedCouponId }),
-        });
-      } catch (couponErr) {
-        console.warn('[create-payment] falha ao incrementar cupom:', couponErr.message);
-      }
-    }
+    // O uso do cupom já foi reservado atomicamente antes de o desconto ser
+    // aplicado (ver claimCouponUsage acima) — não há incremento aqui.
 
     const preference = await createPaymentPreference(itemsForMP, orderCode, customer.email);
 

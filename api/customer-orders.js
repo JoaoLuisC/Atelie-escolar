@@ -60,13 +60,16 @@ module.exports = async function customerOrdersHandler(req, res) {
       return res.status(401).json({ error: 'Autenticação necessária.' });
     }
 
-    // ilike (case-insensitive) e não eq: pedidos novos já gravam customer_email
-    // normalizado (lowercase), mas o histórico anterior pode ter e-mails em
-    // maiúsculas/mistas — trocar por eq quebraria o acesso a esses pedidos.
-    // O índice funcional lower(customer_email) que sustenta isto vem noutra lane.
+    // eq, NUNCA ilike: no PostgREST o valor de `ilike` entra direto no padrão LIKE,
+    // e `_`/`%` são metacaracteres. Como `_` é caractere legal e corriqueiro em
+    // e-mail, `ana_lima@x.com` casava `ana.lima@x.com` e este endpoint entregava
+    // os pedidos — e os download_tokens — de terceiros (IDOR silencioso, sem
+    // atacante). O histórico com e-mail em maiúsculas foi normalizado pela
+    // migration 20260812000000_security_hardening_wave1.sql, e todo insert novo
+    // já grava lowercase (api/create-payment.js).
     const ordersRows = await listTableRows('orders', {
       select: 'id,order_code,total_amount,status,payment_status,created_at,customer_email',
-      filters: [{ column: 'customer_email', operator: 'ilike', value: email }],
+      filters: [{ column: 'customer_email', operator: 'eq', value: email }],
       orderBy: 'created_at',
       ascending: false,
     });

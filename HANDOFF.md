@@ -1,4 +1,10 @@
-> ATENÇÃO: segredos removidos deste arquivo. Os PATs anteriores DEVEM ser revogados no dashboard Supabase e o histórico do git expurgado (git filter-repo).
+> **ATENÇÃO — segredos.** Os PATs Supabase e as senhas de admin/clientes que estavam neste
+> arquivo foram redigidos, mas **continuam no histórico do git** (este arquivo esteve no `main`).
+> Pendências, nesta ordem: (1) revogar os PATs no dashboard Supabase e **trocar a senha do
+> admin e das contas de teste**; (2) só então expurgar o histórico com `git filter-repo
+> --replace-text` e forçar re-clone. Rotacionar antes de expurgar — o expurgo sozinho apenas
+> avisa quem já tem o dado. Nunca voltar a versionar credencial aqui: este arquivo é handoff,
+> não cofre.
 
 # Handoff — sessão Claude (2026-05-30)
 
@@ -11,7 +17,7 @@
 
 | Área | O que aconteceu |
 |---|---|
-| **Banco** | Banco zerado e re-seedado. Admin novo: `adminmarcia@gmail.com` / `Marcia123$`. 10 produtos, 7 categorias, 7 clientes auth + perfis, 12 pedidos (10 aprovados, 1 pendente, 1 cancelado), R$ 557 de receita. Tudo em `npgtngcdskwcsmgymkql.supabase.co`. |
+| **Banco** | Banco zerado e re-seedado. Admin novo: `adminmarcia@gmail.com` (senha fora do repositório — ver gerenciador de segredos). 10 produtos, 7 categorias, 7 clientes auth + perfis, 12 pedidos (10 aprovados, 1 pendente, 1 cancelado), R$ 557 de receita. Tudo em `npgtngcdskwcsmgymkql.supabase.co`. |
 | **Storage** | Bucket `product_images` virou **público**. Imagens dos 9 produtos seed + arquivos de download `.txt` (placeholder) já uploadados via Storage API. URL pattern: `https://npgtngcdskwcsmgymkql.supabase.co/storage/v1/object/public/product_images/<slug>.jpg`. |
 | **Migrations** | Aplicada a `20260528000000_phase3_email_marketing` (cria `email_subscribers` + `email_sent_log`). Antes desse fix, `/api/admin-segments` retornava 500. |
 | **Upload no admin** | Wizard de produto step "Mídia" agora **sobe arquivo do PC** via signed upload URL — não pede mais URL manual. Endpoint novo: `POST /api/admin-upload-url`. |
@@ -33,12 +39,12 @@
 
 ### Conta admin
 - Email: `adminmarcia@gmail.com` (normalizado pelo GoTrue de `adminMarcia@gmail.com`)
-- Senha: `Marcia123$`
+- Senha: **fora do repositório** — guardada no gerenciador de segredos. A senha que estava aqui foi exposta no histórico do git e **deve ser considerada comprometida**; troque-a e nunca versione a nova.
 - Role no `profiles`: `ADMIN` (uppercase — `profiles.role` aceita `CUSTOMER | ADMIN | MASTER`, default `CUSTOMER`; o login admin exige `ADMIN` ou `MASTER`)
 - Email já confirmado (criado com `email_confirm: true`)
 - URL de login admin: `/painel-acesso-privado-atelie`
 
-### Contas cliente (fake, todas com senha `Teste1234$`, email confirmado)
+### Contas cliente (fake, senha compartilhada fora do repositório, email confirmado)
 | Email | Display name | Pedidos |
 |---|---|---|
 | `ana.lima@example.com` | Ana Lima | 2 |
@@ -171,7 +177,7 @@ npm run dev:all
 Cookie de sessão admin TTL = 8h. Se demorou pra voltar, refaz login.
 
 ### Testar upload de arquivo no admin
-1. Login com `adminmarcia@gmail.com` / `Marcia123$`
+1. Login com `adminmarcia@gmail.com` (senha no gerenciador de segredos)
 2. Sidebar → Produtos → Lista de produtos → Editar qualquer produto
 3. Step "Mídia" → clica "Escolher" em qualquer slot
 4. Seleciona arquivo do PC → barra de progresso → preview/nome aparece
@@ -179,7 +185,7 @@ Cookie de sessão admin TTL = 8h. Se demorou pra voltar, refaz login.
 
 ### Testar fluxo de compra do cliente
 1. Logout
-2. Login como qualquer um dos clientes fake (ex: `ana.lima@example.com` / `Teste1234$`)
+2. Login como qualquer um dos clientes fake (ex: `ana.lima@example.com`; senha no gerenciador de segredos)
 3. Adicionar produto ao carrinho → checkout → testar cartão MP `4235 6477 2802 5682` (Visa teste BR) titular `APRO`
 4. Polling do `verify-payment` roda a cada 4s (até ~10 min); aprovação de teste costuma aparecer em segundos
 5. `/downloads` deve listar o arquivo com link funcional (signed URL)

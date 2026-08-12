@@ -31,9 +31,19 @@ async function loadExistingTokens(orderInternalId) {
 }
 
 async function createDownloadTokens(order, items) {
-  if (items.length) {
+  // Deduplica por product_id: download_tokens tem UNIQUE(order_id, product_id)
+  // (migration phase5_payment_hardening), então um pedido com o mesmo produto em
+  // duas linhas fazia o INSERT em lote violar a constraint. Como o 409 é tratado
+  // como "outro processo venceu a corrida", o pedido pago terminava SEM nenhum
+  // token. Um token por produto é o modelo correto: ele autoriza o arquivo, não
+  // a unidade comprada.
+  const uniqueItems = [...new Map(
+    items.filter((item) => item?.product_id).map((item) => [String(item.product_id), item]),
+  ).values()];
+
+  if (uniqueItems.length) {
     const now = Date.now();
-    const payload = items.map((item) => ({
+    const payload = uniqueItems.map((item) => ({
       token: crypto.randomBytes(32).toString('hex'),
       order_id: order.id,
       product_id: item.product_id,
@@ -168,11 +178,22 @@ module.exports = async function webhookHandler(req, res) {
     }
 
     if (payment.status === 'rejected' || payment.status === 'cancelled') {
-      await updateTable('orders', { id: `eq.${order.id}` }, {
-        payment_status: payment.status,
-        payment_id: payment.id,
-        status: 'failed',
-      });
+      // Guarda de idempotência espelhando a do ramo 'approved': sem o
+      // `neq.approved` no filtro, uma notificação atrasada de rejeição/
+      // cancelamento (o MP reentrega por horas) rebaixava para 'failed' um
+      // pedido JÁ APROVADO — mantendo os download_tokens válidos e deixando o
+      // pedido pago invisível para o cliente e para o painel.
+      const demoted = await updateTable('orders',
+        { id: `eq.${order.id}`, payment_status: 'neq.approved' },
+        {
+          payment_status: payment.status,
+          payment_id: payment.id,
+          status: 'failed',
+        });
+
+      if (!Array.isArray(demoted) || demoted.length === 0) {
+        return res.status(200).json({ message: 'Order already approved; ignoring stale notification' });
+      }
 
       await recordEvent({
         eventName: payment.status === 'cancelled' ? 'payment_cancelled' : 'payment_rejected',

@@ -7,7 +7,11 @@
 | Visitante anônimo | Catálogo público, criar pedido | RLS public read em categories/products active=true |
 | Cliente logado | Próprios pedidos, downloads dos próprios produtos | RLS por `auth.uid()` em orders, user_products |
 | Admin | Tudo via painel /admin | Cookie admin_session + service_role no backend |
-| Atacante com anon key | NADA além do catálogo público | RLS bloqueia; sem policies = sem acesso |
+| Atacante com anon key | Catálogo público, e **só as colunas concedidas** a `anon` | RLS bloqueia a LINHA; sem policies = sem acesso. **RLS não filtra COLUNA** — a restrição de coluna vem de `grant select (…)`, aplicada em `products` pela migration `20260812000000_security_hardening_wave1.sql` para tirar `download_url` do alcance de `anon` |
+
+> A anon key é **pública por construção** (vai no bundle JS — `vercel.json` injeta
+> `VITE_SUPABASE_ANON_KEY`). Trate-a como conhecida por qualquer visitante: o perímetro real
+> é RLS **mais** os GRANTs, nunca o segredo da chave.
 
 ---
 
@@ -16,13 +20,32 @@
 ### 1. Network / Headers
 - `helmet()` (dev/Express, via [lib/security-headers.js](../lib/security-headers.js)) — CSP estrita explícita (script-src whitelist GA4/Meta/MP), HSTS, X-Frame-Options DENY, X-Content-Type-Options. Em produção (Vercel) os headers equivalentes vêm da rota `/(.*)` do [vercel.json](../vercel.json): HSTS, nosniff, `X-Frame-Options: SAMEORIGIN`, Permissions-Policy e CSP com `frame-ancestors 'none'`.
 - `cors()` — allowlist explícita em prod (`CORS_ORIGINS`); permissivo em dev (apenas `localhost:*`)
+#### ⚠ Rate limiting — NÃO implementado em produção (pendência API-03)
+
+**Nenhum dos limites abaixo está ativo no ambiente implantado.** Todos usam
+`express-rate-limit` com store em memória e vivem em `server.js` / `routes/*.js`, mas o
+[vercel.json](../vercel.json) só builda o SPA estático e `api/**/*.js` — **o Express não é
+implantado**. Além disso, cada função serverless é uma invocação isolada, então um store em
+memória nunca funcionaria ali nem se o Express rodasse.
+
+Consequência prática: em produção `/api/admin-login` aceita brute force ilimitado de senha
+**e do segundo fator** (o `challengeToken` é reemitível e a validação do código não tem
+contador de tentativas), e `/api/validate-coupon` é um oráculo de enumeração sem teto.
+
+Correção prevista: contador atômico no Postgres (`public.rate_limit_hit`) chamado pelos
+handlers de `api/`, mais rate limit no Vercel Firewall como contenção. Até isso existir, este
+bloco descreve **apenas o comportamento em desenvolvimento**:
+
 - `rate-limit` global — 250 req/15min global (`RATE_LIMIT_MAX`); 30 req/15min em `/auth/*` (`AUTH_RATE_LIMIT_MAX`)
-- `rate-limit` em `/admin-login` — **5 tentativas falhas / 10 min** (definido em [routes/api-compat.routes.js](../routes/api-compat.routes.js); `skipSuccessfulRequests: true` para não punir admin legítimo fazendo logins repetidos)
+- `rate-limit` em `/admin-login` — 5 tentativas falhas / 10 min (definido em [routes/api-compat.routes.js](../routes/api-compat.routes.js); `skipSuccessfulRequests: true` para não punir admin legítimo fazendo logins repetidos)
 - `rate-limit` em `/auth/customer/login` — 5 tentativas / 10 min
 - `rate-limit` em `/verify-payment` — 60 req/min por IP (mitiga enumeração de `order_code`)
 - `rate-limit` em `/track-event` — 120 req/min (analytics) · `/validate-coupon` — 20 req/min (anti-enumeração de cupons)
 - `rate-limit` em `/me-delete-account` — 5 req/min (LGPD §3.8, ação sensível) · `/subscribe` — 5 req/min · `/unsubscribe` — 20 req/min · `/abandoned-cart` — 30 req/min
-- **Limitação conhecida**: os rate limiters (`express-rate-limit`) rodam só no Express (dev/local). Em produção na Vercel cada função serverless é isolada — rate limit efetivo dependeria de store compartilhado (KV), pendência registrada como API-03 em [routes/auth.routes.js](../routes/auth.routes.js).
+
+> A mesma divergência de runtime vale para os schemas Zod em `validation/`: eles são
+> aplicados por `middleware/validate.middleware.js`, usado só pelas rotas Express. Os
+> handlers de `api/` validam por conta própria — ao endurecer validação, mexa nos dois lados.
 - HTTPS obrigatório em produção: o boot em [server.js](../server.js) falha se `APP_URL` não começar com `https://` quando `APP_ENV=production`. Cookies `Secure` dependem disso.
 
 ### 2. Autenticação

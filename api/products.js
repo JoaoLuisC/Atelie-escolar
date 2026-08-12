@@ -20,7 +20,10 @@ module.exports = async function productsHandler(req, res) {
 
     const [productsRows, categoriesRows, approvedOrdersRows, orderItemsRows] = await Promise.all([
       listTableRows('products', {
-        select: 'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
+        // download_url NÃO entra aqui: é o localizador do arquivo pago e este é
+        // um endpoint público. Era selecionado e nem chegava a ser emitido no
+        // map abaixo — vazamento gratuito pelo corpo da resposta.
+        select: 'id,slug,name,description,price,original_price,image_url,images,videos,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
         filters: [{ column: 'active', value: true }],
         orderBy: 'created_at',
         ascending: false,

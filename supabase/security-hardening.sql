@@ -124,15 +124,32 @@ drop policy if exists page_views_public_insert on public.page_views;
 -- Columns Exposed" e protege adminConfig (TOTP/PIN) em settings.
 
 
--- ─── 8. Corrigir search_path MUTÁVEL nas funções ──────────────────
-alter function public.set_updated_at()  set search_path = public, pg_temp;
-alter function public.handle_new_user() set search_path = public, pg_temp;
+-- ─── 8+9. search_path e EXECUTE das funções ───────────────────────
+-- ⚠ handle_new_user() NÃO é criada por schema.sql — a única definição versionada
+-- está em migrations/20260702000000_phase6_db_rls_hardening.sql, aplicada DEPOIS
+-- deste arquivo no bootstrap documentado. Referenciá-la diretamente lançava
+-- ERROR 42883 e, como o SQL Editor roda o script colado numa transação, fazia
+-- ROLLBACK de TUDO acima — inclusive dos `enable row level security` da seção 1
+-- e das policies das seções 2-6. O operador via o erro no fim de um script
+-- chamado "security-hardening" e seguia para o seed com o banco sem RLS.
+alter function public.set_updated_at() set search_path = public, pg_temp;
 
-
--- ─── 9. Bloquear execução pública de handle_new_user ──────────────
-revoke execute on function public.handle_new_user() from public;
-revoke execute on function public.handle_new_user() from anon;
-revoke execute on function public.handle_new_user() from authenticated;
+do $$
+begin
+  if exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'handle_new_user'
+  ) then
+    execute 'alter function public.handle_new_user() set search_path = public, pg_temp';
+    execute 'revoke execute on function public.handle_new_user() from public';
+    execute 'revoke execute on function public.handle_new_user() from anon';
+    execute 'revoke execute on function public.handle_new_user() from authenticated';
+    raise notice 'handle_new_user(): search_path fixado e EXECUTE revogado.';
+  else
+    raise notice 'handle_new_user() ainda não existe — será criada e endurecida por migrations/20260702000000_phase6_db_rls_hardening.sql. Aplique as migrations.';
+  end if;
+end $$;
 
 
 -- ════════════════════════════════════════════════════════════════════

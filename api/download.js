@@ -1,6 +1,6 @@
 const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, insertIntoTable, updateTable } } = require('../lib/supabase');
-const { createSignedDownloadUrl } = require('../lib/storage-signed-url');
-const { extractClientIp } = require('../lib/security-logger');
+const { createSignedDownloadUrl, parseStorageRef } = require('../lib/storage-signed-url');
+const { extractClientIp, recordSecurityEvent } = require('../lib/security-logger');
 
 module.exports = async function downloadHandler(req, res) {
   if (req.method !== 'GET') {
@@ -47,6 +47,24 @@ module.exports = async function downloadHandler(req, res) {
       return res.status(404).json({ error: 'Link de download não encontrado' });
     }
 
+    // FAIL-CLOSED, antes de queimar o token: só entregamos via Storage assinado.
+    // Antes havia fallback `finalUrl = signedUrl || product.download_url`, que
+    // redirecionava cru para qualquer URL externa/pública gravada em
+    // products.download_url — entrega do produto pago sem assinatura e sem
+    // expiração. Um download_url que não seja do Storage é erro de cadastro,
+    // não um modo de entrega. A checagem vem ANTES do claim para não consumir
+    // o token do comprador por erro de dado.
+    if (!parseStorageRef(product.download_url)) {
+      await recordSecurityEvent({
+        eventName: 'download_url_not_storage',
+        severity: 'error',
+        ip: extractClientIp(req),
+        userAgent: req.headers['user-agent'],
+        properties: { product_id: String(tokenRecord.product_id) },
+      });
+      return res.status(500).json({ error: 'Arquivo indisponível. Fale com o suporte.' });
+    }
+
     // Uso único ATÔMICO: marca used=false → true condicionando no próprio UPDATE.
     // Só prossegue quem "ganhar" a transição; requisições concorrentes com o
     // mesmo token recebem 0 linhas afetadas e são barradas (evita download duplo).
@@ -60,12 +78,23 @@ module.exports = async function downloadHandler(req, res) {
       return res.status(401).json({ error: 'Token já utilizado' });
     }
 
-    // Tenta gerar signed URL temporário (5 min) quando o arquivo está no
-    // Supabase Storage. Caso contrário cai no redirect direto (Drive etc.) —
-    // legado, com Referrer-Policy: no-referrer pra não vazar `Referer`.
+    // Signed URL temporário (5 min) para o objeto privado do Storage.
     const signedUrl = await createSignedDownloadUrl(product.download_url);
-    const finalUrl = signedUrl || product.download_url;
-    const deliveryMode = signedUrl ? 'signed-storage' : 'external-redirect';
+    if (!signedUrl) {
+      // Falha na API de assinatura (rede/Storage), não erro de cadastro: o token
+      // já foi reivindicado, então devolvemos o claim para o comprador poder
+      // repetir. Seguro contra corrida: só quem venceu o claim chega aqui.
+      try {
+        await updateTable('download_tokens',
+          { token: `eq.${tokenRecord.token}` },
+          { used: false, used_at: null });
+      } catch (revertErr) {
+        console.error('[download] falha ao devolver o claim do token:', revertErr.message);
+      }
+      return res.status(502).json({ error: 'Não foi possível preparar o download. Tente novamente.' });
+    }
+
+    const finalUrl = signedUrl;
 
     await insertIntoTable('download_logs', {
       order_id: tokenRecord.order_id,
@@ -76,10 +105,10 @@ module.exports = async function downloadHandler(req, res) {
       downloaded_at: new Date().toISOString(),
     });
 
-    // Evita que o token (signed ou externo) vaze via Referer pro destino.
+    // Evita que o token assinado vaze via Referer pro destino.
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Cache-Control', 'no-store, max-age=0');
-    res.setHeader('X-Download-Mode', deliveryMode);
+    res.setHeader('X-Download-Mode', 'signed-storage');
     return res.redirect(finalUrl);
   } catch (error) {
     console.error('Download error:', error);

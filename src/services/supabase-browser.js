@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { CUSTOMER_RESET_PASSWORD_PATH } from '../constants/routes';
+import { CUSTOMER_RESET_PASSWORD_PATH, sanitizeRedirectPath } from '../constants/routes';
 
 let supabaseBrowserClient = null;
 
@@ -53,7 +53,10 @@ export function buildOAuthRedirectUrl(postLoginRedirect = '/checkout') {
     throw new Error('Login com Google disponivel apenas no navegador.');
   }
 
-  const safeRedirect = String(postLoginRedirect || '/checkout').trim() || '/checkout';
+  // Defesa em profundidade: o parâmetro atravessa o Google e volta em /login,
+  // que é quem chama navigate(). Sanitizar aqui também impede que um destino
+  // absoluto sobreviva à ida e volta do OAuth.
+  const safeRedirect = sanitizeRedirectPath(postLoginRedirect);
   const url = new URL('/login', globalThis.window.location.origin);
   url.searchParams.set('oauth', 'google');
   url.searchParams.set('redirect', safeRedirect);

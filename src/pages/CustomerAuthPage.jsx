@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { buildPasswordResetRedirectUrl, getSupabaseBrowserClient } from '../services/supabase-browser';
 import { confirmAccountDeletion, requestAccountDeletion } from '../services/customer-auth';
+import { sanitizeRedirectPath } from '../constants/routes';
 
 function getMode(search) {
   const params = new URLSearchParams(search);
@@ -165,7 +166,8 @@ export function CustomerAuthPage() {
   const { customerSession, loginCustomer, loginCustomerGoogle, registerCustomer, logoutCustomer } = useAuth();
   const { pushToast } = useToast();
 
-  const redirectTo = new URLSearchParams(location.search).get('redirect') || '/checkout';
+  // Sanitizado: o valor vai para navigate() e para o redirect_to do OAuth.
+  const redirectTo = sanitizeRedirectPath(new URLSearchParams(location.search).get('redirect'));
   const deleteToken = new URLSearchParams(location.search).get('delete_token') || '';
   const [deleting, setDeleting] = useState(false);
   const [deleteRequested, setDeleteRequested] = useState(false);

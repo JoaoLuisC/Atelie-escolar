@@ -17,13 +17,13 @@ const { resolveSecret, isLocalDevOrTest } = require('../lib/env-secret');
 //      envia link de confirmação para o e-mail do cliente.
 //   2. POST com token (o token É a autorização) → executa a exclusão.
 //
-// A exclusão:
-//   • deleta o usuário em auth.users (cascateia profiles + user_products
-//     e zera orders.customer_id — ver supabase/schema.sql)
-//   • anonimiza o PII remanescente em orders (mantém histórico fiscal)
-//   • apaga download_tokens dos pedidos do cliente
-//   • marca unsubscribe na newsletter
-//   • registra security_events 'account_self_deleted'
+// A exclusão, NESTA ORDEM (a ordem é o controle de segurança — ver
+// executeDeletion): resolve os pedidos do titular por customer_id + e-mail
+// exato → anonimiza o PII em orders endereçando por id (falha aqui aborta
+// tudo) → apaga download_tokens desses pedidos → só então deleta o usuário
+// em auth.users (cascateia profiles + user_products e zera
+// orders.customer_id — ver supabase/schema.sql) → marca unsubscribe na
+// newsletter → registra security_events 'account_self_deleted'.
 // ════════════════════════════════════════════════════════════════════
 
 const TOKEN_TTL_SECONDS = 60 * 60; // 1h
@@ -129,8 +129,81 @@ async function executeDeletion({ uid, email, req, res }) {
     return { status: 500, body: { success: false, error: 'Configuração do Supabase ausente.' } };
   }
 
-  // 1. Remove a identidade em auth.users (cascateia profiles + user_products;
-  //    orders.customer_id -> null). É o passo crítico.
+  // ORDEM CRÍTICA: identificar e anonimizar os pedidos ANTES de apagar a
+  // identidade. O deleteUser cascateia e zera orders.customer_id — fazê-lo
+  // primeiro destruía a chave forte e obrigava a casar por e-mail, que era o
+  // que introduzia o curinga ILIKE (`_`/`%` do e-mail viravam metacaracteres e
+  // a anonimização atingia pedidos de OUTROS clientes, com service_role).
+
+  // 1. Resolve os pedidos do titular: por customer_id (chave forte) e, para
+  //    pedidos feitos como convidado, por e-mail exato (eq, nunca ilike).
+  let ownOrderIds = [];
+  try {
+    const [byId, byEmail] = await Promise.all([
+      uid
+        ? listTableRows('orders', {
+            select: 'id',
+            filters: [{ column: 'customer_id', operator: 'eq', value: uid }],
+          })
+        : Promise.resolve([]),
+      listTableRows('orders', {
+        select: 'id',
+        filters: [{ column: 'customer_email', operator: 'eq', value: normalizedEmail }],
+      }),
+    ]);
+    ownOrderIds = [...new Set([...byId, ...byEmail].map((order) => order.id).filter(Boolean))];
+  } catch (err) {
+    console.error('[me-delete-account] falha ao resolver pedidos do titular:', err.message);
+    return {
+      status: 500,
+      body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' },
+    };
+  }
+
+  const ordersAffected = ownOrderIds.length;
+  const orderIdFilter = ordersAffected ? `in.(${ownOrderIds.join(',')})` : null;
+
+  // 2. Anonimiza o PII dos pedidos (mantém histórico fiscal), endereçando por id
+  //    — precisão exata, sem nenhum casamento por padrão. Falha aqui é FATAL: se
+  //    o PII não saiu, não apagamos a identidade (perderíamos a chave para sempre
+  //    e devolveríamos "excluída" com o dado pessoal intacto).
+  if (orderIdFilter) {
+    try {
+      await updateTable('orders', { id: orderIdFilter }, {
+        customer_email: anonymizeEmail(normalizedEmail, uid),
+        customer_name: '',
+        customer_cpf: null,
+        customer_phone: null,
+      });
+    } catch (err) {
+      console.error('[me-delete-account] anonimização falhou:', err.message);
+      await recordSecurityEvent({
+        eventName: 'account_deletion_anonymize_failed',
+        severity: 'error',
+        ip: extractClientIp(req),
+        userAgent: req.headers?.['user-agent'],
+        properties: { ordersPending: ordersAffected },
+      });
+      return {
+        status: 500,
+        body: {
+          success: false,
+          error: 'Não foi possível concluir a exclusão dos seus dados. Nada foi apagado — tente novamente.',
+        },
+      };
+    }
+
+    // 3. Apaga os download_tokens dos pedidos do titular (best-effort: o pedido
+    //    já está anonimizado, e o token expira em 72h de todo modo).
+    try {
+      await deleteFromTable('download_tokens', { order_id: orderIdFilter });
+    } catch (err) {
+      console.warn('[me-delete-account] limpeza de tokens falhou:', err.message);
+    }
+  }
+
+  // 4. Só agora remove a identidade em auth.users (cascateia profiles +
+  //    user_products; orders.customer_id -> null).
   if (uid) {
     const { error } = await admin.auth.admin.deleteUser(uid);
     if (error && !/not\s*found/i.test(String(error.message || ''))) {
@@ -139,35 +212,7 @@ async function executeDeletion({ uid, email, req, res }) {
     }
   }
 
-  // 2. Apaga download_tokens dos pedidos do cliente (best-effort).
-  let ordersAffected = 0;
-  try {
-    const orders = await listTableRows('orders', {
-      select: 'id',
-      filters: [{ column: 'customer_email', operator: 'ilike', value: normalizedEmail }],
-    });
-    ordersAffected = orders.length;
-    const ids = orders.map((order) => order.id).filter(Boolean);
-    if (ids.length) {
-      await deleteFromTable('download_tokens', { order_id: `in.(${ids.join(',')})` });
-    }
-  } catch (err) {
-    console.warn('[me-delete-account] limpeza de tokens falhou:', err.message);
-  }
-
-  // 3. Anonimiza o PII remanescente nos pedidos (mantém histórico fiscal).
-  try {
-    await updateTable('orders', { customer_email: `ilike.${normalizedEmail}` }, {
-      customer_email: anonymizeEmail(normalizedEmail, uid),
-      customer_name: '',
-      customer_cpf: null,
-      customer_phone: null,
-    });
-  } catch (err) {
-    console.warn('[me-delete-account] anonimização falhou:', err.message);
-  }
-
-  // 4. Marca unsubscribe na newsletter (best-effort).
+  // 5. Marca unsubscribe na newsletter (best-effort).
   try {
     const subscriber = await getTableRow('email_subscribers', {
       select: 'id,unsubscribed_at',
@@ -182,7 +227,7 @@ async function executeDeletion({ uid, email, req, res }) {
     console.warn('[me-delete-account] unsubscribe falhou:', err.message);
   }
 
-  // 5. Log de segurança (sem PII).
+  // 6. Log de segurança (sem PII).
   await recordSecurityEvent({
     eventName: 'account_self_deleted',
     severity: 'info',
@@ -191,7 +236,7 @@ async function executeDeletion({ uid, email, req, res }) {
     properties: { ordersAnonymized: ordersAffected },
   });
 
-  // 6. Encerra a sessão do cliente.
+  // 7. Encerra a sessão do cliente.
   clearCustomerSessionCookie(res);
 
   return { status: 200, body: { success: true, message: 'Sua conta foi excluída. Sentiremos sua falta.' } };
