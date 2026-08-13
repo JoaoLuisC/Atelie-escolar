@@ -204,7 +204,7 @@ ExplainSection.propTypes = {
 // ════════════════════════════════════════════════════════════════════
 // Pareto bar list — barra horizontal + chip de classe
 // ════════════════════════════════════════════════════════════════════
-function ParetoList({ items, valueLabel = 'Receita', limit = 12, getMeta }) {
+function ParetoList({ items, limit = 12, getMeta }) {
   const top = (items || []).slice(0, limit);
   if (top.length === 0) {
     return <EmptyState icon="bar-chart" title="Sem dados no período" description="Quando houver pedidos aprovados, o Pareto aparece aqui." />;
@@ -243,7 +243,6 @@ function ParetoList({ items, valueLabel = 'Receita', limit = 12, getMeta }) {
 
 ParetoList.propTypes = {
   items: PropTypes.array,
-  valueLabel: PropTypes.string,
   limit: PropTypes.number,
   getMeta: PropTypes.func,
 };

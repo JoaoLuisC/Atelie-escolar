@@ -6,6 +6,7 @@ const {
 const { sendEmail } = require('../lib/email-sender');
 const { optInConfirmation } = require('../lib/email-templates');
 const { sanitizeAttribution } = require('../lib/attribution-sanitize');
+const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -25,9 +26,22 @@ function newToken() {
  * - Email já confirmado → 200 com `alreadyConfirmed=true` (sem reenvio)
  * - Email não confirmado → reenvia confirmação se passou mais de 1h
  * - Email anteriormente unsubscribed → reativa, exige confirmar de novo
+ *
+ * Rate limit: 5/min por IP. Este endpoint dispara um e-mail para um endereço
+ * escolhido pelo cliente — sem contador ele é um relay de spam de graça (e a
+ * reputação queimada é a NOSSA, no domínio de envio). O limite de dev
+ * (routes/api-compat.routes.js: subscribeLimiter, 5/min) só existe no Express;
+ * em produção quem conta é lib/rate-limit.js.
  */
 module.exports = async function subscribeHandler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
+
+  // Antes do método e de qualquer consulta: o balde precisa contar a requisição
+  // mesmo quando ela é malformada, senão o atacante escapa do contador só
+  // trocando o verbo. É o mesmo alcance do `router.all` do Express em dev.
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.subscribe);
+  if (gate.blocked) return;
+
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
   try {

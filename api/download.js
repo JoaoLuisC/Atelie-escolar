@@ -3,11 +3,35 @@ const { createSignedDownloadUrl, parseStorageRef } = require('../lib/storage-sig
 const { extractClientIp, recordSecurityEvent } = require('../lib/security-logger');
 
 module.exports = async function downloadHandler(req, res) {
+  // ── Headers de privacidade aplicados a TODAS as respostas ────────────
+  // Postos aqui no topo, e não só antes do redirect, para valerem também nos
+  // 400/401/404/502 — qualquer resposta desta rota carrega o token na URL.
+  //
+  // - Referrer-Policy: no-referrer → impede que o token vaze no header Referer
+  //   para o host do Storage (destino do redirect) e para qualquer recurso
+  //   carregado a partir da resposta.
+  // - Cache-Control: no-store → impede que proxy/CDN/cache do navegador guarde
+  //   a resposta que contém (ou redireciona a partir de) um token de uso único;
+  //   sem isso, um 302 cacheado poderia ser reproduzido por terceiros na mesma
+  //   rede compartilhada.
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    // ── POR QUE O TOKEN CONTINUA NA QUERY STRING (achado M6) ───────────
+    // O padrão do projeto é o oposto — api/me-delete-account.js:258-260 aceita
+    // token SOMENTE no corpo POST, justamente porque a query vaza por Referer,
+    // logs e histórico. Aqui a exceção é DELIBERADA: este link é clicado
+    // diretamente pelo comprador, inclusive a partir de e-mails de confirmação
+    // JÁ ENVIADOS. Trocar para POST quebraria a entrega de todo pedido antigo,
+    // e nenhum <a href> consegue emitir POST. O risco residual é contido de
+    // outro jeito: token aleatório de 32 bytes, uso ÚNICO com claim atômico,
+    // validade de 72h, Referrer-Policy: no-referrer e Cache-Control: no-store
+    // acima. Um token vazado em log já foi queimado no primeiro uso.
     const token = String(req.query?.token || '').trim();
     if (!token) {
       return res.status(400).json({ error: 'Token é obrigatório' });
@@ -105,9 +129,8 @@ module.exports = async function downloadHandler(req, res) {
       downloaded_at: new Date().toISOString(),
     });
 
-    // Evita que o token assinado vaze via Referer pro destino.
-    res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    // Referrer-Policy: no-referrer e Cache-Control: no-store já foram postos no
+    // topo do handler (valem para todas as respostas, não só para este redirect).
     res.setHeader('X-Download-Mode', 'signed-storage');
     return res.redirect(finalUrl);
   } catch (error) {

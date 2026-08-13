@@ -1,7 +1,5 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { authenticate } = require('../middleware/auth.middleware');
-const { getProfileRoleByUserId } = require('../services/supabase-auth');
 const {
   customerLogin,
   customerRegister,
@@ -27,23 +25,15 @@ const customerLoginLimiter = rateLimit({
   },
 });
 
-// /auth/me continua Express-only (usa Bearer token + middleware authenticate).
-// O frontend não consome este endpoint (usa /auth/customer/session).
-router.get('/auth/me', authenticate, async (req, res, next) => {
-  try {
-    const role = await getProfileRoleByUserId(req.auth.user.id);
-    return res.status(200).json({
-      success: true,
-      user: {
-        id: req.auth.user.id,
-        email: req.auth.user.email,
-        role: role || null,
-      },
-    });
-  } catch (error) {
-    return next(error);
-  }
-});
+// GET /auth/me foi REMOVIDO. Ele era Express-only e autenticava por Bearer
+// token do Supabase (middleware/auth.middleware.js), um modelo de segurança
+// que este sistema NÃO usa: a identidade do cliente é o cookie HttpOnly
+// `customer_session` (HMAC, lib/customer-session.js), verificado por
+// /auth/customer/session. Manter os dois desenhava duas verdades sobre "quem
+// é o usuário logado" — e só a de cookie roda em produção, já que a Vercel
+// publica api/auth/*.js e nunca este router. Nenhum consumidor no frontend.
+// Junto foram removidos middleware/auth.middleware.js (authenticate/checkRole)
+// e middleware/validate.middleware.js, que só existiam para essas rotas mortas.
 
 // Handlers compartilhados com as funções Vercel (api/auth/*.js) — paridade.
 router.post('/auth/customer/login', customerLoginLimiter, customerLogin);

@@ -21,12 +21,20 @@ Mercado Pago para pagamento; Resend (SMTP) para e-mail. Deploy na Vercel
 | `api/` | Handlers HTTP (1 arquivo por endpoint) — rodam na Vercel e no Express |
 | `lib/` | Lógica de backend reutilizável (Supabase, sessões, e-mail, segurança, audit) |
 | `routes/` | Roteamento Express (`api-compat.routes.js` monta os handlers de `api/*.js`; `auth.routes.js` monta `/auth/customer/*`) |
-| `middleware/` | Middlewares Express (auth Bearer, validação zod, erros) — só rodam em dev |
+| `middleware/` | Tratamento de erro do Express (`notFoundHandler`/`errorHandler`) — só roda em dev |
 | `services/` | Clients Supabase server-side |
-| `utils/` | `AppError` (erro HTTP compartilhado) |
-| `validation/` | Schemas zod (pagamento, criação de produto) |
+| `utils/` | `AppError` (erro HTTP usado pelo `errorHandler`) |
 | `supabase/` | `schema.sql` canônico + `migrations/` |
 | `scripts/` | Utilitários de operação (diagnóstico Supabase, Management API, DNS) |
+
+> **Não existe um BFF Express separado.** Todo endpoint servido pelo `server.js`
+> é o mesmo módulo de `api/*.js` que a Vercel publica como função — o Express só
+> muda o transporte. As rotas Express-only que existiam (`POST /produtos`,
+> `GET /auth/me`, aliases `/payments/*`) foram removidas junto com o middleware
+> de Bearer token/role e os schemas zod de `validation/`, porque descreviam um
+> modelo de autenticação e validação que o sistema real não usa e que nunca
+> rodava em produção. Autenticação é cookie HMAC; validação é inline nos
+> handlers de `api/`.
 
 ## Camada de dados (tabelas)
 

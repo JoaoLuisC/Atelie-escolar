@@ -18,6 +18,27 @@ const {
 
 const MAX_RESULTS = 4;
 
+// Teto de pedidos considerados na co-ocorrência. Serve a dois propósitos:
+// (1) achado M7 — este endpoint é público e anônimo, e a varredura de pedidos
+//     aprovados não pode crescer com o histórico;
+// (2) o filtro `order_id=in.(…)` vira querystring de um GET. 150 UUIDs já são
+//     ~5,5 KB de URL; com os 1000 do teto anterior seriam ~37 KB, acima do que
+//     o PostgREST/proxy aceita — a query simplesmente falharia quando o
+//     produto ficasse popular. 150 pedidos recentes é amostra de sobra para
+//     ranquear 4 sugestões.
+const MAX_CO_OCCURRENCE_ORDERS = 150;
+
+// `products.id` e `orders.id` são `uuid` (supabase/schema.sql:48,76). Mesmo
+// motivo do api/create-payment.js (achado B1): nada é interpolado num filtro
+// PostgREST antes de casar com este formato. Vale inclusive para os ids que
+// vieram do próprio banco — validar de novo custa nada e tira a query da
+// dependência de "confiar na origem do valor".
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function onlyUuids(values) {
+  return values.filter((value) => UUID_RE.test(value));
+}
+
 async function loadProduct(productId) {
   return getTableRow('products', {
     select: 'id,slug,name,category_id',
@@ -26,22 +47,33 @@ async function loadProduct(productId) {
 }
 
 async function loadCoOccurrence(productId, limit = MAX_RESULTS) {
-  // Busca todos os order_items que dividem pedido aprovado com o productId.
-  // Para evitar SQL complexo no PostgREST, fazemos em duas queries.
+  // Busca os pedidos MAIS RECENTES que contêm o productId. `order by created_at
+  // desc` + limite deixa a amostra ancorada no presente em vez de numa fatia
+  // arbitrária que o Postgres devolveria sem ordenação.
   const ordersWithProduct = await listTableRows('order_items', {
     select: 'order_id',
     filters: [{ column: 'product_id', value: productId }],
-    limit: 1000,
+    orderBy: 'created_at',
+    ascending: false,
+    limit: MAX_CO_OCCURRENCE_ORDERS,
   });
 
-  const orderIds = [...new Set(ordersWithProduct.map((row) => String(row.order_id)).filter(Boolean))];
+  const orderIds = onlyUuids([
+    ...new Set(ordersWithProduct.map((row) => String(row.order_id || '')).filter(Boolean)),
+  ]);
   if (orderIds.length === 0) return [];
 
-  // Filtra para apenas pedidos aprovados
+  // Filtra para apenas pedidos aprovados. Antes esta query baixava TODOS os
+  // pedidos aprovados da base (limit 5000) para depois cruzar em memória —
+  // varredura proporcional ao histórico inteiro por hit anônimo. Como os ids
+  // que interessam já estão em mãos, o recorte cabe no próprio filtro.
   const approvedOrders = await listTableRows('orders', {
     select: 'id',
-    filters: [{ column: 'payment_status', value: 'approved' }],
-    limit: 5000,
+    filters: [
+      { column: 'id', operator: 'in', value: `(${orderIds.join(',')})` },
+      { column: 'payment_status', value: 'approved' },
+    ],
+    limit: orderIds.length,
   });
   const approvedSet = new Set(approvedOrders.map((row) => String(row.id)));
   const validOrderIds = orderIds.filter((id) => approvedSet.has(id));
@@ -51,7 +83,8 @@ async function loadCoOccurrence(productId, limit = MAX_RESULTS) {
   const coItems = await listTableRows('order_items', {
     select: 'order_id,product_id,quantity',
     filters: [{ column: 'order_id', operator: 'in', value: `(${validOrderIds.join(',')})` }],
-    limit: 5000,
+    // Cada pedido tem poucos itens; 20 por pedido é folga larga sobre o real.
+    limit: validOrderIds.length * 20,
   });
 
   const scoreByProduct = new Map();
@@ -86,10 +119,12 @@ async function loadCategoryFallback(product, excludeIds, limit) {
 }
 
 async function loadProductsByIds(ids) {
-  if (ids.length === 0) return [];
+  const safeIds = onlyUuids(ids);
+  if (safeIds.length === 0) return [];
   const rows = await listTableRows('products', {
     select: 'id,slug,name,price,image_url,images,featured,active',
-    filters: [{ column: 'id', operator: 'in', value: `(${ids.join(',')})` }],
+    filters: [{ column: 'id', operator: 'in', value: `(${safeIds.join(',')})` }],
+    limit: safeIds.length,
   });
   return rows.filter((row) => row.active !== false);
 }
@@ -120,7 +155,12 @@ module.exports = async function crossSellHandler(req, res) {
     }
 
     const productId = String(req.query?.productId || req.query?.id || '').trim();
-    if (!productId) {
+    // Achado B1: o id vem da querystring, ou seja, é entrada do usuário, e é
+    // usado como filtro em três queries. Sem este teste, um valor não-UUID
+    // chega ao PostgREST e volta como erro 400 de cast — que este handler
+    // converteria num 500 genérico, escondendo um pedido malformado atrás de
+    // "erro do servidor". Com ele, o formato é decidido aqui.
+    if (!UUID_RE.test(productId)) {
       return res.status(400).json({ success: false, error: 'productId é obrigatório.' });
     }
 

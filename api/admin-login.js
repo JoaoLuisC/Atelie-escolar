@@ -1,14 +1,63 @@
 const crypto = require('node:crypto');
-const { serviceRoleHelpers: { getTableRow } } = require('../lib/supabase');
+const {
+  getSupabaseConfig,
+  supabaseRequest,
+  serviceRoleHelpers: { getTableRow },
+} = require('../lib/supabase');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 const { safeCompare, setAdminCorsHeaders, setSessionCookie } = require('../lib/admin-session');
 const { resolveSecret } = require('../lib/env-secret');
 const { getAnonClient, getProfileRoleByEmail } = require('../services/supabase-auth');
+const { enforceRateLimit, resolveIdentifier, RATE_LIMITS } = require('../lib/rate-limit');
 
-const FACTOR_CHALLENGE_TTL_SECONDS = 5 * 60;
+// TTL do desafio de 2º fator. Era 300s; caiu para 120s porque o desafio é um
+// portador de "a senha já foi conferida" e o único uso legítimo dele é o
+// intervalo entre ver a tela do código e digitá-lo. Encurtar a janela só é
+// indolor porque o handler REEMITE um desafio novo quando o antigo expira
+// (ver handleSecondFactor) — o painel nunca fica preso.
+const FACTOR_CHALLENGE_TTL_SECONDS = 120;
+
+const TOTP_STEP_SECONDS = 30;
+// window=1 → aceita o código anterior e o próximo (±30s) para tolerar relógio
+// dessincronizado no celular. É o que torna um código válido por ~90s e, sem
+// marcação de uso, replayável nessa janela — daí o consumo único abaixo.
+const TOTP_DRIFT_WINDOW = 1;
+
+// ─── Marcação de uso único (anti-replay) ─────────────────────────────
+// ONDE GUARDAR O "JÁ USADO": reaproveitamos public.rate_limit_hit() — o mesmo
+// contador atômico criado para o P1-3 (20260813000000_rate_limit.sql). Chamar
+// com p_limit = 1 transforma o contador em "primeiro que chega vence": o INSERT
+// ... ON CONFLICT DO UPDATE devolve count=1 para o primeiro consumidor e >=2
+// para qualquer repetição, tudo numa única instrução (sem read-modify-write,
+// sem corrida entre duas lambdas concorrentes).
+//
+// POR QUE NÃO EM settings.adminConfig: aquela linha é lida no login e reescrita
+// pelo painel com merge (api/admin-settings.js). Gravar ali um contador que
+// muda a cada login (a) corre com o "Salvar" do painel e poderia sobrescrever
+// totpSecret/fallbackPin, (b) polui o diff do audit log a cada acesso e (c)
+// obrigaria o handler de login a ter permissão de ESCRITA na config que ele
+// mesmo lê para decidir se exige 2FA — exatamente a superfície que a Correção 3
+// está fechando. rate_limit_hit já é service-role-only, tem RLS sem policies e
+// é purgada de hora em hora (24h de retenção), então nada disso vira histórico
+// de acessos permanente (LGPD).
+//
+// LIMITE CONHECIDO: rate_limit_hit usa JANELA FIXA. A marca vale até o fim da
+// janela corrente, não "3600s a partir do consumo". Com janela de 1h e códigos
+// que vivem <=90s (TOTP) / 120s (desafio), a marca some antes da hora do
+// segredo em ~2,5% dos casos — e mesmo aí o atacante precisaria ter senha +
+// código vivo no mesmo instante. Trocar isso por precisão exata exigiria tabela
+// própria com expiração por linha; não vale a migration extra neste porte.
+const SINGLE_USE_WINDOW_SECONDS = 60 * 60;
+const SINGLE_USE_RPC_PATH = 'rpc/rate_limit_hit';
+const SINGLE_USE_TIMEOUT_MS = 2500;
 
 function getChallengeSecret() {
   return resolveSecret('ADMIN_SESSION_SECRET', 'dev-admin-session-secret-change-me');
+}
+
+/** Impressão digital curta e não reversível — nunca gravar e-mail/IP crus. */
+function fingerprint(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
 }
 
 function toBase64Url(input) {
@@ -25,12 +74,71 @@ function fromBase64Url(input) {
   return Buffer.from(padded, 'base64').toString('utf8');
 }
 
-function createChallengeToken(email) {
+/**
+ * Consome uma marca de uso único e diz se ela ERA inédita.
+ *
+ * @returns {Promise<{fresh: boolean, degraded: boolean}>} `fresh=false` só
+ *   quando o Postgres confirmou que a marca já existia. Falha de infra devolve
+ *   `fresh=true, degraded=true` (fail-open) pelo MESMO motivo documentado em
+ *   lib/rate-limit.js: negar aqui trancaria o admin legítimo para fora durante
+ *   um incidente de banco, e a senha + o 2º fator continuam sendo exigidos.
+ *   Todo fail-open emite evento de segurança para não ser silencioso.
+ */
+async function consumeSingleUse(bucket, identifier, context = {}) {
+  const degrade = async (reason) => {
+    await recordSecurityEvent({
+      eventName: 'admin_2fa_replay_guard_degraded',
+      severity: 'error',
+      ip: context.ip || null,
+      properties: { bucket, reason },
+    });
+    return { fresh: true, degraded: true };
+  };
+
+  if (!getSupabaseConfig()) {
+    return degrade('supabase_not_configured');
+  }
+
+  try {
+    const payload = await supabaseRequest(SINGLE_USE_RPC_PATH, {
+      method: 'POST',
+      useServiceRole: true,
+      signal: AbortSignal.timeout(SINGLE_USE_TIMEOUT_MS),
+      body: JSON.stringify({
+        p_bucket: bucket,
+        p_identifier: String(identifier || '').slice(0, 200),
+        p_limit: 1,
+        p_window_seconds: SINGLE_USE_WINDOW_SECONDS,
+      }),
+    });
+
+    const row = Array.isArray(payload) ? payload[0] : payload;
+    if (!row || typeof row.allowed !== 'boolean') {
+      return degrade('unexpected_rpc_shape');
+    }
+
+    return { fresh: row.allowed === true, degraded: false };
+  } catch (error) {
+    return degrade(`rpc_failed:${String(error?.statusCode || error?.message || '').slice(0, 60)}`);
+  }
+}
+
+/**
+ * Desafio de 2º fator: prova assinada de que a senha daquele e-mail foi aceita
+ * há menos de FACTOR_CHALLENGE_TTL_SECONDS, vinda daquele IP.
+ *
+ * O `nonce` existia antes mas nunca era persistido nem conferido — ou seja, o
+ * desafio era reutilizável à vontade dentro da validade. Agora ele é a CHAVE da
+ * marca de uso único gravada no login bem-sucedido, e o `ip` amarra o desafio à
+ * tentativa que o gerou (um token capturado não serve noutra origem).
+ */
+function createChallengeToken(email, req) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     sub: 'admin-2fa',
     email,
-    nonce: crypto.randomBytes(12).toString('hex'),
+    ip: fingerprint(extractClientIp(req)),
+    nonce: crypto.randomBytes(16).toString('hex'),
     iat: now,
     exp: now + FACTOR_CHALLENGE_TTL_SECONDS,
   };
@@ -44,7 +152,7 @@ function createChallengeToken(email) {
   return `${encodedPayload}.${signature}`;
 }
 
-function verifyChallengeToken(token, expectedEmail) {
+function verifyChallengeToken(token, expectedEmail, req) {
   const raw = String(token || '');
   if (!raw.includes('.')) {
     return { valid: false };
@@ -68,6 +176,17 @@ function verifyChallengeToken(token, expectedEmail) {
     }
 
     if (!safeCompare(String(payload?.email || ''), String(expectedEmail || ''))) {
+      return { valid: false };
+    }
+
+    // Sem nonce (formato antigo) o desafio não tem como ser marcado como usado.
+    // Tratar como inválido força a reemissão no formato novo em vez de abrir
+    // uma exceção permanente ao anti-replay.
+    if (!/^[0-9a-f]{16,}$/.test(String(payload?.nonce || ''))) {
+      return { valid: false };
+    }
+
+    if (!safeCompare(String(payload?.ip || ''), fingerprint(extractClientIp(req)))) {
       return { valid: false };
     }
 
@@ -111,26 +230,33 @@ function generateTotpCode(secretBuffer, counter) {
   return String(binary % 1_000_000).padStart(6, '0');
 }
 
-function isValidTotpCode(secret, code, stepSeconds = 30, window = 1) {
+/**
+ * Devolve o CONTADOR TOTP que casou com o código, ou null.
+ *
+ * Antes isto era um booleano (`isValidTotpCode`). Precisamos do contador porque
+ * ele é a identidade do código dentro da janela — é o que permite marcar
+ * "este código já foi usado" sem guardar o código em lugar nenhum.
+ */
+function matchTotpCounter(secret, code, stepSeconds = TOTP_STEP_SECONDS, window = TOTP_DRIFT_WINDOW) {
   const normalizedCode = String(code || '').trim();
   if (!/^\d{6}$/.test(normalizedCode)) {
-    return false;
+    return null;
   }
 
   const secretBuffer = decodeBase32(secret);
   if (!secretBuffer) {
-    return false;
+    return null;
   }
 
   const currentCounter = Math.floor(Date.now() / 1000 / stepSeconds);
   for (let drift = -window; drift <= window; drift += 1) {
-    const expectedCode = generateTotpCode(secretBuffer, currentCounter + drift);
-    if (safeCompare(normalizedCode, expectedCode)) {
-      return true;
+    const counter = currentCounter + drift;
+    if (safeCompare(normalizedCode, generateTotpCode(secretBuffer, counter))) {
+      return counter;
     }
   }
 
-  return false;
+  return null;
 }
 
 function isSecondFactorRequired(adminConfig) {
@@ -155,6 +281,31 @@ function extractSecondFactorMethods(adminConfig) {
   return methods;
 }
 
+/**
+ * Confere um código de 2º fator contra a config vigente, SEM efeito colateral
+ * (não consome marcas de uso único). Usado por api/admin-settings.js para exigir
+ * reautenticação antes de alterar campos sensíveis de segurança.
+ *
+ * DÍVIDA ASSUMIDA: TOTP/base32 deveriam morar em lib/admin-2fa.js — a revisão já
+ * aponta a extração de helpers duplicados como próximo passo. Enquanto isso,
+ * exportar daqui é preferível a copiar a implementação de HOTP para um segundo
+ * arquivo, onde ela envelheceria em separado.
+ */
+function verifySecondFactorCode(adminConfig, code) {
+  const methods = extractSecondFactorMethods(adminConfig);
+  if (methods.length === 0) return false;
+
+  const normalized = String(code || '').trim();
+  if (!normalized) return false;
+
+  if (methods.includes('totp') && matchTotpCounter(adminConfig?.totpSecret, normalized) !== null) {
+    return true;
+  }
+
+  return methods.includes('pin')
+    && safeCompare(normalized, String(adminConfig?.fallbackPin || '').trim());
+}
+
 async function readAdminConfig() {
   const row = await getTableRow('settings', {
     select: 'setting_value',
@@ -176,7 +327,103 @@ async function readAdminConfig() {
   }
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity
+/**
+ * Etapa do 2º fator. Devolve true quando o login pode prosseguir; quando
+ * devolve false, a resposta JÁ foi escrita.
+ */
+async function handleSecondFactor(req, res, { adminConfig, email, emailKey, challenge }) {
+  const methods = extractSecondFactorMethods(adminConfig);
+  if (methods.length === 0) {
+    res.status(500).json({
+      success: false,
+      error: '2FA ativado sem método configurado no adminConfig.',
+    });
+    return false;
+  }
+
+  // Sem desafio válido (1ª etapa, desafio expirado, adulterado ou de outro IP):
+  // reemitir é seguro porque a senha acabou de ser conferida NESTA requisição.
+  // É também o que mantém o TTL curto e o uso único indolores: o painel recebe
+  // um desafio novo em vez de travar na tela do código.
+  if (!challenge.valid) {
+    res.status(200).json({
+      success: false,
+      requiresSecondFactor: true,
+      methods,
+      challengeToken: createChallengeToken(email, req),
+    });
+    return false;
+  }
+
+  const code = String(req.body?.factorCode || '').trim();
+  if (!code) {
+    res.status(401).json({ success: false, error: 'Código de verificação obrigatório.' });
+    return false;
+  }
+
+  const ip = extractClientIp(req);
+  const totpCounter = methods.includes('totp')
+    ? matchTotpCounter(adminConfig?.totpSecret, code)
+    : null;
+  const pinValid = methods.includes('pin')
+    && safeCompare(code, String(adminConfig?.fallbackPin || '').trim());
+
+  if (totpCounter === null && !pinValid) {
+    await recordSecurityEvent({
+      eventName: 'admin_2fa_failed',
+      severity: 'warn',
+      ip,
+      userAgent: req.headers['user-agent'],
+      properties: { email_hash: emailKey, methods },
+    });
+    res.status(401).json({ success: false, error: 'Código de verificação inválido.' });
+    return false;
+  }
+
+  // TOTP: o mesmo código vale por até ~90s (janela de drift). Marcar o contador
+  // como consumido impede que um código observado (ombro, phishing em tempo
+  // real, log de proxy) seja reapresentado dentro dessa sobra.
+  if (totpCounter !== null) {
+    const totpUse = await consumeSingleUse('admin-2fa-totp', `${emailKey}:${totpCounter}`, { ip });
+    if (!totpUse.fresh) {
+      await recordSecurityEvent({
+        eventName: 'admin_2fa_code_replayed',
+        severity: 'error',
+        ip,
+        userAgent: req.headers['user-agent'],
+        properties: { email_hash: emailKey, counter: totpCounter },
+      });
+      res.status(401).json({
+        success: false,
+        error: 'Código já utilizado. Aguarde o próximo código do autenticador.',
+      });
+      return false;
+    }
+  }
+
+  // Desafio: consumido só APÓS o código ser aceito. Consumir antes faria um erro
+  // de digitação queimar o desafio; consumir aqui garante o que importa — um
+  // desafio emite no máximo UMA sessão. As tentativas com código errado ficam
+  // limitadas pelo balde adminLoginSecondFactor (5 / 10 min) e pelo TTL de 120s.
+  const challengeUse = await consumeSingleUse('admin-2fa-challenge', challenge.payload.nonce, { ip });
+  if (!challengeUse.fresh) {
+    await recordSecurityEvent({
+      eventName: 'admin_2fa_challenge_replayed',
+      severity: 'error',
+      ip,
+      userAgent: req.headers['user-agent'],
+      properties: { email_hash: emailKey },
+    });
+    res.status(401).json({
+      success: false,
+      error: 'Desafio de 2FA já utilizado. Faça login novamente.',
+    });
+    return false;
+  }
+
+  return true;
+}
+
 module.exports = async function adminLoginHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
@@ -190,11 +437,41 @@ module.exports = async function adminLoginHandler(req, res) {
 
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
-  const factorCode = String(req.body?.factorCode || '').trim();
   const challengeToken = String(req.body?.challengeToken || '').trim();
 
   if (!email || !password) {
     return res.status(400).json({ success: false, error: 'E-mail e senha são obrigatórios.' });
+  }
+
+  const emailKey = fingerprint(email);
+
+  // ── Rate limit (P1-3) ─────────────────────────────────────────────
+  // Dois baldes DISTINTOS porque são dois segredos distintos sendo adivinhados.
+  // A fase é decidida pelo desafio: um challengeToken assinado, no prazo, do
+  // mesmo IP e para o mesmo e-mail só existe se a senha já tiver sido aceita há
+  // menos de 2 min. Token ausente/forjado cai no balde da SENHA — não há como
+  // fugir do limite de senha inventando um desafio.
+  //
+  // O limiter de dev (routes/api-compat.routes.js) usa skipSuccessfulRequests;
+  // aqui o sucesso também conta, como lib/rate-limit.js documenta (o contador do
+  // Postgres não tem estorno). O efeito colateral — um login completo custa 1
+  // hit em cada balde, não 2 no mesmo — é justamente o que a separação por fase
+  // resolve: 5 tentativas de senha E 5 de código a cada 10 min.
+  const challenge = challengeToken
+    ? verifyChallengeToken(challengeToken, email, req)
+    : { valid: false };
+
+  const gate = challenge.valid
+    ? await enforceRateLimit(req, res, {
+      ...RATE_LIMITS.adminLoginSecondFactor,
+      // IP + e-mail: o balde do 2º fator não pode ser esvaziado trocando de
+      // conta, nem um admin pode trancar o outro.
+      identifier: `${resolveIdentifier(req)}|${emailKey}`,
+    })
+    : await enforceRateLimit(req, res, RATE_LIMITS.adminLogin);
+
+  if (gate.blocked) {
+    return;
   }
 
   const supabase = getAnonClient();
@@ -216,7 +493,7 @@ module.exports = async function adminLoginHandler(req, res) {
       severity: 'warn',
       ip: extractClientIp(req),
       userAgent: req.headers['user-agent'],
-      properties: { reason: 'invalid_credentials', email_hash: crypto.createHash('sha256').update(email).digest('hex').slice(0, 16) },
+      properties: { reason: 'invalid_credentials', email_hash: emailKey },
     });
     return res.status(401).json({ success: false, error: 'Credenciais inválidas.' });
   }
@@ -230,7 +507,7 @@ module.exports = async function adminLoginHandler(req, res) {
       severity: 'warn',
       ip: extractClientIp(req),
       userAgent: req.headers['user-agent'],
-      properties: { reason: 'non_admin_role', role: normalizedRole || 'none', email_hash: crypto.createHash('sha256').update(email).digest('hex').slice(0, 16) },
+      properties: { reason: 'non_admin_role', role: normalizedRole || 'none', email_hash: emailKey },
     });
     // Resposta HTTP idêntica ao caso de credencial inválida (mesmo status e
     // mensagem) para não vazar que a senha está correta em conta não-admin.
@@ -240,49 +517,14 @@ module.exports = async function adminLoginHandler(req, res) {
 
   const adminConfig = await readAdminConfig();
   if (isSecondFactorRequired(adminConfig)) {
-    const methods = extractSecondFactorMethods(adminConfig);
-    if (methods.length === 0) {
-      return res.status(500).json({
-        success: false,
-        error: '2FA ativado sem método configurado no adminConfig.',
-      });
-    }
-
-    if (!challengeToken) {
-      return res.status(200).json({
-        success: false,
-        requiresSecondFactor: true,
-        methods,
-        challengeToken: createChallengeToken(email),
-      });
-    }
-
-    const challenge = verifyChallengeToken(challengeToken, email);
-    if (!challenge.valid) {
-      return res.status(401).json({
-        success: false,
-        error: 'Desafio de 2FA inválido ou expirado.',
-      });
-    }
-
-    const code = String(factorCode || '').trim();
-    if (!code) {
-      return res.status(401).json({
-        success: false,
-        error: 'Código de verificação obrigatório.',
-      });
-    }
-
-    const totpValid = methods.includes('totp')
-      && isValidTotpCode(adminConfig?.totpSecret, code);
-    const pinValid = methods.includes('pin')
-      && safeCompare(code, String(adminConfig?.fallbackPin || '').trim());
-
-    if (!totpValid && !pinValid) {
-      return res.status(401).json({
-        success: false,
-        error: 'Código de verificação inválido.',
-      });
+    const passed = await handleSecondFactor(req, res, {
+      adminConfig,
+      email,
+      emailKey,
+      challenge,
+    });
+    if (!passed) {
+      return;
     }
   }
 
@@ -290,3 +532,11 @@ module.exports = async function adminLoginHandler(req, res) {
   setSessionCookie(res, { email: authData.user.email || email, role: normalizedRole });
   return res.status(200).json({ success: true, user: { role: normalizedRole || 'admin', email } });
 };
+
+// Primitivos de 2º fator reaproveitados por api/admin-settings.js (reautenticação
+// para alterar 2FA). Anexados ao handler porque a Vercel exige que o export
+// default do arquivo em api/ seja a própria função — propriedades extras são
+// ignoradas pelo runtime e não viram rota.
+module.exports.isSecondFactorRequired = isSecondFactorRequired;
+module.exports.extractSecondFactorMethods = extractSecondFactorMethods;
+module.exports.verifySecondFactorCode = verifySecondFactorCode;

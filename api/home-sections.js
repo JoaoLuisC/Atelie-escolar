@@ -1,4 +1,5 @@
 const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, listTableRows } } = require('../lib/supabase');
+const { loadSoldCountByProduct } = require('../lib/sales-counts');
 
 function safeJsonParse(value, fallback) {
   if (value === null || value === undefined) {
@@ -115,7 +116,12 @@ module.exports = async function homeSectionsHandler(req, res) {
       return res.status(500).json({ success: false, error: 'Supabase nao configurado' });
     }
 
-    const [settingRow, categoriesRows, productsRows, approvedOrdersRows, orderItemsRows] = await Promise.all([
+    // Achado M7: a vitrine da home é pública e anônima, e até aqui baixava
+    // `orders` e `order_items` INTEIRAS (sem `limit`, sem janela) a cada hit
+    // não-cacheado só para ordenar a seção "Mais vendidos".
+    // loadSoldCountByProduct agrega no Postgres e tem teto explícito no
+    // fallback — ver lib/sales-counts.js.
+    const [settingRow, categoriesRows, productsRows, soldCountByProduct] = await Promise.all([
       getTableRow('settings', {
         select: 'setting_value',
         filters: [{ column: 'setting_key', value: 'homeSections' }],
@@ -132,34 +138,13 @@ module.exports = async function homeSectionsHandler(req, res) {
         orderBy: 'created_at',
         ascending: false,
       }),
-      listTableRows('orders', {
-        select: 'id',
-        filters: [{ column: 'payment_status', value: 'approved' }],
-      }),
-      listTableRows('order_items', {
-        select: 'order_id,product_id,quantity',
-      }),
+      loadSoldCountByProduct(),
     ]);
 
     const settings = safeJsonParse(settingRow?.setting_value, {});
     const sections = normalizeSections(settings, categoriesRows);
 
     const categoryById = new Map(categoriesRows.map((category) => [String(category.id), category]));
-    const approvedOrderIds = new Set(approvedOrdersRows.map((row) => String(row.id)));
-    const soldCountByProduct = new Map();
-
-    for (const item of orderItemsRows) {
-      const orderId = String(item.order_id || '');
-      const productId = String(item.product_id || '');
-      if (!orderId || !productId || !approvedOrderIds.has(orderId)) {
-        continue;
-      }
-
-      soldCountByProduct.set(
-        productId,
-        (soldCountByProduct.get(productId) || 0) + Number(item.quantity || 0),
-      );
-    }
 
     const normalizedProducts = productsRows.map((product) => {
       const category = categoryById.get(String(product.category_id));

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
@@ -6,7 +6,7 @@ import { SkeletonDownloadList } from '../components/Skeleton';
 import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { getApiBaseUrl } from '../utils/api';
+import { apiRequest, getApiBaseUrl } from '../utils/api';
 import { formatPrice } from '../utils/currency';
 import { trackPurchaseOnce } from '../utils/analytics';
 
@@ -32,8 +32,15 @@ function usePendingOrderPolling({ orderId, orderEmail, paymentStatus, setOrder, 
       }
 
       try {
-        const response = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${encodeURIComponent(orderId)}&email=${encodeURIComponent(orderEmail)}`);
-        const data = await response.json();
+        // POST com e-mail no CORPO (achado M6): na query string o e-mail do
+        // comprador vaza para access logs, histórico e Referer. Este polling
+        // não recebe AbortSignal de fora, então usa apiRequest — que traz o
+        // timeout e a normalização de erro da camada de API.
+        const { response, data } = await apiRequest('/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, email: orderEmail }),
+        });
 
         if (!response.ok || !data.success) {
           return;
@@ -122,7 +129,18 @@ export function DownloadsPage() {
     setStatus('Carregando as informações do seu pedido…');
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${encodeURIComponent(orderId)}&email=${encodeURIComponent(orderEmail)}`, { signal });
+      // POST com o e-mail no CORPO (achado M6) — a query string vazava PII por
+      // access log/histórico/Referer. Continua em fetch cru (e não apiRequest)
+      // DE PROPÓSITO: apiRequest cria o próprio AbortController e sobrescreve o
+      // `signal` do chamador (src/utils/api.js:39-42), o que desligaria o
+      // cancelamento em troca de pedido/desmontagem que este caminho usa para
+      // não sobrescrever o estado com a resposta de uma consulta antiga.
+      const response = await fetch(`${getApiBaseUrl()}/verify-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, email: orderEmail }),
+        signal,
+      });
       const data = await response.json();
       // Requisição substituída por outra (troca de pedido) ou desmontagem:
       // descarta o resultado para não sobrescrever o estado atual.
@@ -184,7 +202,8 @@ export function DownloadsPage() {
 
   // Histórico de pedidos: SÓ os do cliente logado. O backend deriva o e-mail da
   // sessão (cookie HttpOnly) — não passamos e-mail arbitrário. `credentials`
-  // envia o cookie de sessão.
+  // envia o cookie de sessão. Mantido em fetch cru pelo mesmo motivo de
+  // loadOrder: apiRequest sobrescreveria o `signal` do chamador.
   const loadMyOrders = useCallback(async (signal) => {
     if (!customerSession?.email) return;
     setSearchingByEmail(true);
@@ -249,8 +268,6 @@ export function DownloadsPage() {
   } else if (order?.paymentStatus === 'pending' || pollingStatus) {
     statusStep = 1;
   }
-
-  const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50';
 
   return (
     <Shell>

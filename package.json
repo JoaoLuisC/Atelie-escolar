@@ -14,7 +14,13 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:web": "vitest run",
-    "check": "npm run test && npm run build",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"{src,api,lib,routes,middleware,services,utils,validation,scripts}/**/*.{js,jsx,css}\" \"*.config.js\" server.js",
+    "format:check": "prettier --check \"{src,api,lib,routes,middleware,services,utils,validation,scripts}/**/*.{js,jsx,css}\" \"*.config.js\" server.js",
+    "check:env": "node scripts/check-env.js",
+    "check": "npm run check:env && npm run test && npm run build && npm run lint",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "rebuild": "npm run clean && npm run build",
     "supabase:login": "npx supabase login",
@@ -31,6 +37,15 @@
   ],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "react-helmet-async": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.1",
     "@vercel/analytics": "^1.4.0",
@@ -62,6 +77,7 @@
     "globals": "^17.7.0",
     "jsdom": "^29.0.1",
     "postcss": "^8.5.10",
+    "prettier": "^3.4.2",
     "supabase": "^2.88.1",
     "tailwindcss": "^3.4.17",
     "vercel": "^33.0.0",

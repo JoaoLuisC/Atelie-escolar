@@ -20,21 +20,34 @@
 ### 1. Network / Headers
 - `helmet()` (dev/Express, via [lib/security-headers.js](../lib/security-headers.js)) — CSP estrita explícita (script-src whitelist GA4/Meta/MP), HSTS, X-Frame-Options DENY, X-Content-Type-Options. Em produção (Vercel) os headers equivalentes vêm da rota `/(.*)` do [vercel.json](../vercel.json): HSTS, nosniff, `X-Frame-Options: SAMEORIGIN`, Permissions-Policy e CSP com `frame-ancestors 'none'`.
 - `cors()` — allowlist explícita em prod (`CORS_ORIGINS`); permissivo em dev (apenas `localhost:*`)
-#### ⚠ Rate limiting — NÃO implementado em produção (pendência API-03)
+#### ⚠ Rate limiting — pendência API-03, **ainda aberta em produção**
 
-**Nenhum dos limites abaixo está ativo no ambiente implantado.** Todos usam
-`express-rate-limit` com store em memória e vivem em `server.js` / `routes/*.js`, mas o
+**Nenhum dos limites `express-rate-limit` listados abaixo está ativo no ambiente implantado.**
+Todos usam store em memória e vivem em `server.js` / `routes/*.js`, mas o
 [vercel.json](../vercel.json) só builda o SPA estático e `api/**/*.js` — **o Express não é
 implantado**. Além disso, cada função serverless é uma invocação isolada, então um store em
 memória nunca funcionaria ali nem se o Express rodasse.
 
-Consequência prática: em produção `/api/admin-login` aceita brute force ilimitado de senha
-**e do segundo fator** (o `challengeToken` é reemitível e a validação do código não tem
-contador de tentativas), e `/api/validate-coupon` é um oráculo de enumeração sem teto.
+Consequência prática enquanto a pendência não fecha: em produção `/api/admin-login` aceita
+brute force ilimitado de senha **e do segundo fator** (o `challengeToken` é reemitível e a
+validação do código não tem contador de tentativas), e `/api/validate-coupon` é um oráculo de
+enumeração sem teto.
 
-Correção prevista: contador atômico no Postgres (`public.rate_limit_hit`) chamado pelos
-handlers de `api/`, mais rate limit no Vercel Firewall como contenção. Até isso existir, este
-bloco descreve **apenas o comportamento em desenvolvimento**:
+**Estado da correção (2026-08-12):** está sendo introduzido um limitador com **contador atômico
+no Postgres** — módulo `lib/rate-limit.js` (chamado direto pelos handlers de `api/`, que são o
+que roda em produção) mais a migration `supabase/migrations/20260813000000_rate_limit.sql`, que
+cria a tabela de contagem. O contador precisa ser atômico no banco justamente porque o runtime
+serverless não compartilha memória entre invocações: só o Postgres vê todas elas.
+
+> ⚠ **Isto NÃO fecha a pendência API-03 por si só.** Código versionado ≠ proteção ativa. A
+> pendência só fecha quando (1) a migration `20260813000000_rate_limit.sql` for **aplicada no
+> banco de produção** (`npm run supabase:db:push` — ver P1-4: a aplicação das migrations em prod
+> segue **não confirmada**), (2) o deploy com os handlers chamando o limitador estiver no ar e
+> (3) o bloqueio for verificado na prática contra `/api/admin-login`. Até os três, considere o
+> rate limiting **inexistente em produção**. Rate limit no Vercel Firewall continua recomendado
+> como contenção de borda, independente disso.
+
+Os limites abaixo descrevem **apenas o comportamento em desenvolvimento** (Express):
 
 - `rate-limit` global — 250 req/15min global (`RATE_LIMIT_MAX`); 30 req/15min em `/auth/*` (`AUTH_RATE_LIMIT_MAX`)
 - `rate-limit` em `/admin-login` — 5 tentativas falhas / 10 min (definido em [routes/api-compat.routes.js](../routes/api-compat.routes.js); `skipSuccessfulRequests: true` para não punir admin legítimo fazendo logins repetidos)
@@ -75,7 +88,7 @@ bloco descreve **apenas o comportamento em desenvolvimento**:
 | security_events | — | service_role |
 | settings | — | service_role |
 | page_views | — | service_role (INSERT anônimo removido — RLS-04, forjava IP/UA) |
-| analytics_events | — | anon+auth (whitelist de eventos, sem PII e sem `order_id`/`customer_email`) |
+| analytics_events | — | service_role (INSERT anônimo removido — W1-04, forjava `created_at`/`session_id`/`source` e `properties` sem teto; o front posta em `/api/track-event`, que valida por `lib/analytics-events.js`) |
 | coupons | — | service_role (validação via `/validate-coupon`) |
 | abandoned_carts | — | service_role (escrita pública removida — RLS-02; só via `/api/abandoned-cart`) |
 | email_subscribers | — | service_role |
@@ -83,6 +96,12 @@ bloco descreve **apenas o comportamento em desenvolvimento**:
 | admin_audit_log | — | service_role só INSERT (append-only: UPDATE/DELETE revogados até para service_role — regra I1) |
 
 **Princípio**: service role bypassa RLS, então o **backend pode tudo**. Browser usando anon key fica restrito ao que está nas policies.
+
+#### Fonte de verdade das policies
+
+As policies vivem **exclusivamente** nas migrations de [`supabase/migrations/`](../supabase/migrations/), aplicadas em ordem de timestamp por `npm run supabase:db:push`. O estado corrente de `orders`/`order_items`/`products` é o da última migration que os tocou — [`20260812000000_security_hardening_wave1.sql`](../supabase/migrations/20260812000000_security_hardening_wave1.sql).
+
+[`supabase/security-hardening.sql`](../supabase/security-hardening.sql) **não é fonte de verdade**: é um script único de troubleshooting, mantido em sincronia à mão, para restaurar o baseline de RLS quando o Security Advisor acusa CRITICAL e não dá para rodar a esteira de migrations na hora. Como ele usa `drop policy if exists` + `create policy`, rodá-lo desatualizado **sobrescreve** a policy endurecida mais recente — foi exatamente o que quase aconteceu com o escopo de `orders` (o arquivo ficou com a condição `customer_email = auth.jwt() ->> 'email'` depois que a wave1 a removeu). Regra: **toda migration nova que mexa em policy, grant de coluna ou trigger de segurança deve ser refletida nesse arquivo no mesmo commit** — ou o statement correspondente é removido de lá.
 
 ### 4. Funções com `SECURITY DEFINER`
 
@@ -99,7 +118,7 @@ As demais funções `SECURITY DEFINER` de manutenção — `purge_old_logs()`, `
 
 ### 4b. Privilege escalation bloqueado em `profiles`
 
-RLS sozinho não impede um cliente autenticado de fazer `UPDATE profiles SET role='ADMIN' WHERE id=auth.uid()` — a policy `profiles_own_update` libera a linha, mas não as colunas. Para fechar isso, usamos um trigger guard (RLS-01, em [supabase/security-hardening.sql](../supabase/security-hardening.sql) e na migration phase6):
+RLS sozinho não impede um cliente autenticado de fazer `UPDATE profiles SET role='ADMIN' WHERE id=auth.uid()` — a policy `profiles_own_update` libera a linha, mas não as colunas. Para fechar isso, usamos um trigger guard (RLS-01), definido na migration [`20260702000000_phase6_db_rls_hardening.sql`](../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql):
 
 ```sql
 create or replace function public.profiles_guard_privileged_cols()
@@ -205,7 +224,7 @@ Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Res
 - `order_code` tem 128 bits de entropia (`crypto.randomBytes(16).toString('hex')`).
 - Comparação do email usa `crypto.timingSafeEqual` para não vazar diferenças por tempo.
 - Resposta uniforme `404 "Pedido não encontrado"` em ambos os casos (order não existe vs email não bate).
-- Rate-limit por IP (60 req/min) bloqueia tentativas em massa.
+- Rate-limit por IP (60 req/min) contra tentativas em massa — **só em dev/Express**; em produção depende do limitador da pendência API-03 (ver camada 1).
 
 ### 10. Retenção de logs (LGPD princípio da minimização)
 
@@ -320,6 +339,8 @@ Patch crítico → atualizar imediatamente. Minor → mensal. Major → planejad
 - [ ] `APP_URL` é `https://...` (não localhost)
 - [ ] `APP_ENV=production` (ou `NODE_ENV` — ver `runtimeEnv` em [lib/env-secret.js](../lib/env-secret.js))
 - [ ] `CRON_SECRET` com o mesmo valor na Vercel e no GitHub Secrets (workflow `email-cron.yml`)
+- [ ] **Todas** as migrations aplicadas em produção (`npm run supabase:db:push`) — em especial `20260812000000_security_hardening_wave1.sql` (IDOR de `orders` + `download_url`) e `20260813000000_rate_limit.sql` (API-03)
+- [ ] Rate limiting verificado **no ar**, não só no código: 6ª tentativa em `/api/admin-login` deve responder 429
 - [ ] Security Advisor: 0 CRITICAL
 - [ ] 2FA habilitado para conta admin
 - [ ] Backup do banco testado (Supabase Pro)

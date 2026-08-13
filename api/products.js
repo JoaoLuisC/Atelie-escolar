@@ -1,4 +1,5 @@
 const { getSupabaseConfig, serviceRoleHelpers: { listTableRows } } = require('../lib/supabase');
+const { loadSoldCountByProduct } = require('../lib/sales-counts');
 
 /**
  * API: Listar produtos disponíveis
@@ -18,7 +19,12 @@ module.exports = async function productsHandler(req, res) {
       return res.status(500).json({ error: 'Supabase não configurado' });
     }
 
-    const [productsRows, categoriesRows, approvedOrdersRows, orderItemsRows] = await Promise.all([
+    // Achado M7: até aqui este endpoint público e anônimo baixava `orders` e
+    // `order_items` INTEIRAS (sem `limit`, sem janela) a cada hit não-cacheado,
+    // só para somar quantidade por produto. loadSoldCountByProduct agrega no
+    // Postgres (RPC) e cai numa varredura com teto explícito se a migration
+    // 20260813000001 ainda não estiver aplicada — ver lib/sales-counts.js.
+    const [productsRows, categoriesRows, soldCountByProduct] = await Promise.all([
       listTableRows('products', {
         // download_url NÃO entra aqui: é o localizador do arquivo pago e este é
         // um endpoint público. Era selecionado e nem chegava a ser emitido no
@@ -34,33 +40,10 @@ module.exports = async function productsHandler(req, res) {
         orderBy: 'name',
         ascending: true,
       }),
-      listTableRows('orders', {
-        select: 'id',
-        filters: [{ column: 'payment_status', value: 'approved' }],
-        orderBy: 'created_at',
-        ascending: false,
-      }),
-      listTableRows('order_items', {
-        select: 'order_id,product_id,quantity',
-        orderBy: 'order_id',
-        ascending: false,
-      }),
+      loadSoldCountByProduct(),
     ]);
 
     const categoryById = new Map(categoriesRows.map((category) => [String(category.id), category.name]));
-    const approvedOrderIds = new Set(approvedOrdersRows.map((row) => String(row.id)));
-    const soldCountByProduct = new Map();
-
-    for (const item of orderItemsRows) {
-      const orderId = String(item.order_id || '');
-      const productId = String(item.product_id || '');
-      if (!orderId || !productId || !approvedOrderIds.has(orderId)) {
-        continue;
-      }
-
-      const qty = Number(item.quantity || 0);
-      soldCountByProduct.set(productId, (soldCountByProduct.get(productId) || 0) + (Number.isFinite(qty) ? qty : 0));
-    }
 
     const products = productsRows.map((row) => {
       const images = Array.isArray(row.images) ? row.images : [];

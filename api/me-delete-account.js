@@ -18,12 +18,24 @@ const { resolveSecret, isLocalDevOrTest } = require('../lib/env-secret');
 //   2. POST com token (o token É a autorização) → executa a exclusão.
 //
 // A exclusão, NESTA ORDEM (a ordem é o controle de segurança — ver
-// executeDeletion): resolve os pedidos do titular por customer_id + e-mail
-// exato → anonimiza o PII em orders endereçando por id (falha aqui aborta
-// tudo) → apaga download_tokens desses pedidos → só então deleta o usuário
-// em auth.users (cascateia profiles + user_products e zera
-// orders.customer_id — ver supabase/schema.sql) → marca unsubscribe na
-// newsletter → registra security_events 'account_self_deleted'.
+// executeDeletion): resolve a identidade autoritativa em auth.users pelo uid
+// → adota os pedidos ÓRFÃOS daquele e-mail (checkout de convidado; só órfãos,
+// nunca pedido já vinculado a outro uid) → resolve os pedidos do titular
+// EXCLUSIVAMENTE por customer_id = uid → anonimiza o PII em orders
+// endereçando por id (falha aqui aborta tudo) → apaga download_tokens desses
+// pedidos → só então deleta o usuário em auth.users (cascateia profiles +
+// user_products e zera orders.customer_id — ver supabase/schema.sql) → marca
+// unsubscribe na newsletter → registra security_events 'account_self_deleted'.
+//
+// POR QUE customer_id E NÃO customer_email (achado P1-1): a wave1
+// (20260812000000_security_hardening_wave1.sql, W1-02) tirou a policy de
+// orders do claim `email` porque ele não prova posse do endereço — com
+// "Confirm email" OFF, um atacante registra o e-mail da vítima e recebe uma
+// sessão com aquele e-mail. Este handler usa serviceRoleHelpers, que BYPASSA
+// RLS, então a policy corrigida não o alcançava: escopar a exclusão por
+// customer_email deixava o atacante DESTRUIR o PII dos pedidos de convidado
+// da vítima. Aqui a operação é irreversível, então o escopo é o mais estreito
+// possível: só o que está provadamente vinculado ao uid da sessão.
 // ════════════════════════════════════════════════════════════════════
 
 const TOKEN_TTL_SECONDS = 60 * 60; // 1h
@@ -121,8 +133,69 @@ async function requestDeletion(user) {
   return { status: 200, body };
 }
 
+// Identidade AUTORITATIVA do titular: lida de auth.users pelo uid, nunca do
+// cookie nem do token. Os dois são assinados por nós (não são forjáveis pelo
+// cliente), mas ambos carregam uma CÓPIA do e-mail feita no login/na
+// solicitação; o que vale numa operação destrutiva é o estado atual de
+// auth.users. Retorna { email } só com o e-mail confirmado — com "Confirm
+// email" ON (obrigatório; a wave1 lista isso em "NÃO cobre"), email_confirmed_at
+// é a única evidência que o Supabase produz de que o endereço é deste uid.
+// `missing: true` significa que o usuário não existe mais (conta já excluída).
+async function resolveAuthIdentity(admin, uid) {
+  const { data, error } = await admin.auth.admin.getUserById(uid);
+  if (error) {
+    if (error.status === 404 || /not\s*found/i.test(String(error.message || ''))) {
+      return { missing: true };
+    }
+    throw new Error(error.message || 'auth.getUserById falhou');
+  }
+
+  // Resposta sem erro E sem usuário é estado impossível: NÃO tratamos como
+  // "já excluído", senão devolveríamos "conta excluída" sem ter apagado nada.
+  const user = data?.user;
+  if (!user?.id) {
+    throw new Error('auth.getUserById devolveu resposta vazia');
+  }
+  if (String(user.id) !== String(uid)) {
+    return null;
+  }
+
+  const email = String(user.email || '').trim().toLowerCase();
+  const confirmed = Boolean(user.email_confirmed_at || user.confirmed_at);
+  if (!email || !confirmed) {
+    return null;
+  }
+
+  return { email };
+}
+
+// Reconciliação do checkout de CONVIDADO, idêntica à de api/customer-orders.js:
+// api/create-payment.js grava o pedido sem customer_id e
+// ensureCustomerAccountFromCheckout cria a conta depois sem voltar para
+// vincular. Sem isto, escopar por customer_id deixaria o PII dos pedidos de
+// convidado para trás numa exclusão LGPD.
+//
+// O segundo predicado é o controle de segurança: `customer_id=is.null`
+// restringe a adoção a pedidos ÓRFÃOS — pedido já vinculado a outro uid é
+// intocável, então ninguém anonimiza pedido de quem tem conta. O e-mail não
+// autoriza nada por si: ele só casa órfão com dono, e vem de auth.users
+// (uid → e-mail), não da sessão crua.
+//
+// RISCO RESIDUAL, assumido: com "Confirm email" OFF e uma vítima que nunca
+// criou conta (pedidos órfãos), quem registrar o e-mail dela adota — e aqui,
+// destrói — esses órfãos. Não existe prova de posse melhor na camada de
+// aplicação para um pedido feito sem conta; o fecho é "Confirm email = ON".
+async function adoptOrphanGuestOrders(uid, email) {
+  const adopted = await updateTable(
+    'orders',
+    { customer_email: `eq.${email}`, customer_id: 'is.null' },
+    { customer_id: uid },
+  );
+  return Array.isArray(adopted) ? adopted.length : 0;
+}
+
 async function executeDeletion({ uid, email, req, res }) {
-  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const tokenEmail = String(email || '').trim().toLowerCase();
 
   const admin = getAdminClient();
   if (!admin) {
@@ -131,27 +204,63 @@ async function executeDeletion({ uid, email, req, res }) {
 
   // ORDEM CRÍTICA: identificar e anonimizar os pedidos ANTES de apagar a
   // identidade. O deleteUser cascateia e zera orders.customer_id — fazê-lo
-  // primeiro destruía a chave forte e obrigava a casar por e-mail, que era o
+  // primeiro destruiria a chave forte e obrigaria a casar por e-mail, que era o
   // que introduzia o curinga ILIKE (`_`/`%` do e-mail viravam metacaracteres e
   // a anonimização atingia pedidos de OUTROS clientes, com service_role).
 
-  // 1. Resolve os pedidos do titular: por customer_id (chave forte) e, para
-  //    pedidos feitos como convidado, por e-mail exato (eq, nunca ilike).
+  // 0. Identidade autoritativa. FALHA FECHADA: sem ela não sabemos o escopo,
+  //    e numa operação irreversível preferimos não apagar nada — o cliente
+  //    tenta de novo.
+  let identity;
+  try {
+    identity = await resolveAuthIdentity(admin, uid);
+  } catch (err) {
+    console.error('[me-delete-account] falha ao resolver identidade:', err.message);
+    return {
+      status: 500,
+      body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' },
+    };
+  }
+
+  if (identity?.missing) {
+    // Idempotência: a conta já não existe. Nada a apagar, só encerra a sessão.
+    clearCustomerSessionCookie(res);
+    return { status: 200, body: { success: true, message: 'Sua conta foi excluída. Sentiremos sua falta.' } };
+  }
+
+  if (!identity) {
+    return {
+      status: 409,
+      body: {
+        success: false,
+        error: 'Confirme seu e-mail antes de excluir a conta. Se o problema persistir, fale com o suporte.',
+      },
+    };
+  }
+
+  const normalizedEmail = identity.email;
+
+  // Divergência entre o e-mail do token e o atual em auth.users significa que
+  // a conta mudou de e-mail depois da solicitação. Numa exclusão irreversível,
+  // o desvio invalida a autorização: exigimos uma solicitação nova.
+  if (tokenEmail && tokenEmail !== normalizedEmail) {
+    return {
+      status: 400,
+      body: { success: false, error: 'Link inválido ou expirado. Solicite a exclusão novamente.' },
+    };
+  }
+
+  // 1. Vincula os pedidos de convidado ao uid (só os órfãos) e então resolve o
+  //    escopo EXCLUSIVAMENTE por customer_id — a única chave que prova posse.
+  //    Falhar na adoção também fecha: nada foi tocado ainda.
   let ownOrderIds = [];
   try {
-    const [byId, byEmail] = await Promise.all([
-      uid
-        ? listTableRows('orders', {
-            select: 'id',
-            filters: [{ column: 'customer_id', operator: 'eq', value: uid }],
-          })
-        : Promise.resolve([]),
-      listTableRows('orders', {
-        select: 'id',
-        filters: [{ column: 'customer_email', operator: 'eq', value: normalizedEmail }],
-      }),
-    ]);
-    ownOrderIds = [...new Set([...byId, ...byEmail].map((order) => order.id).filter(Boolean))];
+    await adoptOrphanGuestOrders(uid, normalizedEmail);
+    const ownOrders = await listTableRows('orders', {
+      select: 'id',
+      filters: [{ column: 'customer_id', operator: 'eq', value: uid }],
+    });
+    ownOrderIds = [...new Set(ownOrders.map((order) => order.id).filter(Boolean))];
   } catch (err) {
     console.error('[me-delete-account] falha ao resolver pedidos do titular:', err.message);
     return {
@@ -203,13 +312,12 @@ async function executeDeletion({ uid, email, req, res }) {
   }
 
   // 4. Só agora remove a identidade em auth.users (cascateia profiles +
-  //    user_products; orders.customer_id -> null).
-  if (uid) {
-    const { error } = await admin.auth.admin.deleteUser(uid);
-    if (error && !/not\s*found/i.test(String(error.message || ''))) {
-      console.error('[me-delete-account] deleteUser falhou:', error.message);
-      return { status: 500, body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' } };
-    }
+  //    user_products; orders.customer_id -> null). O uid já foi validado no
+  //    passo 0 (resolveAuthIdentity), então não há guarda condicional aqui.
+  const { error: deleteUserError } = await admin.auth.admin.deleteUser(uid);
+  if (deleteUserError && !/not\s*found/i.test(String(deleteUserError.message || ''))) {
+    console.error('[me-delete-account] deleteUser falhou:', deleteUserError.message);
+    return { status: 500, body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' } };
   }
 
   // 5. Marca unsubscribe na newsletter (best-effort).
@@ -278,9 +386,11 @@ module.exports = async function meDeleteAccountHandler(req, res) {
       return res.status(result.status).json(result.body);
     }
 
-    // Passo 1: requisição (precisa de sessão de cliente).
+    // Passo 1: requisição (precisa de sessão de cliente). O uid é exigido
+    // aqui, e não só o e-mail: ele é a âncora de toda a exclusão (passo 2 e
+    // executeDeletion), então um token emitido sem uid seria inutilizável.
     const user = getCustomerSessionFromRequest(req);
-    if (!user || !user.email) {
+    if (!user || !user.uid || !user.email) {
       return res.status(401).json({ success: false, error: 'Faça login para excluir sua conta.' });
     }
     const result = await requestDeletion(user);

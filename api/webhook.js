@@ -1,5 +1,5 @@
 const crypto = require('node:crypto');
-const { getPaymentInfo, validateWebhookSignature } = require('../lib/mercadopago-config');
+const { getPaymentInfo, inspectWebhookSignature } = require('../lib/mercadopago-config');
 const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable } } = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
 const { recordEvent } = require('../lib/analytics-events');
@@ -77,6 +77,105 @@ async function createDownloadTokens(order, items) {
   }));
 }
 
+// ════════════════════════════════════════════════════════════════════
+// Reconciliação de valor pago × valor do pedido (achado P0-1 da revisão
+// 2026-08-12 — o item de maior retorno da rodada).
+//
+// O QUE ESTAVA ERRADO
+// A única condição para liberar o produto era `payment.status === 'approved'`
+// somada a um `external_reference` que resolvesse para um pedido existente.
+// `transaction_amount`, `currency_id` e `live_mode` não eram lidos em lugar
+// nenhum do projeto; `total_amount` era carregado mas só alimentava analytics.
+// Ou seja: o sistema confiava no gateway para dizer QUE foi pago, e nunca
+// perguntava QUANTO. Um pagamento de R$ 0,01 apontando para o order_code de
+// um pedido de R$ 200 transicionava o pedido para approved e emitia os
+// download_tokens — entrega completa do produto digital.
+//
+// A REGRA
+// "Confie no gateway, mas verifique o valor": o preço já vem do banco em
+// create-payment.js (nunca do cliente), e `orders.total_amount` é exatamente
+// o que foi enviado na preference (subtotal - desconto do cupom, arredondado
+// a 2 casas). Então o valor cobrado TEM que reconciliar com ele antes de
+// qualquer transição para approved.
+//
+// TOLERÂNCIA de 1 centavo: `applyDiscountToItems` rateia o desconto do cupom
+// entre os itens com arredondamento por unidade e absorve o drift no último
+// item elegível, então a soma da preference pode diferir do total do pedido
+// por frações de centavo. Um centavo cobre o arredondamento e não cobre
+// nenhum ataque plausível.
+//
+// PAGAMENTO A MAIOR não bloqueia: cobrar mais que o devido não é falha de
+// segurança para a entrega (é caso de suporte/estorno), e travar a entrega
+// puniria o cliente que já pagou.
+//
+// LIMITE CONHECIDO: a checagem assume UM pagamento por pedido, que é o que a
+// preference atual produz (`installments: 1`, sem pagamento com dois cartões).
+// Se um dia habilitarmos pagamento fracionado, isto precisa somar os
+// pagamentos do external_reference em vez de olhar um só.
+// ════════════════════════════════════════════════════════════════════
+const AMOUNT_TOLERANCE = 0.01;
+const EXPECTED_CURRENCY = 'BRL';
+
+function isProductionRuntime() {
+  // Mesma precedência de scripts/check-env.js: APP_ENV > VERCEL_ENV > NODE_ENV.
+  // NODE_ENV sozinho não serve — a Vercel o define como 'production' também
+  // nos builds de preview.
+  const env = String(process.env.APP_ENV || process.env.VERCEL_ENV || process.env.NODE_ENV || '')
+    .trim()
+    .toLowerCase();
+  return env === 'production';
+}
+
+/**
+ * Confere se o pagamento aprovado pelo MP corresponde de fato ao pedido.
+ * Fail-CLOSED: qualquer campo ausente/ilegível reprova, porque "não consegui
+ * conferir o valor" nunca pode significar "libera o produto".
+ *
+ * @returns {{ok: boolean, reason: string|null, currency: string, paid: number, due: number}}
+ */
+function checkPaymentIntegrity(payment, order) {
+  const currency = String(payment?.currency_id || '').trim().toUpperCase();
+
+  // Sem a checagem de moeda, 200 unidades de uma moeda fraca satisfariam
+  // "paid >= due" e comprariam um produto de R$ 200. A loja só vende em BRL.
+  const toNumber = (value) => (
+    value === null || value === undefined || value === '' ? Number.NaN : Number(value)
+  );
+  const due = toNumber(order?.total_amount);
+  const paid = toNumber(payment?.transaction_amount);
+
+  if (currency !== EXPECTED_CURRENCY) {
+    return { ok: false, reason: 'currency_mismatch', currency, paid, due };
+  }
+
+  // total_amount nulo/negativo é linha corrompida de `orders`: não sabemos
+  // quanto o pedido vale, então não temos como afirmar que foi pago.
+  if (!Number.isFinite(due) || due < 0) {
+    return { ok: false, reason: 'order_total_unusable', currency, paid, due };
+  }
+
+  if (!Number.isFinite(paid) || paid < 0) {
+    return { ok: false, reason: 'payment_amount_unusable', currency, paid, due };
+  }
+
+  if (paid + AMOUNT_TOLERANCE < due) {
+    return { ok: false, reason: 'amount_below_order_total', currency, paid, due };
+  }
+
+  // live_mode=false é pagamento de SANDBOX. Em produção ele nunca deveria
+  // aparecer: significa que o deploy está com credencial de teste (que o
+  // scripts/check-env.js só consegue AVISAR, não bloquear) e, portanto, que
+  // estaríamos entregando produto real contra dinheiro que não existe.
+  // Deliberadamente não há env de escape: o jeito suportado de rodar em
+  // sandbox é publicar com APP_ENV=preview/development, que é justamente o
+  // que faz esta checagem não se aplicar.
+  if (isProductionRuntime() && payment?.live_mode === false) {
+    return { ok: false, reason: 'test_payment_in_production', currency, paid, due };
+  }
+
+  return { ok: true, reason: null, currency, paid, due };
+}
+
 module.exports = async function webhookHandler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -87,8 +186,14 @@ module.exports = async function webhookHandler(req, res) {
       return res.status(500).json({ error: 'Supabase não configurado' });
     }
 
-    const isValid = validateWebhookSignature(req);
-    if (!isValid) {
+    // `inspectWebhookSignature` agora também impõe uma janela de frescor sobre
+    // o `ts` assinado (ver lib/mercadopago-config.js). O motivo entra como
+    // property do evento em vez de virar um evento novo: o alerta continua
+    // sendo "webhook rejeitado", mas dá para separar varredura da internet
+    // (`hash_mismatch`/`missing_headers`) de replay de uma notificação real
+    // (`stale_timestamp`), que é o único motivo que exige assinatura válida.
+    const signature = inspectWebhookSignature(req);
+    if (!signature.valid) {
       await recordSecurityEvent({
         eventName: 'webhook_invalid_signature',
         severity: 'warn',
@@ -96,10 +201,17 @@ module.exports = async function webhookHandler(req, res) {
         userAgent: req.headers['user-agent'],
         requestId: req.headers['x-request-id'],
         properties: {
+          reason: signature.reason,
           has_signature_header: Boolean(req.headers['x-signature']),
           payment_id: String(req.body?.data?.id || ''),
+          // Só fazem sentido no caso de idade; nulos nos demais.
+          age_seconds: signature.ageSeconds,
+          tolerance_seconds: signature.reason === 'stale_timestamp' ? signature.toleranceSeconds : null,
         },
       });
+      // Mesmo 401 genérico de antes: a resposta não revela ao emissor QUAL das
+      // checagens falhou (um atacante não deve descobrir pelo status que a
+      // assinatura estava certa e só o horário estava velho).
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
@@ -122,6 +234,46 @@ module.exports = async function webhookHandler(req, res) {
     }
 
     if (payment.status === 'approved') {
+      // GATE DE DINHEIRO — roda ANTES de qualquer escrita: antes do UPDATE que
+      // marca o pedido como pago e antes de qualquer download_token existir.
+      // Se a reconciliação falhar, o pedido fica exatamente como estava
+      // (pending), o cliente não recebe nada e o caso vira evento de segurança
+      // para investigação manual.
+      const integrity = checkPaymentIntegrity(payment, order);
+      if (!integrity.ok) {
+        await recordSecurityEvent({
+          eventName: 'payment_amount_mismatch',
+          severity: 'error',
+          ip: extractClientIp(req),
+          userAgent: req.headers['user-agent'],
+          requestId: req.headers['x-request-id'],
+          properties: {
+            reason: integrity.reason,
+            // order_code e valores NÃO são PII (o e-mail do cliente, sim — por
+            // isso não entra aqui). Sem eles o evento é inútil para investigar.
+            order_code: order.order_code,
+            payment_id: String(payment.id ?? ''),
+            currency_id: integrity.currency || null,
+            transaction_amount: Number.isFinite(integrity.paid) ? integrity.paid : null,
+            order_total_amount: Number.isFinite(integrity.due) ? integrity.due : null,
+            live_mode: payment.live_mode === undefined ? null : Boolean(payment.live_mode),
+          },
+        });
+
+        // 200, deliberadamente. O Mercado Pago reentrega qualquer resposta que
+        // não seja 2xx, por horas. Divergência de valor é condição PERMANENTE
+        // (o pagamento não vai mudar de valor na próxima tentativa), então
+        // devolver 4xx/5xx só multiplicaria a mesma notificação, e com ela o
+        // getPaymentInfo e o evento de segurança — transformando um alerta
+        // legítimo em enxurrada que esconde o resto do log. O 200 aqui é
+        // "recebi e decidi", não "aprovei": o corpo diz explicitamente que não
+        // houve aprovação, e o registro com severity 'error' é o canal que
+        // acorda alguém (SECURITY_ALERT_WEBHOOK_URL). Fica o trade-off
+        // consciente: se um dia o bug for NOSSO (total_amount errado), o MP não
+        // vai reinsistir — a recuperação é manual, guiada pelo evento.
+        return res.status(200).json({ message: 'Payment did not reconcile with the order; not approved' });
+      }
+
       // Transição idempotente e ATÔMICA: só a primeira notificação que muda o
       // pedido de !approved → approved "vence". Reentregas/webhooks concorrentes
       // veem 0 linhas afetadas e apenas devolvem os tokens já existentes, sem
@@ -136,15 +288,15 @@ module.exports = async function webhookHandler(req, res) {
         });
       const isFirstApproval = Array.isArray(transitioned) && transitioned.length > 0;
 
-      const orderItems = await loadOrderItems(order.id);
+      // Emissão dos tokens continua idempotente: só cria quando ainda não há
+      // nenhum. `order_items` passou a ser carregado apenas nesse caso — numa
+      // reentrega do MP não há o que criar, e a consulta era trabalho jogado
+      // fora que o replay conseguia forçar de graça.
       const existingTokens = await loadExistingTokens(order.id);
-      const downloadTokens = existingTokens.length
-        ? existingTokens.map((token) => ({
-            productId: String(token.product_id),
-            productName: token.product_name,
-            token: token.token,
-          }))
-        : await createDownloadTokens(order, orderItems);
+      if (!existingTokens.length) {
+        const orderItems = await loadOrderItems(order.id);
+        await createDownloadTokens(order, orderItems);
+      }
 
       if (isFirstApproval) {
         try {
@@ -171,10 +323,19 @@ module.exports = async function webhookHandler(req, res) {
         });
       }
 
-      return res.status(200).json({
-        message: 'Webhook processed successfully',
-        downloadTokens,
-      });
+      // A resposta NÃO devolve mais os downloadTokens (achado P1-5).
+      // O corpo do webhook não tem destinatário autenticado: quem consegue
+      // emitir a requisição lê a resposta. Ecoar os tokens fazia deste endpoint
+      // um leitor de credenciais de download sem sessão nenhuma — bastava
+      // repetir uma notificação capturada para reler os tokens do pedido a
+      // qualquer momento. A janela de frescor reduziu a janela do replay, mas o
+      // conserto de verdade é não colocar segredo em resposta que qualquer um
+      // provoca. Os dois consumidores legítimos continuam servidos por
+      // endpoints autenticados: api/verify-payment.js (order_code + e-mail
+      // conferidos em tempo constante) e api/customer-orders.js (sessão do
+      // cliente). Nada no frontend lia este campo — DownloadsPage.jsx consome
+      // `order.downloadTokens` daqueles dois, não do webhook.
+      return res.status(200).json({ message: 'Webhook processed successfully' });
     }
 
     if (payment.status === 'rejected' || payment.status === 'cancelled') {

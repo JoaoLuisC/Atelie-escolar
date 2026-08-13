@@ -6,8 +6,6 @@ const cors = require('cors');
 const { createSecurityMiddleware } = require('./lib/security-headers');
 const rateLimit = require('express-rate-limit');
 const authRoutes = require('./routes/auth.routes');
-const productRoutes = require('./routes/products.routes');
-const paymentRoutes = require('./routes/payment.routes');
 const apiCompatRoutes = require('./routes/api-compat.routes');
 const { notFoundHandler, errorHandler } = require('./middleware/error.middleware');
 
@@ -36,11 +34,19 @@ loadEnvFiles();
 const RUNTIME_ENV = String(process.env.APP_ENV || process.env.NODE_ENV || 'development').trim().toLowerCase();
 process.env.NODE_ENV = RUNTIME_ENV;
 
+// Segredos exigidos no boot. A lista contém APENAS variáveis que algum código
+// de `api/` ou `lib/` realmente lê — exigir um segredo que ninguém consome dá
+// falsa sensação de proteção (o operador rotaciona algo inerte e acha que
+// endureceu o sistema). `DOWNLOAD_TOKEN_SECRET` foi removido daqui por isso:
+// os tokens de download são valores opacos gerados e conferidos no banco
+// (`download_tokens`), sem HMAC — nenhum arquivo lê essa variável. Pior:
+// ela vazou no histórico do git (.env.production), então mantê-la na lista
+// sugeria que o segredo vazado protegia a entrega dos produtos. Não protegia.
+// A mesma lista, para o runtime real (Vercel), vive em `scripts/check-env.js`.
 const REQUIRED_PRODUCTION_SECRETS = [
   'ADMIN_SESSION_SECRET',
   'CUSTOMER_SESSION_SECRET',
   'WEBHOOK_SECRET',
-  'DOWNLOAD_TOKEN_SECRET',
   'SUPABASE_URL',
   'SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
@@ -137,9 +143,11 @@ app.get('/health', (_req, res) => {
 const sitemapHandler = require('./api/sitemap.xml');
 app.get('/sitemap.xml', (req, res, next) => Promise.resolve(sitemapHandler(req, res)).catch(next));
 
+// Ordem importa: authRoutes expõe /auth/customer/* (handlers compartilhados
+// com api/auth/*.js) e apiCompatRoutes monta o restante de api/*.js. Não há
+// mais um "BFF" Express próprio — todo endpoint servido aqui é o MESMO módulo
+// que a Vercel publica como função, para que dev e produção não divirjam.
 app.use('/api', authRoutes);
-app.use('/api', productRoutes);
-app.use('/api', paymentRoutes);
 app.use('/api', apiCompatRoutes);
 app.use('/api', notFoundHandler);
 

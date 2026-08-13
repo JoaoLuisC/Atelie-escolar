@@ -8,7 +8,7 @@ import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
-import { getApiBaseUrl } from '../utils/api';
+import { apiRequest } from '../utils/api';
 import { formatPrice } from '../utils/currency';
 import {
   buildCartPayload,
@@ -22,6 +22,44 @@ const ABANDONED_CART_DEBOUNCE_MS = 1500;
 // Polling de confirmação do pagamento: 150 tentativas × 4s ≈ 10 minutos.
 const PAYMENT_POLL_INTERVAL_MS = 4000;
 const PAYMENT_POLL_MAX_ATTEMPTS = 150;
+// Backoff ao receber 429. Num IP compartilhado — escola, lan house, CGNAT de
+// operadora móvel, que é o cenário típico do público deste catálogo — o
+// servidor pode legitimamente pedir uma pausa. A resposta certa é DESACELERAR,
+// nunca desistir: o cliente já pagou e esta tela é o único lugar onde ele
+// acompanha a confirmação. Piso de 15s para não reentrar no limite no tique
+// seguinte (loop de 429); teto de 5min para a espera continuar sendo espera.
+const PAYMENT_POLL_BACKOFF_MIN_MS = 15000;
+const PAYMENT_POLL_BACKOFF_MAX_MS = 300000;
+
+/**
+ * Quanto esperar depois de um 429.
+ *
+ * Prioriza `retryAfterSeconds` do envelope do projeto e só então o header
+ * Retry-After — e não o contrário — porque o header NÃO atravessa CORS sem
+ * `Access-Control-Expose-Headers` (em dev o front fala com localhost:3000, que
+ * é outra origem). O corpo sempre chega. O header aceita segundos ou data HTTP
+ * (RFC 9110 permite as duas formas).
+ */
+function readRetryAfterMs(response, data, { minMs, maxMs }) {
+  const fromBody = Number(data?.retryAfterSeconds);
+  let seconds = Number.isFinite(fromBody) && fromBody > 0 ? fromBody : 0;
+
+  if (!seconds) {
+    const header = response?.headers?.get?.('Retry-After');
+    const asNumber = Number(header);
+    if (Number.isFinite(asNumber) && asNumber > 0) {
+      seconds = asNumber;
+    } else if (header) {
+      const asDate = Date.parse(header);
+      if (Number.isFinite(asDate)) seconds = (asDate - Date.now()) / 1000;
+    }
+  }
+
+  // Clamp nos dois lados: sem piso, um Retry-After curto (ou ausente) reentra
+  // no limite imediatamente; sem teto, um valor absurdo — ou o relógio do
+  // cliente adiantado, no caso da forma de data — congelaria a tela.
+  return Math.min(Math.max(seconds * 1000, minMs), maxMs);
+}
 
 export function CheckoutPage() {
   const navigate = useNavigate();
@@ -67,7 +105,10 @@ export function CheckoutPage() {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return undefined;
 
     const timeoutId = setTimeout(() => {
-      fetch(`${getApiBaseUrl()}/abandoned-cart`, {
+      // apiRequest (e não fetch cru): traz o AbortController com timeout e a
+      // normalização de erro da camada de API. `keepalive` continua valendo —
+      // a captura precisa sobreviver ao fechamento da aba.
+      apiRequest('/abandoned-cart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         keepalive: true,
@@ -127,10 +168,25 @@ export function CheckoutPage() {
 
     let cancelled = false;
     let attempts = 0;
+    // Tiques a PULAR por conta de um 429 (o agendador continua sendo o mesmo
+    // setInterval de 4s — desacelerar é pular tiques, não reagendar).
+    let cooldownTicks = 0;
+    // Piso do backoff, que sobe a cada 429 consecutivo e volta ao mínimo na
+    // primeira resposta boa.
+    let backoffFloorMs = PAYMENT_POLL_BACKOFF_MIN_MS;
     const maxAttempts = PAYMENT_POLL_MAX_ATTEMPTS;
 
     const interval = setInterval(async () => {
       if (cancelled) return;
+
+      // Em backoff: não consulta a API e não gasta tentativa. O efeito é
+      // esticar o relógio do polling (150 tentativas passam a cobrir bem mais
+      // que 10min) em vez de encerrar a espera.
+      if (cooldownTicks > 0) {
+        cooldownTicks -= 1;
+        return;
+      }
+
       attempts += 1;
 
       if (attempts > maxAttempts) {
@@ -147,9 +203,36 @@ export function CheckoutPage() {
       }
 
       try {
-        const verifyResponse = await fetch(`${getApiBaseUrl()}/verify-payment?orderId=${encodeURIComponent(pendingOrderId)}&email=${encodeURIComponent(pendingOrderEmail)}`);
-        const verifyData = await verifyResponse.json();
+        // POST com o e-mail no CORPO (achado M6): na query string ele vazaria
+        // para os access logs da Vercel, para o histórico do navegador e para o
+        // header Referer. O backend ainda aceita GET por compatibilidade, mas
+        // este é o caminho preferencial. apiRequest dá timeout (AbortController)
+        // ao polling — antes, uma requisição pendurada ficava presa para sempre.
+        const { response, data: verifyData } = await apiRequest('/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: pendingOrderId, email: pendingOrderEmail }),
+        });
         if (cancelled) return;
+
+        // 429 NÃO é erro nem resposta final: é o servidor pedindo ritmo. Nada
+        // de limpar pendingOrderId nem de mostrar falha — o pedido segue vivo
+        // e o pagamento pode ser aprovado no próximo tique. Sem este ramo, o
+        // 429 caía no caminho de "resposta sem order" e a tela quebrava.
+        if (response?.status === 429) {
+          const waitMs = readRetryAfterMs(response, verifyData, {
+            minMs: backoffFloorMs,
+            maxMs: PAYMENT_POLL_BACKOFF_MAX_MS,
+          });
+          cooldownTicks = Math.ceil(waitMs / PAYMENT_POLL_INTERVAL_MS);
+          backoffFloorMs = Math.min(backoffFloorMs * 2, PAYMENT_POLL_BACKOFF_MAX_MS);
+          setStatusTone('info');
+          setStatus('Muita gente confirmando pagamento agora. Continuamos verificando o seu — só um pouco mais devagar. Pode deixar esta tela aberta.');
+          return;
+        }
+
+        // Resposta boa: desfaz a escada do backoff.
+        backoffFloorMs = PAYMENT_POLL_BACKOFF_MIN_MS;
         const paymentStatus = verifyData?.order?.paymentStatus;
 
         if (paymentStatus === 'approved') {
@@ -241,13 +324,11 @@ export function CheckoutPage() {
         setGuestEmail(email);
       }
 
-      const response = await fetch(`${getApiBaseUrl()}/create-payment`, {
+      const { response, data } = await apiRequest('/create-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
-      const data = await response.json();
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Erro ao criar pagamento.');

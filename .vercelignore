@@ -1,3 +1,34 @@
-# Testes não vão para o deploy (as funções serverless em api/ não os importam).
+# O que NÃO sobe para o deploy da Vercel.
+#
+# Por que isso importa além de tamanho: com a configuração `functions`
+# (zero-config), TODO arquivo .js dentro de api/ vira uma função serverless
+# publicada. Um arquivo de teste esquecido ali viraria endpoint público.
+# E o bundle enxuto encurta o tempo de upload/build de cada deploy.
+
+# Testes — nem as funções de api/ nem o bundle do front os importam.
 api/__tests__
+**/__tests__
 **/*.test.js
+**/*.test.jsx
+
+# Documentação e material do TCC: dezenas de MB que nada em runtime lê.
+docs/
+tcc-build/
+TCC-Atelie-Escolar.docx
+HANDOFF.md
+
+# Scripts de manutenção (check-advisor, db-inspect, configure-auth, fix-utf8…).
+# Rodam na máquina do dev ou no CI, nunca dentro de uma função serverless.
+# EXCEÇÃO: check-env.js é chamado pelo buildCommand do vercel.json, então
+# precisa existir durante o build.
+# Padrão é `scripts/*` e não `scripts/` de propósito: a sintaxe é a do
+# .gitignore, onde um `!` não consegue reincluir arquivo cujo DIRETÓRIO pai
+# foi excluído. Ignorando o conteúdo (e não a pasta), a exceção funciona.
+scripts/*
+!scripts/check-env.js
+
+# SQL e migrations: aplicados via `supabase db push`, não pelo deploy.
+supabase/
+
+# Configuração de CI — sem uso em runtime.
+.github/

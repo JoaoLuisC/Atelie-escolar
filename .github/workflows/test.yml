@@ -1,19 +1,71 @@
 name: test
 
+# Antes: só rodava em push/PR para `main`. Como o trabalho aqui cai direto na
+# main, na prática o CI só falava DEPOIS que o código já estava integrado —
+# não havia sinal em branch de trabalho. Agora roda em qualquer branch.
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
-    branches: [main]
+  workflow_dispatch:
+
+# Sem isto, o GITHUB_TOKEN entra com permissão de escrita por padrão em alguns
+# repositórios. Este workflow só lê código.
+permissions:
+  contents: read
+
+# Push seguido de push na mesma branch cancelava nada e gastava minuto de
+# runner em execução já obsoleta. Em `main` NÃO cancelamos: cada commit
+# integrado merece seu próprio resultado registrado.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Rede travada ou vitest pendurado num teste sem timeout seguravam o job
+    # até o limite de 6h do GitHub. A suíte inteira leva ~1 min.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
+          # Alinhado com o campo "engines" do package.json (>=20) e com o
+          # runtime das funções serverless da Vercel.
           node-version: 20
           cache: npm
-      - run: npm ci
-      - run: npm run check
+
+      - name: Install (lockfile exato)
+        run: npm ci
+
+      # Os passos abaixo são o mesmo conteúdo de `npm run check`, quebrado em
+      # steps separados de propósito: na UI do Actions dá para ver de cara SE
+      # foi lint, env, teste ou build que caiu, sem abrir o log.
+      - name: Lint
+        run: npm run lint
+
+      # Modo permissivo aqui — o runner não tem (nem deve ter) os segredos de
+      # produção. O valor no CI é de visibilidade: lista o que produção vai
+      # exigir e falha se o próprio script quebrar. O gate BLOQUEANTE de
+      # verdade está no buildCommand da Vercel (ver vercel.json), onde os
+      # segredos existem e a falta de um derruba o deploy — que é o achado
+      # P0-3 ("deploy fica verde sem segredos e quebra no 1º cliente").
+      - name: Validar variáveis de ambiente
+        run: npm run check:env
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Visibilidade de CVE em dependências de RUNTIME (--omit=dev: uma falha
+      # em ferramenta de build não chega ao cliente). NÃO bloqueia o merge de
+      # propósito: advisory novo em dependência transitiva apareceria do nada
+      # e travaria trabalho não relacionado. A diretriz do projeto é não rodar
+      # `npm audit fix` automaticamente — aqui é só relatório.
+      - name: Auditoria de dependências (não bloqueante)
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
