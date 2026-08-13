@@ -3,7 +3,9 @@ import PropTypes from 'prop-types';
 const BASE_CLASSES = 'animate-pulse rounded bg-slate-200/80';
 
 export function SkeletonLine({ width = 'w-full', height = 'h-3.5', className = '' }) {
-  return <span aria-hidden="true" className={`block ${BASE_CLASSES} ${width} ${height} ${className}`} />;
+  return (
+    <span aria-hidden="true" className={`block ${BASE_CLASSES} ${width} ${height} ${className}`} />
+  );
 }
 
 SkeletonLine.propTypes = {

@@ -7,7 +7,9 @@ function normalizeUser(user = {}) {
   const uid = String(user.uid || user.id || '').trim();
   const email = String(user.email || '').trim();
   const name = String(user.name || '').trim();
-  const role = String(user.role || '').trim().toLowerCase();
+  const role = String(user.role || '')
+    .trim()
+    .toLowerCase();
 
   if (!uid || !email) {
     return null;
@@ -97,9 +99,10 @@ export async function consumeCustomerSessionFromAuthCallback() {
   if (!globalThis.window) return null;
 
   const url = new URL(globalThis.window.location.href);
-  const hasOAuthMarker = url.searchParams.get('oauth') === 'google'
-    || url.searchParams.has('code')
-    || url.hash.includes('access_token=');
+  const hasOAuthMarker =
+    url.searchParams.get('oauth') === 'google' ||
+    url.searchParams.has('code') ||
+    url.hash.includes('access_token=');
 
   if (!hasOAuthMarker) return null;
 

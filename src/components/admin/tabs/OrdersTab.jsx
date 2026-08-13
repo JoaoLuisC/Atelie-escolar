@@ -4,7 +4,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { StatusChip } from '../ui/StatusChip';
 import { EmptyState } from '../ui/EmptyState';
-import { formatDateTime } from '../utils/format';
+import { formatDateTime } from '../../../utils/date';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos os status' },
@@ -27,13 +27,19 @@ export function OrdersTab({ orders, statusFilter, onStatusFilterChange, onOpenOr
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
         >
           {STATUS_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
           ))}
         </select>
       }
     >
       {orders.length === 0 ? (
-        <EmptyState icon="receipt" title="Nenhum pedido" description="Nenhum pedido corresponde ao filtro selecionado." />
+        <EmptyState
+          icon="receipt"
+          title="Nenhum pedido"
+          description="Nenhum pedido corresponde ao filtro selecionado."
+        />
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200">
@@ -56,7 +62,9 @@ export function OrdersTab({ orders, statusFilter, onStatusFilterChange, onOpenOr
                   </td>
                   <td className="px-3 py-3">
                     <StatusChip status={order.paymentStatus} />
-                    <div className="mt-1 text-xs text-slate-500">{formatDateTime(order.createdAt)}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {formatDateTime(order.createdAt)}
+                    </div>
                   </td>
                   <td className="px-3 py-3 text-right font-semibold text-slate-900">
                     {formatPrice(order.totalAmount || 0)}

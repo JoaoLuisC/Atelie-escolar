@@ -12,16 +12,25 @@ export function StatCard({ label, value, icon, accent = 'primary', hint = null }
   const accentClass = accentClasses[accent] || accentClasses.primary;
 
   return (
-    <article className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5`}>
+    <article
+      className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5`}
+    >
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${accentClass}`} />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+          <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {label}
+          </p>
           <p className="mt-2 truncate text-2xl font-bold text-slate-900 sm:text-3xl">{value}</p>
           {hint ? <p className="mt-1 truncate text-xs text-slate-500">{hint}</p> : null}
         </div>
         {icon ? (
-          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ${accentClass.split(' ').filter((c) => c.startsWith('text-') || c.startsWith('ring-')).join(' ')}`}>
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ${accentClass
+              .split(' ')
+              .filter((c) => c.startsWith('text-') || c.startsWith('ring-'))
+              .join(' ')}`}
+          >
             <i className={`bi bi-${icon} text-lg`} />
           </span>
         ) : null}

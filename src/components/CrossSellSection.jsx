@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getApiBaseUrl } from '../utils/api';
+import { fetchCrossSell } from '../services/products';
 import { formatPrice } from '../utils/currency';
 
 /**
@@ -27,12 +27,10 @@ export function CrossSellSection({ productId }) {
 
     (async () => {
       try {
-        const response = await fetch(
-          `${getApiBaseUrl()}/cross-sell?productId=${encodeURIComponent(productId)}`,
-        );
-        const data = await response.json();
+        // Regra C2 — ver fetchCrossSell em src/services/products.js.
+        const products = await fetchCrossSell(productId);
         if (cancelled) return;
-        setItems(Array.isArray(data?.products) ? data.products : []);
+        setItems(products);
       } catch {
         if (!cancelled) setItems([]);
       } finally {
@@ -59,9 +57,14 @@ export function CrossSellSection({ productId }) {
   if (items.length === 0) return null;
 
   return (
-    <section aria-labelledby="cross-sell-title" className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <section
+      aria-labelledby="cross-sell-title"
+      className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+    >
       <header className="mb-4">
-        <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Você também pode gostar</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-brand-600">
+          Você também pode gostar
+        </p>
         <h2 id="cross-sell-title" className="font-display text-xl font-bold text-slate-900">
           Quem comprou este levou também
         </h2>

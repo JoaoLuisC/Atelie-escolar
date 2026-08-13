@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
-import { getApiBaseUrl } from '../utils/api';
+import { apiRequest } from '../utils/api';
+import { ROUTES } from '../constants/routes';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -26,15 +27,24 @@ export function ConfirmSubscriptionPage() {
   useEffect(() => {
     const token = params.get('token') || '';
     if (!token) {
-      setStatus({ state: 'error', message: 'Link inválido. Volte ao seu email e clique no botão de confirmação.' });
+      setStatus({
+        state: 'error',
+        message: 'Link inválido. Volte ao seu email e clique no botão de confirmação.',
+      });
       return;
     }
 
     (async () => {
       try {
-        const response = await fetch(`${getApiBaseUrl()}/confirm-subscription?token=${encodeURIComponent(token)}`);
-        const data = await response.json();
-        if (!data.confirmed) {
+        // Regra C1: `apiRequest` no lugar de `fetch` cru — traz timeout de 15s
+        // (esta tela ficava carregando para sempre numa rede ruim) e normaliza
+        // a resposta. Regra A1: o backend agora usa status real (404 token
+        // inválido, 409 cancelada, 410 expirada) em vez de 200 com
+        // `confirmed:false`, então a checagem é `success`, não `confirmed`.
+        const { data } = await apiRequest(
+          `/confirm-subscription?token=${encodeURIComponent(token)}`,
+        );
+        if (!data.success) {
           setStatus({ state: 'error', message: data.error || 'Token inválido ou expirado.' });
           return;
         }
@@ -61,18 +71,22 @@ export function ConfirmSubscriptionPage() {
         {isSuccess ? '✓ Confirmado' : isError ? 'Ops…' : 'Aguarde'}
       </p>
       <h1 className="mt-2 font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">
-        {isSuccess ? 'Bem-vindo(a) à lista!' : isError ? 'Não foi possível confirmar' : 'Confirmando…'}
+        {isSuccess
+          ? 'Bem-vindo(a) à lista!'
+          : isError
+            ? 'Não foi possível confirmar'
+            : 'Confirmando…'}
       </h1>
       <p className="mt-3 max-w-md text-sm text-slate-600">{status.message}</p>
       <div className="mt-6 flex flex-wrap justify-center gap-2">
         <Link
-          to="/produtos"
+          to={ROUTES.produtos}
           className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
         >
           Ver produtos
         </Link>
         <Link
-          to="/"
+          to={ROUTES.home}
           className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
         >
           Voltar à home
@@ -97,8 +111,8 @@ export function UnsubscribePage() {
     (async () => {
       setStatus({ state: 'loading', message: 'Cancelando sua inscrição…' });
       try {
-        const response = await fetch(`${getApiBaseUrl()}/unsubscribe?token=${encodeURIComponent(token)}`);
-        const data = await response.json();
+        // Regra C1: cliente HTTP único, com timeout.
+        const { data } = await apiRequest(`/unsubscribe?token=${encodeURIComponent(token)}`);
         setStatus({
           state: data.success ? 'success' : 'error',
           message: data.message || data.error || 'Algo deu errado.',
@@ -119,12 +133,11 @@ export function UnsubscribePage() {
     setStatus({ state: 'loading', message: 'Cancelando…' });
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/unsubscribe`, {
+      const { data } = await apiRequest('/unsubscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      const data = await response.json();
       setStatus({
         state: data.success ? 'success' : 'error',
         message: data.message || data.error || 'Algo deu errado.',
@@ -154,7 +167,10 @@ export function UnsubscribePage() {
 
       {showForm ? (
         <form onSubmit={onSubmit} className="mt-6 flex w-full max-w-md flex-col gap-2 text-left">
-          <label htmlFor="unsub-email" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label
+            htmlFor="unsub-email"
+            className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
             Email cadastrado
           </label>
           <input
@@ -178,7 +194,7 @@ export function UnsubscribePage() {
       ) : null}
 
       <Link
-        to="/"
+        to={ROUTES.home}
         className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:underline"
       >
         ← Voltar à home

@@ -6,12 +6,27 @@ import { Card } from '../ui/Card';
 import { StatusChip } from '../ui/StatusChip';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
-import { formatDateTime } from '../utils/format';
+import { formatDateTime } from '../../../utils/date';
 
 const CURVE_STYLES = {
-  A: { label: 'A', desc: '80% da receita', chip: 'bg-emerald-100 text-emerald-700 ring-emerald-200', bar: 'from-emerald-500 to-emerald-400' },
-  B: { label: 'B', desc: '15% da receita', chip: 'bg-amber-100 text-amber-700 ring-amber-200', bar: 'from-amber-500 to-amber-400' },
-  C: { label: 'C', desc: '5% da receita', chip: 'bg-slate-100 text-slate-600 ring-slate-200', bar: 'from-slate-400 to-slate-300' },
+  A: {
+    label: 'A',
+    desc: '80% da receita',
+    chip: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
+    bar: 'from-emerald-500 to-emerald-400',
+  },
+  B: {
+    label: 'B',
+    desc: '15% da receita',
+    chip: 'bg-amber-100 text-amber-700 ring-amber-200',
+    bar: 'from-amber-500 to-amber-400',
+  },
+  C: {
+    label: 'C',
+    desc: '5% da receita',
+    chip: 'bg-slate-100 text-slate-600 ring-slate-200',
+    bar: 'from-slate-400 to-slate-300',
+  },
 };
 
 function formatPct(value, { withSign = true } = {}) {
@@ -69,7 +84,15 @@ function Sparkline({ values = [], accent = '#7c3aed' }) {
         </linearGradient>
       </defs>
       <path d={areaPath} fill={`url(#spark-${gradientId})`} />
-      <polyline points={points} fill="none" stroke={accent} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline
+        points={points}
+        fill="none"
+        stroke={accent}
+        strokeWidth="2"
+        vectorEffect="non-scaling-stroke"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -79,28 +102,69 @@ Sparkline.propTypes = {
   accent: PropTypes.string,
 };
 
-function HeroCard({ label, value, icon, accent = 'primary', delta = null, sparkline = null, hint = null }) {
+function HeroCard({
+  label,
+  value,
+  icon,
+  accent = 'primary',
+  delta = null,
+  sparkline = null,
+  hint = null,
+}) {
   const accents = {
-    primary: { bg: 'from-violet-500/15 via-white to-white', ring: 'ring-violet-200', icon: 'bg-violet-100 text-violet-700', spark: '#7c3aed' },
-    success: { bg: 'from-emerald-500/15 via-white to-white', ring: 'ring-emerald-200', icon: 'bg-emerald-100 text-emerald-700', spark: '#059669' },
-    info: { bg: 'from-sky-500/15 via-white to-white', ring: 'ring-sky-200', icon: 'bg-sky-100 text-sky-700', spark: '#0284c7' },
-    warning: { bg: 'from-amber-500/15 via-white to-white', ring: 'ring-amber-200', icon: 'bg-amber-100 text-amber-700', spark: '#d97706' },
-    neutral: { bg: 'from-slate-500/10 via-white to-white', ring: 'ring-slate-200', icon: 'bg-slate-100 text-slate-700', spark: '#475569' },
+    primary: {
+      bg: 'from-violet-500/15 via-white to-white',
+      ring: 'ring-violet-200',
+      icon: 'bg-violet-100 text-violet-700',
+      spark: '#7c3aed',
+    },
+    success: {
+      bg: 'from-emerald-500/15 via-white to-white',
+      ring: 'ring-emerald-200',
+      icon: 'bg-emerald-100 text-emerald-700',
+      spark: '#059669',
+    },
+    info: {
+      bg: 'from-sky-500/15 via-white to-white',
+      ring: 'ring-sky-200',
+      icon: 'bg-sky-100 text-sky-700',
+      spark: '#0284c7',
+    },
+    warning: {
+      bg: 'from-amber-500/15 via-white to-white',
+      ring: 'ring-amber-200',
+      icon: 'bg-amber-100 text-amber-700',
+      spark: '#d97706',
+    },
+    neutral: {
+      bg: 'from-slate-500/10 via-white to-white',
+      ring: 'ring-slate-200',
+      icon: 'bg-slate-100 text-slate-700',
+      spark: '#475569',
+    },
   };
   const tone = accents[accent] || accents.primary;
   return (
-    <article className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br ${tone.bg} p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5`}>
+    <article
+      className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br ${tone.bg} p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5`}
+    >
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[11px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
-          <p className="mt-2 truncate text-2xl font-extrabold text-slate-900 sm:text-3xl">{value}</p>
+          <p className="truncate text-[11px] font-bold uppercase tracking-widest text-slate-500">
+            {label}
+          </p>
+          <p className="mt-2 truncate text-2xl font-extrabold text-slate-900 sm:text-3xl">
+            {value}
+          </p>
           <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-600">
             {delta ? <TrendBadge trend={delta.trend} pct={delta.pct} /> : null}
             {hint ? <span className="truncate">{hint}</span> : null}
           </div>
         </div>
         {icon ? (
-          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ${tone.icon} ${tone.ring}`}>
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ${tone.icon} ${tone.ring}`}
+          >
             <i className={`bi bi-${icon} text-lg`} />
           </span>
         ) : null}
@@ -133,11 +197,15 @@ function MiniStat({ label, value, icon, accent = 'neutral' }) {
   };
   return (
     <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${tones[accent] || tones.neutral}`}>
+      <span
+        className={`flex h-9 w-9 items-center justify-center rounded-lg ${tones[accent] || tones.neutral}`}
+      >
         <i className={`bi bi-${icon}`} />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+        <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          {label}
+        </p>
         <p className="truncate text-base font-bold text-slate-900">{value}</p>
       </div>
     </div>
@@ -154,7 +222,9 @@ MiniStat.propTypes = {
 function RevenueLineChart({ entries }) {
   const gradientId = useId();
   if (!entries || entries.length === 0) {
-    return <p className="py-10 text-center text-sm text-slate-500">Sem vendas registradas no período.</p>;
+    return (
+      <p className="py-10 text-center text-sm text-slate-500">Sem vendas registradas no período.</p>
+    );
   }
 
   const width = 100;
@@ -193,9 +263,26 @@ function RevenueLineChart({ entries }) {
             />
           ))}
           <path d={areaPath} fill={`url(#revenue-area-${gradientId})`} />
-          <path d={linePath} fill="none" stroke="#7c3aed" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d={linePath}
+            fill="none"
+            stroke="#7c3aed"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
           {points.map((p) => (
-            <circle key={`${p.x}-${p.y}`} cx={p.x} cy={p.y} r="1.6" fill="#7c3aed" stroke="#fff" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+            <circle
+              key={`${p.x}-${p.y}`}
+              cx={p.x}
+              cy={p.y}
+              r="1.6"
+              fill="#7c3aed"
+              stroke="#fff"
+              strokeWidth="0.8"
+              vectorEffect="non-scaling-stroke"
+            />
           ))}
         </svg>
       </div>
@@ -203,7 +290,9 @@ function RevenueLineChart({ entries }) {
         {entries.map((entry) => (
           <div key={entry.label} className="truncate">
             <div>{entry.label}</div>
-            <div className="mt-0.5 truncate font-semibold text-slate-700">{formatPrice(entry.value)}</div>
+            <div className="mt-0.5 truncate font-semibold text-slate-700">
+              {formatPrice(entry.value)}
+            </div>
           </div>
         ))}
       </div>
@@ -228,7 +317,13 @@ function CategoryDonut({ entries }) {
     const startAngle = (cumulative / total) * 360;
     cumulative += value;
     const endAngle = (cumulative / total) * 360;
-    return { ...entry, color: palette[index % palette.length], startAngle, endAngle, sharePct: total ? (value / total) * 100 : 0 };
+    return {
+      ...entry,
+      color: palette[index % palette.length],
+      startAngle,
+      endAngle,
+      sharePct: total ? (value / total) * 100 : 0,
+    };
   });
 
   const radius = 38;
@@ -258,11 +353,17 @@ function CategoryDonut({ entries }) {
       <div className="relative">
         <svg viewBox="0 0 100 100" className="h-32 w-32 sm:h-36 sm:w-36">
           {segments.map((segment) => (
-            <path key={segment.label} d={arcPath(segment.startAngle, segment.endAngle)} fill={segment.color} />
+            <path
+              key={segment.label}
+              d={arcPath(segment.startAngle, segment.endAngle)}
+              fill={segment.color}
+            />
           ))}
         </svg>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            Total
+          </span>
           <span className="text-sm font-bold text-slate-900">{formatPrice(total)}</span>
         </div>
       </div>
@@ -270,12 +371,17 @@ function CategoryDonut({ entries }) {
         {segments.map((segment) => (
           <li key={segment.label} className="flex items-center justify-between gap-2 text-sm">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: segment.color }} />
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ background: segment.color }}
+              />
               <span className="truncate text-slate-700">{segment.label}</span>
             </span>
             <span className="shrink-0 font-semibold text-slate-900">
               {Math.round(segment.sharePct)}%
-              <span className="ml-1 text-xs font-normal text-slate-500">{formatPrice(segment.value)}</span>
+              <span className="ml-1 text-xs font-normal text-slate-500">
+                {formatPrice(segment.value)}
+              </span>
             </span>
           </li>
         ))}
@@ -296,12 +402,20 @@ function CustomerMixCard({ mix }) {
     <Card title="Mix de clientes" subtitle="Novos vs recorrentes (compras aprovadas)">
       <div className="flex flex-col gap-4">
         <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
-          <div className="bg-gradient-to-r from-violet-500 to-violet-400" style={{ width: `${recurringPct}%` }} />
-          <div className="bg-gradient-to-r from-sky-400 to-sky-300" style={{ width: `${newPct}%` }} />
+          <div
+            className="bg-gradient-to-r from-violet-500 to-violet-400"
+            style={{ width: `${recurringPct}%` }}
+          />
+          <div
+            className="bg-gradient-to-r from-sky-400 to-sky-300"
+            style={{ width: `${newPct}%` }}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl bg-violet-50 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">Recorrentes</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+              Recorrentes
+            </p>
             <p className="mt-1 text-2xl font-bold text-violet-900">{mix.recurring}</p>
             <p className="text-xs text-violet-700">{recurringPct}% dos compradores</p>
           </div>
@@ -336,8 +450,15 @@ function AbcCurveCard({ abc }) {
   const items = abc?.items || [];
   if (!items.length) {
     return (
-      <Card title="Curva ABC" subtitle="Classifica produtos por participação no faturamento (Pareto 80/15/5)">
-        <EmptyState icon="bar-chart" title="Sem vendas para classificar" description="A curva ABC aparece quando houver pedidos aprovados com produtos identificados." />
+      <Card
+        title="Curva ABC"
+        subtitle="Classifica produtos por participação no faturamento (Pareto 80/15/5)"
+      >
+        <EmptyState
+          icon="bar-chart"
+          title="Sem vendas para classificar"
+          description="A curva ABC aparece quando houver pedidos aprovados com produtos identificados."
+        />
       </Card>
     );
   }
@@ -345,12 +466,14 @@ function AbcCurveCard({ abc }) {
   return (
     <Card title="Curva ABC" subtitle="Top produtos ordenados por receita (princípio de Pareto)">
       <div className="mb-4 grid grid-cols-3 gap-2 text-center">
-        {(['A', 'B', 'C']).map((curve) => {
+        {['A', 'B', 'C'].map((curve) => {
           const style = CURVE_STYLES[curve];
           return (
             <div key={curve} className={`rounded-xl px-3 py-2 ring-1 ${style.chip}`}>
               <p className="text-lg font-bold leading-none">{abc.summary?.[curve] || 0}</p>
-              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide">Classe {style.label}</p>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide">
+                Classe {style.label}
+              </p>
               <p className="text-[10px] opacity-80">{style.desc}</p>
             </div>
           );
@@ -363,7 +486,9 @@ function AbcCurveCard({ abc }) {
             <li key={item.id} className="space-y-1">
               <div className="flex items-baseline justify-between gap-3 text-sm">
                 <span className="flex min-w-0 items-center gap-2">
-                  <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1 ${style.chip}`}>
+                  <span
+                    className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1 ${style.chip}`}
+                  >
                     {style.label}
                   </span>
                   <span className="truncate font-medium text-slate-700">
@@ -376,14 +501,19 @@ function AbcCurveCard({ abc }) {
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div className={`h-full bg-gradient-to-r ${style.bar}`} style={{ width: `${Math.max(6, Math.min(100, item.sharePct))}%` }} />
+                <div
+                  className={`h-full bg-gradient-to-r ${style.bar}`}
+                  style={{ width: `${Math.max(6, Math.min(100, item.sharePct))}%` }}
+                />
               </div>
             </li>
           );
         })}
       </ul>
       {items.length > top.length ? (
-        <p className="mt-3 text-xs text-slate-500">+ {items.length - top.length} produtos restantes na cauda C.</p>
+        <p className="mt-3 text-xs text-slate-500">
+          + {items.length - top.length} produtos restantes na cauda C.
+        </p>
       ) : null}
     </Card>
   );
@@ -438,7 +568,13 @@ export function DashboardTab({
   const safeSummary = summary || {};
   const monthDelta = comparisonDelta || { pct: 0, trend: 'stable' };
   const ticket = ticketMedio || { value: 0, pct: 0, trend: 'stable', qty: 0 };
-  const mix = customerMix || { total: 0, newCustomers: 0, recurring: 0, recurringPct: 0, inactive: 0 };
+  const mix = customerMix || {
+    total: 0,
+    newCustomers: 0,
+    recurring: 0,
+    recurringPct: 0,
+    inactive: 0,
+  };
 
   // KPIs avançados (LTV, recompra, LTV/CAC) — carregados sob demanda
   // para não bloquear o render do resto do dashboard.
@@ -446,9 +582,15 @@ export function DashboardTab({
   useEffect(() => {
     let cancelled = false;
     fetchAdminKpis({ window: 12 })
-      .then((data) => { if (!cancelled) setAdvancedKpis(data?.kpis || null); })
-      .catch(() => { if (!cancelled) setAdvancedKpis(null); });
-    return () => { cancelled = true; };
+      .then((data) => {
+        if (!cancelled) setAdvancedKpis(data?.kpis || null);
+      })
+      .catch(() => {
+        if (!cancelled) setAdvancedKpis(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -490,10 +632,30 @@ export function DashboardTab({
 
       {/* Secondary mini stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MiniStat label="Receita total" value={formatPrice(safeSummary.revenueTotal || 0)} icon="bank2" accent="info" />
-        <MiniStat label="Produtos ativos" value={safeSummary.activeProducts || 0} icon="box-seam" accent="success" />
-        <MiniStat label="Pendentes" value={safeSummary.pendingOrders || 0} icon="hourglass-split" accent="warning" />
-        <MiniStat label="Clientes cadastrados" value={safeSummary.totalUsers || 0} icon="people" accent="neutral" />
+        <MiniStat
+          label="Receita total"
+          value={formatPrice(safeSummary.revenueTotal || 0)}
+          icon="bank2"
+          accent="info"
+        />
+        <MiniStat
+          label="Produtos ativos"
+          value={safeSummary.activeProducts || 0}
+          icon="box-seam"
+          accent="success"
+        />
+        <MiniStat
+          label="Pendentes"
+          value={safeSummary.pendingOrders || 0}
+          icon="hourglass-split"
+          accent="warning"
+        />
+        <MiniStat
+          label="Clientes cadastrados"
+          value={safeSummary.totalUsers || 0}
+          icon="people"
+          accent="neutral"
+        />
       </div>
 
       {/* KPIs avançados (Fase 4) — LTV, recompra, LTV/CAC ratio */}
@@ -518,11 +680,7 @@ export function DashboardTab({
         />
         <MiniStat
           label="LTV / CAC"
-          value={
-            advancedKpis?.ltvCacRatio
-              ? `${advancedKpis.ltvCacRatio.toFixed(1)}x`
-              : 'Fase 5'
-          }
+          value={advancedKpis?.ltvCacRatio ? `${advancedKpis.ltvCacRatio.toFixed(1)}x` : 'Fase 5'}
           icon="speedometer2"
           accent={advancedKpis?.ltvCacRatio >= 3 ? 'success' : 'warning'}
         />
@@ -571,7 +729,11 @@ export function DashboardTab({
       {/* Recent orders */}
       <Card title="Pedidos recentes" subtitle="Últimos 8 pedidos">
         {recentOrders.length === 0 ? (
-          <EmptyState icon="receipt" title="Nenhum pedido recente" description="Os pedidos aparecerão aqui assim que forem criados." />
+          <EmptyState
+            icon="receipt"
+            title="Nenhum pedido recente"
+            description="Os pedidos aparecerão aqui assim que forem criados."
+          />
         ) : (
           <div className="overflow-hidden rounded-xl border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200">
@@ -587,14 +749,18 @@ export function DashboardTab({
                 {recentOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-50/60">
                     <td className="px-3 py-3">
-                      <div className="font-semibold text-slate-800">{order.orderId || order.id}</div>
+                      <div className="font-semibold text-slate-800">
+                        {order.orderId || order.id}
+                      </div>
                       <div className="truncate text-xs text-slate-500">
                         {order.customerEmail || order.customerName || 'Cliente não identificado'}
                       </div>
                     </td>
                     <td className="px-3 py-3">
                       <StatusChip status={order.paymentStatus} />
-                      <div className="mt-1 text-xs text-slate-500">{formatDateTime(order.createdAt)}</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {formatDateTime(order.createdAt)}
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-right font-semibold text-slate-900">
                       {formatPrice(order.totalAmount || 0)}

@@ -13,9 +13,10 @@ const DEFAULT_BENEFITS = [
  * `products.benefits` (jsonb); cai no default se vazio.
  */
 export function ProductBenefits({ items, className = '' }) {
-  const list = Array.isArray(items) && items.length > 0
-    ? items.map((item) => (typeof item === 'string' ? { label: item } : item))
-    : DEFAULT_BENEFITS;
+  const list =
+    Array.isArray(items) && items.length > 0
+      ? items.map((item) => (typeof item === 'string' ? { label: item } : item))
+      : DEFAULT_BENEFITS;
 
   return (
     <ul className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${className}`}>

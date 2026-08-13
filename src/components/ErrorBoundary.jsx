@@ -67,7 +67,8 @@ export class ErrorBoundary extends React.Component {
           <i className="bi bi-exclamation-triangle text-3xl text-rose-600" />
           <h1 className="mt-3 text-lg font-bold text-slate-900">Algo deu errado</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Tivemos um problema ao carregar esta página. Já registramos o ocorrido. Tente recarregar.
+            Tivemos um problema ao carregar esta página. Já registramos o ocorrido. Tente
+            recarregar.
           </p>
           <button
             type="button"

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
+import { ROUTES } from '../constants/routes';
 
 export function AdminLoginPage() {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ export function AdminLoginPage() {
   if (loading) submitLabel = 'Entrando...';
 
   if (authReady && adminAuthenticated) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to={ROUTES.admin} replace />;
   }
 
   async function onSubmit(event) {
@@ -77,7 +78,9 @@ export function AdminLoginPage() {
             <i className="bi bi-shield-lock-fill text-2xl" />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-violet-600">Painel administrativo</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-violet-600">
+              Painel administrativo
+            </p>
             <h1 className="mt-1 text-2xl font-bold text-slate-900">Acesso restrito</h1>
             <p className="mt-2 text-sm text-slate-600">
               Use o e-mail Supabase do perfil master/admin para acessar o painel.
@@ -87,7 +90,9 @@ export function AdminLoginPage() {
 
         <form className="flex flex-col gap-3" onSubmit={onSubmit}>
           <div>
-            <label htmlFor="admin-login-email" className="sr-only">E-mail</label>
+            <label htmlFor="admin-login-email" className="sr-only">
+              E-mail
+            </label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
                 <i className="bi bi-envelope" />
@@ -106,7 +111,9 @@ export function AdminLoginPage() {
           </div>
 
           <div>
-            <label htmlFor="admin-login-password" className="sr-only">Senha</label>
+            <label htmlFor="admin-login-password" className="sr-only">
+              Senha
+            </label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
                 <i className="bi bi-lock" />
@@ -126,7 +133,9 @@ export function AdminLoginPage() {
 
           {requiresSecondFactor ? (
             <div>
-              <label htmlFor="admin-login-factor" className="sr-only">Código de verificação</label>
+              <label htmlFor="admin-login-factor" className="sr-only">
+                Código de verificação
+              </label>
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
                   <i className="bi bi-key" />
@@ -154,15 +163,17 @@ export function AdminLoginPage() {
             disabled={loading}
             className="mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:bg-violet-300"
           >
-            {loading ? <i className="bi bi-arrow-clockwise animate-spin" /> : <i className="bi bi-box-arrow-in-right" />}
+            {loading ? (
+              <i className="bi bi-arrow-clockwise animate-spin" />
+            ) : (
+              <i className="bi bi-box-arrow-in-right" />
+            )}
             {submitLabel}
           </button>
         </form>
 
         {status ? (
-          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            {status}
-          </p>
+          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{status}</p>
         ) : null}
       </article>
     </section>

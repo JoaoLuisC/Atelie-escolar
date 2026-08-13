@@ -26,7 +26,9 @@ function FunnelBar({ step, maxCount }) {
         <span className="truncate font-medium text-slate-700">{step.label}</span>
         <span className="shrink-0 text-right">
           <span className="font-bold text-slate-900">{step.count.toLocaleString('pt-BR')}</span>
-          <span className="ml-2 text-xs text-slate-500">conv. {formatPct(step.conversionFromPrevious)}</span>
+          <span className="ml-2 text-xs text-slate-500">
+            conv. {formatPct(step.conversionFromPrevious)}
+          </span>
         </span>
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
@@ -51,7 +53,13 @@ FunnelBar.propTypes = {
 
 function AttributionTable({ items }) {
   if (!items || items.length === 0) {
-    return <EmptyState icon="bullseye" title="Sem pedidos atribuídos" description="Compras aprovadas com UTM aparecerão aqui." />;
+    return (
+      <EmptyState
+        icon="bullseye"
+        title="Sem pedidos atribuídos"
+        description="Compras aprovadas com UTM aparecerão aqui."
+      />
+    );
   }
   return (
     <div className="overflow-x-auto">
@@ -71,7 +79,10 @@ function AttributionTable({ items }) {
                 <div className="font-semibold text-slate-800">{entry.source}</div>
                 {entry.details?.length ? (
                   <div className="mt-0.5 truncate text-[11px] text-slate-500">
-                    {entry.details.slice(0, 3).map((d) => `${d.medium || '—'} · ${d.campaign || '—'}`).join(' • ')}
+                    {entry.details
+                      .slice(0, 3)
+                      .map((d) => `${d.medium || '—'} · ${d.campaign || '—'}`)
+                      .join(' • ')}
                   </div>
                 ) : null}
               </td>
@@ -130,7 +141,9 @@ export function FunnelTab() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Funil de conversão</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+            Funil de conversão
+          </p>
           <p className="text-sm text-slate-700">Sessões únicas por etapa nos últimos {days} dias</p>
         </div>
         <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
@@ -159,20 +172,36 @@ export function FunnelTab() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Sessões únicas</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">{totals.sessions.toLocaleString('pt-BR')}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+            Sessões únicas
+          </p>
+          <p className="mt-2 text-2xl font-extrabold text-slate-900">
+            {totals.sessions.toLocaleString('pt-BR')}
+          </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Eventos registrados</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">{totals.events.toLocaleString('pt-BR')}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+            Eventos registrados
+          </p>
+          <p className="mt-2 text-2xl font-extrabold text-slate-900">
+            {totals.events.toLocaleString('pt-BR')}
+          </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Compras aprovadas</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">{totals.approvedOrders.toLocaleString('pt-BR')}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+            Compras aprovadas
+          </p>
+          <p className="mt-2 text-2xl font-extrabold text-slate-900">
+            {totals.approvedOrders.toLocaleString('pt-BR')}
+          </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Receita no período</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">{formatPrice(totals.revenue)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+            Receita no período
+          </p>
+          <p className="mt-2 text-2xl font-extrabold text-slate-900">
+            {formatPrice(totals.revenue)}
+          </p>
         </div>
       </div>
 

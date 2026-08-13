@@ -1,22 +1,22 @@
-import React from 'react';
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { readCart, writeCart } from '../utils/cart-storage';
 import { buildItemPayload, trackEvent } from '../utils/analytics';
 
-export const CartContext = React.createContext(null);
+export const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-  const [cart, setCart] = React.useState(() => readCart());
+  const [cart, setCart] = useState(() => readCart());
   // Espelho síncrono do carrinho: permite checagens (exists/removed) sem prender
   // os callbacks a `cart`, mantendo-os estáveis entre renders (deps []).
-  const cartRef = React.useRef(cart);
+  const cartRef = useRef(cart);
 
-  React.useEffect(() => {
+  useEffect(() => {
     cartRef.current = cart;
     writeCart(cart);
   }, [cart]);
 
-  const addToCart = React.useCallback((product) => {
+  const addToCart = useCallback((product) => {
     const exists = cartRef.current.some((item) => String(item.id) === String(product.id));
 
     if (exists) {
@@ -45,28 +45,34 @@ export function CartProvider({ children }) {
     return { ok: true, message: 'Produto adicionado ao carrinho.' };
   }, []);
 
-  const removeFromCart = React.useCallback((productId) => {
+  const removeFromCart = useCallback((productId) => {
     const removed = cartRef.current.find((item) => String(item.id) === String(productId));
     setCart((prev) => prev.filter((item) => String(item.id) !== String(productId)));
     if (removed) {
       trackEvent('remove_from_cart', {
         currency: 'BRL',
         value: Number(removed.price) || 0,
-        items: [{ item_id: String(removed.id), item_name: removed.name, price: Number(removed.price) || 0 }],
+        items: [
+          {
+            item_id: String(removed.id),
+            item_name: removed.name,
+            price: Number(removed.price) || 0,
+          },
+        ],
       });
     }
   }, []);
 
-  const clearCart = React.useCallback(() => {
+  const clearCart = useCallback(() => {
     setCart([]);
   }, []);
 
-  const total = React.useMemo(
+  const total = useMemo(
     () => cart.reduce((sum, item) => sum + (Number(item.price) || 0) * (item.quantity || 1), 0),
     [cart],
   );
 
-  const value = React.useMemo(
+  const value = useMemo(
     () => ({
       cart,
       total,

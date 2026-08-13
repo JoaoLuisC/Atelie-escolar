@@ -83,7 +83,9 @@ describe('attribution.captureAttributionFromUrl', () => {
   it('retorna null quando storage não está disponível', () => {
     const originalLocalStorage = globalThis.localStorage;
     Object.defineProperty(globalThis, 'localStorage', {
-      get: () => { throw new Error('SecurityError'); },
+      get: () => {
+        throw new Error('SecurityError');
+      },
       configurable: true,
     });
 

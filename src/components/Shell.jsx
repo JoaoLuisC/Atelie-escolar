@@ -6,10 +6,13 @@ import { CartContext } from '../providers/CartProvider';
 import { useToast } from '../hooks/useToast';
 import { CartDrawer } from './CartDrawer';
 import { NewsletterSignup } from './NewsletterSignup';
+import { ROUTES } from '../constants/routes';
 
 function navLinkClass({ isActive }) {
   return `inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-    isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-100 hover:text-brand-700'
+    isActive
+      ? 'bg-brand-50 text-brand-700'
+      : 'text-slate-700 hover:bg-slate-100 hover:text-brand-700'
   }`;
 }
 
@@ -22,7 +25,9 @@ function staticLinkClass() {
 // atenuados sob um rótulo de seção.
 function mobileNavLinkClass({ isActive }) {
   return `flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-[15px] font-medium transition ${
-    isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-800 hover:bg-slate-100 hover:text-brand-700'
+    isActive
+      ? 'bg-brand-50 text-brand-700'
+      : 'text-slate-800 hover:bg-slate-100 hover:text-brand-700'
   }`;
 }
 
@@ -39,7 +44,9 @@ export function Shell({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
-  const isAdminRole = ['admin', 'master'].includes(String(customerSession?.role || '').toLowerCase());
+  const isAdminRole = ['admin', 'master'].includes(
+    String(customerSession?.role || '').toLowerCase(),
+  );
 
   function handleCustomerLogout() {
     logoutCustomer();
@@ -56,14 +63,14 @@ export function Shell({ children }) {
   }
 
   function goToCheckout() {
-    navigate('/checkout');
+    navigate(ROUTES.checkout);
   }
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
       <nav className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 lg:px-6">
-          <Link to="/" className="flex items-center gap-2.5">
+          <Link to={ROUTES.home} className="flex items-center gap-2.5">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-brand">
               <OwlLogo width={28} height={28} />
             </span>
@@ -74,20 +81,28 @@ export function Shell({ children }) {
 
           <ul className="hidden items-center gap-1 lg:flex">
             <li>
-              <NavLink to="/" end className={navLinkClass}>Início</NavLink>
+              <NavLink to={ROUTES.home} end className={navLinkClass}>
+                Início
+              </NavLink>
             </li>
             <li>
-              <a href="/#como-funciona" className={staticLinkClass()}>Como Funciona</a>
+              <a href="/#como-funciona" className={staticLinkClass()}>
+                Como Funciona
+              </a>
             </li>
             <li>
-              <a href="/#contato" className={staticLinkClass()}>Contato</a>
+              <a href="/#contato" className={staticLinkClass()}>
+                Contato
+              </a>
             </li>
             <li>
-              <NavLink to="/produtos" className={navLinkClass}>Produtos</NavLink>
+              <NavLink to={ROUTES.produtos} className={navLinkClass}>
+                Produtos
+              </NavLink>
             </li>
             {customerSession?.email && !isAdminRole ? (
               <li>
-                <NavLink to="/downloads" className={navLinkClass}>
+                <NavLink to={ROUTES.downloads} className={navLinkClass}>
                   <i className="bi bi-bag-heart" /> Meus produtos
                 </NavLink>
               </li>
@@ -95,10 +110,14 @@ export function Shell({ children }) {
             {isAdminRole ? (
               <li>
                 <NavLink
-                  to="/admin"
-                  className={({ isActive }) => `inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                    isActive ? 'bg-amber-100 text-amber-800' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                  }`}
+                  to={ROUTES.admin}
+                  className={({ isActive }) =>
+                    `inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                      isActive
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                    }`
+                  }
                 >
                   <i className="bi bi-shield-lock" /> Painel admin
                 </NavLink>
@@ -111,7 +130,11 @@ export function Shell({ children }) {
               <button
                 type="button"
                 onClick={openCart}
-                aria-label={cartCount > 0 ? `Abrir carrinho com ${cartCount} ${cartCount === 1 ? 'item' : 'itens'}` : 'Abrir carrinho'}
+                aria-label={
+                  cartCount > 0
+                    ? `Abrir carrinho com ${cartCount} ${cartCount === 1 ? 'item' : 'itens'}`
+                    : 'Abrir carrinho'
+                }
                 aria-haspopup="dialog"
                 aria-expanded={cartDrawerOpen}
                 className="relative inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 hover:text-brand-700"
@@ -126,10 +149,14 @@ export function Shell({ children }) {
             ) : null}
 
             <NavLink
-              to="/login"
-              className={({ isActive }) => `hidden lg:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-100 hover:text-brand-700'
-              }`}
+              to={ROUTES.login}
+              className={({ isActive }) =>
+                `hidden lg:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  isActive
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-brand-700'
+                }`
+              }
             >
               <i className="bi bi-person-circle" /> {customerSession?.email ? 'Conta' : 'Entrar'}
             </NavLink>
@@ -159,31 +186,85 @@ export function Shell({ children }) {
         {mobileMenuOpen ? (
           <div className="border-t border-slate-200 bg-white lg:hidden">
             <ul className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3">
-              <li><NavLink to="/" end onClick={() => setMobileMenuOpen(false)} className={mobileNavLinkClass}>Início</NavLink></li>
-              <li><NavLink to="/produtos" onClick={() => setMobileMenuOpen(false)} className={mobileNavLinkClass}>Produtos</NavLink></li>
+              <li>
+                <NavLink
+                  to={ROUTES.home}
+                  end
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={mobileNavLinkClass}
+                >
+                  Início
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to={ROUTES.produtos}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={mobileNavLinkClass}
+                >
+                  Produtos
+                </NavLink>
+              </li>
               {customerSession?.email && !isAdminRole ? (
-                <li><NavLink to="/downloads" onClick={() => setMobileMenuOpen(false)} className={mobileNavLinkClass}><i className="bi bi-bag-heart" aria-hidden="true" /> Meus produtos</NavLink></li>
+                <li>
+                  <NavLink
+                    to={ROUTES.downloads}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={mobileNavLinkClass}
+                  >
+                    <i className="bi bi-bag-heart" aria-hidden="true" /> Meus produtos
+                  </NavLink>
+                </li>
               ) : null}
               {isAdminRole ? (
                 <li>
                   <NavLink
-                    to="/admin"
+                    to={ROUTES.admin}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={({ isActive }) => `flex min-h-[44px] w-full items-center gap-2 rounded-lg px-3 text-[15px] font-semibold transition ${
-                      isActive ? 'bg-amber-100 text-amber-800' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                    }`}
+                    className={({ isActive }) =>
+                      `flex min-h-[44px] w-full items-center gap-2 rounded-lg px-3 text-[15px] font-semibold transition ${
+                        isActive
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                      }`
+                    }
                   >
                     <i className="bi bi-shield-lock" aria-hidden="true" /> Painel admin
                   </NavLink>
                 </li>
               ) : null}
 
-              <li className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Navegar</li>
-              <li><a href="/#como-funciona" onClick={() => setMobileMenuOpen(false)} className={mobileSecondaryLinkClass()}>Como Funciona</a></li>
-              <li><a href="/#contato" onClick={() => setMobileMenuOpen(false)} className={mobileSecondaryLinkClass()}>Contato</a></li>
+              <li className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                Navegar
+              </li>
+              <li>
+                <a
+                  href="/#como-funciona"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={mobileSecondaryLinkClass()}
+                >
+                  Como Funciona
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/#contato"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={mobileSecondaryLinkClass()}
+                >
+                  Contato
+                </a>
+              </li>
 
               <li className="mt-2 border-t border-slate-100 pt-2">
-                <NavLink to="/login" onClick={() => setMobileMenuOpen(false)} className={mobileNavLinkClass}><i className="bi bi-person-circle" aria-hidden="true" /> {customerSession?.email ? 'Conta' : 'Entrar'}</NavLink>
+                <NavLink
+                  to={ROUTES.login}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={mobileNavLinkClass}
+                >
+                  <i className="bi bi-person-circle" aria-hidden="true" />{' '}
+                  {customerSession?.email ? 'Conta' : 'Entrar'}
+                </NavLink>
               </li>
               {customerSession?.email ? (
                 <li>
@@ -207,7 +288,7 @@ export function Shell({ children }) {
         <div className="mx-auto max-w-6xl px-4 py-14 lg:px-6">
           <div className="grid gap-10 md:grid-cols-4">
             <div className="md:col-span-2 md:pr-8">
-              <Link to="/" className="inline-flex items-center gap-2.5">
+              <Link to={ROUTES.home} className="inline-flex items-center gap-2.5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800">
                   <OwlLogo width={22} height={22} />
                 </span>
@@ -216,44 +297,97 @@ export function Shell({ children }) {
                 </span>
               </Link>
               <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-400">
-                Materiais gráficos digitais profissionais e editáveis para festas, eventos e decoração escolar.
-                Download instantâneo após a aprovação do pagamento.
+                Materiais gráficos digitais profissionais e editáveis para festas, eventos e
+                decoração escolar. Download instantâneo após a aprovação do pagamento.
               </p>
               <div className="mt-5 flex gap-2">
-                <a href="https://instagram.com/profamarciarcardoso" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white">
+                <a
+                  href="https://instagram.com/profamarciarcardoso"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Instagram"
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white"
+                >
                   <i className="bi bi-instagram" />
                 </a>
-                <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white">
+                <a
+                  href="https://www.facebook.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Facebook"
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white"
+                >
                   <i className="bi bi-facebook" />
                 </a>
-                <a href="https://www.pinterest.com" target="_blank" rel="noopener noreferrer" aria-label="Pinterest" className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white">
+                <a
+                  href="https://www.pinterest.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Pinterest"
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white"
+                >
                   <i className="bi bi-pinterest" />
                 </a>
               </div>
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Navegação</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                Navegação
+              </h4>
               <ul className="mt-4 space-y-2.5 text-sm">
-                <li><Link to="/" className="text-slate-400 transition hover:text-white">Início</Link></li>
-                <li><Link to="/produtos" className="text-slate-400 transition hover:text-white">Produtos</Link></li>
-                <li><a href="/#como-funciona" className="text-slate-400 transition hover:text-white">Como funciona</a></li>
-                <li><Link to="/login" className="text-slate-400 transition hover:text-white">Minha conta</Link></li>
-                <li><Link to="/downloads" className="text-slate-400 transition hover:text-white">Downloads</Link></li>
+                <li>
+                  <Link to={ROUTES.home} className="text-slate-400 transition hover:text-white">
+                    Início
+                  </Link>
+                </li>
+                <li>
+                  <Link to={ROUTES.produtos} className="text-slate-400 transition hover:text-white">
+                    Produtos
+                  </Link>
+                </li>
+                <li>
+                  <a href="/#como-funciona" className="text-slate-400 transition hover:text-white">
+                    Como funciona
+                  </a>
+                </li>
+                <li>
+                  <Link to={ROUTES.login} className="text-slate-400 transition hover:text-white">
+                    Minha conta
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to={ROUTES.downloads}
+                    className="text-slate-400 transition hover:text-white"
+                  >
+                    Downloads
+                  </Link>
+                </li>
               </ul>
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Contato</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                Contato
+              </h4>
               <ul className="mt-4 space-y-2.5 text-sm">
                 <li>
-                  <a href="mailto:contato@profamarciarcardoso.com.br" className="flex items-center gap-2 text-slate-400 transition hover:text-white">
+                  <a
+                    href="mailto:contato@profamarciarcardoso.com.br"
+                    className="flex items-center gap-2 text-slate-400 transition hover:text-white"
+                  >
                     <i className="bi bi-envelope" aria-hidden="true" />
                     contato@profamarciarcardoso.com.br
                   </a>
                 </li>
                 <li>
-                  <a href="https://wa.me/5511999999999" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-slate-400 transition hover:text-white">
+                  <a
+                    href="https://wa.me/5511999999999"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-slate-400 transition hover:text-white"
+                  >
                     <i className="bi bi-whatsapp" aria-hidden="true" />
                     (11) 99999-9999
                   </a>
@@ -269,8 +403,12 @@ export function Shell({ children }) {
           <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-slate-800 pt-6 text-xs text-slate-500 sm:flex-row">
             <p>&copy; 2026 Profa. Marciar Cardoso. Todos os direitos reservados.</p>
             <div className="flex items-center gap-4">
-              <Link to="/privacidade" className="transition hover:text-slate-300">Privacidade</Link>
-              <Link to="/termos" className="transition hover:text-slate-300">Termos</Link>
+              <Link to={ROUTES.privacidade} className="transition hover:text-slate-300">
+                Privacidade
+              </Link>
+              <Link to={ROUTES.termos} className="transition hover:text-slate-300">
+                Termos
+              </Link>
             </div>
           </div>
         </div>
@@ -283,7 +421,14 @@ export function Shell({ children }) {
 
 function OwlLogo({ width, height }) {
   return (
-    <svg width={width} height={height} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 36 36"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
       <ellipse cx="18" cy="24" rx="11" ry="10" fill="#9B5DE5" />
       <ellipse cx="18" cy="13" rx="9" ry="9" fill="#9B5DE5" />
       <polygon points="10,8 12,2 14,8" fill="#7A3DC0" />
@@ -295,8 +440,20 @@ function OwlLogo({ width, height }) {
       <circle cx="22.5" cy="13" r="2" fill="#1a0030" />
       <circle cx="23.5" cy="11.5" r=".8" fill="rgba(255,255,255,0.7)" />
       <polygon points="16,16 20,16 18,18.5" fill="#FEE440" />
-      <path d="M8,22 Q12,17 14,25" stroke="#7A3DC0" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <path d="M28,22 Q24,17 22,25" stroke="#7A3DC0" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      <path
+        d="M8,22 Q12,17 14,25"
+        stroke="#7A3DC0"
+        strokeWidth="1.5"
+        fill="none"
+        strokeLinecap="round"
+      />
+      <path
+        d="M28,22 Q24,17 22,25"
+        stroke="#7A3DC0"
+        strokeWidth="1.5"
+        fill="none"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

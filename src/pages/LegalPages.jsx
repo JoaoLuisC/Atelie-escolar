@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { CONSENT_POLICY_VERSION } from '../utils/consent';
+import { ROUTES } from '../constants/routes';
 
 function LegalLayout({ title, description, pathname, children }) {
   return (
@@ -10,21 +11,34 @@ function LegalLayout({ title, description, pathname, children }) {
       <SEO title={title} description={description} pathname={pathname} />
       <article className="mx-auto max-w-3xl px-4 py-10 lg:px-6">
         <header className="mb-6">
-          <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Documentos legais</p>
-          <h1 className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">{title}</h1>
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-600">
+            Documentos legais
+          </p>
+          <h1 className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">
+            {title}
+          </h1>
           <p className="mt-2 text-xs text-slate-500">Versão vigente: {CONSENT_POLICY_VERSION}</p>
         </header>
         <section className="prose prose-slate max-w-none text-sm leading-relaxed text-slate-700">
           {children}
         </section>
         <nav className="mt-10 flex flex-wrap gap-2 text-xs">
-          <Link to="/privacidade" className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50">
+          <Link
+            to={ROUTES.privacidade}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+          >
             Política de Privacidade
           </Link>
-          <Link to="/termos" className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50">
+          <Link
+            to={ROUTES.termos}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+          >
             Termos de Uso
           </Link>
-          <Link to="/" className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50">
+          <Link
+            to={ROUTES.home}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+          >
             Voltar para a home
           </Link>
         </nav>
@@ -49,41 +63,77 @@ export function PrivacyPage() {
     >
       <h2>1. Quem somos</h2>
       <p>
-        O Ateliê da Escola é uma loja online de materiais educativos digitais operada pela
-        Profa. Marciar Cardoso. O contato para questões de privacidade é{' '}
+        O Ateliê da Escola é uma loja online de materiais educativos digitais operada pela Profa.
+        Marciar Cardoso. O contato para questões de privacidade é{' '}
         <a href="mailto:contato@profamarciarcardoso.com.br">contato@profamarciarcardoso.com.br</a>.
       </p>
 
       <h2>2. Dados que coletamos</h2>
       <ul>
-        <li><strong>Cadastro e compra:</strong> nome, e-mail e (opcionalmente) telefone/CPF informados no checkout.</li>
-        <li><strong>Pagamento:</strong> os dados do cartão são tratados <em>diretamente pelo Mercado Pago</em> — não armazenamos número de cartão, CVV ou validade.</li>
-        <li><strong>Uso do site:</strong> páginas visitadas, eventos de navegação e identificador anônimo de sessão. Esses dados são associados ao seu IP e User-Agent apenas para diagnóstico e segurança.</li>
-        <li><strong>Cookies de marketing (opcionais):</strong> Google Analytics e Meta Pixel só são carregados depois que você aceita explicitamente no banner.</li>
+        <li>
+          <strong>Cadastro e compra:</strong> nome, e-mail e (opcionalmente) telefone/CPF informados
+          no checkout.
+        </li>
+        <li>
+          <strong>Pagamento:</strong> os dados do cartão são tratados{' '}
+          <em>diretamente pelo Mercado Pago</em> — não armazenamos número de cartão, CVV ou
+          validade.
+        </li>
+        <li>
+          <strong>Uso do site:</strong> páginas visitadas, eventos de navegação e identificador
+          anônimo de sessão. Esses dados são associados ao seu IP e User-Agent apenas para
+          diagnóstico e segurança.
+        </li>
+        <li>
+          <strong>Cookies de marketing (opcionais):</strong> Google Analytics e Meta Pixel só são
+          carregados depois que você aceita explicitamente no banner.
+        </li>
       </ul>
 
       <h2>3. Para que usamos</h2>
       <ul>
         <li>Processar pedidos, liberar downloads e enviar e-mail de confirmação.</li>
         <li>Cumprir obrigações fiscais e legais (notas, impostos, prevenção a fraude).</li>
-        <li>Melhorar o site com base em métricas agregadas — sem rastrear individualmente quem você é.</li>
-        <li>Atender pedidos da LGPD: acesso, correção, exclusão, portabilidade e revogação de consentimento.</li>
+        <li>
+          Melhorar o site com base em métricas agregadas — sem rastrear individualmente quem você é.
+        </li>
+        <li>
+          Atender pedidos da LGPD: acesso, correção, exclusão, portabilidade e revogação de
+          consentimento.
+        </li>
       </ul>
 
       <h2>4. Bases legais (LGPD art. 7º)</h2>
       <ul>
-        <li><strong>Execução de contrato</strong> para tudo que envolve cumprir o pedido.</li>
-        <li><strong>Cumprimento de obrigação legal</strong> para retenção fiscal (5 anos).</li>
-        <li><strong>Legítimo interesse</strong> para logs de segurança e prevenção a fraude.</li>
-        <li><strong>Consentimento</strong> para cookies de marketing (Google/Meta) — revogável a qualquer momento limpando os dados do site ou usando "Apenas essenciais" no banner.</li>
+        <li>
+          <strong>Execução de contrato</strong> para tudo que envolve cumprir o pedido.
+        </li>
+        <li>
+          <strong>Cumprimento de obrigação legal</strong> para retenção fiscal (5 anos).
+        </li>
+        <li>
+          <strong>Legítimo interesse</strong> para logs de segurança e prevenção a fraude.
+        </li>
+        <li>
+          <strong>Consentimento</strong> para cookies de marketing (Google/Meta) — revogável a
+          qualquer momento limpando os dados do site ou usando "Apenas essenciais" no banner.
+        </li>
       </ul>
 
       <h2>5. Com quem compartilhamos</h2>
       <ul>
-        <li><strong>Mercado Pago</strong> — processamento de pagamento.</li>
-        <li><strong>Supabase</strong> — banco de dados e autenticação (servidores nos EUA).</li>
-        <li><strong>Resend</strong> — envio de e-mails transacionais.</li>
-        <li><strong>Google Analytics / Meta</strong> — somente com consentimento ativo.</li>
+        <li>
+          <strong>Mercado Pago</strong> — processamento de pagamento.
+        </li>
+        <li>
+          <strong>Supabase</strong> — banco de dados e autenticação (servidores nos EUA).
+        </li>
+        <li>
+          <strong>Resend</strong> — envio de e-mails transacionais.
+        </li>
+        <li>
+          <strong>Google Analytics / Meta</strong> — somente com consentimento ativo.
+        </li>
       </ul>
       <p>
         Não vendemos seus dados. Nenhum desses parceiros recebe a sua senha — ela é armazenada
@@ -101,28 +151,28 @@ export function PrivacyPage() {
       <h2>7. Seus direitos</h2>
       <p>
         Pela LGPD, você pode pedir confirmação de tratamento, acesso aos dados, correção,
-        anonimização, portabilidade, eliminação e informação sobre compartilhamentos.
-        Escreva para <a href="mailto:contato@profamarciarcardoso.com.br">contato@profamarciarcardoso.com.br</a> e
+        anonimização, portabilidade, eliminação e informação sobre compartilhamentos. Escreva para{' '}
+        <a href="mailto:contato@profamarciarcardoso.com.br">contato@profamarciarcardoso.com.br</a> e
         respondemos em até 15 dias úteis.
       </p>
 
       <h2>8. Segurança</h2>
       <p>
-        Usamos HTTPS em todo o tráfego, cookies HttpOnly + SameSite para sessão, validação
-        de assinatura HMAC em webhooks de pagamento e Row-Level Security no banco. Detalhes
-        técnicos estão documentados internamente e revisamos o controle trimestralmente.
+        Usamos HTTPS em todo o tráfego, cookies HttpOnly + SameSite para sessão, validação de
+        assinatura HMAC em webhooks de pagamento e Row-Level Security no banco. Detalhes técnicos
+        estão documentados internamente e revisamos o controle trimestralmente.
       </p>
 
       <h2>9. Crianças e adolescentes</h2>
       <p>
-        O site não é direcionado a menores de 18 anos. Se você é responsável e identificou
-        cadastro indevido de menor sob sua tutela, escreva para o contato acima para excluirmos.
+        O site não é direcionado a menores de 18 anos. Se você é responsável e identificou cadastro
+        indevido de menor sob sua tutela, escreva para o contato acima para excluirmos.
       </p>
 
       <h2>10. Alterações</h2>
       <p>
-        Mudanças nesta política sobem com nova versão e o banner pede sua aceitação novamente.
-        A versão vigente aparece no topo desta página.
+        Mudanças nesta política sobem com nova versão e o banner pede sua aceitação novamente. A
+        versão vigente aparece no topo desta página.
       </p>
     </LegalLayout>
   );
@@ -138,22 +188,28 @@ export function TermsPage() {
       <h2>1. Sobre estes termos</h2>
       <p>
         Ao usar o Ateliê da Escola você aceita estes Termos e a{' '}
-        <Link to="/privacidade">Política de Privacidade</Link>. Se discordar de qualquer ponto,
-        por favor não use o site.
+        <Link to={ROUTES.privacidade}>Política de Privacidade</Link>. Se discordar de qualquer
+        ponto, por favor não use o site.
       </p>
 
       <h2>2. Produtos</h2>
       <p>
-        Vendemos arquivos digitais (PDF, imagens, kits) para uso pessoal e em sala de aula.
-        Os produtos têm descrição, preço e amostras na página do produto.
+        Vendemos arquivos digitais (PDF, imagens, kits) para uso pessoal e em sala de aula. Os
+        produtos têm descrição, preço e amostras na página do produto.
       </p>
 
       <h2>3. Pedido e pagamento</h2>
       <ul>
-        <li>O preço é confirmado pelo servidor no momento do checkout (ignoramos valores manipulados no cliente).</li>
+        <li>
+          O preço é confirmado pelo servidor no momento do checkout (ignoramos valores manipulados
+          no cliente).
+        </li>
         <li>Pagamento via Mercado Pago — cartão, Pix ou boleto.</li>
         <li>Após aprovação, liberamos automaticamente um link de download por item.</li>
-        <li>Cada link expira em <strong>72 horas</strong> e é de uso único. Se precisar baixar de novo, acesse <Link to="/downloads">/downloads</Link>.</li>
+        <li>
+          Cada link expira em <strong>72 horas</strong> e é de uso único. Se precisar baixar de
+          novo, acesse <Link to={ROUTES.downloads}>/downloads</Link>.
+        </li>
       </ul>
 
       <h2>4. Licença de uso</h2>
@@ -168,22 +224,21 @@ export function TermsPage() {
 
       <h2>5. Reembolso</h2>
       <p>
-        Por se tratar de produto digital com entrega imediata, o direito de arrependimento
-        do CDC (art. 49) é exercido <strong>antes</strong> da geração do link de download. Após o
-        link ser emitido, o reembolso é avaliado caso a caso por e-mail.
+        Por se tratar de produto digital com entrega imediata, o direito de arrependimento do CDC
+        (art. 49) é exercido <strong>antes</strong> da geração do link de download. Após o link ser
+        emitido, o reembolso é avaliado caso a caso por e-mail.
       </p>
 
       <h2>6. Conta de cliente</h2>
       <p>
         Você é responsável pelas credenciais da sua conta. Use senhas únicas e habilite a
-        recuperação por e-mail. Reset de senha em{' '}
-        <Link to="/login">/login</Link>.
+        recuperação por e-mail. Reset de senha em <Link to={ROUTES.login}>/login</Link>.
       </p>
 
       <h2>7. Uso indevido</h2>
       <p>
-        Tentativas de burlar pagamento, baixar arquivos sem direito, automatizar acessos ou
-        enumerar pedidos resultam em bloqueio e podem ser reportadas às autoridades.
+        Tentativas de burlar pagamento, baixar arquivos sem direito, automatizar acessos ou enumerar
+        pedidos resultam em bloqueio e podem ser reportadas às autoridades.
       </p>
 
       <h2>8. Limitação de responsabilidade</h2>
@@ -195,13 +250,14 @@ export function TermsPage() {
 
       <h2>9. Foro</h2>
       <p>
-        Estes termos seguem a legislação brasileira. Eventuais disputas são resolvidas no
-        foro do domicílio do consumidor.
+        Estes termos seguem a legislação brasileira. Eventuais disputas são resolvidas no foro do
+        domicílio do consumidor.
       </p>
 
       <h2>10. Contato</h2>
       <p>
-        Dúvidas ou pedidos: <a href="mailto:contato@profamarciarcardoso.com.br">contato@profamarciarcardoso.com.br</a>.
+        Dúvidas ou pedidos:{' '}
+        <a href="mailto:contato@profamarciarcardoso.com.br">contato@profamarciarcardoso.com.br</a>.
       </p>
     </LegalLayout>
   );

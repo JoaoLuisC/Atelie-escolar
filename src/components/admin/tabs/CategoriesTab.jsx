@@ -8,7 +8,11 @@ export function CategoriesTab({ categories, onCreate, onEdit, onDelete }) {
     <Card
       title="Categorias"
       subtitle={`${categories.length} categoria(s) cadastrada(s)`}
-      action={<Button icon="plus-lg" onClick={onCreate}>Nova categoria</Button>}
+      action={
+        <Button icon="plus-lg" onClick={onCreate}>
+          Nova categoria
+        </Button>
+      }
     >
       {categories.length === 0 ? (
         <EmptyState
@@ -41,8 +45,16 @@ export function CategoriesTab({ categories, onCreate, onEdit, onDelete }) {
                   {category.color || '#9B5DE5'} · {category.active === false ? 'Inativa' : 'Ativa'}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-1">
-                  <Button variant="secondary" size="sm" onClick={() => onEdit(category)}>Editar</Button>
-                  <Button variant="ghost" size="sm" icon="trash" onClick={() => onDelete(category)} aria-label="Excluir" />
+                  <Button variant="secondary" size="sm" onClick={() => onEdit(category)}>
+                    Editar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="trash"
+                    onClick={() => onDelete(category)}
+                    aria-label="Excluir"
+                  />
                 </div>
               </div>
             </article>

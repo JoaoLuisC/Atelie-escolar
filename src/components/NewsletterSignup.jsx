@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 import { useState } from 'react';
-import { getApiBaseUrl } from '../utils/api';
+import { subscribeToNewsletter } from '../services/newsletter';
 import { getAttributionPayload } from '../utils/analytics';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -29,19 +29,15 @@ export function NewsletterSignup({ source = 'footer', className = '' }) {
     setStatus({ type: 'loading', message: 'Enviando…' });
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/subscribe`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: trimmed,
-          source,
-          attribution: getAttributionPayload(),
-        }),
+      // Regra C2 — ver src/services/newsletter.js.
+      const data = await subscribeToNewsletter({
+        email: trimmed,
+        source,
+        attribution: getAttributionPayload(),
       });
-      const data = await response.json();
 
-      if (!data.success) {
-        setStatus({ type: 'error', message: data.error || 'Não foi possível inscrever agora.' });
+      if (!data.ok) {
+        setStatus({ type: 'error', message: data.message });
         return;
       }
 
@@ -90,7 +86,11 @@ export function NewsletterSignup({ source = 'footer', className = '' }) {
         <p
           role={status.type === 'error' ? 'alert' : 'status'}
           className={`text-xs ${
-            status.type === 'error' ? 'text-rose-200' : status.type === 'success' ? 'text-emerald-200' : 'text-white/70'
+            status.type === 'error'
+              ? 'text-rose-200'
+              : status.type === 'success'
+                ? 'text-emerald-200'
+                : 'text-white/70'
           }`}
         >
           {status.message}

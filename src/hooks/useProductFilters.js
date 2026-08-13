@@ -83,7 +83,9 @@ export function useProductFilters() {
     const presetFromQuery = normalizeText(searchParams.get('preset'));
 
     if (categoryFromQuery) {
-      const foundCategory = categories.find((category) => normalizeText(category) === normalizeText(categoryFromQuery));
+      const foundCategory = categories.find(
+        (category) => normalizeText(category) === normalizeText(categoryFromQuery),
+      );
       if (foundCategory) {
         setActiveCategory(foundCategory);
       }
@@ -117,7 +119,8 @@ export function useProductFilters() {
       }
 
       if (activePriceRange === '0-25') return (product.price || 0) <= 25;
-      if (activePriceRange === '25-50') return (product.price || 0) > 25 && (product.price || 0) <= 50;
+      if (activePriceRange === '25-50')
+        return (product.price || 0) > 25 && (product.price || 0) <= 50;
       if (activePriceRange === '50+') return (product.price || 0) > 50;
 
       return true;

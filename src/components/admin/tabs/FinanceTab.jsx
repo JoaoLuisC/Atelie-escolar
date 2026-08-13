@@ -11,9 +11,24 @@ export function FinanceTab({ approvedOrders, faturamentoSeries }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Bruto acumulado" value={formatPrice(totalGross)} icon="cash-stack" accent="success" />
-        <StatCard label="Pedidos aprovados" value={approvedOrders.length} icon="check2-circle" accent="primary" />
-        <StatCard label="Ticket médio" value={formatPrice(avgTicket)} icon="calculator" accent="info" />
+        <StatCard
+          label="Bruto acumulado"
+          value={formatPrice(totalGross)}
+          icon="cash-stack"
+          accent="success"
+        />
+        <StatCard
+          label="Pedidos aprovados"
+          value={approvedOrders.length}
+          icon="check2-circle"
+          accent="primary"
+        />
+        <StatCard
+          label="Ticket médio"
+          value={formatPrice(avgTicket)}
+          icon="calculator"
+          accent="info"
+        />
       </div>
 
       <Card title="Faturamento dos últimos 6 meses" subtitle="Apenas pedidos aprovados">

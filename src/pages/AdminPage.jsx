@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ADMIN_LOGIN_PATH } from '../constants/routes';
+import { ADMIN_LOGIN_PATH, ROUTES } from '../constants/routes';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { ProductWizard } from '../components/ProductWizard';
@@ -80,8 +80,8 @@ export function AdminPage() {
   const { logoutAdmin, setAdminAuthenticated, adminAuthenticated } = useAuth();
   const { pushToast } = useToast();
   // Só em DEV: em produção a flag é inerte (ver ProtectedRoute).
-  const allowAdminBypass = import.meta.env.DEV
-    && import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
+  const allowAdminBypass =
+    import.meta.env.DEV && import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
   const showBypassBanner = allowAdminBypass && !adminAuthenticated;
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -111,12 +111,15 @@ export function AdminPage() {
     pushToast('Sessão admin expirada. Faça login novamente.', 'warning');
   }, [allowAdminBypass, setAdminAuthenticated, pushToast]);
 
-  const handleAdminError = useCallback((error, fallback) => {
-    if (isSessionError(error)) {
-      onAuthExpired();
-    }
-    pushToast(error?.message || fallback, 'error');
-  }, [onAuthExpired, pushToast]);
+  const handleAdminError = useCallback(
+    (error, fallback) => {
+      if (isSessionError(error)) {
+        onAuthExpired();
+      }
+      pushToast(error?.message || fallback, 'error');
+    },
+    [onAuthExpired, pushToast],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -130,7 +133,12 @@ export function AdminPage() {
           if (cancelled) return;
           setDashboardData(data);
           if (activeTab === 'vitrine') {
-            setVitrineSections(parseHomeSectionsSetting(data.settings?.homeSections || { sections: [] }, data.categories || []));
+            setVitrineSections(
+              parseHomeSectionsSetting(
+                data.settings?.homeSections || { sections: [] },
+                data.categories || [],
+              ),
+            );
           }
         }
 
@@ -167,14 +175,35 @@ export function AdminPage() {
     };
   }, [activeTab, ordersFilter, allowAdminBypass, onAuthExpired]);
 
-  const approvedOrders = useMemo(() => deriveApprovedOrders(dashboardData.orders), [dashboardData.orders]);
-  const productPerformance = useMemo(() => deriveProductPerformance(dashboardData.products, approvedOrders), [dashboardData.products, approvedOrders]);
-  const monthlyComparison = useMemo(() => deriveMonthlyComparison(approvedOrders), [approvedOrders]);
-  const comparisonDelta = useMemo(() => deriveComparisonDelta(monthlyComparison), [monthlyComparison]);
-  const recentOrders = useMemo(() => deriveRecentOrders(dashboardData.orders), [dashboardData.orders]);
+  const approvedOrders = useMemo(
+    () => deriveApprovedOrders(dashboardData.orders),
+    [dashboardData.orders],
+  );
+  const productPerformance = useMemo(
+    () => deriveProductPerformance(dashboardData.products, approvedOrders),
+    [dashboardData.products, approvedOrders],
+  );
+  const monthlyComparison = useMemo(
+    () => deriveMonthlyComparison(approvedOrders),
+    [approvedOrders],
+  );
+  const comparisonDelta = useMemo(
+    () => deriveComparisonDelta(monthlyComparison),
+    [monthlyComparison],
+  );
+  const recentOrders = useMemo(
+    () => deriveRecentOrders(dashboardData.orders),
+    [dashboardData.orders],
+  );
   const dailyRevenue = useMemo(() => deriveDailyRevenue(approvedOrders), [approvedOrders]);
-  const categoryRevenue = useMemo(() => deriveCategoryRevenue(dashboardData.products, approvedOrders), [dashboardData.products, approvedOrders]);
-  const faturamentoSeries = useMemo(() => deriveFaturamentoSeries(approvedOrders), [approvedOrders]);
+  const categoryRevenue = useMemo(
+    () => deriveCategoryRevenue(dashboardData.products, approvedOrders),
+    [dashboardData.products, approvedOrders],
+  );
+  const faturamentoSeries = useMemo(
+    () => deriveFaturamentoSeries(approvedOrders),
+    [approvedOrders],
+  );
   const ticketMedio = useMemo(() => deriveTicketMedio(monthlyComparison), [monthlyComparison]);
   const customerMix = useMemo(() => deriveCustomerMix(dashboardData.users), [dashboardData.users]);
   const abcCurve = useMemo(() => deriveAbcCurve(productPerformance), [productPerformance]);
@@ -196,7 +225,7 @@ export function AdminPage() {
     } catch (error) {
       pushToast(error?.message || 'Erro ao encerrar sessão.', 'error');
     } finally {
-      navigate('/login', { replace: true });
+      navigate(ROUTES.login, { replace: true });
     }
   }
 
@@ -266,7 +295,10 @@ export function AdminPage() {
   }
 
   async function handleDeleteProduct(product) {
-    if (typeof globalThis.window !== 'undefined' && !globalThis.window.confirm?.(`Excluir o produto "${product.name}"?`)) {
+    if (
+      typeof globalThis.window !== 'undefined' &&
+      !globalThis.window.confirm?.(`Excluir o produto "${product.name}"?`)
+    ) {
       return;
     }
     try {
@@ -310,7 +342,10 @@ export function AdminPage() {
   }
 
   async function handleDeleteCategory(category) {
-    if (typeof globalThis.window !== 'undefined' && !globalThis.window.confirm?.(`Excluir a categoria "${category.name}"?`)) {
+    if (
+      typeof globalThis.window !== 'undefined' &&
+      !globalThis.window.confirm?.(`Excluir a categoria "${category.name}"?`)
+    ) {
       return;
     }
     try {
@@ -326,9 +361,9 @@ export function AdminPage() {
     setUsersUpdatingId(user.id);
     try {
       await updateAdminUser({ id: user.id, role: String(nextRole || '').toLowerCase() });
-      setUsers((prev) => prev.map((entry) => (
-        entry.id === user.id ? { ...entry, role: nextRole } : entry
-      )));
+      setUsers((prev) =>
+        prev.map((entry) => (entry.id === user.id ? { ...entry, role: nextRole } : entry)),
+      );
       pushToast('Papel do usuário atualizado.', 'success');
     } catch (error) {
       handleAdminError(error, 'Erro ao atualizar usuário.');
@@ -456,7 +491,9 @@ export function AdminPage() {
       case 'faturamento':
         return <FinanceTab approvedOrders={approvedOrders} faturamentoSeries={faturamentoSeries} />;
       case 'comparativo':
-        return <ComparisonTab monthlyComparison={monthlyComparison} comparisonDelta={comparisonDelta} />;
+        return (
+          <ComparisonTab monthlyComparison={monthlyComparison} comparisonDelta={comparisonDelta} />
+        );
       case 'funil':
         return <FunnelTab />;
       case 'analise':
@@ -476,7 +513,9 @@ export function AdminPage() {
           />
         );
       case 'seguranca':
-        return <SecurityTab config={adminConfig} onSave={handleSecuritySave} saving={securitySaving} />;
+        return (
+          <SecurityTab config={adminConfig} onSave={handleSecuritySave} saving={securitySaving} />
+        );
       default:
         return null;
     }
@@ -495,10 +534,16 @@ export function AdminPage() {
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <i className="bi bi-exclamation-triangle-fill mt-0.5 shrink-0 text-amber-600" />
             <div>
-              <p className="font-semibold">Modo de desenvolvimento (bypass) — sem sessão admin real.</p>
+              <p className="font-semibold">
+                Modo de desenvolvimento (bypass) — sem sessão admin real.
+              </p>
               <p className="mt-0.5 text-amber-800">
-                O painel abre sem login, mas as APIs exigem sessão: por isso o Dashboard fica vazio e abas como Segmentos, Cupons e Usuários mostram “sessão expirada”.{' '}
-                <a href={ADMIN_LOGIN_PATH} className="font-semibold underline">Faça login</a> para carregar os dados.
+                O painel abre sem login, mas as APIs exigem sessão: por isso o Dashboard fica vazio
+                e abas como Segmentos, Cupons e Usuários mostram “sessão expirada”.{' '}
+                <a href={ADMIN_LOGIN_PATH} className="font-semibold underline">
+                  Faça login
+                </a>{' '}
+                para carregar os dados.
               </p>
             </div>
           </div>
@@ -521,7 +566,9 @@ export function AdminPage() {
         initialCategory={editingCategory}
       />
 
-      {orderDetail ? <OrderDetailModal order={orderDetail} onClose={() => setOrderDetail(null)} /> : null}
+      {orderDetail ? (
+        <OrderDetailModal order={orderDetail} onClose={() => setOrderDetail(null)} />
+      ) : null}
     </>
   );
 }

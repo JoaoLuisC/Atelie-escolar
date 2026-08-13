@@ -10,8 +10,8 @@ export function ProtectedRoute({ children }) {
   // `import.meta.env.DEV` garante que a flag fica INERTE em builds de
   // produção mesmo que VITE_ALLOW_ADMIN_BYPASS=true vaze para o deploy
   // (variáveis VITE_* são inlined no bundle público).
-  const allowAdminBypass = import.meta.env.DEV
-    && import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
+  const allowAdminBypass =
+    import.meta.env.DEV && import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
 
   if (!authReady) {
     return (
@@ -19,7 +19,9 @@ export function ProtectedRoute({ children }) {
         <article className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           <i className="bi bi-shield-lock-fill text-3xl text-brand-600" />
           <h3 className="mt-2 font-heading text-lg font-bold text-slate-900">Verificando sessão</h3>
-          <p className="mt-1 text-sm text-slate-600">Aguarde enquanto validamos seu acesso administrativo.</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Aguarde enquanto validamos seu acesso administrativo.
+          </p>
         </article>
       </section>
     );

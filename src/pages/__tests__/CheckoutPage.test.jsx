@@ -1,12 +1,10 @@
 import { MemoryRouter } from 'react-router-dom';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CheckoutPage } from '../CheckoutPage';
 
 vi.mock('../../hooks/useCart', () => ({
   useCart: () => ({
-    cart: [
-      { id: 1, name: 'Produto Teste', price: 10, quantity: 1 },
-    ],
+    cart: [{ id: 1, name: 'Produto Teste', price: 10, quantity: 1 }],
     total: 10,
     removeFromCart: vi.fn(),
     clearCart: vi.fn(),
@@ -63,7 +61,11 @@ describe('CheckoutPage', () => {
       if (u.includes('/create-payment')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ success: true, orderId: 'ORD-1', initPoint: 'https://sandbox.mercadopago.com/pagar' }),
+          json: async () => ({
+            success: true,
+            orderId: 'ORD-1',
+            initPoint: 'https://sandbox.mercadopago.com/pagar',
+          }),
         });
       }
       if (u.includes('/verify-payment')) {
@@ -97,7 +99,6 @@ describe('CheckoutPage', () => {
     vi.spyOn(globalThis, 'setInterval').mockImplementation((callback) => {
       pollDone = (async () => {
         for (let i = 0; i < 152; i += 1) {
-          // eslint-disable-next-line no-await-in-loop
           await callback();
         }
       })();
@@ -112,7 +113,11 @@ describe('CheckoutPage', () => {
       if (u.includes('/create-payment')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ success: true, orderId: 'ORD-2', initPoint: 'https://sandbox.mercadopago.com/pagar' }),
+          json: async () => ({
+            success: true,
+            orderId: 'ORD-2',
+            initPoint: 'https://sandbox.mercadopago.com/pagar',
+          }),
         });
       }
       if (u.includes('/verify-payment')) {
@@ -135,7 +140,6 @@ describe('CheckoutPage', () => {
     // Aguarda o onSubmit resolver e o efeito registrar o intervalo (poll).
     // Flush por macrotask; sem waitFor para não colidir com o setInterval mock.
     for (let i = 0; i < 50 && pollDone === null; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
     expect(pollDone).not.toBeNull();

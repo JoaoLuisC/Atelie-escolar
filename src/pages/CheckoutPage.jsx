@@ -10,12 +10,9 @@ import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
 import { apiRequest } from '../utils/api';
 import { formatPrice } from '../utils/currency';
-import {
-  buildCartPayload,
-  getAttributionPayload,
-  trackEvent,
-} from '../utils/analytics';
+import { buildCartPayload, getAttributionPayload, trackEvent } from '../utils/analytics';
 import { getSessionId } from '../utils/attribution';
+import { ROUTES } from '../constants/routes';
 
 // Debounce da captura de carrinho abandonado ao digitar o e-mail.
 const ABANDONED_CART_DEBOUNCE_MS = 1500;
@@ -197,7 +194,9 @@ export function CheckoutPage() {
           setPendingOrderEmail('');
           setPaymentUrl('');
           setStatusTone('info');
-          setStatus('Demorou mais do que esperávamos para confirmar. Você pode acompanhar a qualquer momento em Meus Downloads — ninguém perde o pedido.');
+          setStatus(
+            'Demorou mais do que esperávamos para confirmar. Você pode acompanhar a qualquer momento em Meus Downloads — ninguém perde o pedido.',
+          );
         }
         return;
       }
@@ -227,7 +226,9 @@ export function CheckoutPage() {
           cooldownTicks = Math.ceil(waitMs / PAYMENT_POLL_INTERVAL_MS);
           backoffFloorMs = Math.min(backoffFloorMs * 2, PAYMENT_POLL_BACKOFF_MAX_MS);
           setStatusTone('info');
-          setStatus('Muita gente confirmando pagamento agora. Continuamos verificando o seu — só um pouco mais devagar. Pode deixar esta tela aberta.');
+          setStatus(
+            'Muita gente confirmando pagamento agora. Continuamos verificando o seu — só um pouco mais devagar. Pode deixar esta tela aberta.',
+          );
           return;
         }
 
@@ -245,7 +246,9 @@ export function CheckoutPage() {
           setStatusTone('success');
           pushToast('Pagamento aprovado.', 'success');
           setStatus('Tudo certo! Pagamento aprovado. Levando você para a área de downloads…');
-          navigate(`/downloads?order=${encodeURIComponent(pendingOrderId)}&email=${encodeURIComponent(pendingOrderEmail)}&success=1`);
+          navigate(
+            `/downloads?order=${encodeURIComponent(pendingOrderId)}&email=${encodeURIComponent(pendingOrderEmail)}&success=1`,
+          );
           return;
         }
 
@@ -256,7 +259,9 @@ export function CheckoutPage() {
           setPendingOrderEmail('');
           setPaymentUrl('');
           setStatusTone('error');
-          setStatus('Não conseguimos confirmar este pagamento. Você pode tentar de novo com outro método sem perder o carrinho.');
+          setStatus(
+            'Não conseguimos confirmar este pagamento. Você pode tentar de novo com outro método sem perder o carrinho.',
+          );
           pushToast('Pagamento não confirmado.', 'warning');
         }
       } catch (pollError) {
@@ -348,7 +353,9 @@ export function CheckoutPage() {
       window.open(nextPaymentUrl, '_blank', 'noopener,noreferrer');
       pushToast('Pagamento gerado. Estamos aguardando a confirmação.', 'info');
       setStatusTone('info');
-      setStatus('Aguardando confirmação do pagamento. Use o botão "Abrir pagamento" caso a cobrança não tenha aberto — vamos te avisar aqui assim que aprovar.');
+      setStatus(
+        'Aguardando confirmação do pagamento. Use o botão "Abrir pagamento" caso a cobrança não tenha aberto — vamos te avisar aqui assim que aprovar.',
+      );
       setPendingOrderEmail(email);
       setPendingOrderId(String(data.orderId || ''));
     } catch (submitError) {
@@ -362,7 +369,8 @@ export function CheckoutPage() {
 
   // text-base (16px) no mobile evita o zoom automático do iOS ao focar o input;
   // sm:text-sm mantém o visual compacto no desktop.
-  const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base sm:text-sm transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50 disabled:text-slate-500';
+  const inputClass =
+    'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base sm:text-sm transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50 disabled:text-slate-500';
   const errorInputClass = 'border-rose-300 focus:border-rose-500 focus:ring-rose-100';
 
   // Cancela a espera de confirmação: zera o pedido pendente e reabilita o form
@@ -404,7 +412,9 @@ export function CheckoutPage() {
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <header className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Resumo do Pedido</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-brand-600">
+                  Resumo do Pedido
+                </p>
                 <h3 className="font-heading text-lg font-bold text-slate-900">Seu Carrinho</h3>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
@@ -416,7 +426,7 @@ export function CheckoutPage() {
               <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-500">
                 <p>Seu carrinho está vazio.</p>
                 <Link
-                  to="/produtos"
+                  to={ROUTES.produtos}
                   className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
                 >
                   <i className="bi bi-bag" aria-hidden="true" /> Ver produtos
@@ -425,10 +435,15 @@ export function CheckoutPage() {
             ) : (
               <ul className="flex flex-col gap-2">
                 {cart.map((item) => (
-                  <li key={item.id} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5"
+                  >
                     <div className="min-w-0 flex-1">
                       <strong className="block truncate text-sm text-slate-800">{item.name}</strong>
-                      <span className="text-xs font-semibold text-brand-700">{formatPrice(item.price)}</span>
+                      <span className="text-xs font-semibold text-brand-700">
+                        {formatPrice(item.price)}
+                      </span>
                     </div>
                     <button
                       type="button"
@@ -467,20 +482,27 @@ export function CheckoutPage() {
               ) : null}
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-semibold text-slate-600">Total</span>
-                <strong className="font-display text-2xl font-bold text-brand-700">{formatPrice(displayTotal)}</strong>
+                <strong className="font-display text-2xl font-bold text-brand-700">
+                  {formatPrice(displayTotal)}
+                </strong>
               </div>
             </div>
 
             <p className="mt-3 text-xs text-slate-500">
-              Após a aprovação, seus arquivos ficam disponíveis automaticamente na área de downloads.
+              Após a aprovação, seus arquivos ficam disponíveis automaticamente na área de
+              downloads.
             </p>
           </article>
 
           {/* PAGAMENTO */}
           <article className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <header>
-              <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Finalização segura</p>
-              <h3 className="font-heading text-lg font-bold text-slate-900">Dados para pagamento</h3>
+              <p className="text-xs font-bold uppercase tracking-widest text-brand-600">
+                Finalização segura
+              </p>
+              <h3 className="font-heading text-lg font-bold text-slate-900">
+                Dados para pagamento
+              </h3>
             </header>
 
             <StatusStepper
@@ -500,11 +522,13 @@ export function CheckoutPage() {
             ) : (
               <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                 <p className="mb-2 text-xs text-slate-600">
-                  Acelere preenchendo seus dados pela sua conta Google — ou continue como convidado preenchendo nome e e-mail abaixo.
+                  Acelere preenchendo seus dados pela sua conta Google — ou continue como convidado
+                  preenchendo nome e e-mail abaixo.
                 </p>
                 {guestEmail ? (
                   <p className="mb-2 text-xs text-slate-600">
-                    Comprando como convidado: <strong className="text-slate-800">{guestEmail}</strong>
+                    Comprando como convidado:{' '}
+                    <strong className="text-slate-800">{guestEmail}</strong>
                   </p>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
@@ -518,7 +542,7 @@ export function CheckoutPage() {
                     {googleLoading ? 'Abrindo Google…' : 'Continuar com Google'}
                   </button>
                   <Link
-                    to="/login?mode=login&redirect=/checkout"
+                    to={`${ROUTES.login}?mode=login&redirect=${ROUTES.checkout}`}
                     className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold text-brand-700 transition hover:underline"
                   >
                     Já tenho conta
@@ -529,7 +553,10 @@ export function CheckoutPage() {
 
             <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-3">
               <div>
-                <label htmlFor="checkout-name" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label
+                  htmlFor="checkout-name"
+                  className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
                   Nome completo
                 </label>
                 <input
@@ -546,12 +573,17 @@ export function CheckoutPage() {
                   })}
                 />
                 {errors.name ? (
-                  <p id="checkout-name-error" role="alert" className="mt-1 text-xs text-rose-700">{errors.name.message}</p>
+                  <p id="checkout-name-error" role="alert" className="mt-1 text-xs text-rose-700">
+                    {errors.name.message}
+                  </p>
                 ) : null}
               </div>
 
               <div>
-                <label htmlFor="checkout-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label
+                  htmlFor="checkout-email"
+                  className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
                   E-mail
                 </label>
                 <input
@@ -564,11 +596,16 @@ export function CheckoutPage() {
                   className={`${inputClass} ${errors.email ? errorInputClass : ''}`}
                   {...register('email', {
                     required: 'Informe um e-mail válido para receber a confirmação.',
-                    pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Digite um e-mail válido.' },
+                    pattern: {
+                      value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                      message: 'Digite um e-mail válido.',
+                    },
                   })}
                 />
                 {errors.email ? (
-                  <p id="checkout-email-error" role="alert" className="mt-1 text-xs text-rose-700">{errors.email.message}</p>
+                  <p id="checkout-email-error" role="alert" className="mt-1 text-xs text-rose-700">
+                    {errors.email.message}
+                  </p>
                 ) : null}
               </div>
 
@@ -579,9 +616,13 @@ export function CheckoutPage() {
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-5 py-3 text-base font-semibold text-white shadow-brand transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-400 disabled:shadow-none"
                 >
                   {processing ? (
-                    <><i className="bi bi-arrow-clockwise animate-spin" /> Processando…</>
+                    <>
+                      <i className="bi bi-arrow-clockwise animate-spin" /> Processando…
+                    </>
                   ) : (
-                    <>Ir para pagamento <i className="bi bi-arrow-right" /></>
+                    <>
+                      Ir para pagamento <i className="bi bi-arrow-right" />
+                    </>
                   )}
                 </button>
 
@@ -606,10 +647,20 @@ export function CheckoutPage() {
                   </button>
                 ) : null}
 
-                <div aria-label="Selos de confiança" className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  <span className="inline-flex items-center gap-1"><i className="bi bi-shield-lock-fill text-emerald-600" /> Compra segura</span>
-                  <span className="inline-flex items-center gap-1"><i className="bi bi-credit-card-2-front-fill text-brand-600" /> Pagamento verificado</span>
-                  <span className="inline-flex items-center gap-1"><i className="bi bi-stars text-amber-500" /> Download garantido</span>
+                <div
+                  aria-label="Selos de confiança"
+                  className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <i className="bi bi-shield-lock-fill text-emerald-600" /> Compra segura
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <i className="bi bi-credit-card-2-front-fill text-brand-600" /> Pagamento
+                    verificado
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <i className="bi bi-stars text-amber-500" /> Download garantido
+                  </span>
                 </div>
               </div>
             </form>

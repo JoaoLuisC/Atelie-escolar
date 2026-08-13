@@ -5,14 +5,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 
-export function ProductsTab({
-  products,
-  categories,
-  onCreate,
-  onEdit,
-  onToggleActive,
-  onDelete,
-}) {
+export function ProductsTab({ products, categories, onCreate, onEdit, onToggleActive, onDelete }) {
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterActive, setFilterActive] = useState('all');
@@ -20,11 +13,18 @@ export function ProductsTab({
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return products.filter((product) => {
-      if (query && !String(product.name || '').toLowerCase().includes(query)) return false;
+      if (
+        query &&
+        !String(product.name || '')
+          .toLowerCase()
+          .includes(query)
+      )
+        return false;
       if (filterCategory) {
         const productCategoryId = String(product.categoryId || product.category_id || '');
         const productCategoryName = String(product.category || '');
-        const matchesCategory = productCategoryId === String(filterCategory) || productCategoryName === filterCategory;
+        const matchesCategory =
+          productCategoryId === String(filterCategory) || productCategoryName === filterCategory;
         if (!matchesCategory) return false;
       }
       if (filterActive === 'active' && product.active === false) return false;
@@ -38,7 +38,9 @@ export function ProductsTab({
       title="Produtos"
       subtitle={`${filtered.length} de ${products.length} produto(s)`}
       action={
-        <Button icon="plus-lg" onClick={onCreate}>Novo produto</Button>
+        <Button icon="plus-lg" onClick={onCreate}>
+          Novo produto
+        </Button>
       }
     >
       <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center">
@@ -55,7 +57,9 @@ export function ProductsTab({
         >
           <option value="">Todas as categorias</option>
           {categories.map((category) => (
-            <option key={category.id} value={category.id}>{category.name}</option>
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
           ))}
         </select>
         <select
@@ -98,24 +102,38 @@ export function ProductsTab({
                       </span>
                     ) : null}
                   </td>
-                  <td className="px-3 py-3 text-slate-600">{product.category || 'Sem categoria'}</td>
-                  <td className="px-3 py-3 text-right font-semibold text-slate-900">{formatPrice(product.price)}</td>
+                  <td className="px-3 py-3 text-slate-600">
+                    {product.category || 'Sem categoria'}
+                  </td>
+                  <td className="px-3 py-3 text-right font-semibold text-slate-900">
+                    {formatPrice(product.price)}
+                  </td>
                   <td className="px-3 py-3">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${
-                      product.active === false
-                        ? 'bg-slate-100 text-slate-600 ring-slate-200'
-                        : 'bg-emerald-100 text-emerald-800 ring-emerald-200'
-                    }`}>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${
+                        product.active === false
+                          ? 'bg-slate-100 text-slate-600 ring-slate-200'
+                          : 'bg-emerald-100 text-emerald-800 ring-emerald-200'
+                      }`}
+                    >
                       {product.active === false ? 'Inativo' : 'Ativo'}
                     </span>
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex justify-end gap-1">
-                      <Button variant="secondary" size="sm" onClick={() => onEdit(product)}>Editar</Button>
+                      <Button variant="secondary" size="sm" onClick={() => onEdit(product)}>
+                        Editar
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => onToggleActive(product)}>
                         {product.active === false ? 'Ativar' : 'Pausar'}
                       </Button>
-                      <Button variant="ghost" size="sm" icon="trash" onClick={() => onDelete(product)} aria-label="Excluir" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="trash"
+                        onClick={() => onDelete(product)}
+                        aria-label="Excluir"
+                      />
                     </div>
                   </td>
                 </tr>

@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CONSENT_DENIED, CONSENT_GRANTED, getConsentState, setConsentState } from '../utils/consent';
+import { ROUTES } from '../constants/routes';
+import {
+  CONSENT_DENIED,
+  CONSENT_GRANTED,
+  getConsentState,
+  setConsentState,
+} from '../utils/consent';
 
 export function ConsentBanner() {
   const [state, setState] = useState(getConsentState());
@@ -40,10 +46,22 @@ export function ConsentBanner() {
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-slate-900">Sua privacidade importa</h2>
             <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-              Usamos cookies essenciais para o funcionamento do site. Cookies de marketing
-              (Google Analytics e Meta) ajudam a medir o que funciona. Você decide. Saiba mais
-              na nossa <Link to="/privacidade" className="font-semibold text-brand-700 underline-offset-2 hover:underline">Política de Privacidade</Link>
-              {' '}e nos <Link to="/termos" className="font-semibold text-brand-700 underline-offset-2 hover:underline">Termos de Uso</Link>.
+              Usamos cookies essenciais para o funcionamento do site. Cookies de marketing (Google
+              Analytics e Meta) ajudam a medir o que funciona. Você decide. Saiba mais na nossa{' '}
+              <Link
+                to={ROUTES.privacidade}
+                className="font-semibold text-brand-700 underline-offset-2 hover:underline"
+              >
+                Política de Privacidade
+              </Link>{' '}
+              e nos{' '}
+              <Link
+                to={ROUTES.termos}
+                className="font-semibold text-brand-700 underline-offset-2 hover:underline"
+              >
+                Termos de Uso
+              </Link>
+              .
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">

@@ -2,7 +2,8 @@ import PropTypes from 'prop-types';
 import { Helmet } from 'react-helmet-async';
 
 const DEFAULT_SITE_NAME = 'Ateliê da Escola';
-const DEFAULT_DESCRIPTION = 'Materiais educativos digitais para professores: banners, painéis e atividades pedagógicas em PDF, com download imediato após pagamento aprovado.';
+const DEFAULT_DESCRIPTION =
+  'Materiais educativos digitais para professores: banners, painéis e atividades pedagógicas em PDF, com download imediato após pagamento aprovado.';
 // Aponta para um asset que existe de fato (o antigo og-default.png nunca foi
 // versionado). Páginas com imagem própria (ex.: produto) sobrescrevem via prop.
 const DEFAULT_IMAGE = '/favicon.svg';
@@ -54,7 +55,9 @@ export function SEO({
   // Só emite og:image/twitter:image quando há um asset real para apontar —
   // nunca deixa a tag referenciando um arquivo inexistente.
   const absoluteImage = resolvedImage
-    ? (resolvedImage.startsWith('http') ? resolvedImage : `${readBaseUrl()}${resolvedImage}`)
+    ? resolvedImage.startsWith('http')
+      ? resolvedImage
+      : `${readBaseUrl()}${resolvedImage}`
     : null;
 
   return (
@@ -80,9 +83,7 @@ export function SEO({
       {absoluteImage ? <meta name="twitter:image" content={absoluteImage} /> : null}
 
       {/* JSON-LD opcional para Schema.org */}
-      {jsonLd ? (
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
-      ) : null}
+      {jsonLd ? <script type="application/ld+json">{JSON.stringify(jsonLd)}</script> : null}
     </Helmet>
   );
 }

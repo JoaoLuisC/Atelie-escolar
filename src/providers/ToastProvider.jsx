@@ -11,14 +11,17 @@ export function ToastProvider({ children }) {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  const pushToast = useCallback((message, type = 'info', duration = 2400) => {
-    const id = `${Date.now()}-${Math.random()}`;
-    setToasts((prev) => [...prev, { id, message, type }]);
+  const pushToast = useCallback(
+    (message, type = 'info', duration = 2400) => {
+      const id = `${Date.now()}-${Math.random()}`;
+      setToasts((prev) => [...prev, { id, message, type }]);
 
-    setTimeout(() => {
-      removeToast(id);
-    }, duration);
-  }, [removeToast]);
+      setTimeout(() => {
+        removeToast(id);
+      }, duration);
+    },
+    [removeToast],
+  );
 
   const value = useMemo(
     () => ({

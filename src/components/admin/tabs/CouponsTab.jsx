@@ -43,10 +43,18 @@ export function CouponsTab() {
     let cancelled = false;
     setLoading(true);
     fetchAdminCoupons()
-      .then((data) => { if (!cancelled) setCoupons(data.coupons || []); })
-      .catch((err) => { if (!cancelled) setError(err?.message || 'Erro ao carregar cupons.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((data) => {
+        if (!cancelled) setCoupons(data.coupons || []);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err?.message || 'Erro ao carregar cupons.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function reload() {
@@ -86,7 +94,10 @@ export function CouponsTab() {
   }
 
   async function handleDelete(coupon) {
-    if (typeof globalThis.window !== 'undefined' && !globalThis.window.confirm?.(`Excluir o cupom "${coupon.code}"?`)) {
+    if (
+      typeof globalThis.window !== 'undefined' &&
+      !globalThis.window.confirm?.(`Excluir o cupom "${coupon.code}"?`)
+    ) {
       return;
     }
     try {
@@ -108,7 +119,9 @@ export function CouponsTab() {
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+        {error}
+      </div>
     );
   }
 
@@ -117,7 +130,11 @@ export function CouponsTab() {
       <Card
         title="Cupons de desconto"
         subtitle={`${coupons.length} cupom(ns) cadastrado(s) · validados no checkout`}
-        action={<Button icon="plus-lg" onClick={openCreate}>Novo cupom</Button>}
+        action={
+          <Button icon="plus-lg" onClick={openCreate}>
+            Novo cupom
+          </Button>
+        }
       >
         {coupons.length === 0 ? (
           <EmptyState
@@ -133,7 +150,9 @@ export function CouponsTab() {
                 className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 transition hover:shadow-sm"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-sm font-bold text-slate-900">{coupon.code}</span>
+                  <span className="truncate font-mono text-sm font-bold text-slate-900">
+                    {coupon.code}
+                  </span>
                   <span
                     className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${
                       coupon.active
@@ -146,15 +165,32 @@ export function CouponsTab() {
                 </div>
                 <p className="text-lg font-extrabold text-brand-700">{formatDiscount(coupon)}</p>
                 <ul className="flex flex-col gap-0.5 text-xs text-slate-500">
-                  <li><i className="bi bi-calendar-event mr-1" aria-hidden="true" />{formatValidity(coupon)}</li>
-                  <li><i className="bi bi-graph-up mr-1" aria-hidden="true" />{usageLabel(coupon)}</li>
+                  <li>
+                    <i className="bi bi-calendar-event mr-1" aria-hidden="true" />
+                    {formatValidity(coupon)}
+                  </li>
+                  <li>
+                    <i className="bi bi-graph-up mr-1" aria-hidden="true" />
+                    {usageLabel(coupon)}
+                  </li>
                   {coupon.minOrderAmount ? (
-                    <li><i className="bi bi-cart mr-1" aria-hidden="true" />Mín. {formatPrice(coupon.minOrderAmount)}</li>
+                    <li>
+                      <i className="bi bi-cart mr-1" aria-hidden="true" />
+                      Mín. {formatPrice(coupon.minOrderAmount)}
+                    </li>
                   ) : null}
                 </ul>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  <Button variant="secondary" size="sm" onClick={() => openEdit(coupon)}>Editar</Button>
-                  <Button variant="ghost" size="sm" icon="trash" onClick={() => handleDelete(coupon)} aria-label={`Excluir ${coupon.code}`} />
+                  <Button variant="secondary" size="sm" onClick={() => openEdit(coupon)}>
+                    Editar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="trash"
+                    onClick={() => handleDelete(coupon)}
+                    aria-label={`Excluir ${coupon.code}`}
+                  />
                 </div>
               </article>
             ))}

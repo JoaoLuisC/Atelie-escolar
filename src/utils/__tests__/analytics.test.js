@@ -5,12 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // módulo real, precisamos desmockar antes de importar.
 vi.unmock('../analytics');
 
-import {
-  buildCartPayload,
-  buildItemPayload,
-  trackEvent,
-  trackPurchaseOnce,
-} from '../analytics';
+import { buildCartPayload, buildItemPayload, trackEvent, trackPurchaseOnce } from '../analytics';
 import { CONSENT_POLICY_VERSION } from '../consent';
 
 function grantConsent() {

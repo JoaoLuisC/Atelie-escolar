@@ -10,7 +10,9 @@ import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
 import { fetchProductByIdentifier } from '../services/products';
 import { formatPrice } from '../utils/currency';
+import { formatMachinePrice } from '../utils/currency';
 import { buildItemPayload, trackEvent } from '../utils/analytics';
+import { ROUTES } from '../constants/routes';
 
 function buildProductJsonLd(product) {
   if (!product) return null;
@@ -25,14 +27,14 @@ function buildProductJsonLd(product) {
     brand: { '@type': 'Brand', name: 'Profa. Marciar Cardoso' },
     offers: {
       '@type': 'Offer',
-      url: typeof window !== 'undefined'
-        ? `${window.location.origin}/produtos/${product.slug || product.id}`
-        : undefined,
+      url:
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/produtos/${product.slug || product.id}`
+          : undefined,
       priceCurrency: 'BRL',
-      price: Number(product.price || 0).toFixed(2),
-      availability: product.active === false
-        ? 'https://schema.org/OutOfStock'
-        : 'https://schema.org/InStock',
+      price: formatMachinePrice(product.price),
+      availability:
+        product.active === false ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
       itemCondition: 'https://schema.org/NewCondition',
     },
   };
@@ -123,7 +125,7 @@ export function ProductDetailsPage() {
     if (!product) return;
     const result = addToCart(product);
     pushToast(result.message, result.ok ? 'success' : 'warning');
-    navigate('/checkout');
+    navigate(ROUTES.checkout);
   }
 
   function onAddToCart() {
@@ -147,14 +149,13 @@ export function ProductDetailsPage() {
           jsonLd={buildProductJsonLd(product)}
         />
       ) : (
-        <SEO
-          title="Carregando produto"
-          pathname={`/produtos/${slug || ''}`}
-          noindex
-        />
+        <SEO title="Carregando produto" pathname={`/produtos/${slug || ''}`} noindex />
       )}
       <section className="mx-auto max-w-6xl px-4 py-8 lg:px-6">
-        <Link to="/produtos" className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline">
+        <Link
+          to={ROUTES.produtos}
+          className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"
+        >
           <i className="bi bi-arrow-left" /> Voltar ao catálogo
         </Link>
 
@@ -182,7 +183,11 @@ export function ProductDetailsPage() {
                     <i className="bi bi-image text-5xl" />
                   </div>
                 ) : activeMedia.type === 'image' ? (
-                  <img src={activeMedia.url} alt={product.name} className="h-full w-full object-cover" />
+                  <img
+                    src={activeMedia.url}
+                    alt={product.name}
+                    className="h-full w-full object-cover"
+                  />
                 ) : youtubeEmbed ? (
                   <iframe
                     src={youtubeEmbed}
@@ -206,11 +211,19 @@ export function ProductDetailsPage() {
                         key={`${m.type}-${i}`}
                         onClick={() => setActiveMediaIndex(i)}
                         className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition ${
-                          isActive ? 'border-brand-600 ring-2 ring-brand-200' : 'border-slate-200 hover:border-brand-400'
+                          isActive
+                            ? 'border-brand-600 ring-2 ring-brand-200'
+                            : 'border-slate-200 hover:border-brand-400'
                         }`}
                       >
                         {m.type === 'image' ? (
-                          <img src={m.url} alt={`Mídia ${i + 1}`} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                          <img
+                            src={m.url}
+                            alt={`Mídia ${i + 1}`}
+                            loading="lazy"
+                            decoding="async"
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-slate-900 text-white">
                             <i className="bi bi-play-circle-fill text-2xl" />
@@ -241,16 +254,22 @@ export function ProductDetailsPage() {
                 ) : null}
               </div>
 
-              <h2 className="mt-3 font-display text-2xl font-bold text-slate-900 sm:text-3xl">{product.name}</h2>
+              <h2 className="mt-3 font-display text-2xl font-bold text-slate-900 sm:text-3xl">
+                {product.name}
+              </h2>
               <p className="mt-3 text-sm leading-relaxed text-slate-600">
                 {product.description || 'Sem descrição disponível.'}
               </p>
 
               <div className="mt-6 rounded-xl bg-slate-50 p-4">
                 <div className="flex items-baseline gap-3">
-                  <span className="font-display text-3xl font-bold text-brand-700">{formatPrice(product.price)}</span>
+                  <span className="font-display text-3xl font-bold text-brand-700">
+                    {formatPrice(product.price)}
+                  </span>
                   {product.originalPrice && product.originalPrice > product.price ? (
-                    <span className="text-sm text-slate-500 line-through">{formatPrice(product.originalPrice)}</span>
+                    <span className="text-sm text-slate-500 line-through">
+                      {formatPrice(product.originalPrice)}
+                    </span>
                   ) : null}
                 </div>
                 <p className="mt-1 text-xs text-slate-500">

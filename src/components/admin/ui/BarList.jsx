@@ -1,17 +1,23 @@
 import PropTypes from 'prop-types';
 import { formatPrice } from '../../../utils/currency';
 
-export function BarList({ entries, formatter = formatPrice, accent = 'primary', emptyText = 'Sem dados disponíveis.' }) {
+export function BarList({
+  entries,
+  formatter = formatPrice,
+  accent = 'primary',
+  emptyText = 'Sem dados disponíveis.',
+}) {
   if (!entries || entries.length === 0) {
     return <p className="py-6 text-center text-sm text-slate-500">{emptyText}</p>;
   }
 
-  const accentBar = {
-    primary: 'from-violet-500 to-violet-400',
-    success: 'from-emerald-500 to-emerald-400',
-    info: 'from-sky-500 to-sky-400',
-    warning: 'from-amber-500 to-amber-400',
-  }[accent] || 'from-violet-500 to-violet-400';
+  const accentBar =
+    {
+      primary: 'from-violet-500 to-violet-400',
+      success: 'from-emerald-500 to-emerald-400',
+      info: 'from-sky-500 to-sky-400',
+      warning: 'from-amber-500 to-amber-400',
+    }[accent] || 'from-violet-500 to-violet-400';
 
   return (
     <ul className="flex flex-col gap-3">

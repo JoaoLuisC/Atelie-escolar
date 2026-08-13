@@ -62,12 +62,21 @@ export function ProductSidebar({
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 lg:hidden">
           <span className="text-sm font-bold text-slate-800">Filtros</span>
-          <button type="button" onClick={onClose} aria-label="Fechar" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar"
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+          >
             <i className="bi bi-x-lg" />
           </button>
         </div>
 
-        <CollapsibleSection title="Categorias" isOpen={isCategorySectionOpen} onToggle={onToggleCategorySection}>
+        <CollapsibleSection
+          title="Categorias"
+          isOpen={isCategorySectionOpen}
+          onToggle={onToggleCategorySection}
+        >
           <ul className="flex flex-col gap-1">
             <li>
               <button
@@ -106,7 +115,11 @@ export function ProductSidebar({
           </ul>
         </CollapsibleSection>
 
-        <CollapsibleSection title="Faixa de preço" isOpen={isPriceSectionOpen} onToggle={onTogglePriceSection}>
+        <CollapsibleSection
+          title="Faixa de preço"
+          isOpen={isPriceSectionOpen}
+          onToggle={onTogglePriceSection}
+        >
           <ul className="flex flex-col gap-1.5">
             {PRICE_RANGES.map((range) => (
               <li key={range.value}>

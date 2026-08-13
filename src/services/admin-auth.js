@@ -1,7 +1,7 @@
 import { apiRequest } from '../utils/api';
 
 export async function loginAdmin({ username, password, factorCode, challengeToken }) {
-  const { response, data } = await apiRequest('/admin-login', {
+  const { response, data } = await apiRequest('/admin/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -20,7 +20,7 @@ export async function loginAdmin({ username, password, factorCode, challengeToke
 }
 
 export async function logoutAdmin() {
-  const { response, data } = await apiRequest('/admin-logout', {
+  const { response, data } = await apiRequest('/admin/logout', {
     method: 'POST',
     credentials: 'include',
   });
@@ -33,7 +33,7 @@ export async function logoutAdmin() {
 }
 
 export async function getAdminSession() {
-  const { response, data } = await apiRequest('/admin-session', {
+  const { response, data } = await apiRequest('/admin/session', {
     method: 'GET',
     credentials: 'include',
   });

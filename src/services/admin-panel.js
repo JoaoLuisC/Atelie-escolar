@@ -18,15 +18,15 @@ async function request(path, options = {}) {
 }
 
 export async function fetchAdminDashboardData() {
-  return request('/admin-dashboard');
+  return request('/admin/dashboard');
 }
 
 export async function fetchAdminCategories() {
-  return request('/admin-categories');
+  return request('/admin/categories');
 }
 
 export async function createAdminCategory(payload) {
-  return request('/admin-categories', {
+  return request('/admin/categories', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -34,7 +34,7 @@ export async function createAdminCategory(payload) {
 }
 
 export async function updateAdminCategory(payload) {
-  return request('/admin-categories', {
+  return request('/admin/categories', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -42,17 +42,17 @@ export async function updateAdminCategory(payload) {
 }
 
 export async function deleteAdminCategory(id) {
-  return request(`/admin-categories?id=${encodeURIComponent(id)}`, {
+  return request(`/admin/categories?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }
 
 export async function fetchAdminCoupons() {
-  return request('/admin-coupons');
+  return request('/admin/coupons');
 }
 
 export async function createAdminCoupon(payload) {
-  return request('/admin-coupons', {
+  return request('/admin/coupons', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -60,7 +60,7 @@ export async function createAdminCoupon(payload) {
 }
 
 export async function updateAdminCoupon(payload) {
-  return request('/admin-coupons', {
+  return request('/admin/coupons', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -68,17 +68,17 @@ export async function updateAdminCoupon(payload) {
 }
 
 export async function deleteAdminCoupon(id) {
-  return request(`/admin-coupons?id=${encodeURIComponent(id)}`, {
+  return request(`/admin/coupons?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }
 
 export async function fetchAdminUsers() {
-  return request('/admin-users');
+  return request('/admin/users');
 }
 
 export async function updateAdminUser(payload) {
-  return request('/admin-users', {
+  return request('/admin/users', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -86,18 +86,18 @@ export async function updateAdminUser(payload) {
 }
 
 export async function deleteAdminUser(id) {
-  return request(`/admin-users?id=${encodeURIComponent(id)}`, {
+  return request(`/admin/users?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }
 
 export async function fetchAdminOrders(status = '') {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  return request(`/admin-orders${query}`);
+  return request(`/admin/orders${query}`);
 }
 
 export async function updateAdminOrder(payload) {
-  return request('/admin-orders', {
+  return request('/admin/orders', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -105,13 +105,13 @@ export async function updateAdminOrder(payload) {
 }
 
 export async function deleteAdminOrder(id) {
-  return request(`/admin-orders?id=${encodeURIComponent(id)}`, {
+  return request(`/admin/orders?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }
 
 export async function patchAdminProduct(payload) {
-  return request('/admin-products', {
+  return request('/admin/products', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -119,11 +119,11 @@ export async function patchAdminProduct(payload) {
 }
 
 export async function fetchAdminSetting(key) {
-  return request(`/admin-settings?key=${encodeURIComponent(key)}`);
+  return request(`/admin/settings?key=${encodeURIComponent(key)}`);
 }
 
 export async function saveAdminSetting({ key, value }) {
-  return request('/admin-settings', {
+  return request('/admin/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ key, value }),
@@ -132,29 +132,29 @@ export async function saveAdminSetting({ key, value }) {
 
 export async function fetchAdminFunnel(days = 30) {
   const query = Number.isFinite(Number(days)) ? `?days=${encodeURIComponent(days)}` : '';
-  return request(`/admin-funnel${query}`);
+  return request(`/admin/funnel${query}`);
 }
 
 export async function fetchAdminSegments() {
-  return request('/admin-segments');
+  return request('/admin/segments');
 }
 
 export async function fetchAdminAbcProducts({ period = 'month', categoryId = null } = {}) {
   const params = new URLSearchParams({ period });
   if (categoryId) params.set('categoryId', String(categoryId));
-  return request(`/admin-abc-products?${params.toString()}`);
+  return request(`/admin/abc-products?${params.toString()}`);
 }
 
 export async function fetchAdminAbcCustomers({ period = 'quarter' } = {}) {
-  return request(`/admin-abc-customers?period=${encodeURIComponent(period)}`);
+  return request(`/admin/abc-customers?period=${encodeURIComponent(period)}`);
 }
 
 export async function fetchAdminCohort({ months = 12 } = {}) {
-  return request(`/admin-cohort?months=${encodeURIComponent(months)}`);
+  return request(`/admin/cohort?months=${encodeURIComponent(months)}`);
 }
 
 export async function fetchAdminKpis({ window = 12 } = {}) {
-  return request(`/admin-kpis?window=${encodeURIComponent(window)}`);
+  return request(`/admin/kpis?window=${encodeURIComponent(window)}`);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -173,7 +173,7 @@ export async function uploadProductAsset({ kind, file, onProgress }) {
     throw new Error(`kind inválido: ${kind}`);
   }
 
-  const sign = await request('/admin-upload-url', {
+  const sign = await request('/admin/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

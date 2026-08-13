@@ -1,7 +1,7 @@
 import { apiRequest } from '../utils/api';
 
 export async function fetchAdminProducts() {
-  const { response, data } = await apiRequest('/admin-products', {
+  const { response, data } = await apiRequest('/admin/products', {
     credentials: 'include',
   });
 
@@ -17,7 +17,7 @@ export async function fetchAdminProducts() {
 }
 
 export async function createAdminProduct(payload) {
-  const { response, data } = await apiRequest('/admin-products', {
+  const { response, data } = await apiRequest('/admin/products', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -32,7 +32,7 @@ export async function createAdminProduct(payload) {
 }
 
 export async function updateAdminProduct(payload) {
-  const { response, data } = await apiRequest('/admin-products', {
+  const { response, data } = await apiRequest('/admin/products', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -47,7 +47,7 @@ export async function updateAdminProduct(payload) {
 }
 
 export async function deleteAdminProduct(id) {
-  const { response, data } = await apiRequest(`/admin-products?id=${encodeURIComponent(id)}`, {
+  const { response, data } = await apiRequest(`/admin/products?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
     credentials: 'include',
   });

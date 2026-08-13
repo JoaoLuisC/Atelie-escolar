@@ -22,7 +22,10 @@ export function ProductReviews({ items }) {
   if (normalized.length === 0) return null;
 
   return (
-    <section aria-labelledby="product-reviews-title" className="mt-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-brand-50/50 to-white p-5 shadow-sm sm:p-6">
+    <section
+      aria-labelledby="product-reviews-title"
+      className="mt-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-brand-50/50 to-white p-5 shadow-sm sm:p-6"
+    >
       <header className="mb-4">
         <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Quem já usou</p>
         <h2 id="product-reviews-title" className="font-display text-xl font-bold text-slate-900">
@@ -46,9 +49,14 @@ export function ProductReviews({ items }) {
               </span>
               <div className="min-w-0">
                 {entry.rating ? (
-                  <p aria-label={`Avaliação ${entry.rating} de 5`} className="mb-1 text-xs text-amber-500">
+                  <p
+                    aria-label={`Avaliação ${entry.rating} de 5`}
+                    className="mb-1 text-xs text-amber-500"
+                  >
                     {'★'.repeat(Math.max(0, Math.min(5, Math.round(entry.rating))))}
-                    <span className="text-slate-300">{'★'.repeat(5 - Math.max(0, Math.min(5, Math.round(entry.rating))))}</span>
+                    <span className="text-slate-300">
+                      {'★'.repeat(5 - Math.max(0, Math.min(5, Math.round(entry.rating))))}
+                    </span>
                   </p>
                 ) : null}
                 <p className="text-sm leading-relaxed text-slate-700">“{entry.text}”</p>

@@ -88,7 +88,9 @@ export function SecurityTab({ config, onSave, saving = false }) {
               className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
             />
             <span>
-              <span className="block text-sm font-semibold text-slate-800">Exigir 2FA no login admin</span>
+              <span className="block text-sm font-semibold text-slate-800">
+                Exigir 2FA no login admin
+              </span>
               <span className="block text-xs text-slate-500">
                 Quando ativado, o login do admin exigirá código TOTP (ou o PIN de recuperação).
               </span>
@@ -101,9 +103,11 @@ export function SecurityTab({ config, onSave, saving = false }) {
             value={totpSecret}
             onChange={setTotpSecret}
             placeholder={has2FA ? '•••••••• — configurado' : 'Ex: JBSWY3DPEHPK3PXP'}
-            hint={has2FA
-              ? 'Já configurado. Digite um novo segredo para substituir, ou deixe em branco para manter o atual.'
-              : 'Use um app autenticador (Google Authenticator, 1Password, Authy). Gere uma chave Base32 de 16+ caracteres.'}
+            hint={
+              has2FA
+                ? 'Já configurado. Digite um novo segredo para substituir, ou deixe em branco para manter o atual.'
+                : 'Use um app autenticador (Google Authenticator, 1Password, Authy). Gere uma chave Base32 de 16+ caracteres.'
+            }
           />
 
           <SecretField
@@ -112,9 +116,11 @@ export function SecurityTab({ config, onSave, saving = false }) {
             value={fallbackPin}
             onChange={setFallbackPin}
             placeholder={hasPin ? '•••••• — configurado' : 'Ex: 487239'}
-            hint={hasPin
-              ? 'Já configurado. Digite um novo PIN para substituir, ou deixe em branco para manter o atual.'
-              : 'PIN numérico (6+ dígitos) para uso emergencial caso o TOTP não esteja disponível.'}
+            hint={
+              hasPin
+                ? 'Já configurado. Digite um novo PIN para substituir, ou deixe em branco para manter o atual.'
+                : 'PIN numérico (6+ dígitos) para uso emergencial caso o TOTP não esteja disponível.'
+            }
           />
 
           <div className="flex justify-end">
@@ -127,10 +133,22 @@ export function SecurityTab({ config, onSave, saving = false }) {
 
       <Card title="Boas práticas">
         <ul className="space-y-3 text-sm text-slate-600">
-          <li className="flex gap-2"><i className="bi bi-shield-check mt-0.5 text-emerald-600" />Sempre mantenha o 2FA ativo em produção.</li>
-          <li className="flex gap-2"><i className="bi bi-clock-history mt-0.5 text-violet-600" />Troque o segredo TOTP em caso de suspeita.</li>
-          <li className="flex gap-2"><i className="bi bi-key mt-0.5 text-amber-600" />Guarde o PIN de recuperação em local seguro (cofre/gerenciador de senhas).</li>
-          <li className="flex gap-2"><i className="bi bi-eye-slash mt-0.5 text-slate-600" />Nunca compartilhe seus segredos em e-mail ou chat.</li>
+          <li className="flex gap-2">
+            <i className="bi bi-shield-check mt-0.5 text-emerald-600" />
+            Sempre mantenha o 2FA ativo em produção.
+          </li>
+          <li className="flex gap-2">
+            <i className="bi bi-clock-history mt-0.5 text-violet-600" />
+            Troque o segredo TOTP em caso de suspeita.
+          </li>
+          <li className="flex gap-2">
+            <i className="bi bi-key mt-0.5 text-amber-600" />
+            Guarde o PIN de recuperação em local seguro (cofre/gerenciador de senhas).
+          </li>
+          <li className="flex gap-2">
+            <i className="bi bi-eye-slash mt-0.5 text-slate-600" />
+            Nunca compartilhe seus segredos em e-mail ou chat.
+          </li>
         </ul>
       </Card>
     </div>

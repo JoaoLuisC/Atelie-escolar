@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { useEffect, useRef } from 'react';
 import { formatPrice } from '../../utils/currency';
-import { formatDateTime } from './utils/format';
+import { formatDateTime } from '../../utils/date';
 import { StatusChip } from './ui/StatusChip';
 import { Button } from './ui/Button';
 
@@ -122,7 +122,9 @@ export function OrderDetailModal({ order, onClose }) {
           </div>
           <div>
             <dt className="text-xs text-slate-500">Status</dt>
-            <dd className="mt-0.5"><StatusChip status={order.paymentStatus} /></dd>
+            <dd className="mt-0.5">
+              <StatusChip status={order.paymentStatus} />
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-slate-500">Total</dt>

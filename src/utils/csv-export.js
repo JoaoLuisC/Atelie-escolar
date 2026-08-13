@@ -23,17 +23,21 @@ function escapeCell(value) {
  */
 export function buildCsv(columns, rows) {
   const header = columns.map((c) => escapeCell(c.label || c.key)).join(',');
-  const body = (rows || []).map((row) => (
-    columns.map((c) => {
-      const value = typeof c.format === 'function' ? c.format(row[c.key], row) : row[c.key];
-      return escapeCell(value);
-    }).join(',')
-  )).join('\n');
+  const body = (rows || [])
+    .map((row) =>
+      columns
+        .map((c) => {
+          const value = typeof c.format === 'function' ? c.format(row[c.key], row) : row[c.key];
+          return escapeCell(value);
+        })
+        .join(','),
+    )
+    .join('\n');
   return `${header}\n${body}`;
 }
 
 /**
- * Dispara download de CSV no browser. Adiciona BOM (﻿) para Excel
+ * Dispara download de CSV no browser. Adiciona BOM (U+FEFF) para Excel
  * abrir com codificação UTF-8 corretamente — sem isso, acentos quebram.
  */
 export function downloadCsv({ columns, rows, filename = 'export.csv' }) {

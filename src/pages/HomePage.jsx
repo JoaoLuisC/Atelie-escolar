@@ -5,9 +5,11 @@ import { Shell } from '../components/Shell';
 import { SocialProofStrip } from '../components/SocialProofStrip';
 import { fetchHomeSections } from '../services/products';
 import { formatPrice } from '../utils/currency';
+import { ROUTES } from '../constants/routes';
 
 const HOME_SEO_TITLE = 'Materiais educativos digitais para professores';
-const HOME_SEO_DESCRIPTION = 'Painéis, banners e atividades pedagógicas em PDF, prontos para imprimir. Download imediato após o pagamento. Criados por professores, para professores.';
+const HOME_SEO_DESCRIPTION =
+  'Painéis, banners e atividades pedagógicas em PDF, prontos para imprimir. Download imediato após o pagamento. Criados por professores, para professores.';
 
 const HOME_JSON_LD = [
   {
@@ -48,16 +50,58 @@ const SCHOOL_ICONS = [
 ];
 
 const HOW_STEPS = [
-  { num: '01', icon: 'search', title: 'Escolha', text: 'Navegue pelo catálogo e encontre atividades práticas para tornar o aprendizado dos seus alunos mais prazeroso.', accent: 'from-brand-500 to-brand-700' },
-  { num: '02', icon: 'credit-card-fill', title: 'Pague', text: 'Finalize seu pedido com segurança e confirmação rápida.', accent: 'from-emerald-500 to-emerald-700' },
-  { num: '03', icon: 'cloud-arrow-down-fill', title: 'Baixe na hora', text: 'Acesso liberado imediatamente após a aprovação do pagamento.', accent: 'from-sky-500 to-sky-700' },
-  { num: '04', icon: 'printer-fill', title: 'Imprima', text: 'Os arquivos estão prontos para uso no formato PDF com acesso ilimitado e permanente.', accent: 'from-amber-500 to-rose-500' },
+  {
+    num: '01',
+    icon: 'search',
+    title: 'Escolha',
+    text: 'Navegue pelo catálogo e encontre atividades práticas para tornar o aprendizado dos seus alunos mais prazeroso.',
+    accent: 'from-brand-500 to-brand-700',
+  },
+  {
+    num: '02',
+    icon: 'credit-card-fill',
+    title: 'Pague',
+    text: 'Finalize seu pedido com segurança e confirmação rápida.',
+    accent: 'from-emerald-500 to-emerald-700',
+  },
+  {
+    num: '03',
+    icon: 'cloud-arrow-down-fill',
+    title: 'Baixe na hora',
+    text: 'Acesso liberado imediatamente após a aprovação do pagamento.',
+    accent: 'from-sky-500 to-sky-700',
+  },
+  {
+    num: '04',
+    icon: 'printer-fill',
+    title: 'Imprima',
+    text: 'Os arquivos estão prontos para uso no formato PDF com acesso ilimitado e permanente.',
+    accent: 'from-amber-500 to-rose-500',
+  },
 ];
 
 const TESTIMONIALS = [
-  { initial: 'C', name: 'Carla M.', role: 'Professora, SP', text: '"Comprei, baixei e mandei para a gráfica em menos de 5 minutos! 😍"', avatarBg: 'bg-gradient-to-br from-brand-500 to-accent-pink' },
-  { initial: 'A', name: 'Ana R.', role: 'Diretora, MG', text: '"Os banners de formatura ficaram lindos. Todos elogiaram o design!"', avatarBg: 'bg-gradient-to-br from-accent-sky to-emerald-400' },
-  { initial: 'J', name: 'Juliana F.', role: 'Coord. Pedagógica, RJ', text: '"Recebi os arquivos na hora e consegui organizar tudo sem complicação!"', avatarBg: 'bg-gradient-to-br from-accent-yellow to-accent-pink' },
+  {
+    initial: 'C',
+    name: 'Carla M.',
+    role: 'Professora, SP',
+    text: '"Comprei, baixei e mandei para a gráfica em menos de 5 minutos! 😍"',
+    avatarBg: 'bg-gradient-to-br from-brand-500 to-accent-pink',
+  },
+  {
+    initial: 'A',
+    name: 'Ana R.',
+    role: 'Diretora, MG',
+    text: '"Os banners de formatura ficaram lindos. Todos elogiaram o design!"',
+    avatarBg: 'bg-gradient-to-br from-accent-sky to-emerald-400',
+  },
+  {
+    initial: 'J',
+    name: 'Juliana F.',
+    role: 'Coord. Pedagógica, RJ',
+    text: '"Recebi os arquivos na hora e consegui organizar tudo sem complicação!"',
+    avatarBg: 'bg-gradient-to-br from-accent-yellow to-accent-pink',
+  },
 ];
 
 // Respeita prefers-reduced-motion: desliga animações infinitas (float) que só
@@ -82,10 +126,14 @@ function Marquee({ items, dark = false, reverse = false }) {
     <div
       aria-hidden="true"
       className={`overflow-hidden border-y py-3 ${
-        dark ? 'border-slate-700 bg-slate-900 text-white' : 'border-brand-100 bg-brand-50 text-brand-700'
+        dark
+          ? 'border-slate-700 bg-slate-900 text-white'
+          : 'border-brand-100 bg-brand-50 text-brand-700'
       }`}
     >
-      <div className={`flex w-max whitespace-nowrap font-display text-sm font-bold uppercase tracking-widest motion-reduce:animate-none ${reverse ? 'animate-marquee-reverse' : 'animate-marquee'}`}>
+      <div
+        className={`flex w-max whitespace-nowrap font-display text-sm font-bold uppercase tracking-widest motion-reduce:animate-none ${reverse ? 'animate-marquee-reverse' : 'animate-marquee'}`}
+      >
         {doubled.map((item, i) => (
           <span key={`${item}-${i}`} className="inline-flex items-center gap-8 pr-8">
             {item}
@@ -148,18 +196,32 @@ export function HomePage() {
       />
       {/* HERO */}
       <section className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50">
-        <div aria-hidden="true" className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-brand-400/30 blur-3xl" />
-        <div aria-hidden="true" className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-accent-sky/20 blur-3xl" />
-        <div aria-hidden="true" className="absolute top-1/2 left-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-pink/15 blur-3xl" />
+        <div
+          aria-hidden="true"
+          className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-brand-400/30 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-accent-sky/20 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute top-1/2 left-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-pink/15 blur-3xl"
+        />
 
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden sm:block">
           {SCHOOL_ICONS.map((icon, i) => (
             <span
               key={i}
               className={`absolute text-3xl opacity-60 ${icon.position}`}
-              style={prefersReducedMotion
-                ? undefined
-                : { animation: `float ${5 + i * 0.5}s ease-in-out infinite`, animationDelay: `${i * 0.3}s` }}
+              style={
+                prefersReducedMotion
+                  ? undefined
+                  : {
+                      animation: `float ${5 + i * 0.5}s ease-in-out infinite`,
+                      animationDelay: `${i * 0.3}s`,
+                    }
+              }
             >
               {icon.emoji}
             </span>
@@ -169,16 +231,19 @@ export function HomePage() {
         <div className="relative mx-auto max-w-6xl px-4 py-10 lg:px-6 lg:py-14">
           <div className="max-w-3xl">
             <h1 className="font-display text-2xl font-extrabold leading-tight text-slate-900 sm:text-3xl lg:text-4xl">
-              Painéis e recursos pedagógicos{' '}
-              feitos com{' '}
-              <span className="bg-gradient-to-r from-brand-600 to-accent-pink bg-clip-text text-transparent">cuidado</span>
-              {' '}e{' '}
-              <span className="bg-gradient-to-r from-emerald-500 to-accent-sky bg-clip-text text-transparent">criatividade</span>
+              Painéis e recursos pedagógicos feitos com{' '}
+              <span className="bg-gradient-to-r from-brand-600 to-accent-pink bg-clip-text text-transparent">
+                cuidado
+              </span>{' '}
+              e{' '}
+              <span className="bg-gradient-to-r from-emerald-500 to-accent-sky bg-clip-text text-transparent">
+                criatividade
+              </span>
             </h1>
 
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
-                to="/produtos"
+                to={ROUTES.produtos}
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-5 py-2.5 text-sm font-semibold text-white shadow-brand transition hover:scale-105"
               >
                 Ver Produtos <i className="bi bi-arrow-right" />
@@ -194,13 +259,17 @@ export function HomePage() {
       <section className="mx-auto max-w-6xl px-4 py-16 lg:px-6">
         <div className="mb-8 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">Catálogo</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">
+              Catálogo
+            </p>
             <h2 className="font-display text-3xl font-bold text-slate-900 sm:text-4xl">
-              É exatamente isso que<br />você precisa 👇
+              É exatamente isso que
+              <br />
+              você precisa 👇
             </h2>
           </div>
           <Link
-            to="/produtos"
+            to={ROUTES.produtos}
             className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
           >
             Ver catálogo completo <i className="bi bi-arrow-right" />
@@ -208,7 +277,9 @@ export function HomePage() {
         </div>
 
         {homeSectionsStatus ? (
-          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{homeSectionsStatus}</p>
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            {homeSectionsStatus}
+          </p>
         ) : null}
 
         {hasHomeSections ? (
@@ -249,14 +320,26 @@ export function HomePage() {
                       >
                         <div className="aspect-square overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
                           {product.image ? (
-                            <img src={product.image} alt={product.name} loading="lazy" decoding="async" className="h-full w-full object-cover transition group-hover:scale-105" />
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              loading="lazy"
+                              decoding="async"
+                              className="h-full w-full object-cover transition group-hover:scale-105"
+                            />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-xs text-white/70">Produto</div>
+                            <div className="flex h-full w-full items-center justify-center text-xs text-white/70">
+                              Produto
+                            </div>
                           )}
                         </div>
                         <div className="flex flex-col gap-1 p-3">
-                          <strong className="line-clamp-2 text-sm text-slate-800">{product.name}</strong>
-                          <span className="font-display text-base font-bold text-brand-700">{formatPrice(product.price || 0)}</span>
+                          <strong className="line-clamp-2 text-sm text-slate-800">
+                            {product.name}
+                          </strong>
+                          <span className="font-display text-base font-bold text-brand-700">
+                            {formatPrice(product.price || 0)}
+                          </span>
                         </div>
                       </Link>
                     ))}
@@ -281,24 +364,39 @@ export function HomePage() {
       <section id="como-funciona" className="bg-slate-50 py-16">
         <div className="mx-auto max-w-6xl px-4 lg:px-6">
           <div className="mb-10 text-center">
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">Simples assim</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">
+              Simples assim
+            </p>
             <h2 className="font-display text-3xl font-bold text-slate-900 sm:text-4xl">
-              Do clique à impressão<br />
+              Do clique à impressão
+              <br />
               <span className="text-brand-600">em minutos</span>
             </h2>
-            <p className="mt-3 text-sm text-slate-500">Sem cadastro obrigatório. Sem espera. Sem complicação.</p>
+            <p className="mt-3 text-sm text-slate-500">
+              Sem cadastro obrigatório. Sem espera. Sem complicação.
+            </p>
           </div>
 
           <ol className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {HOW_STEPS.map((step) => (
-              <li key={step.num} className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-                <span aria-hidden="true" className="pointer-events-none absolute right-3 top-2 font-display text-5xl font-extrabold text-slate-100">
+              <li
+                key={step.num}
+                className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+              >
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-2 font-display text-5xl font-extrabold text-slate-100"
+                >
                   {step.num}
                 </span>
-                <div className={`relative inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br text-xl text-white shadow-brand ${step.accent}`}>
+                <div
+                  className={`relative inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br text-xl text-white shadow-brand ${step.accent}`}
+                >
                   <i className={`bi bi-${step.icon}`} />
                 </div>
-                <h5 className="relative mt-3 font-heading text-lg font-bold text-slate-900">{step.title}</h5>
+                <h5 className="relative mt-3 font-heading text-lg font-bold text-slate-900">
+                  {step.title}
+                </h5>
                 <p className="relative mt-1 text-sm text-slate-600">{step.text}</p>
               </li>
             ))}
@@ -308,8 +406,12 @@ export function HomePage() {
             <div className="flex items-start gap-3">
               <i className="bi bi-info-circle-fill text-2xl text-brand-600" />
               <div>
-                <strong className="block font-semibold text-slate-900">PDF em alta resolução</strong>
-                <span className="text-sm text-slate-600">Arquivos prontos para impressão, com acesso ilimitado e permanente.</span>
+                <strong className="block font-semibold text-slate-900">
+                  PDF em alta resolução
+                </strong>
+                <span className="text-sm text-slate-600">
+                  Arquivos prontos para impressão, com acesso ilimitado e permanente.
+                </span>
               </div>
             </div>
           </div>
@@ -318,29 +420,48 @@ export function HomePage() {
 
       {/* SOCIAL PROOF */}
       <section className="relative overflow-hidden py-16">
-        <div aria-hidden="true" className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-accent-pink/20 blur-3xl" />
-        <div aria-hidden="true" className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-accent-sky/20 blur-3xl" />
+        <div
+          aria-hidden="true"
+          className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-accent-pink/20 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-accent-sky/20 blur-3xl"
+        />
 
         <div className="relative mx-auto max-w-6xl px-4 lg:px-6">
           <div className="mb-10 text-center">
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">Como a escola usa</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">
+              Como a escola usa
+            </p>
             <h2 className="font-display text-3xl font-bold text-slate-900 sm:text-4xl">
-              Mais de <span className="text-brand-600">16.000 professoras</span><br />nos seguem nas redes 📲
+              Mais de <span className="text-brand-600">16.000 professoras</span>
+              <br />
+              nos seguem nas redes 📲
             </h2>
-            <p className="mt-3 text-sm text-slate-500">Veja como escolas de todo o Brasil estão usando nossos materiais.</p>
+            <p className="mt-3 text-sm text-slate-500">
+              Veja como escolas de todo o Brasil estão usando nossos materiais.
+            </p>
           </div>
 
           <SocialProofStrip className="mb-8" />
 
           <div className="grid gap-4 md:grid-cols-3">
             {TESTIMONIALS.map((t, i) => (
-              <article key={i} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-bold text-white ${t.avatarBg}`}>
+              <article
+                key={i}
+                className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+              >
+                <div
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-bold text-white ${t.avatarBg}`}
+                >
                   {t.initial}
                 </div>
                 <div>
                   <p className="text-sm leading-relaxed text-slate-700">{t.text}</p>
-                  <span className="mt-2 block text-xs font-semibold text-slate-500">{t.name} · {t.role}</span>
+                  <span className="mt-2 block text-xs font-semibold text-slate-500">
+                    {t.name} · {t.role}
+                  </span>
                 </div>
               </article>
             ))}
@@ -366,7 +487,6 @@ export function HomePage() {
           </div>
         </div>
       </section>
-
     </Shell>
   );
 }

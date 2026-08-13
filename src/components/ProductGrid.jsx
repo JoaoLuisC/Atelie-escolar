@@ -19,7 +19,10 @@ function ProductCard({ onAddToCart, product }) {
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-brand-soft transition duration-300 hover:-translate-y-1 hover:shadow-brand">
-      <Link to={`/produtos/${product.slug || product.id}`} className="relative block aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
+      <Link
+        to={`/produtos/${product.slug || product.id}`}
+        className="relative block aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200"
+      >
         {product.image ? (
           <img
             src={product.image}
@@ -33,7 +36,9 @@ function ProductCard({ onAddToCart, product }) {
           </div>
         )}
         {badge ? (
-          <span className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md ${badge.cls}`}>
+          <span
+            className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md ${badge.cls}`}
+          >
             {badge.label}
           </span>
         ) : null}
@@ -46,17 +51,27 @@ function ProductCard({ onAddToCart, product }) {
         <span className="inline-flex w-fit rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">
           {product.category || 'Banner'}
         </span>
-        <h3 className="mt-2 line-clamp-2 font-heading text-base font-bold text-slate-900">{product.name}</h3>
+        <h3 className="mt-2 line-clamp-2 font-heading text-base font-bold text-slate-900">
+          {product.name}
+        </h3>
         <p className="mt-1 line-clamp-2 text-sm text-slate-600">{truncate(product.description)}</p>
 
         <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
-          <li className="inline-flex items-center gap-1"><i className="bi bi-file-pdf-fill text-rose-500" /> PDF</li>
-          <li className="inline-flex items-center gap-1"><i className="bi bi-pencil-square text-accent-sky" /> Canva</li>
-          <li className="inline-flex items-center gap-1"><i className="bi bi-printer-fill text-brand-600" /> Imprimível</li>
+          <li className="inline-flex items-center gap-1">
+            <i className="bi bi-file-pdf-fill text-rose-500" /> PDF
+          </li>
+          <li className="inline-flex items-center gap-1">
+            <i className="bi bi-pencil-square text-accent-sky" /> Canva
+          </li>
+          <li className="inline-flex items-center gap-1">
+            <i className="bi bi-printer-fill text-brand-600" /> Imprimível
+          </li>
         </ul>
 
         <div className="mt-3 flex items-baseline justify-between gap-2">
-          <span className="font-display text-xl font-bold text-brand-700">{formatPrice(product.price)}</span>
+          <span className="font-display text-xl font-bold text-brand-700">
+            {formatPrice(product.price)}
+          </span>
         </div>
 
         <div className="mt-4 flex gap-2">
@@ -93,7 +108,10 @@ ProductCard.propTypes = {
 
 function ProductSkeletonCard() {
   return (
-    <article aria-hidden="true" className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <article
+      aria-hidden="true"
+      className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white"
+    >
       <div className="aspect-[4/3] animate-pulse bg-slate-200" />
       <div className="flex flex-col gap-2 p-4">
         <div className="h-3 w-16 animate-pulse rounded-full bg-slate-200" />
@@ -138,7 +156,9 @@ export function ProductGrid({ error, loading, onAddToCart, products }) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-12 text-center">
         <i className="bi bi-search text-3xl text-slate-400" />
-        <p className="text-sm font-semibold text-slate-700">Nenhum produto encontrado nessa categoria.</p>
+        <p className="text-sm font-semibold text-slate-700">
+          Nenhum produto encontrado nessa categoria.
+        </p>
       </div>
     );
   }

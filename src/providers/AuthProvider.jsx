@@ -26,10 +26,7 @@ export function AuthProvider({ children }) {
     async function bootstrap() {
       try {
         // Paraleliza as duas consultas de sessão para cortar 1 RTT no boot.
-        const [data, customer] = await Promise.all([
-          getAdminSession(),
-          fetchCustomerSession(),
-        ]);
+        const [data, customer] = await Promise.all([getAdminSession(), fetchCustomerSession()]);
         if (!cancelled) {
           setAdminAuthenticated(data.authenticated === true);
           setCustomerSession(customer);
@@ -130,7 +127,9 @@ export function AuthProvider({ children }) {
 
         const name = String(session?.name || '').trim();
         const uid = String(session?.uid || '').trim();
-        const role = String(session?.role || '').trim().toLowerCase();
+        const role = String(session?.role || '')
+          .trim()
+          .toLowerCase();
         setCustomerSession({ email, name, uid, role });
       },
     }),

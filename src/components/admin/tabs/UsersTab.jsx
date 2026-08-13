@@ -12,7 +12,9 @@ const ROLE_OPTIONS = [
 ];
 
 function normalizeRole(role) {
-  const value = String(role || '').trim().toLowerCase();
+  const value = String(role || '')
+    .trim()
+    .toLowerCase();
   if (value === 'master') return 'admin';
   if (value === 'vendedor') return 'support';
   if (value === 'cliente') return 'customer';
@@ -34,8 +36,14 @@ export function UsersTab({ users, onRoleChange, onDelete, updatingId = '' }) {
     const query = search.trim().toLowerCase();
     if (!query) return users;
     return users.filter((user) => {
-      return String(user.name || '').toLowerCase().includes(query)
-        || String(user.email || '').toLowerCase().includes(query);
+      return (
+        String(user.name || '')
+          .toLowerCase()
+          .includes(query) ||
+        String(user.email || '')
+          .toLowerCase()
+          .includes(query)
+      );
     });
   }, [users, search]);
 
@@ -80,12 +88,16 @@ export function UsersTab({ users, onRoleChange, onDelete, updatingId = '' }) {
                   return (
                     <tr key={user.id} className="hover:bg-slate-50/60">
                       <td className="px-3 py-3">
-                        <div className="font-semibold text-slate-800">{user.name || 'Sem nome'}</div>
+                        <div className="font-semibold text-slate-800">
+                          {user.name || 'Sem nome'}
+                        </div>
                         <div className="truncate text-xs text-slate-500">{user.email}</div>
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${getRoleBadgeClass(role)}`}>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${getRoleBadgeClass(role)}`}
+                          >
                             {role.toUpperCase()}
                           </span>
                           <select
@@ -95,7 +107,9 @@ export function UsersTab({ users, onRoleChange, onDelete, updatingId = '' }) {
                             className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
                           >
                             {ROLE_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>{option.label}</option>
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -131,14 +145,22 @@ export function UsersTab({ users, onRoleChange, onDelete, updatingId = '' }) {
             className="absolute inset-0 bg-slate-900/50"
             onClick={() => setConfirmDelete(null)}
           />
-          <dialog open className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <dialog
+            open
+            className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+          >
             <h3 className="text-lg font-bold text-slate-900">Revogar acesso?</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Isto removerá <strong>{confirmDelete.name || confirmDelete.email}</strong> da tabela de perfis.
+              Isto removerá <strong>{confirmDelete.name || confirmDelete.email}</strong> da tabela
+              de perfis.
             </p>
             <div className="mt-5 flex items-center justify-end gap-2">
-              <Button variant="secondary" onClick={() => setConfirmDelete(null)}>Cancelar</Button>
-              <Button variant="danger" onClick={handleConfirmDelete}>Revogar acesso</Button>
+              <Button variant="secondary" onClick={() => setConfirmDelete(null)}>
+                Cancelar
+              </Button>
+              <Button variant="danger" onClick={handleConfirmDelete}>
+                Revogar acesso
+              </Button>
             </div>
           </dialog>
         </div>

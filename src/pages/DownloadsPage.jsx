@@ -9,8 +9,17 @@ import { useToast } from '../hooks/useToast';
 import { apiRequest, getApiBaseUrl } from '../utils/api';
 import { formatPrice } from '../utils/currency';
 import { trackPurchaseOnce } from '../utils/analytics';
+import { ROUTES } from '../constants/routes';
 
-function usePendingOrderPolling({ orderId, orderEmail, paymentStatus, setOrder, setStatus, setPollingStatus, pushToast }) {
+function usePendingOrderPolling({
+  orderId,
+  orderEmail,
+  paymentStatus,
+  setOrder,
+  setStatus,
+  setPollingStatus,
+  pushToast,
+}) {
   useEffect(() => {
     if (!orderId || !orderEmail || paymentStatus !== 'pending') {
       setPollingStatus('');
@@ -27,7 +36,9 @@ function usePendingOrderPolling({ orderId, orderEmail, paymentStatus, setOrder, 
 
       if (attempts > maxAttempts) {
         clearInterval(interval);
-        setPollingStatus('Pausamos a verificação automática. Clique em Atualizar quando quiser tentar de novo.');
+        setPollingStatus(
+          'Pausamos a verificação automática. Clique em Atualizar quando quiser tentar de novo.',
+        );
         return;
       }
 
@@ -71,7 +82,9 @@ function usePendingOrderPolling({ orderId, orderEmail, paymentStatus, setOrder, 
           clearInterval(interval);
           setPollingStatus('Recebemos o status final do pagamento.');
           setOrder(data.order);
-          setStatus('Não conseguimos confirmar este pagamento. Tente novamente em alguns minutos ou nos chame pelo e-mail.');
+          setStatus(
+            'Não conseguimos confirmar este pagamento. Tente novamente em alguns minutos ou nos chame pelo e-mail.',
+          );
         }
       } catch (pollError) {
         if (import.meta.env.DEV) {
@@ -84,7 +97,6 @@ function usePendingOrderPolling({ orderId, orderEmail, paymentStatus, setOrder, 
   }, [orderId, orderEmail, paymentStatus, pushToast, setOrder, setPollingStatus, setStatus]);
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity
 export function DownloadsPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -102,87 +114,100 @@ export function DownloadsPage() {
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order') || localStorage.getItem('lastOrderId') || '';
   const orderEmail = (
-    params.get('email')
-    || localStorage.getItem('lastOrderEmail')
-    || customerSession?.email
-    || ''
-  ).trim().toLowerCase();
+    params.get('email') ||
+    localStorage.getItem('lastOrderEmail') ||
+    customerSession?.email ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
   const hasSuccessFlag = params.get('success') === '1';
 
-  const loadOrder = useCallback(async (signal) => {
-    if (!orderId) {
-      setStatus('Nenhum pedido selecionado. Entre na sua conta para ver o histórico de pedidos e downloads.');
-      setOrder(null);
-      setOrderError('');
-      setLoading(false);
-      return;
-    }
-    if (!orderEmail) {
-      setStatus('Para consultar este pedido, informe o e-mail usado na compra abaixo.');
-      setOrder(null);
-      setOrderError('');
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setStatus('Carregando as informações do seu pedido…');
-
-    try {
-      // POST com o e-mail no CORPO (achado M6) — a query string vazava PII por
-      // access log/histórico/Referer. Continua em fetch cru (e não apiRequest)
-      // DE PROPÓSITO: apiRequest cria o próprio AbortController e sobrescreve o
-      // `signal` do chamador (src/utils/api.js:39-42), o que desligaria o
-      // cancelamento em troca de pedido/desmontagem que este caminho usa para
-      // não sobrescrever o estado com a resposta de uma consulta antiga.
-      const response = await fetch(`${getApiBaseUrl()}/verify-payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, email: orderEmail }),
-        signal,
-      });
-      const data = await response.json();
-      // Requisição substituída por outra (troca de pedido) ou desmontagem:
-      // descarta o resultado para não sobrescrever o estado atual.
-      if (signal?.aborted) return;
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Não foi possível verificar o pedido agora.');
+  const loadOrder = useCallback(
+    async (signal) => {
+      if (!orderId) {
+        setStatus(
+          'Nenhum pedido selecionado. Entre na sua conta para ver o histórico de pedidos e downloads.',
+        );
+        setOrder(null);
+        setOrderError('');
+        setLoading(false);
+        return;
+      }
+      if (!orderEmail) {
+        setStatus('Para consultar este pedido, informe o e-mail usado na compra abaixo.');
+        setOrder(null);
+        setOrderError('');
+        setLoading(false);
+        return;
       }
 
-      setOrder(data.order || null);
-      setOrderError('');
+      setLoading(true);
+      setStatus('Carregando as informações do seu pedido…');
 
-      if (data.order?.paymentStatus === 'approved') {
-        localStorage.removeItem('lastOrderId');
-        localStorage.removeItem('lastOrderEmail');
-        setStatus('Tudo certo. Seus arquivos estão liberados abaixo.');
-        trackPurchaseOnce(data.order?.orderId || orderId, {
-          currency: 'BRL',
-          value: Number(data.order?.totalAmount || 0),
-          items: (data.order?.items || []).map((item) => ({
-            item_id: String(item.id),
-            item_name: item.title,
-            price: Number(item.price || 0),
-            quantity: Number(item.quantity || 1),
-          })),
+      try {
+        // POST com o e-mail no CORPO (achado M6) — a query string vazava PII por
+        // access log/histórico/Referer.
+        //
+        // Já foi `fetch` cru: `apiRequest` criava o próprio AbortController e
+        // SOBRESCREVIA o `signal` do chamador, o que desligaria o cancelamento em
+        // troca de pedido/desmontagem. A causa foi corrigida na origem (regra C1)
+        // — `apiRequest` agora COMPÕE os dois sinais, então este caminho ganhou o
+        // timeout de 15s sem abrir mão do cancelamento. Polling numa rede ruim
+        // ficava pendurado para sempre exatamente aqui.
+        const { response, data } = await apiRequest('/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, email: orderEmail }),
+          signal,
         });
-      } else if (data.order?.paymentStatus === 'pending') {
-        setStatus('Estamos confirmando seu pagamento. Vamos liberar os arquivos assim que aprovar — sem necessidade de recarregar.');
-      } else {
-        setStatus('Não conseguimos confirmar este pagamento. Tente novamente em alguns minutos ou nos chame pelo e-mail.');
+        // Requisição substituída por outra (troca de pedido) ou desmontagem:
+        // descarta o resultado para não sobrescrever o estado atual.
+        if (signal?.aborted) return;
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Não foi possível verificar o pedido agora.');
+        }
+
+        setOrder(data.order || null);
+        setOrderError('');
+
+        if (data.order?.paymentStatus === 'approved') {
+          localStorage.removeItem('lastOrderId');
+          localStorage.removeItem('lastOrderEmail');
+          setStatus('Tudo certo. Seus arquivos estão liberados abaixo.');
+          trackPurchaseOnce(data.order?.orderId || orderId, {
+            currency: 'BRL',
+            value: Number(data.order?.totalAmount || 0),
+            items: (data.order?.items || []).map((item) => ({
+              item_id: String(item.id),
+              item_name: item.title,
+              price: Number(item.price || 0),
+              quantity: Number(item.quantity || 1),
+            })),
+          });
+        } else if (data.order?.paymentStatus === 'pending') {
+          setStatus(
+            'Estamos confirmando seu pagamento. Vamos liberar os arquivos assim que aprovar — sem necessidade de recarregar.',
+          );
+        } else {
+          setStatus(
+            'Não conseguimos confirmar este pagamento. Tente novamente em alguns minutos ou nos chame pelo e-mail.',
+          );
+        }
+      } catch (error) {
+        if (error?.name === 'AbortError' || signal?.aborted) return;
+        const message = error.message || 'Erro ao carregar downloads.';
+        setStatus(message);
+        setOrderError(message);
+        pushToast(message, 'error');
+        setOrder(null);
+      } finally {
+        if (!signal?.aborted) setLoading(false);
       }
-    } catch (error) {
-      if (error?.name === 'AbortError' || signal?.aborted) return;
-      const message = error.message || 'Erro ao carregar downloads.';
-      setStatus(message);
-      setOrderError(message);
-      pushToast(message, 'error');
-      setOrder(null);
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [orderId, orderEmail, pushToast]);
+    },
+    [orderId, orderEmail, pushToast],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -202,47 +227,49 @@ export function DownloadsPage() {
 
   // Histórico de pedidos: SÓ os do cliente logado. O backend deriva o e-mail da
   // sessão (cookie HttpOnly) — não passamos e-mail arbitrário. `credentials`
-  // envia o cookie de sessão. Mantido em fetch cru pelo mesmo motivo de
-  // loadOrder: apiRequest sobrescreveria o `signal` do chamador.
-  const loadMyOrders = useCallback(async (signal) => {
-    if (!customerSession?.email) return;
-    setSearchingByEmail(true);
-    setEmailStatus('Carregando seus pedidos...');
+  // envia o cookie de sessão. Em `apiRequest` (regra C1) desde que ele passou a
+  // compor o `signal` do chamador com o do timeout.
+  const loadMyOrders = useCallback(
+    async (signal) => {
+      if (!customerSession?.email) return;
+      setSearchingByEmail(true);
+      setEmailStatus('Carregando seus pedidos...');
 
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/customer-orders`, {
-        credentials: 'include',
-        signal,
-      });
+      try {
+        const { response, data } = await apiRequest('/customer-orders', {
+          credentials: 'include',
+          signal,
+        });
 
-      if (signal?.aborted) return;
+        if (signal?.aborted) return;
 
-      if (response.status === 401) {
+        if (response.status === 401) {
+          setOrders([]);
+          setEmailStatus('Sua sessão expirou. Faça login novamente para ver seus pedidos.');
+          return;
+        }
+
+        if (signal?.aborted) return;
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Não foi possível carregar os pedidos.');
+        }
+
+        setOrders(data.orders || []);
+        setEmailStatus(
+          (data.orders || []).length === 0
+            ? 'Nenhum pedido encontrado na sua conta.'
+            : `Encontramos ${(data.orders || []).length} pedido(s).`,
+        );
+      } catch (error) {
+        if (error?.name === 'AbortError' || signal?.aborted) return;
         setOrders([]);
-        setEmailStatus('Sua sessão expirou. Faça login novamente para ver seus pedidos.');
-        return;
+        setEmailStatus(error.message || 'Erro ao buscar pedidos.');
+      } finally {
+        if (!signal?.aborted) setSearchingByEmail(false);
       }
-
-      const data = await response.json();
-      if (signal?.aborted) return;
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Não foi possível carregar os pedidos.');
-      }
-
-      setOrders(data.orders || []);
-      setEmailStatus(
-        (data.orders || []).length === 0
-          ? 'Nenhum pedido encontrado na sua conta.'
-          : `Encontramos ${(data.orders || []).length} pedido(s).`,
-      );
-    } catch (error) {
-      if (error?.name === 'AbortError' || signal?.aborted) return;
-      setOrders([]);
-      setEmailStatus(error.message || 'Erro ao buscar pedidos.');
-    } finally {
-      if (!signal?.aborted) setSearchingByEmail(false);
-    }
-  }, [customerSession?.email]);
+    },
+    [customerSession?.email],
+  );
 
   useEffect(() => {
     if (!customerSession?.email) {
@@ -280,14 +307,19 @@ export function DownloadsPage() {
       <section className="mx-auto max-w-4xl px-4 py-8 lg:px-6">
         <header className="mb-6">
           <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Pós-compra</p>
-          <h1 className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">Meus Downloads</h1>
-          <p className="mt-2 text-sm text-slate-600">Seu histórico e seus arquivos em um só lugar.</p>
+          <h1 className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">
+            Meus Downloads
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Seu histórico e seus arquivos em um só lugar.
+          </p>
         </header>
 
         {hasSuccessFlag ? (
           <article className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
             <strong className="block font-bold">Pagamento confirmado.</strong>
-            Seu pedido foi recebido. Se o status estiver aprovado, os botões de download aparecem abaixo.
+            Seu pedido foi recebido. Se o status estiver aprovado, os botões de download aparecem
+            abaixo.
           </article>
         ) : null}
 
@@ -311,7 +343,11 @@ export function DownloadsPage() {
 
           <StatusStepper
             activeStep={statusStep}
-            description={pollingStatus || status || 'Acompanhe a liberação em tempo real. Pode fechar a aba e voltar quando quiser.'}
+            description={
+              pollingStatus ||
+              status ||
+              'Acompanhe a liberação em tempo real. Pode fechar a aba e voltar quando quiser.'
+            }
             steps={[
               { label: 'Processando', description: 'Validando a cobrança.' },
               { label: 'Confirmando', description: 'Organizando os links.' },
@@ -323,7 +359,8 @@ export function DownloadsPage() {
             <div className="mt-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Seus pedidos <span className="normal-case text-slate-400">({customerSession.email})</span>
+                  Seus pedidos{' '}
+                  <span className="normal-case text-slate-400">({customerSession.email})</span>
                 </p>
                 <button
                   type="button"
@@ -342,7 +379,7 @@ export function DownloadsPage() {
                 Para ver o histórico dos seus pedidos e baixar os arquivos, entre na sua conta.
               </p>
               <Link
-                to="/login?redirect=/downloads"
+                to={`${ROUTES.login}?redirect=${ROUTES.downloads}`}
                 className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
               >
                 <i className="bi bi-box-arrow-in-right" aria-hidden="true" /> Entrar
@@ -352,7 +389,9 @@ export function DownloadsPage() {
 
           {orderError ? (
             <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
-              <strong className="block text-sm font-bold text-rose-800">Falha ao carregar pedido</strong>
+              <strong className="block text-sm font-bold text-rose-800">
+                Falha ao carregar pedido
+              </strong>
               <p className="mt-1 text-xs text-rose-700/80">{orderError}</p>
             </div>
           ) : null}
@@ -364,7 +403,8 @@ export function DownloadsPage() {
             <div className="mt-5 space-y-3">
               <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200">
                 <i className="bi bi-hourglass-split mr-1.5" aria-hidden="true" />
-                Pagamento ainda em análise. Você não precisa fazer nada — assim que confirmar, seus arquivos aparecem aqui.
+                Pagamento ainda em análise. Você não precisa fazer nada — assim que confirmar, seus
+                arquivos aparecem aqui.
               </p>
               <SkeletonDownloadList count={Math.max(1, (order.items || []).length || 2)} />
             </div>
@@ -373,33 +413,46 @@ export function DownloadsPage() {
           {order && order.paymentStatus !== 'approved' && order.paymentStatus !== 'pending' ? (
             <p className="mt-5 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-800 ring-1 ring-rose-200">
               <i className="bi bi-x-octagon mr-1.5" aria-hidden="true" />
-              Este pedido não foi aprovado. Se já tentou pagar e o valor foi cobrado, nos chame por e-mail que verificamos.
+              Este pedido não foi aprovado. Se já tentou pagar e o valor foi cobrado, nos chame por
+              e-mail que verificamos.
             </p>
           ) : null}
 
           {/* Carga inicial com orderId conhecido: skeleton enquanto o backend responde. */}
           {loading && orderId && !order ? (
             <div className="mt-5 space-y-2">
-              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">Arquivos disponíveis</h4>
+              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">
+                Arquivos disponíveis
+              </h4>
               <SkeletonDownloadList count={2} />
             </div>
           ) : null}
 
           {orders.length > 0 ? (
             <div className="mt-5">
-              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">Histórico de pedidos</h4>
+              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">
+                Histórico de pedidos
+              </h4>
               <ul className="flex flex-col gap-2">
                 {orders.map((entry) => (
-                  <li key={`${entry.orderId}-${entry.internalOrderId || ''}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+                  <li
+                    key={`${entry.orderId}-${entry.internalOrderId || ''}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5"
+                  >
                     <div className="min-w-0">
-                      <strong className="block text-sm text-slate-800">Pedido #{entry.orderId || entry.internalOrderId}</strong>
+                      <strong className="block text-sm text-slate-800">
+                        Pedido #{entry.orderId || entry.internalOrderId}
+                      </strong>
                       <p className="text-xs text-slate-500">
-                        Status: {entry.paymentStatus || entry.status} · Total: {formatPrice(entry.totalAmount)}
+                        Status: {entry.paymentStatus || entry.status} · Total:{' '}
+                        {formatPrice(entry.totalAmount)}
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => openOrder(entry.orderId, entry.internalOrderId, customerSession?.email)}
+                      onClick={() =>
+                        openOrder(entry.orderId, entry.internalOrderId, customerSession?.email)
+                      }
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                     >
                       Abrir pedido
@@ -412,12 +465,15 @@ export function DownloadsPage() {
 
           {order?.paymentStatus === 'approved' ? (
             <div className="mt-5">
-              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">Arquivos disponíveis</h4>
+              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">
+                Arquivos disponíveis
+              </h4>
               {(order.downloadTokens || []).length === 0 ? (
                 <div className="space-y-3">
                   <p className="rounded-xl bg-sky-50 px-3 py-2.5 text-sm text-sky-800 ring-1 ring-sky-200">
                     <i className="bi bi-arrow-clockwise mr-1.5" aria-hidden="true" />
-                    Tudo certo com o pagamento — estamos preparando os arquivos. Em alguns segundos clique em Atualizar.
+                    Tudo certo com o pagamento — estamos preparando os arquivos. Em alguns segundos
+                    clique em Atualizar.
                   </p>
                   <SkeletonDownloadList count={Math.max(1, (order.items || []).length || 1)} />
                 </div>
@@ -425,10 +481,17 @@ export function DownloadsPage() {
                 <>
                   <ul className="flex flex-col gap-2">
                     {(order.downloadTokens || []).map((item) => (
-                      <li key={item.token} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-br from-brand-50 to-white p-3 ring-1 ring-brand-100">
+                      <li
+                        key={item.token}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-br from-brand-50 to-white p-3 ring-1 ring-brand-100"
+                      >
                         <div className="min-w-0">
-                          <strong className="block text-sm text-slate-800">{item.productName || `Produto ${item.productId}`}</strong>
-                          <p className="text-xs text-slate-500">Token vinculado ao pedido aprovado.</p>
+                          <strong className="block text-sm text-slate-800">
+                            {item.productName || `Produto ${item.productId}`}
+                          </strong>
+                          <p className="text-xs text-slate-500">
+                            Token vinculado ao pedido aprovado.
+                          </p>
                         </div>
                         <a
                           href={`${getApiBaseUrl()}/download?token=${encodeURIComponent(item.token)}`}
@@ -442,7 +505,9 @@ export function DownloadsPage() {
                     ))}
                   </ul>
                   <p className="mt-2 text-xs text-slate-500">
-                    Cada link é de uso único e expira por segurança. Se um download não abrir ou o link já tiver sido usado, clique em <strong>Atualizar</strong> acima para gerar novos links — ou nos chame por e-mail.
+                    Cada link é de uso único e expira por segurança. Se um download não abrir ou o
+                    link já tiver sido usado, clique em <strong>Atualizar</strong> acima para gerar
+                    novos links — ou nos chame por e-mail.
                   </p>
                 </>
               )}
@@ -450,10 +515,16 @@ export function DownloadsPage() {
           ) : null}
 
           <div className="mt-6 flex flex-wrap gap-2">
-            <Link to="/produtos" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+            <Link
+              to={ROUTES.produtos}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
               Voltar para produtos
             </Link>
-            <Link to="/checkout" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+            <Link
+              to={ROUTES.checkout}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
               Ir para checkout
             </Link>
           </div>

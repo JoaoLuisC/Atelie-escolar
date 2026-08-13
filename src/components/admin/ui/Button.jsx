@@ -1,11 +1,16 @@
 import PropTypes from 'prop-types';
 
 const VARIANTS = {
-  primary: 'bg-violet-600 text-white shadow-sm hover:bg-violet-700 focus-visible:outline-violet-600 disabled:bg-violet-300',
-  secondary: 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 focus-visible:outline-slate-400 disabled:text-slate-400',
-  ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 focus-visible:outline-slate-300 disabled:text-slate-400',
-  danger: 'bg-rose-600 text-white shadow-sm hover:bg-rose-700 focus-visible:outline-rose-600 disabled:bg-rose-300',
-  success: 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 focus-visible:outline-emerald-600 disabled:bg-emerald-300',
+  primary:
+    'bg-violet-600 text-white shadow-sm hover:bg-violet-700 focus-visible:outline-violet-600 disabled:bg-violet-300',
+  secondary:
+    'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 focus-visible:outline-slate-400 disabled:text-slate-400',
+  ghost:
+    'bg-transparent text-slate-600 hover:bg-slate-100 focus-visible:outline-slate-300 disabled:text-slate-400',
+  danger:
+    'bg-rose-600 text-white shadow-sm hover:bg-rose-700 focus-visible:outline-rose-600 disabled:bg-rose-300',
+  success:
+    'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 focus-visible:outline-emerald-600 disabled:bg-emerald-300',
 };
 
 const SIZES = {

@@ -34,9 +34,10 @@ export function ProductWizard({
   useEffect(() => {
     if (initialProduct) {
       const initialCategoryId = String(
-        initialProduct.categoryId
-          ?? initialProduct.category_id
-          ?? (categories.find((cat) => cat.name === initialProduct.category)?.id ?? ''),
+        initialProduct.categoryId ??
+          initialProduct.category_id ??
+          categories.find((cat) => cat.name === initialProduct.category)?.id ??
+          '',
       );
       setFormData({
         id: initialProduct.id || '',
@@ -48,9 +49,13 @@ export function ProductWizard({
         originalPrice: initialProduct.originalPrice || '',
         productType: initialProduct.productType || 'individual',
       });
-      setImages(initialProduct.images && initialProduct.images.length > 0
-        ? initialProduct.images
-        : (initialProduct.image ? [initialProduct.image] : ['']));
+      setImages(
+        initialProduct.images && initialProduct.images.length > 0
+          ? initialProduct.images
+          : initialProduct.image
+            ? [initialProduct.image]
+            : [''],
+      );
       setVideos(initialProduct.videos || []);
       setBenefits(normalizeBenefits(initialProduct.benefits));
       setFaq(normalizeFaq(initialProduct.faq));
@@ -227,7 +232,9 @@ export function ProductWizard({
             >
               <option value="">Selecione uma categoria…</option>
               {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
               ))}
             </select>
           </Field>
@@ -267,7 +274,11 @@ export function ProductWizard({
                 />
               ))}
             </div>
-            <button type="button" onClick={handleAddImage} className={`${SECONDARY_BTN_CLASS} mt-2`}>
+            <button
+              type="button"
+              onClick={handleAddImage}
+              className={`${SECONDARY_BTN_CLASS} mt-2`}
+            >
               <i className="bi bi-plus-lg" /> Adicionar imagem
             </button>
           </Field>
@@ -291,7 +302,11 @@ export function ProductWizard({
                 />
               ))}
             </div>
-            <button type="button" onClick={handleAddVideo} className={`${SECONDARY_BTN_CLASS} mt-2`}>
+            <button
+              type="button"
+              onClick={handleAddVideo}
+              className={`${SECONDARY_BTN_CLASS} mt-2`}
+            >
               <i className="bi bi-plus-lg" /> Adicionar vídeo
             </button>
           </Field>
@@ -378,16 +393,20 @@ export function ProductWizard({
   );
 }
 
-const INPUT_CLASS = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
-const SECONDARY_BTN_CLASS = 'inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50';
+const INPUT_CLASS =
+  'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
+const SECONDARY_BTN_CLASS =
+  'inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50';
 const IMAGE_MAX_BYTES = 500 * 1024; // §3.2 guard rail: 500kB por imagem
 
 // ─── Normalização ao carregar um produto existente para edição ────────
 function normalizeBenefits(items) {
   if (!Array.isArray(items)) return [];
-  return items.map((item) => (typeof item === 'string'
-    ? { icon: '', label: item }
-    : { icon: String(item?.icon || '').trim(), label: String(item?.label || '').trim() }));
+  return items.map((item) =>
+    typeof item === 'string'
+      ? { icon: '', label: item }
+      : { icon: String(item?.icon || '').trim(), label: String(item?.label || '').trim() },
+  );
 }
 
 function normalizeFaq(items) {
@@ -412,13 +431,19 @@ function normalizeReviews(items) {
 // ─── Limpeza no submit: descarta linhas vazias e converte tipos ───────
 function cleanBenefits(items) {
   return items
-    .map((item) => ({ icon: String(item.icon || '').trim(), label: String(item.label || '').trim() }))
+    .map((item) => ({
+      icon: String(item.icon || '').trim(),
+      label: String(item.label || '').trim(),
+    }))
     .filter((item) => item.label);
 }
 
 function cleanFaq(items) {
   return items
-    .map((item) => ({ question: String(item.question || '').trim(), answer: String(item.answer || '').trim() }))
+    .map((item) => ({
+      question: String(item.question || '').trim(),
+      answer: String(item.answer || '').trim(),
+    }))
     .filter((item) => item.question && item.answer);
 }
 
@@ -458,7 +483,8 @@ RemoveRowButton.propTypes = {
 };
 
 function BenefitsEditor({ value, onChange }) {
-  const update = (index, patch) => onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const update = (index, patch) =>
+    onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   const add = () => onChange([...value, { icon: '', label: '' }]);
   const remove = (index) => onChange(value.filter((_, i) => i !== index));
 
@@ -503,7 +529,8 @@ function BenefitsEditor({ value, onChange }) {
 BenefitsEditor.propTypes = EDITOR_PROP_TYPES;
 
 function FaqEditor({ value, onChange }) {
-  const update = (index, patch) => onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const update = (index, patch) =>
+    onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   const add = () => onChange([...value, { question: '', answer: '' }]);
   const remove = (index) => onChange(value.filter((_, i) => i !== index));
 
@@ -548,8 +575,10 @@ function FaqEditor({ value, onChange }) {
 FaqEditor.propTypes = EDITOR_PROP_TYPES;
 
 function ReviewsEditor({ value, onChange }) {
-  const update = (index, patch) => onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
-  const add = () => onChange([...value, { author: '', role: '', location: '', text: '', rating: '' }]);
+  const update = (index, patch) =>
+    onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const add = () =>
+    onChange([...value, { author: '', role: '', location: '', text: '', rating: '' }]);
   const remove = (index) => onChange(value.filter((_, i) => i !== index));
 
   return (
@@ -560,7 +589,10 @@ function ReviewsEditor({ value, onChange }) {
     >
       <div id="product-reviews" className="flex flex-col gap-3">
         {value.map((item, idx) => (
-          <div key={`review-${idx}`} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+          <div
+            key={`review-${idx}`}
+            className="rounded-lg border border-slate-200 bg-slate-50/60 p-3"
+          >
             <div className="flex items-start gap-2">
               <input
                 type="text"
@@ -570,7 +602,10 @@ function ReviewsEditor({ value, onChange }) {
                 aria-label={`Autor do depoimento ${idx + 1}`}
                 className={INPUT_CLASS}
               />
-              <RemoveRowButton onClick={() => remove(idx)} label={`Remover depoimento ${idx + 1}`} />
+              <RemoveRowButton
+                onClick={() => remove(idx)}
+                label={`Remover depoimento ${idx + 1}`}
+              />
             </div>
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
               <input
@@ -626,7 +661,10 @@ ReviewsEditor.propTypes = EDITOR_PROP_TYPES;
 function Field({ label, htmlFor, children, hint, className = '' }) {
   return (
     <div className={className}>
-      <label htmlFor={htmlFor} className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <label
+        htmlFor={htmlFor}
+        className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+      >
         {label}
       </label>
       {children}
@@ -705,31 +743,43 @@ function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToa
     <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
       <div className="flex items-center gap-3">
         {isImage && hasValue ? (
-          // eslint-disable-next-line jsx-a11y/img-redundant-alt
           <img
             src={value}
             alt={`Preview de ${label}`}
             className="h-16 w-16 shrink-0 rounded-md object-cover ring-1 ring-slate-200"
-            onError={(e) => { e.currentTarget.style.opacity = '0.3'; }}
+            onError={(e) => {
+              e.currentTarget.style.opacity = '0.3';
+            }}
           />
         ) : (
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-white ring-1 ring-slate-200 text-slate-400">
-            <i className={`bi ${isImage ? 'bi-image' : kind === 'video' ? 'bi-film' : 'bi-file-earmark-arrow-down'} text-2xl`} />
+            <i
+              className={`bi ${isImage ? 'bi-image' : kind === 'video' ? 'bi-film' : 'bi-file-earmark-arrow-down'} text-2xl`}
+            />
           </div>
         )}
 
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-slate-800">
-            {hasValue ? displayName : <span className="text-slate-500">Nenhum arquivo selecionado</span>}
+            {hasValue ? (
+              displayName
+            ) : (
+              <span className="text-slate-500">Nenhum arquivo selecionado</span>
+            )}
           </p>
           {hasValue ? (
-            <p className="truncate text-[11px] text-slate-500" title={value}>{value}</p>
+            <p className="truncate text-[11px] text-slate-500" title={value}>
+              {value}
+            </p>
           ) : (
             <p className="text-[11px] text-slate-500">Clique em &quot;Escolher arquivo&quot;.</p>
           )}
           {uploading ? (
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
+              <div
+                className="h-full bg-brand-500 transition-all"
+                style={{ width: `${progress}%` }}
+              />
             </div>
           ) : null}
           {error ? <p className="mt-1 text-xs text-rose-600">{error}</p> : null}
@@ -742,7 +792,9 @@ function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToa
             disabled={uploading}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-wait disabled:opacity-60"
           >
-            <i className={`bi ${uploading ? 'bi-arrow-clockwise animate-spin' : hasValue ? 'bi-arrow-repeat' : 'bi-upload'}`} />
+            <i
+              className={`bi ${uploading ? 'bi-arrow-clockwise animate-spin' : hasValue ? 'bi-arrow-repeat' : 'bi-upload'}`}
+            />
             {uploading ? `${progress}%` : hasValue ? 'Trocar' : 'Escolher'}
           </button>
           {hasValue && !uploading ? (
@@ -768,13 +820,7 @@ function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToa
         </div>
       </div>
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        onChange={handleFile}
-        className="hidden"
-      />
+      <input ref={inputRef} type="file" accept={accept} onChange={handleFile} className="hidden" />
     </div>
   );
 }
@@ -813,7 +859,7 @@ ProductWizard.propTypes = {
     PropTypes.shape({
       id: PropTypes.string.isRequired,
       name: PropTypes.string.isRequired,
-    })
+    }),
   ),
   initialProduct: PropTypes.shape({
     id: PropTypes.string,

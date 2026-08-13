@@ -1,21 +1,43 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { ADMIN_LOGIN_PATH } from './constants/routes';
+import { ADMIN_LOGIN_PATH, ROUTES } from './constants/routes';
 
 const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })));
-const ProductsPage = lazy(() => import('./pages/ProductsPage').then((m) => ({ default: m.ProductsPage })));
-const ProductDetailsPage = lazy(() => import('./pages/ProductDetailsPage').then((m) => ({ default: m.ProductDetailsPage })));
-const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then((m) => ({ default: m.CheckoutPage })));
-const CustomerAuthPage = lazy(() => import('./pages/CustomerAuthPage').then((m) => ({ default: m.CustomerAuthPage })));
-const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
-const DownloadsPage = lazy(() => import('./pages/DownloadsPage').then((m) => ({ default: m.DownloadsPage })));
-const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
-const PrivacyPage = lazy(() => import('./pages/LegalPages').then((m) => ({ default: m.PrivacyPage })));
+const ProductsPage = lazy(() =>
+  import('./pages/ProductsPage').then((m) => ({ default: m.ProductsPage })),
+);
+const ProductDetailsPage = lazy(() =>
+  import('./pages/ProductDetailsPage').then((m) => ({ default: m.ProductDetailsPage })),
+);
+const CheckoutPage = lazy(() =>
+  import('./pages/CheckoutPage').then((m) => ({ default: m.CheckoutPage })),
+);
+const CustomerAuthPage = lazy(() =>
+  import('./pages/CustomerAuthPage').then((m) => ({ default: m.CustomerAuthPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import('./pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })),
+);
+const DownloadsPage = lazy(() =>
+  import('./pages/DownloadsPage').then((m) => ({ default: m.DownloadsPage })),
+);
+const NotFoundPage = lazy(() =>
+  import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
+);
+const PrivacyPage = lazy(() =>
+  import('./pages/LegalPages').then((m) => ({ default: m.PrivacyPage })),
+);
 const TermsPage = lazy(() => import('./pages/LegalPages').then((m) => ({ default: m.TermsPage })));
-const ConfirmSubscriptionPage = lazy(() => import('./pages/SubscriptionPages').then((m) => ({ default: m.ConfirmSubscriptionPage })));
-const UnsubscribePage = lazy(() => import('./pages/SubscriptionPages').then((m) => ({ default: m.UnsubscribePage })));
-const AdminLoginPage = lazy(() => import('./pages/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })));
+const ConfirmSubscriptionPage = lazy(() =>
+  import('./pages/SubscriptionPages').then((m) => ({ default: m.ConfirmSubscriptionPage })),
+);
+const UnsubscribePage = lazy(() =>
+  import('./pages/SubscriptionPages').then((m) => ({ default: m.UnsubscribePage })),
+);
+const AdminLoginPage = lazy(() =>
+  import('./pages/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })),
+);
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
 
 function RouteFallback() {
@@ -47,13 +69,13 @@ export default function App() {
         <Route path="/admin-login" element={<Navigate to={ADMIN_LOGIN_PATH} replace />} />
         <Route
           path="/admin"
-          element={(
+          element={
             <ProtectedRoute>
               <AdminPage />
             </ProtectedRoute>
-          )}
+          }
         />
-        <Route path="/admin/usuarios" element={<Navigate to="/admin" replace />} />
+        <Route path="/admin/usuarios" element={<Navigate to={ROUTES.admin} replace />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>

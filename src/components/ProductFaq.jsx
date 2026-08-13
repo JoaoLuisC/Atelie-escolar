@@ -22,9 +22,14 @@ export function ProductFaq({ items }) {
   if (normalized.length === 0) return null;
 
   return (
-    <section aria-labelledby="product-faq-title" className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <section
+      aria-labelledby="product-faq-title"
+      className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+    >
       <header className="mb-4">
-        <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Perguntas frequentes</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-brand-600">
+          Perguntas frequentes
+        </p>
         <h2 id="product-faq-title" className="font-display text-xl font-bold text-slate-900">
           Tire suas dúvidas
         </h2>

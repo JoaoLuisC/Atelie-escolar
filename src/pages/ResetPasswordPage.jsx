@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '../hooks/useToast';
 import { getSupabaseBrowserClient } from '../services/supabase-browser';
+import { ROUTES } from '../constants/routes';
 
 function getSafeRedirect(search) {
   const params = new URLSearchParams(search);
@@ -18,7 +19,9 @@ function applyRecoverySessionFromUrl(supabase) {
     return supabase.auth.exchangeCodeForSession(code);
   }
 
-  const hashParams = new URLSearchParams(String(globalThis.window.location.hash || '').replace(/^#/, ''));
+  const hashParams = new URLSearchParams(
+    String(globalThis.window.location.hash || '').replace(/^#/, ''),
+  );
   const accessToken = String(hashParams.get('access_token') || '').trim();
   const refreshToken = String(hashParams.get('refresh_token') || '').trim();
 
@@ -123,7 +126,8 @@ export function ResetPasswordPage() {
     }
   }
 
-  const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50';
+  const inputClass =
+    'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50';
 
   return (
     <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-100 via-white to-sky-50 px-4 py-10">
@@ -131,15 +135,25 @@ export function ResetPasswordPage() {
         <header className="mb-5">
           <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Conta</p>
           <h1 className="font-display text-2xl font-extrabold text-slate-900">Redefinir senha</h1>
-          <p className="mt-1 text-sm text-slate-600">Escolha uma nova senha para continuar acessando sua conta.</p>
-          <Link to="/login" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline">
+          <p className="mt-1 text-sm text-slate-600">
+            Escolha uma nova senha para continuar acessando sua conta.
+          </p>
+          <Link
+            to={ROUTES.login}
+            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
+          >
             <i className="bi bi-arrow-left" /> Voltar para o login
           </Link>
         </header>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
-            <label htmlFor="new-password" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nova senha</label>
+            <label
+              htmlFor="new-password"
+              className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Nova senha
+            </label>
             <input
               id="new-password"
               type="password"
@@ -157,7 +171,12 @@ export function ResetPasswordPage() {
             </p>
           </div>
           <div>
-            <label htmlFor="confirm-password" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Confirmar nova senha</label>
+            <label
+              htmlFor="confirm-password"
+              className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Confirmar nova senha
+            </label>
             <input
               id="confirm-password"
               type="password"
@@ -180,7 +199,8 @@ export function ResetPasswordPage() {
           </button>
 
           <p className="text-xs text-slate-500">
-            Após concluir, você será redirecionado para <strong>{redirectTo === '/downloads' ? 'Downloads' : 'Checkout'}</strong>.
+            Após concluir, você será redirecionado para{' '}
+            <strong>{redirectTo === '/downloads' ? 'Downloads' : 'Checkout'}</strong>.
           </p>
         </form>
       </article>

@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 import { useState } from 'react';
-import { getApiBaseUrl } from '../utils/api';
+import { validateCoupon } from '../services/coupons';
 import { formatPrice } from '../utils/currency';
 
 /**
@@ -25,7 +25,9 @@ export function CouponField({ cart, applied, onApply, onClear, disabled = false 
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Cupom aplicado</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+              Cupom aplicado
+            </p>
             <p className="text-sm font-semibold text-emerald-900">
               {applied.code} · −{formatPrice(applied.discount)}
             </p>
@@ -55,23 +57,14 @@ export function CouponField({ cart, applied, onApply, onClear, disabled = false 
     setStatus({ type: 'loading', message: 'Validando…' });
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/validate-coupon`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: trimmed,
-          items: cart.map((item) => ({
-            productId: String(item.id),
-            categoryId: item.categoryId || null,
-            price: Number(item.price || 0),
-            quantity: Number(item.quantity || 1),
-          })),
-        }),
-      });
-      const data = await response.json();
+      // Regra C2: o componente pede "valide este cupom para este carrinho"
+      // e não sabe URL, método nem formato de item. A montagem do payload
+      // (inclusive o `categoryId`, sem o qual cupom restrito sempre reporta
+      // "não elegível") mora em src/services/coupons.js.
+      const data = await validateCoupon(trimmed, cart);
 
-      if (!data.success) {
-        setStatus({ type: 'error', message: data.error || 'Cupom inválido.' });
+      if (!data.ok) {
+        setStatus({ type: 'error', message: data.message });
         return;
       }
 

@@ -31,8 +31,12 @@ export function PerformanceTab({ productPerformance }) {
                   <tr key={product.id} className="hover:bg-slate-50/60">
                     <td className="px-3 py-3 font-semibold text-slate-800">{product.name}</td>
                     <td className="px-3 py-3 text-right text-slate-700">{product.qty}</td>
-                    <td className="px-3 py-3 text-right font-semibold text-slate-900">{formatPrice(product.rev)}</td>
-                    <td className="px-3 py-3 text-right text-slate-700">{product.downloads || 0}</td>
+                    <td className="px-3 py-3 text-right font-semibold text-slate-900">
+                      {formatPrice(product.rev)}
+                    </td>
+                    <td className="px-3 py-3 text-right text-slate-700">
+                      {product.downloads || 0}
+                    </td>
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
@@ -41,7 +45,9 @@ export function PerformanceTab({ productPerformance }) {
                             style={{ width: `${Math.max(6, conversionPct)}%` }}
                           />
                         </div>
-                        <span className="w-10 text-right text-xs font-semibold text-slate-600">{conversionPct}%</span>
+                        <span className="w-10 text-right text-xs font-semibold text-slate-600">
+                          {conversionPct}%
+                        </span>
                       </div>
                     </td>
                   </tr>

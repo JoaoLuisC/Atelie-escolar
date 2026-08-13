@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
-import { formatToday } from './utils/format';
+import { formatToday } from '../../utils/date';
+import { ROUTES } from '../../constants/routes';
 
 const NAV_SECTIONS = [
   {
@@ -87,9 +88,7 @@ function NavItem({ active, label, icon, onClick }) {
       type="button"
       onClick={onClick}
       className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-        active
-          ? 'bg-violet-600 text-white shadow-sm'
-          : 'text-slate-700 hover:bg-slate-100'
+        active ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'
       }`}
     >
       <i className={`bi bi-${icon} text-base`} />
@@ -186,7 +185,7 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
 
         <nav className="flex-1 overflow-y-auto p-3">
           <Link
-            to="/"
+            to={ROUTES.home}
             className="mb-2 flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
           >
             <i className="bi bi-shop text-base" />
@@ -223,7 +222,9 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
             <i className="bi bi-person-circle text-xl text-slate-400" />
             <div className="min-w-0">
               <div className="truncate text-xs font-semibold text-slate-700">{userLabel}</div>
-              <div className="truncate text-[10px] uppercase tracking-wide text-slate-500">Sessão admin</div>
+              <div className="truncate text-[10px] uppercase tracking-wide text-slate-500">
+                Sessão admin
+              </div>
             </div>
           </div>
           <button
@@ -253,9 +254,7 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
           <span className="hidden text-sm text-slate-500 sm:inline">{today}</span>
         </header>
 
-        <main className="flex-1 overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6">
-          {children}
-        </main>
+        <main className="flex-1 overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6">{children}</main>
       </div>
     </div>
   );

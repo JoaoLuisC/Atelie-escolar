@@ -3,12 +3,7 @@ import { useEffect, useState } from 'react';
 import { ModalWizard } from './ModalWizard';
 import { useToast } from '../hooks/useToast';
 
-export function CategoryWizard({
-  isOpen,
-  onClose,
-  onSubmit,
-  initialCategory = null,
-}) {
+export function CategoryWizard({ isOpen, onClose, onSubmit, initialCategory = null }) {
   const { pushToast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
@@ -94,7 +89,10 @@ export function CategoryWizard({
     >
       <div className="flex flex-col gap-4">
         <div>
-          <label htmlFor="cat-name" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label
+            htmlFor="cat-name"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
             Nome da categoria *
           </label>
           <input
@@ -109,7 +107,10 @@ export function CategoryWizard({
         </div>
 
         <div>
-          <label htmlFor="cat-color" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label
+            htmlFor="cat-color"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
             Cor de destaque
           </label>
           <div className="flex items-center gap-3">
@@ -121,7 +122,10 @@ export function CategoryWizard({
               onChange={handleInputChange}
               className="h-10 w-16 cursor-pointer rounded-lg border border-slate-200 bg-white"
             />
-            <div aria-live="polite" className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+            <div
+              aria-live="polite"
+              className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"
+            >
               <span
                 aria-hidden="true"
                 className="h-5 w-5 rounded ring-1 ring-slate-200"
@@ -143,7 +147,9 @@ export function CategoryWizard({
             className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
           />
           <span>
-            <span className="block text-sm font-semibold text-slate-800">★ Evidenciar na página de produtos</span>
+            <span className="block text-sm font-semibold text-slate-800">
+              ★ Evidenciar na página de produtos
+            </span>
             <span className="block text-xs text-slate-500">
               Categorias evidenciadas aparecem em destaque no topo da lista de produtos.
             </span>

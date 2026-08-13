@@ -6,8 +6,7 @@ function DeltaBadge({ trend, pct }) {
   if (trend === 'up') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-bold text-emerald-700 ring-1 ring-emerald-200">
-        <i className="bi bi-arrow-up-right" />
-        +{pct.toFixed(1)}%
+        <i className="bi bi-arrow-up-right" />+{pct.toFixed(1)}%
       </span>
     );
   }
@@ -41,7 +40,10 @@ export function ComparisonTab({ monthlyComparison, comparisonDelta }) {
     >
       <div className="grid gap-3 sm:grid-cols-2">
         {monthlyComparison.map((month, index) => (
-          <article key={month.label} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <article
+            key={month.label}
+            className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"
+          >
             <p className="text-xs uppercase tracking-wide text-slate-500">
               {index === 0 ? 'Mês anterior' : 'Mês atual'}
             </p>

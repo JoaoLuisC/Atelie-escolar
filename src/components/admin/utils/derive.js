@@ -1,4 +1,5 @@
-import { toDateSafe } from './format';
+import { classifyByCumulative } from '../../../utils/abc';
+import { toDateSafe } from '../../../utils/date';
 
 export function deriveApprovedOrders(orders) {
   return (orders || []).filter((order) => order.paymentStatus === 'approved');
@@ -112,7 +113,8 @@ export function deriveCategoryRevenue(products, approvedOrders, limit = 5) {
     for (const item of order.items || []) {
       const id = String(item.id || item.productId || '');
       const category = productCategory[id] || 'Sem categoria';
-      buckets[category] = (buckets[category] || 0) + Number(item.price || 0) * Number(item.quantity || 0);
+      buckets[category] =
+        (buckets[category] || 0) + Number(item.price || 0) * Number(item.quantity || 0);
     }
   }
 
@@ -150,13 +152,17 @@ export function deriveFaturamentoSeries(approvedOrders, monthsCount = 6) {
   }
 
   const max = Math.max(1, ...months.map((item) => item.value), 1);
-  return months.map((item) => ({ ...item, pct: Math.max(8, Math.round((item.value / max) * 100)) }));
+  return months.map((item) => ({
+    ...item,
+    pct: Math.max(8, Math.round((item.value / max) * 100)),
+  }));
 }
 
 export function deriveTicketMedio(monthlyComparison) {
-  const [prev, current] = monthlyComparison.length >= 2
-    ? monthlyComparison
-    : [{ avg: 0, qty: 0 }, monthlyComparison[0] || { avg: 0, qty: 0 }];
+  const [prev, current] =
+    monthlyComparison.length >= 2
+      ? monthlyComparison
+      : [{ avg: 0, qty: 0 }, monthlyComparison[0] || { avg: 0, qty: 0 }];
 
   const currentAvg = Number(current?.avg || 0);
   const prevAvg = Number(prev?.avg || 0);
@@ -206,9 +212,7 @@ export function deriveAbcCurve(productPerformance) {
     const rev = Number(product.rev || 0);
     cumulative += rev;
     const cumulativePct = (cumulative / totalRevenue) * 100;
-    let curve = 'C';
-    if (cumulativePct <= 80) curve = 'A';
-    else if (cumulativePct <= 95) curve = 'B';
+    const rank = index + 1;
     return {
       id: product.id,
       name: product.name,
@@ -216,15 +220,18 @@ export function deriveAbcCurve(productPerformance) {
       qty: Number(product.qty || 0),
       sharePct: (rev / totalRevenue) * 100,
       cumulativePct,
-      rank: index + 1,
-      curve,
+      rank,
+      curve: classifyByCumulative(cumulativePct, rank),
     };
   });
 
-  const summary = items.reduce((acc, item) => {
-    acc[item.curve] = (acc[item.curve] || 0) + 1;
-    return acc;
-  }, { A: 0, B: 0, C: 0 });
+  const summary = items.reduce(
+    (acc, item) => {
+      acc[item.curve] = (acc[item.curve] || 0) + 1;
+      return acc;
+    },
+    { A: 0, B: 0, C: 0 },
+  );
 
   return { totalRevenue, items, summary };
 }
@@ -249,7 +256,9 @@ export function deriveMonthSparkline(approvedOrders, days = 14) {
 }
 
 export function parseHomeSectionsSetting(raw, categories) {
-  const categoryById = new Map((categories || []).map((category) => [String(category.id), category]));
+  const categoryById = new Map(
+    (categories || []).map((category) => [String(category.id), category]),
+  );
   const sections = Array.isArray(raw?.sections) ? raw.sections : [];
 
   const parsed = sections
@@ -291,7 +300,9 @@ export function parseHomeSectionsSetting(raw, categories) {
 
   const defaults = (categories || [])
     .filter((category) => category.active !== false)
-    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }))
+    .sort((a, b) =>
+      String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }),
+    )
     .slice(0, 3)
     .map((category) => ({
       localId: `section-${Math.random().toString(36).slice(2, 10)}`,
@@ -304,8 +315,20 @@ export function parseHomeSectionsSetting(raw, categories) {
 
   return [
     ...defaults,
-    { localId: `section-${Math.random().toString(36).slice(2, 10)}`, type: 'best_sellers', title: 'Mais vendidos', limit: 8, enabled: true },
-    { localId: `section-${Math.random().toString(36).slice(2, 10)}`, type: 'new_arrivals', title: 'Novidades', limit: 8, enabled: true },
+    {
+      localId: `section-${Math.random().toString(36).slice(2, 10)}`,
+      type: 'best_sellers',
+      title: 'Mais vendidos',
+      limit: 8,
+      enabled: true,
+    },
+    {
+      localId: `section-${Math.random().toString(36).slice(2, 10)}`,
+      type: 'new_arrivals',
+      title: 'Novidades',
+      limit: 8,
+      enabled: true,
+    },
   ];
 }
 

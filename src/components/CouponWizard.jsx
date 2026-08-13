@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { ModalWizard } from './ModalWizard';
 import { useToast } from '../hooks/useToast';
 
-const INPUT_CLASS = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
+const INPUT_CLASS =
+  'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
 const LABEL_CLASS = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
 function emptyForm() {
@@ -37,8 +38,10 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
         id: initialCoupon.id || '',
         code: initialCoupon.code || '',
         discountType: initialCoupon.discountType || 'percent',
-        discountValue: initialCoupon.discountValue != null ? String(initialCoupon.discountValue) : '',
-        minOrderAmount: initialCoupon.minOrderAmount != null ? String(initialCoupon.minOrderAmount) : '',
+        discountValue:
+          initialCoupon.discountValue != null ? String(initialCoupon.discountValue) : '',
+        minOrderAmount:
+          initialCoupon.minOrderAmount != null ? String(initialCoupon.minOrderAmount) : '',
         maxUses: initialCoupon.maxUses != null ? String(initialCoupon.maxUses) : '',
         validUntil: toDateInputValue(initialCoupon.validUntil),
         active: initialCoupon.active !== false,
@@ -105,7 +108,9 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
     >
       <div className="flex flex-col gap-4">
         <div>
-          <label htmlFor="coupon-code" className={LABEL_CLASS}>Código *</label>
+          <label htmlFor="coupon-code" className={LABEL_CLASS}>
+            Código *
+          </label>
           <input
             id="coupon-code"
             type="text"
@@ -116,12 +121,16 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
             maxLength={64}
             className={`${INPUT_CLASS} font-mono uppercase`}
           />
-          <p className="mt-1 text-xs text-slate-500">Letras, números, ponto, hífen e underscore. Sem espaços.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Letras, números, ponto, hífen e underscore. Sem espaços.
+          </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="coupon-type" className={LABEL_CLASS}>Tipo de desconto</label>
+            <label htmlFor="coupon-type" className={LABEL_CLASS}>
+              Tipo de desconto
+            </label>
             <select
               id="coupon-type"
               name="discountType"
@@ -154,7 +163,9 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="coupon-min" className={LABEL_CLASS}>Pedido mínimo (R$)</label>
+            <label htmlFor="coupon-min" className={LABEL_CLASS}>
+              Pedido mínimo (R$)
+            </label>
             <input
               id="coupon-min"
               type="number"
@@ -168,7 +179,9 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
             />
           </div>
           <div>
-            <label htmlFor="coupon-max-uses" className={LABEL_CLASS}>Limite de usos</label>
+            <label htmlFor="coupon-max-uses" className={LABEL_CLASS}>
+              Limite de usos
+            </label>
             <input
               id="coupon-max-uses"
               type="number"
@@ -184,7 +197,9 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
         </div>
 
         <div>
-          <label htmlFor="coupon-valid-until" className={LABEL_CLASS}>Válido até</label>
+          <label htmlFor="coupon-valid-until" className={LABEL_CLASS}>
+            Válido até
+          </label>
           <input
             id="coupon-valid-until"
             type="date"

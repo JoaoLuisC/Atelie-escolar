@@ -3,6 +3,7 @@ import { useContext, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { CartContext } from '../providers/CartProvider';
 import { formatPrice } from '../utils/currency';
+import { ROUTES } from '../constants/routes';
 
 /**
  * Drawer lateral de carrinho (regra B3 — carrinho não bloqueia navegação).
@@ -131,9 +132,13 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
       >
         <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Seu carrinho</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-brand-600">
+              Seu carrinho
+            </p>
             <h2 id="cart-drawer-title" className="font-display text-lg font-bold text-slate-900">
-              {cart.length === 0 ? 'Nada por aqui ainda' : `${cart.length} item${cart.length === 1 ? '' : 's'}`}
+              {cart.length === 0
+                ? 'Nada por aqui ainda'
+                : `${cart.length} item${cart.length === 1 ? '' : 's'}`}
             </h2>
           </div>
           <button
@@ -152,7 +157,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
               <i className="bi bi-cart3 text-4xl text-slate-300" aria-hidden="true" />
               <p className="text-sm">Seu carrinho está vazio.</p>
               <Link
-                to="/produtos"
+                to={ROUTES.produtos}
                 onClick={onClose}
                 className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
               >
@@ -183,7 +188,9 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <strong className="line-clamp-2 text-sm text-slate-800">{item.name}</strong>
-                    <p className="mt-1 text-sm font-semibold text-brand-700">{formatPrice(item.price)}</p>
+                    <p className="mt-1 text-sm font-semibold text-brand-700">
+                      {formatPrice(item.price)}
+                    </p>
                   </div>
                   <button
                     type="button"

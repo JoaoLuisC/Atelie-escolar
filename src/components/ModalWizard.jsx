@@ -111,7 +111,9 @@ export function ModalWizard({
       >
         <header className="border-b border-slate-200 px-5 py-4">
           <div className="flex items-start justify-between gap-3">
-            <h2 id="modal-wizard-title" className="font-heading text-lg font-bold text-slate-900">{title}</h2>
+            <h2 id="modal-wizard-title" className="font-heading text-lg font-bold text-slate-900">
+              {title}
+            </h2>
             <button
               type="button"
               onClick={onClose}

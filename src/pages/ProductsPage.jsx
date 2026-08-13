@@ -57,13 +57,22 @@ export function ProductsPage() {
         pathname="/produtos"
       />
       <section className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50">
-        <div aria-hidden="true" className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-brand-400/30 blur-3xl" />
-        <div aria-hidden="true" className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-accent-sky/20 blur-3xl" />
+        <div
+          aria-hidden="true"
+          className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-brand-400/30 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-accent-sky/20 blur-3xl"
+        />
 
         <div className="relative mx-auto max-w-6xl px-4 py-12 lg:px-6 lg:py-16">
           <h1 className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl lg:text-5xl">
-            Banners para toda<br />
-            <span className="bg-gradient-to-r from-brand-600 to-accent-pink bg-clip-text text-transparent">ocasião escolar</span>
+            Banners para toda
+            <br />
+            <span className="bg-gradient-to-r from-brand-600 to-accent-pink bg-clip-text text-transparent">
+              ocasião escolar
+            </span>
           </h1>
         </div>
       </section>
@@ -98,7 +107,10 @@ export function ProductsPage() {
               </button>
 
               <div className="flex flex-1 flex-wrap gap-1.5 overflow-x-auto">
-                <CategoryChip active={activeCategory === 'all'} onClick={() => selectCategory('all')}>
+                <CategoryChip
+                  active={activeCategory === 'all'}
+                  onClick={() => selectCategory('all')}
+                >
                   Todos
                 </CategoryChip>
                 {featuredCategories.map((category) => (
@@ -112,7 +124,10 @@ export function ProductsPage() {
                 ))}
               </div>
 
-              <SortDropdown value={activeSort} onChange={(event) => setActiveSort(event.target.value)} />
+              <SortDropdown
+                value={activeSort}
+                onChange={(event) => setActiveSort(event.target.value)}
+              />
             </div>
 
             {canShowResultsCount ? (
@@ -121,7 +136,12 @@ export function ProductsPage() {
               </p>
             ) : null}
 
-            <ProductGrid error={error} loading={loading} onAddToCart={onAddToCart} products={filteredProducts} />
+            <ProductGrid
+              error={error}
+              loading={loading}
+              onAddToCart={onAddToCart}
+              products={filteredProducts}
+            />
           </div>
         </div>
       </section>

@@ -2,7 +2,10 @@ import PropTypes from 'prop-types';
 
 export function StatusStepper({ activeStep, description = '', steps }) {
   return (
-    <section aria-label="Progresso do processo" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section
+      aria-label="Progresso do processo"
+      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+    >
       <ol className="grid gap-3 sm:grid-cols-3">
         {steps.map((step, index) => {
           const isActive = index === activeStep;
@@ -22,7 +25,9 @@ export function StatusStepper({ activeStep, description = '', steps }) {
                 isActive ? 'bg-brand-50/60 ring-brand-200' : 'ring-slate-100'
               }`}
             >
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${circleClasses}`}>
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${circleClasses}`}
+              >
                 {isComplete ? <i className="bi bi-check2" /> : index + 1}
               </span>
               <div className="min-w-0">
@@ -34,7 +39,9 @@ export function StatusStepper({ activeStep, description = '', steps }) {
         })}
       </ol>
       {description ? (
-        <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{description}</p>
+        <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          {description}
+        </p>
       ) : null}
     </section>
   );

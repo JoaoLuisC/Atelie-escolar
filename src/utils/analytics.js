@@ -72,10 +72,9 @@ function loadMetaPixel() {
   if (pixelLoaded || !PIXEL_ID || typeof globalThis.document === 'undefined') return;
 
   if (!globalThis.window.fbq) {
-    /* eslint-disable */
-    (function(f, b, e, v, n, t, s) {
+    (function (f, b, e, v, n, t, s) {
       if (f.fbq) return;
-      n = f.fbq = function() {
+      n = f.fbq = function () {
         n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
       };
       if (!f._fbq) f._fbq = n;
@@ -88,8 +87,12 @@ function loadMetaPixel() {
       t.src = v;
       s = b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t, s);
-    })(globalThis.window, globalThis.document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
-    /* eslint-enable */
+    })(
+      globalThis.window,
+      globalThis.document,
+      'script',
+      'https://connect.facebook.net/en_US/fbevents.js',
+    );
   }
 
   globalThis.window.fbq('init', PIXEL_ID);
@@ -137,7 +140,6 @@ export function initAnalytics() {
 
   // Captura UTM da landing inicial (one-time, antes de qualquer evento)
   try {
-    // eslint-disable-next-line global-require
     import('./attribution').then(({ captureAttributionFromUrl }) => captureAttributionFromUrl());
   } catch {
     /* ignore */
