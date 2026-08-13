@@ -535,6 +535,60 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
       expect(store.rows('orders')[0].payment_status).toBe('approved');
     });
 
+    it('persiste a aprovação mesmo quando os tokens JÁ existem (pedido não fica pending)', async () => {
+      // O bug: o UPDATE de `orders` morava dentro da função que criava os
+      // tokens, e ela só rodava quando não havia nenhum. Bastava um poll morrer
+      // entre o INSERT dos tokens e o UPDATE (504 do Supabase) para as duas
+      // condições divergirem: dali em diante todo poll via "já tem token",
+      // pulava a criação — e com ela o único ponto que escrevia em `orders` —
+      // mas ainda devolvia `approved` montado em memória. O comprador baixava
+      // os arquivos e o pedido ficava `pending` PARA SEMPRE no banco: fora do
+      // painel, fora do faturamento, e invisível para a sequência pós-compra,
+      // que filtra `payment_status = 'approved'`.
+      const { handler, store } = arrangeVerify({
+        tokens: [{
+          order_id: ORDER_ID, product_id: 'p1', product_name: 'Kit de Atividades',
+          token: 'token-de-poll-anterior', used: false,
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          created_at: '2026-08-12T10:05:00.000Z',
+        }],
+        searchResults: [approvedPayment({ id: 'MP-OK' })],
+      });
+      const res = createMockRes();
+
+      await handler(verifyRequest(), res);
+
+      // A asserção que importa é sobre o BANCO, não sobre o corpo: era
+      // exatamente a divergência entre os dois que definia o bug.
+      const [order] = store.rows('orders');
+      expect(order.payment_status).toBe('approved');
+      expect(order.status).toBe('completed');
+      expect(order.payment_id).toBe('MP-OK');
+      expect(order.completed_at).toEqual(expect.any(String));
+
+      // E sem emitir credencial nova: o token existente é reaproveitado.
+      expect(store.rows('download_tokens')).toHaveLength(1);
+      expect(store.spies.insertIntoTable).not.toHaveBeenCalled();
+      expect(res.body.order.downloadTokens[0].token).toBe('token-de-poll-anterior');
+    });
+
+    it('não redispara o provisionamento quando outro processo já aprovou', async () => {
+      // Provisionamento é e-mail para o comprador. Antes ele saía sempre que os
+      // tokens fossem criados — condição diferente de "esta é a primeira
+      // aprovação". Numa corrida em que o webhook aprovou e este poll criou os
+      // tokens, o convite de senha ia duas vezes.
+      const { handler, ensureCustomerAccountFromCheckout } = arrangeVerify({
+        order: baseOrder({ payment_status: 'approved', status: 'completed' }),
+        searchResults: [approvedPayment()],
+      });
+      const res = createMockRes();
+
+      await handler(verifyRequest(), res);
+
+      expect(ensureCustomerAccountFromCheckout).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+    });
+
     it('um pagamento forjado mais recente não impede a aprovação do legítimo', async () => {
       const { handler, store } = arrangeVerify({
         // A busca vem ordenada por date_created desc: o forjado (mais novo)
@@ -640,6 +694,32 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
         expect(noWebhook.store.rows('orders')[0].payment_status).toBe(esperado);
         expect(noVerify.store.rows('orders')[0].payment_status).toBe(esperado);
       }
+    });
+
+    it('as duas aceitam a folga de 1 centavo em valor que quebra em ponto flutuante', async () => {
+      // Regressão de aritmética, não de política: com due=2.29 e paid=2.28, a
+      // forma ingênua `paid + 0.01 < due` vale 2.2899999999999996 < 2.29 →
+      // TRUE, e um pagamento exatamente dentro da folga era recusado. O erro
+      // cai sempre no falso negativo — recusar quem pagou certo —, e no webhook
+      // isso não é reprocessado: vira cliente pago sem produto. A comparação em
+      // centavos inteiros elimina a classe sem mover o limite.
+      const centavo = { total_amount: 2.29 };
+      const pago = { transaction_amount: 2.28 };
+
+      const noWebhook = arrangeWebhook({ order: baseOrder(centavo), payment: approvedPayment(pago) });
+      await noWebhook.handler(webhookRequest(), createMockRes());
+
+      resetModuleRegistry();
+
+      const noVerify = arrangeVerify({
+        order: baseOrder(centavo),
+        searchResults: [approvedPayment(pago)],
+      });
+      await noVerify.handler(verifyRequest(), createMockRes());
+
+      expect(noWebhook.store.rows('orders')[0].payment_status).toBe('approved');
+      expect(noVerify.store.rows('orders')[0].payment_status).toBe('approved');
+      expect(noWebhook.security.recordSecurityEvent).not.toHaveBeenCalled();
     });
 
     it('as duas recusam pagamento de sandbox quando o runtime é produção', async () => {

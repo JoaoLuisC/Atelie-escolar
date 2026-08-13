@@ -120,14 +120,30 @@ module.exports = async function downloadHandler(req, res) {
 
     const finalUrl = signedUrl;
 
-    await insertIntoTable('download_logs', {
-      order_id: tokenRecord.order_id,
-      product_id: tokenRecord.product_id,
-      token,
-      ip_address: extractClientIp(req) || '',
-      user_agent: String(req.headers['user-agent'] || ''),
-      downloaded_at: new Date().toISOString(),
-    });
+    // Log de auditoria BEST-EFFORT, e a ordem dos fatos explica por quê: neste
+    // ponto o token já foi reivindicado (irreversível — devolver o claim aqui
+    // liberaria um segundo download) e a URL assinada já existe. Se este INSERT
+    // subisse a exceção, ele cairia no catch geral, o comprador receberia 500 e
+    // a próxima tentativa bateria em "Token já utilizado": o cliente PAGOU e
+    // nunca baixa o arquivo, por causa de uma escrita que não decide nada.
+    //
+    // A troca é deliberada: uma linha de auditoria a menos custa menos que uma
+    // entrega perdida, e o fato do uso não se perde — `download_tokens.used_at`
+    // já foi carimbado no claim atômico acima, que é o registro que importa para
+    // a regra de uso único. A falha vai para o stdout (capturado pela Vercel)
+    // para não sumir em silêncio.
+    try {
+      await insertIntoTable('download_logs', {
+        order_id: tokenRecord.order_id,
+        product_id: tokenRecord.product_id,
+        token,
+        ip_address: extractClientIp(req) || '',
+        user_agent: String(req.headers['user-agent'] || ''),
+        downloaded_at: new Date().toISOString(),
+      });
+    } catch (logErr) {
+      console.error('[download] falha ao gravar download_logs (entrega segue):', logErr.message);
+    }
 
     // Referrer-Policy: no-referrer e Cache-Control: no-store já foram postos no
     // topo do handler (valem para todas as respostas, não só para este redirect).

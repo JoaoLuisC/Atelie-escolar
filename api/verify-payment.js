@@ -26,17 +26,44 @@ const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 // ════════════════════════════════════════════════════════════════════
 const { checkPaymentIntegrity } = require('../lib/payment-integrity');
 
+// A busca traz os pagamentos MAIS RECENTES primeiro, e avaliamos todos até
+// achar um que reconcilie (ver refreshApprovedOrderData). Com uma janela curta,
+// porém, essa defesa tem fundo falso: bastam `limit` pagamentos aprovados mais
+// novos para EXPULSAR o legítimo da página, e aí nenhum candidato reconcilia —
+// exatamente a negação de serviço contra o próprio comprador que a avaliação
+// multi-candidato existe para impedir. Passamos de 5 para o teto da API (o MP
+// limita a busca de pagamentos a 30 por página), o que torna o ataque bem mais
+// caro sem paginar.
+//
+// Deliberadamente NÃO paginamos: isto roda no caminho de polling do checkout,
+// varrer páginas daria ao atacante um jeito de multiplicar nossas chamadas ao
+// MP. Em vez disso, sinalizamos o truncamento (ver `truncated`) para que o caso
+// apareça no evento de segurança em vez de virar "pedido travado" silencioso —
+// e o backstop continua sendo o webhook, que busca o pagamento POR ID e por
+// isso não depende de janela nenhuma.
+const APPROVED_SEARCH_LIMIT = 30;
+
 async function fetchApprovedPayments(orderId) {
   const mpClient = initializeMercadoPago();
   const paymentApi = new mercadopago.Payment(mpClient);
 
   const searchResult = await paymentApi.search({
-    options: { external_reference: orderId, sort: 'date_created', criteria: 'desc', limit: 5 },
+    options: {
+      external_reference: orderId,
+      sort: 'date_created',
+      criteria: 'desc',
+      limit: APPROVED_SEARCH_LIMIT,
+    },
   });
 
-  return (searchResult.results || []).filter(
-    (payment) => payment.status === 'approved' && payment.external_reference === orderId
-  );
+  const results = searchResult.results || [];
+  return {
+    approved: results.filter(
+      (payment) => payment.status === 'approved' && payment.external_reference === orderId
+    ),
+    // Página cheia = pode haver pagamento legítimo fora da janela.
+    truncated: results.length >= APPROVED_SEARCH_LIMIT,
+  };
 }
 
 async function loadOrder(orderId) {
@@ -64,10 +91,49 @@ async function loadDownloadTokens(orderInternalId) {
   });
 }
 
-// PRÉ-CONDIÇÃO: só pode ser chamada depois de checkPaymentIntegrity() devolver
-// `ok: true` para o pagamento. Esta função emite os tokens de download e aprova
-// o pedido — não existe checagem de valor aqui dentro.
-async function createTokensForOrder(order, items, paymentId) {
+// ════════════════════════════════════════════════════════════════════
+// TRANSIÇÃO E EMISSÃO SÃO INDEPENDENTES — e por que isso é um conserto.
+//
+// Antes, o UPDATE de `orders` morava DENTRO da função que criava os tokens, e
+// ela só era chamada quando ainda não existia nenhum token. Isso acoplava duas
+// condições que não são a mesma: "faltam tokens" e "o pedido ainda não está
+// aprovado". Basta um poll morrer no meio (o INSERT dos tokens passou, o UPDATE
+// levou 504) para elas divergirem — e a partir daí:
+//   • o poll seguinte via `existingTokens.length > 0`, pulava a criação, e com
+//     ela pulava o ÚNICO ponto que escrevia em `orders`;
+//   • ainda assim devolvia ao cliente `payment_status: 'approved'` montado em
+//     memória. O comprador via "aprovado" e baixava os arquivos;
+//   • no banco o pedido ficava `pending` PARA SEMPRE. Some do painel, não entra
+//     no faturamento, e a sequência pós-compra (que filtra
+//     `payment_status = 'approved'`) nunca dispara. Venda entregue e invisível.
+//
+// Agora cada efeito tem sua própria guarda, exatamente como em api/webhook.js:
+// a transição é sempre TENTADA quando o pagamento reconcilia (condicionada em
+// `neq.approved`, então é idempotente e barata), os tokens são criados só se não
+// houver nenhum, e o provisionamento só na primeira aprovação. É a mesma
+// disciplina que o webhook já seguia — mais uma assimetria entre as duas portas
+// que deixa de existir.
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * Transição idempotente para approved. Devolve as linhas AFETADAS: array vazio
+ * significa "outro processo (webhook ou outro poll) já aprovou este pedido".
+ *
+ * PRÉ-CONDIÇÃO: só pode ser chamada depois de checkPaymentIntegrity() devolver
+ * `ok: true` — não existe checagem de valor aqui dentro.
+ */
+async function markOrderApproved(order, paymentId) {
+  return updateTable('orders',
+    { id: `eq.${order.id}`, payment_status: 'neq.approved' },
+    {
+      payment_status: 'approved',
+      status: 'completed',
+      payment_id: paymentId,
+      completed_at: new Date().toISOString(),
+    });
+}
+
+async function createTokensForOrder(order, items) {
   for (const item of items) {
     const token = crypto.randomBytes(32).toString('hex');
     try {
@@ -87,25 +153,6 @@ async function createTokensForOrder(order, items, paymentId) {
         throw err;
       }
     }
-  }
-
-  // Transição idempotente: só marca completed quem ainda não estava approved.
-  await updateTable('orders',
-    { id: `eq.${order.id}`, payment_status: 'neq.approved' },
-    {
-      payment_status: 'approved',
-      status: 'completed',
-      payment_id: paymentId,
-      completed_at: new Date().toISOString(),
-    });
-
-  try {
-    await ensureCustomerAccountFromCheckout({
-      email: order.customer_email,
-      name: order.customer_name,
-    });
-  } catch (provisionErr) {
-    console.error('[verify-payment] Falha ao provisionar conta de cliente:', provisionErr.message);
   }
 
   // Devolve o conjunto canônico efetivamente persistido (cobre a corrida).
@@ -135,7 +182,7 @@ async function refreshApprovedOrderData(order, orderId, req) {
   }
 
   try {
-    const approvedPayments = await fetchApprovedPayments(orderId);
+    const { approved: approvedPayments, truncated } = await fetchApprovedPayments(orderId);
     if (!approvedPayments.length) {
       return order;
     }
@@ -194,6 +241,11 @@ async function refreshApprovedOrderData(order, orderId, req) {
             ? null
             : Boolean(suspect.payment.live_mode),
           approved_candidates: approvedPayments.length,
+          // `true` = a página da busca veio cheia, então PODE existir um
+          // pagamento legítimo fora dela. Distingue "recusei o que vi" de "pode
+          // ser que eu não tenha visto o certo" — sem isso, um pedido travado
+          // por saturação da janela seria indistinguível de fraude comum.
+          candidates_truncated: truncated,
         },
       });
       return order;
@@ -201,18 +253,44 @@ async function refreshApprovedOrderData(order, orderId, req) {
 
     const approvedPayment = reconciled.payment;
 
+    // 1. TRANSIÇÃO — sempre tentada, e antes de qualquer outra escrita. É ela
+    //    que define a verdade no banco; o resto da função só monta a resposta.
+    const transitioned = await markOrderApproved(order, approvedPayment.id);
+    const isFirstApproval = Array.isArray(transitioned) && transitioned.length > 0;
+
+    // 2. TOKENS — só cria se ainda não houver nenhum (o webhook ou outro poll
+    //    pode ter vencido a corrida). Emitir de novo seria credencial extra.
     const orderItems = await loadOrderItems(order.id);
     const existingTokens = await loadDownloadTokens(order.id);
     const downloadTokens = existingTokens.length
       ? mapTokenRows(existingTokens)
-      : await createTokensForOrder(order, orderItems, approvedPayment.id);
+      : await createTokensForOrder(order, orderItems);
+
+    // 3. PROVISIONAMENTO — só na primeira aprovação, igual ao webhook. Antes
+    //    era disparado sempre que os tokens fossem criados, o que é condição
+    //    diferente: numa corrida em que o webhook aprovou e este poll criou os
+    //    tokens, o comprador recebia o convite de senha duas vezes.
+    if (isFirstApproval) {
+      try {
+        await ensureCustomerAccountFromCheckout({
+          email: order.customer_email,
+          name: order.customer_name,
+        });
+      } catch (provisionErr) {
+        console.error('[verify-payment] Falha ao provisionar conta de cliente:', provisionErr.message);
+      }
+    }
+
+    // A resposta reflete o que foi PERSISTIDO. Quando o UPDATE afetou a linha,
+    // ela é a fonte da verdade (inclusive `completed_at` real, não um carimbo
+    // novo a cada poll); quando não afetou, outro processo já aprovou e relemos
+    // para não inventar estado — é essa releitura que impede o pedido de ficar
+    // `pending` no banco enquanto o cliente vê "aprovado" na tela.
+    const persisted = transitioned?.[0] || await loadOrder(orderId) || order;
 
     return {
       ...order,
-      payment_status: 'approved',
-      status: 'completed',
-      payment_id: approvedPayment.id,
-      completed_at: new Date().toISOString(),
+      ...persisted,
       downloadTokens,
       // Reaproveitado no handler para não recarregar order_items na mesma chamada.
       orderItems,
