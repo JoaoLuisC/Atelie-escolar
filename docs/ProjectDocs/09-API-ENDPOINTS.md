@@ -13,7 +13,7 @@
   - **Admin** — cookie `admin_session` (HttpOnly, SameSite=Strict) emitido em `/api/admin-login`
   - **Webhook** — header `x-signature` validado por HMAC com `WEBHOOK_SECRET`
   - **Cron** — header `X-Cron-Secret: <CRON_SECRET>` (comparação timing-safe; nunca via query string)
-- **Erros:** JSON com shape `{ "error": "mensagem humana" }` (vários handlers incluem também `"success": false`). Código de máquina só onde faz diferença: `code` no `/api/validate-coupon` e no 404 de produção (`_notfound`)
+- **Erros:** JSON com shape `{ "error": "mensagem humana" }` (vários handlers incluem também `"success": false`). Código de máquina só onde faz diferença: `code` no `/api/validate-coupon` e no 404 de produção (`notfound`)
 - **Rate-limit:** implementado com `express-rate-limit`, ou seja, **só vale em dev/Express** — na Vercel serverless não há store compartilhado (pendência API-03). Retornos 429 usam os headers padrão `RateLimit-*` + `Retry-After`
 
 ---
@@ -367,7 +367,7 @@ Disparado pelo workflow `email-cron.yml` (GitHub Actions) de hora em hora (`cron
 
 ## 8. Express routes (não em `api/` — existem SÓ em dev)
 
-Rotas montadas direto no Express via `server.js`/`routes/`. **Na Vercel elas não existem** (caem no 404 JSON de `api/_notfound.js`):
+Rotas montadas direto no Express via `server.js`/`routes/`. **Na Vercel elas não existem** (caem no 404 JSON de `api/notfound.js`):
 
 | Path | Métodos | Arquivo | Descrição |
 |---|---|---|---|
@@ -386,7 +386,7 @@ Rotas montadas direto no Express via `server.js`/`routes/`. **Na Vercel elas nã
 | 400 | Payload/query inválido (item sem `productId`, e-mail malformado, chave de setting fora da whitelist etc.) |
 | 401 | Cookie de sessão ausente/inválido; token de download inválido, usado ou expirado; assinatura HMAC do webhook não bate; `X-Cron-Secret` errado |
 | 403 | Request cross-origin em `/api/admin-logout` e `/api/auth/customer/logout` (anti-CSRF); `/api/admin-users` recusa editar/excluir contas admin/master |
-| 404 | Recurso não existe — também usado no `verify-payment` quando o e-mail não bate (anti-enumeração) e em qualquer `/api/*` sem função na Vercel (`_notfound`, com `code: "not_found"`) |
+| 404 | Recurso não existe — também usado no `verify-payment` quando o e-mail não bate (anti-enumeração) e em qualquer `/api/*` sem função na Vercel (`notfound`, com `code: "not_found"`) |
 | 405 | Método não permitido no endpoint |
 | 409 | Duplicata (ex.: categoria com mesmo slug) |
 | 422 | Cupom não aplicável em `/api/validate-coupon` (com `code` de máquina: `not_found`, `inactive`, `not_yet_valid`, `expired`, `exhausted`, `below_min`, `not_eligible`) |

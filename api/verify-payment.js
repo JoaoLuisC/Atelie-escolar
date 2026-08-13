@@ -6,128 +6,25 @@ const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-p
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 
-// Moeda única do catálogo. Um pagamento em outra moeda não é comparável com
-// orders.total_amount (que é sempre BRL): 50 USD "≥" 200 BRL passaria numa
-// comparação numérica crua e entregaria o produto por uma fração do preço.
-const EXPECTED_CURRENCY = 'BRL';
-// Tolerância de 1 centavo: o total do pedido é somado em ponto flutuante e o
-// Mercado Pago arredonda a preferência em 2 casas. Sem a folga, um pedido de
-// R$ 89,90 pago como 89.899999… seria recusado como divergência.
-// MESMO valor de api/webhook.js — ver o bloco "PARIDADE" abaixo.
-const AMOUNT_TOLERANCE = 0.01;
-
-function isProductionRuntime() {
-  // Cópia literal de api/webhook.js: precedência APP_ENV > VERCEL_ENV > NODE_ENV
-  // (mesma de scripts/check-env.js). NODE_ENV sozinho não serve — a Vercel o
-  // define como 'production' também nos builds de preview.
-  const env = String(process.env.APP_ENV || process.env.VERCEL_ENV || process.env.NODE_ENV || '')
-    .trim()
-    .toLowerCase();
-  return env === 'production';
-}
-
 // ════════════════════════════════════════════════════════════════════
-// PARIDADE COM api/webhook.js — regressão da rodada de correção do P0-1.
+// PARIDADE COM api/webhook.js — agora ESTRUTURAL, não por disciplina.
 //
-// O QUE ESTAVA ERRADO (depois da correção, não antes)
-// A reconciliação de valor do P0-1 foi implementada nas DUAS portas que
-// aprovam pedido e emitem download_tokens — o webhook do Mercado Pago e este
-// endpoint de polling — mas com rigor DIFERENTE. O webhook é fail-closed no
-// total do pedido (`order_total_unusable`); aqui a leitura era
-// `Number(order?.total_amount || 0)`, ou seja, fail-OPEN: um pedido com
-// `total_amount` null/0/ilegível (linha corrompida, migration parcial, insert
-// que não gravou o total) fazia `due` virar 0, e então QUALQUER pagamento
-// aprovado de R$ 0,01 apontado para aquele order_code satisfazia
-// `paid + 0.01 >= 0` — o pedido era aprovado e os tokens emitidos.
+// Esta é a segunda porta que aprova pedido e emite download_tokens (a outra é
+// a notificação do Mercado Pago). Quando a reconciliação de valor do P0-1 foi
+// implementada, ela virou DUAS cópias com rigor diferente: o webhook ficou
+// fail-closed no total do pedido, e aqui a leitura era
+// `Number(order?.total_amount || 0)` — fail-OPEN. Um pedido com `total_amount`
+// null/ilegível fazia `due` virar 0 e qualquer pagamento de R$ 0,01 apontado
+// para aquele order_code satisfazia `paid + 0.01 >= 0`: pedido aprovado,
+// tokens emitidos. Um atacante não escolhe por onde a defesa é forte, então a
+// proteção inteira valia o que valia a mais frouxa das duas portas.
 //
-// POR QUE ISSO ANULA A CORREÇÃO INTEIRA
-// Um atacante não escolhe por onde a defesa é forte; ele escolhe a porta mais
-// fraca. Como as duas portas são funcionalmente equivalentes (ambas aprovam o
-// pedido e entregam o produto), a proteção do P0-1 valia exatamente o que
-// valia a mais frouxa das duas — que era nada, no caso do total ilegível.
-//
-// A REGRA
-// As duas portas têm que ser LITERALMENTE equivalentes: mesmos motivos de
-// recusa, mesmas tolerâncias, mesmo nome de evento de segurança. Qualquer
-// divergência entre elas é, por construção, um bypass. `checkPaymentIntegrity`
-// abaixo é a réplica exata de webhook.js:136-177 (incluindo os ramos
-// `payment_amount_unusable`, `amount_below_order_total` e
-// `test_payment_in_production`, que aqui simplesmente não existiam).
-//
-// PRÓXIMO PASSO recomendado: extrair para lib/payment-integrity.js e fazer as
-// duas portas importarem — duas cópias que precisam concordar são duas cópias
-// que vão divergir de novo na próxima edição.
-//
-// LIMITE CONHECIDO, COMPARTILHADO COM O WEBHOOK (deliberado, não esquecimento):
-// `total_amount === 0` continua passando nas DUAS portas — o teste é
-// `due < 0`, não `due <= 0`. Um pedido de R$ 0,00 é anômalo (nem o cupom de
-// 100% chega aqui: o MP recusa preference de valor zero), então provavelmente
-// deveria reprovar. Mas apertar SÓ este arquivo recriaria exatamente a
-// assimetria que esta correção existe para eliminar: o MP notifica o webhook
-// automaticamente em todo pagamento, então a porta frouxa aprovaria de
-// qualquer jeito e o único efeito líquido seria uma nova divergência. O aperto
-// certo é `due <= 0` nas duas ao mesmo tempo, na extração para
-// lib/payment-integrity.js.
+// A resposta não é "manter as duas cópias iguais com atenção": é não ter duas.
+// A regra e todo o raciocínio moram em lib/payment-integrity.js — inclusive o
+// aperto de `due < 0` para `due <= 0`, que ficou represado justamente até esta
+// extração porque apertar só um lado recriaria a assimetria.
 // ════════════════════════════════════════════════════════════════════
-
-/**
- * Reconciliação SERVER-SIDE do valor pago (achado P0-1).
- *
- * O gateway diz apenas "este pagamento foi aprovado"; ele não sabe (nem tem
- * como saber) quanto o pedido vale para nós. Como `external_reference` é um
- * campo escolhido por quem cria a cobrança, aprovar só por
- * `status === 'approved' && external_reference === orderId` significa que
- * QUALQUER pagamento de valor arbitrário (R$ 0,01) apontado para um pedido de
- * R$ 200 transicionava o pedido para approved e emitia os download_tokens.
- *
- * Fail-CLOSED em todos os ramos: qualquer campo ausente/ilegível — do
- * pagamento OU do pedido — reprova, porque "não consegui conferir o valor"
- * nunca pode significar "libera o produto".
- *
- * @returns {{ok: boolean, reason: string|null, currency: string, paid: number, due: number}}
- */
-function checkPaymentIntegrity(payment, order) {
-  const currency = String(payment?.currency_id || '').trim().toUpperCase();
-
-  // Number('') e Number(null) são 0, não NaN — é exatamente esse coerce que
-  // transformava total ausente em "pedido de R$ 0,00, qualquer coisa paga".
-  const toNumber = (value) => (
-    value === null || value === undefined || value === '' ? Number.NaN : Number(value)
-  );
-  const due = toNumber(order?.total_amount);
-  const paid = toNumber(payment?.transaction_amount);
-
-  // Sem a checagem de moeda, 200 unidades de uma moeda fraca satisfariam
-  // "paid >= due" e comprariam um produto de R$ 200. A loja só vende em BRL.
-  if (currency !== EXPECTED_CURRENCY) {
-    return { ok: false, reason: 'currency_mismatch', currency, paid, due };
-  }
-
-  // total_amount nulo/negativo é linha corrompida de `orders`: não sabemos
-  // quanto o pedido vale, então não temos como afirmar que foi pago.
-  if (!Number.isFinite(due) || due < 0) {
-    return { ok: false, reason: 'order_total_unusable', currency, paid, due };
-  }
-
-  if (!Number.isFinite(paid) || paid < 0) {
-    return { ok: false, reason: 'payment_amount_unusable', currency, paid, due };
-  }
-
-  if (paid + AMOUNT_TOLERANCE < due) {
-    return { ok: false, reason: 'amount_below_order_total', currency, paid, due };
-  }
-
-  // live_mode=false é pagamento de SANDBOX. Em produção ele nunca deveria
-  // aparecer: significa que o deploy está com credencial de teste e que
-  // estaríamos entregando produto real contra dinheiro que não existe. Esta
-  // porta faltava aqui inteiramente: o webhook recusava o pagamento de teste e
-  // o polling do frontend, chamando a MESMA busca no MP, aprovava.
-  if (isProductionRuntime() && payment?.live_mode === false) {
-    return { ok: false, reason: 'test_payment_in_production', currency, paid, due };
-  }
-
-  return { ok: true, reason: null, currency, paid, due };
-}
+const { checkPaymentIntegrity } = require('../lib/payment-integrity');
 
 async function fetchApprovedPayments(orderId) {
   const mpClient = initializeMercadoPago();

@@ -563,15 +563,27 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
   // verify-payment.js decidem IGUAL. A correção do P0-1 foi aplicada nas duas
   // portas com rigor diferente, e o resultado prático foi que a proteção valia
   // o que valia a mais frouxa — um pedido com total_amount ilegível era
-  // recusado pelo webhook e aprovado pelo verify por R$ 0,01. Enquanto a
-  // checagem for código duplicado (ver a recomendação de extrair
-  // lib/payment-integrity.js), este é o teste que detecta a próxima divergência
-  // em vez de deixá-la virar bypass em produção.
+  // recusado pelo webhook e aprovado pelo verify por R$ 0,01.
+  //
+  // A checagem deixou de ser duplicada (lib/payment-integrity.js), e mesmo
+  // assim este bloco continua sendo o que detecta a próxima divergência: ele
+  // exercita os dois HANDLERS de ponta a ponta, então pega o que a extração
+  // não pode impedir — uma porta que chame a função no lugar errado do fluxo
+  // (depois de já ter escrito no banco), que ignore o `ok`, ou que volte a
+  // ter lógica de valor própria. O que mudou é a classe de bug que sobra,
+  // não a necessidade do teste.
   describe('paridade webhook × verify-payment', () => {
     const CENARIOS = [
       { nome: 'total do pedido nulo', order: { total_amount: null }, payment: { transaction_amount: 0.01 }, reason: 'order_total_unusable' },
       { nome: 'total do pedido negativo', order: { total_amount: -10 }, payment: { transaction_amount: 0.01 }, reason: 'order_total_unusable' },
       { nome: 'total do pedido em string vazia', order: { total_amount: '' }, payment: { transaction_amount: 0.01 }, reason: 'order_total_unusable' },
+      // ZERO reprova desde a extração (`due <= 0`). A linha zerada é real e não
+      // hipotética: api/create-payment.js grava o pedido ANTES de criar a
+      // preference, então um cupom de 100% deixa `total_amount = 0` em `orders`
+      // mesmo quando o Mercado Pago recusa a cobrança de valor zero. Com o
+      // antigo `due < 0`, esse pedido aceitava qualquer pagamento — `0.01 +
+      // 0.01 >= 0` — e entregava os produtos por um centavo.
+      { nome: 'total do pedido zerado (cupom de 100% deixa a linha gravada)', order: { total_amount: 0 }, payment: { transaction_amount: 0.01 }, reason: 'order_total_unusable' },
       { nome: 'valor pago ausente', order: {}, payment: { transaction_amount: undefined }, reason: 'payment_amount_unusable' },
       { nome: 'valor pago negativo', order: {}, payment: { transaction_amount: -200 }, reason: 'payment_amount_unusable' },
       { nome: 'moeda diferente de BRL', order: {}, payment: { currency_id: 'USD' }, reason: 'currency_mismatch' },

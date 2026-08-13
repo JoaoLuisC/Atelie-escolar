@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -36,7 +38,29 @@ const WEBHOOK_SECRET = 'segredo-de-webhook-fixo-para-teste';
 const ORDER_CODE = 'ORD-0001';
 const ORDER_ID = 10;
 const ORDER_TOTAL = 200;
-const TOLERANCE_SECONDS = 300;
+
+// ── Os limites vêm DO MÓDULO, nunca copiados ─────────────────────────
+// Este arquivo já pagou o preço de repetir o número: enquanto a janela era de
+// 300s, `const TOLERANCE_SECONDS = 300` aqui era inofensivo; quando ela foi
+// recalibrada para 48h (ver o bloco longo em lib/mercadopago-config.js:81-151),
+// dois testes passaram a falhar em cima de um comportamento CORRETO — eles
+// afirmavam sobre o contrato ANTIGO, não sobre a intenção. Importando os
+// limites, o teste segue dizendo o que sempre quis dizer ("`ts` fora da janela
+// é recusado antes de qualquer I/O") e só fica vermelho quando ISSO quebra.
+//
+// `createRequire` em vez de `import`: é o mesmo carregador CJS que o harness
+// usa (money-path-harness.js:42), então lemos exatamente o módulo que o handler
+// vai carregar, sem depender da inferência de named exports do interop ESM.
+const requireCjs = createRequire(import.meta.url);
+const {
+  DEFAULT_WEBHOOK_TOLERANCE_SECONDS: TOLERANCE_SECONDS,
+  MAX_WEBHOOK_TOLERANCE_SECONDS: TOLERANCE_MAX_SECONDS,
+  DEFAULT_FUTURE_SKEW_SECONDS: FUTURE_SKEW_SECONDS,
+} = requireCjs('../../lib/mercadopago-config');
+
+function nowSeconds() {
+  return Math.floor(Date.now() / 1000);
+}
 
 function baseOrder(overrides = {}) {
   return {
@@ -254,13 +278,18 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
 
       // Assinatura corretamente calculada com o WEBHOOK_SECRET — só o instante
       // é antigo. É exatamente a forma de uma notificação capturada e reenviada.
-      const velho = Math.floor(Date.now() / 1000) - (TOLERANCE_SECONDS + 60);
+      // O cenário realista de vazamento (histórico de git, export de log, túnel
+      // de dev esquecido) nasce muito além da janela, que é o que a torna útil
+      // mesmo larga.
+      const velho = nowSeconds() - (TOLERANCE_SECONDS + 60);
       await handler(webhookRequest('MP-1', { requestId: 'req-replay', tsSeconds: velho }), res);
 
       expect(res.statusCode).toBe(401);
       expect(res.body).toEqual({ error: 'Invalid signature' });
 
       // Nada foi consultado nem escrito: o gate é a primeira coisa do handler.
+      // Esta é a metade do teste que NÃO depende do tamanho da janela e que
+      // precisa sobreviver a qualquer recalibração dela.
       expect(sdk.get).not.toHaveBeenCalled();
       expect(store.spies.updateTable).not.toHaveBeenCalled();
       expect(store.spies.insertIntoTable).not.toHaveBeenCalled();
@@ -275,30 +304,63 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
       expect(event.properties.tolerance_seconds).toBe(TOLERANCE_SECONDS);
     });
 
-    it('recusa assinatura datada no FUTURO além da tolerância', async () => {
+    it('recusa assinatura datada no FUTURO além da folga de skew (janela assimétrica)', async () => {
       const { handler, security, sdk } = arrange();
       const res = createMockRes();
 
-      const futuro = Math.floor(Date.now() / 1000) + (TOLERANCE_SECONDS + 60);
+      // O limite do FUTURO é derivado do skew (~2min), não da tolerância do
+      // passado (~48h) — e é essa assimetria que está sob teste: reentrega
+      // legítima é sempre um evento do passado, então o lado do futuro pode ser
+      // apertado de graça, enquanto apertar o do passado custaria "cliente
+      // pagou e não recebeu". O mesmo deslocamento no passado é ACEITO (ver o
+      // teste da reentrega de horas depois).
+      const futuro = nowSeconds() + (FUTURE_SKEW_SECONDS + 60);
       await handler(webhookRequest('MP-1', { requestId: 'req-futuro', tsSeconds: futuro }), res);
 
-      // Valor absoluto na comparação: um `ts` no futuro só vem de relógio
-      // adulterado ou skew grosseiro, e não pode virar janela infinita.
       expect(res.statusCode).toBe(401);
       expect(sdk.get).not.toHaveBeenCalled();
-      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe('stale_timestamp');
+
+      const event = security.recordSecurityEvent.mock.calls[0][0];
+      expect(event.properties.reason).toBe('stale_timestamp');
+      // Idade NEGATIVA e limite registrado = o EFETIVAMENTE violado (o do
+      // futuro). Gravar aqui a janela do passado tornaria o evento impossível
+      // de interpretar meses depois: "age=-180s, tolerance=172800s" não diz a
+      // ninguém por que a requisição foi recusada.
+      expect(event.properties.age_seconds).toBeLessThan(0);
+      expect(event.properties.tolerance_seconds).toBe(FUTURE_SKEW_SECONDS);
     });
 
-    it('aceita assinatura dentro da janela (reentrega legítima chega sempre fresca)', async () => {
+    it('aceita assinatura quase no limite da janela do passado', async () => {
       const { handler, store, sdk } = arrange();
       const res = createMockRes();
 
-      const recente = Math.floor(Date.now() / 1000) - (TOLERANCE_SECONDS - 60);
+      const recente = nowSeconds() - (TOLERANCE_SECONDS - 60);
       await handler(webhookRequest('MP-1', { requestId: 'req-fresco', tsSeconds: recente }), res);
 
       expect(res.statusCode).toBe(200);
       expect(sdk.get).toHaveBeenCalledTimes(1);
       expect(store.rows('orders')[0].payment_status).toBe('approved');
+    });
+
+    it('aceita reentrega de HORAS depois — o caso que a janela de 300s quebrava', async () => {
+      // ESTE é o desfecho que motivou a recalibração, e é por isso que ele tem
+      // teste próprio em vez de sair de graça no teste do limite acima: a
+      // primeira entrega caiu em 5xx (Supabase piscou), o Mercado Pago
+      // reentregou horas depois em backoff crescente e — se ele reaproveita o
+      // `ts` do manifesto original, que o contrato NÃO garante que não —
+      // a notificação chega com assinatura válida e horas de idade. Com 300s
+      // isso virava 401 e o pedido pago nunca era aprovado: um `if` de
+      // segurança transformando um 5xx transitório em cliente lesado.
+      const { handler, store, sdk } = arrange();
+      const res = createMockRes();
+
+      const seisHorasAtras = nowSeconds() - 6 * 60 * 60;
+      await handler(webhookRequest('MP-1', { requestId: 'req-reentrega', tsSeconds: seisHorasAtras }), res);
+
+      expect(res.statusCode).toBe(200);
+      expect(sdk.get).toHaveBeenCalledTimes(1);
+      expect(store.rows('orders')[0].payment_status).toBe('approved');
+      expect(store.rows('download_tokens')).toHaveLength(1);
     });
 
     it('respeita WEBHOOK_TOLERANCE_SECONDS, mas ignora valor inválido (fail-closed no default)', async () => {
@@ -307,24 +369,46 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
       const estreito = arrange();
       const resEstreito = createMockRes();
       await estreito.handler(
-        webhookRequest('MP-1', { requestId: 'req-a', tsSeconds: Math.floor(Date.now() / 1000) - 60 }),
+        webhookRequest('MP-1', { requestId: 'req-a', tsSeconds: nowSeconds() - 60 }),
         resEstreito,
       );
       expect(resEstreito.statusCode).toBe(401);
+      expect(estreito.security.recordSecurityEvent.mock.calls[0][0].properties.tolerance_seconds)
+        .toBe(30);
 
       // …mas um erro de digitação não pode significar "sem proteção": cai no
-      // default de 300s em vez de desligar a checagem.
+      // DEFAULT do módulo em vez de desligar a checagem. O que importa aqui não
+      // é o número, é que o fallback continua sendo um limite finito.
       resetModuleRegistry();
       process.env.WEBHOOK_TOLERANCE_SECONDS = 'zero';
       const invalido = arrange();
       const resInvalido = createMockRes();
       await invalido.handler(
-        webhookRequest('MP-1', { requestId: 'req-b', tsSeconds: Math.floor(Date.now() / 1000) - (TOLERANCE_SECONDS + 60) }),
+        webhookRequest('MP-1', { requestId: 'req-b', tsSeconds: nowSeconds() - (TOLERANCE_SECONDS + 60) }),
         resInvalido,
       );
       expect(resInvalido.statusCode).toBe(401);
       expect(invalido.security.recordSecurityEvent.mock.calls[0][0].properties.tolerance_seconds)
         .toBe(TOLERANCE_SECONDS);
+    });
+
+    it('CLAMPA valor acima do teto em vez de aceitá-lo (um zero a mais não desliga a proteção)', async () => {
+      // `WEBHOOK_TOLERANCE_SECONDS` digitado com um zero a mais desligaria a
+      // proteção na prática e ninguém perceberia — nada quebra, o sistema só
+      // fica silenciosamente replayável para sempre, que é o P1-5 de volta.
+      // Clampar (e não cair no default) é deliberado: quem escreveu um número
+      // grande quis uma janela grande, e a maior autorizada é o teto.
+      process.env.WEBHOOK_TOLERANCE_SECONDS = String(TOLERANCE_MAX_SECONDS * 100);
+      const { handler, security, sdk } = arrange();
+      const res = createMockRes();
+
+      const alemDoTeto = nowSeconds() - (TOLERANCE_MAX_SECONDS + 60);
+      await handler(webhookRequest('MP-1', { requestId: 'req-teto', tsSeconds: alemDoTeto }), res);
+
+      expect(res.statusCode).toBe(401);
+      expect(sdk.get).not.toHaveBeenCalled();
+      expect(security.recordSecurityEvent.mock.calls[0][0].properties.tolerance_seconds)
+        .toBe(TOLERANCE_MAX_SECONDS);
     });
   });
 

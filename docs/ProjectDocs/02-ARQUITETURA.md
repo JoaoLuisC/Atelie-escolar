@@ -49,7 +49,7 @@ Projeto-mae/
 │   ├── __tests__/                        # Testes dos endpoints
 │   ├── auth/customer/                    # login.js / register.js / session.js / logout.js
 │   │   └── google/                       # start.js / callback.js (OAuth Google)
-│   ├── _notfound.js                      # 404 JSON para /api/* inexistente (Vercel)
+│   ├── notfound.js                       # 404 JSON para /api/* inexistente (Vercel)
 │   ├── products.js                       # GET listagem pública
 │   ├── product-details.js                # GET por slug
 │   ├── home-sections.js                  # GET vitrine + destaques + mais vendidos
@@ -96,7 +96,9 @@ Projeto-mae/
 │   ├── security-headers.js               # CSP estrita, HSTS, X-Frame-Options
 │   ├── security-logger.js                # Log estruturado + tabela security_events + webhook opcional
 │   ├── admin-audit.js                     # Trilha de auditoria de ações admin (logAdminAction)
-│   ├── mercadopago-config.js             # SDK MP + criar preferência + validar webhook
+│   ├── mercadopago-config.js             # SDK MP + criar preferência + validar webhook (HMAC + janela de frescor do `ts`)
+│   ├── payment-integrity.js              # Reconciliação valor/moeda/live_mode — porta ÚNICA de webhook.js e verify-payment.js
+│   ├── rate-limit.js                     # Contador atômico no Postgres (rate_limit_hit) — vale em serverless
 │   ├── analytics-events.js               # Whitelist + RLS público de eventos
 │   ├── attribution-sanitize.js           # Whitelist canônica de atribuição (UTMs/referrer/sessão)
 │   ├── coupons.js                        # Validação e cálculo de desconto de cupons
@@ -360,7 +362,8 @@ Express :3000
 ### `vercel.json`
 - Build estático em `dist/` (frontend)
 - Cada `api/**/*.js` vira função serverless (o caminho do arquivo é a rota; ex.: `api/auth/customer/login.js` → `/api/auth/customer/login`)
-- Rotas em ordem: headers de segurança em todas as respostas (HSTS, CSP, X-Frame-Options etc., com `continue`); `/api/*` → `/api/$1`; `/sitemap.xml` → `/api/sitemap.xml.js`; filesystem (estáticos); `/api/*` sem função → `/api/_notfound.js` (404 JSON); `/*` → `/index.html` (SPA fallback)
+- Rotas em ordem: headers de segurança em todas as respostas (HSTS, CSP, X-Frame-Options etc., com `continue`); `/api/*` → `/api/$1`; `/sitemap.xml` → `/api/sitemap.xml`; filesystem (estáticos); `/api/*` sem função → `/api/notfound` (404 JSON); `/*` → `/index.html` (SPA fallback)
+- Os `dest` são **caminhos de rota, sem `.js`** — sob zero-config a Vercel publica `api/x.js` na rota `/api/x`. E o handler do 404 **não pode** voltar a se chamar `_notfound.js`: arquivos de `api/` prefixados com `_` não viram função, o `dest` não resolveria e todo `/api/*` inexistente cairia no SPA fallback, respondendo HTML com status 200
 
 ### `tailwind.config.js`
 - Brand: `purple` (#9B5DE5) com escalas 50-900; accents `sky`, `pink`, `yellow`

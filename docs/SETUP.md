@@ -377,7 +377,7 @@ Reinicie `npm run dev:all`. O `notification_url` passado ao MP agora é a URL do
 Configurado em `vercel.json`:
 - Frontend: build em `dist/`, servido como estático
 - API: cada arquivo em `api/**/*.js` vira função serverless
-- Routes: `/api/*` → função; `/sitemap.xml` → `api/sitemap.xml.js` (sitemap dinâmico); `/api/*` inexistente → 404 JSON (`api/_notfound.js`); resto → SPA fallback
+- Routes: `/api/*` → função; `/sitemap.xml` → `api/sitemap.xml` (sitemap dinâmico); `/api/*` inexistente → 404 JSON (`api/notfound.js`); resto → SPA fallback
 
 ### Variáveis no Vercel
 

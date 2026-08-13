@@ -19,8 +19,13 @@ HANDOFF.md
 
 # Scripts de manutenção (check-advisor, db-inspect, configure-auth, fix-utf8…).
 # Rodam na máquina do dev ou no CI, nunca dentro de uma função serverless.
-# EXCEÇÃO: check-env.js é chamado pelo buildCommand do vercel.json, então
-# precisa existir durante o build.
+# EXCEÇÃO: check-env.js. Ele NÃO é mais chamado pelo buildCommand — hoje o
+# vercel.json roda só `npm run build` (vite build), e a validação de segredos
+# vive no CI (.github/workflows/test.yml, step "Validar variáveis de ambiente"),
+# de propósito: quebrar o BUILD por env faltando trancaria justamente o deploy
+# de hotfix durante um incidente, que é quando ele mais precisa passar. A
+# exceção fica porque o arquivo é pequeno e porque é ele que precisa continuar
+# existindo no bundle se um dia alguém devolver o `check:env` ao buildCommand.
 # Padrão é `scripts/*` e não `scripts/` de propósito: a sintaxe é a do
 # .gitignore, onde um `!` não consegue reincluir arquivo cujo DIRETÓRIO pai
 # foi excluído. Ignorando o conteúdo (e não a pasta), a exceção funciona.
