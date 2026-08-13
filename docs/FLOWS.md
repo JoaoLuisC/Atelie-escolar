@@ -1,5 +1,19 @@
 # Fluxogramas
 
+> ## ⚠️ Documento em retirada
+>
+> **A versão canônica de fluxos é [ProjectDocs/05-FLUXOS.md](./ProjectDocs/05-FLUXOS.md).**
+>
+> Regra F2 (`CONTRIBUTING.md`): cada tema tem exatamente um arquivo canônico.
+> Este arquivo é a versão curta de um par duplicado — as duas descrevem o mesmo
+> assunto, com estruturas diferentes, e nada garante que estejam de acordo.
+>
+> **Não edite este arquivo.** Correção vai na versão canônica.
+>
+> Ele não foi apagado ainda porque os diagramas Mermaid daqui não têm equivalente óbvio na versão canônica. A remoção depende de alguém que
+> conheça o estado atual do sistema confirmar, seção a seção, que a versão
+> canônica cobre tudo o que está aqui.
+
 > Diagramas em **Mermaid**. Abra este arquivo no GitHub, VS Code (com extensão Mermaid Preview) ou em https://mermaid.live.
 
 ## Índice

@@ -1,5 +1,19 @@
 # Segurança
 
+> ## ⚠️ Documento em retirada
+>
+> **A versão canônica de segurança é [ProjectDocs/08-SEGURANCA.md](./ProjectDocs/08-SEGURANCA.md).**
+>
+> Regra F2 (`CONTRIBUTING.md`): cada tema tem exatamente um arquivo canônico.
+> Este arquivo é a versão curta de um par duplicado — as duas descrevem o mesmo
+> assunto, com estruturas diferentes, e nada garante que estejam de acordo.
+>
+> **Não edite este arquivo.** Correção vai na versão canônica.
+>
+> Ele não foi apagado ainda porque é documentação de SEGURANÇA de um sistema que processa pagamento: apagar uma seção que só existe aqui (RLS, `SECURITY DEFINER`, retenção de log LGPD) é um risco que não se assume por diferença de títulos. A remoção depende de alguém que
+> conheça o estado atual do sistema confirmar, seção a seção, que a versão
+> canônica cobre tudo o que está aqui.
+
 ## Modelo de ameaça
 
 | Ator | Acesso esperado | Como bloqueamos |

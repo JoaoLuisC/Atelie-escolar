@@ -140,7 +140,14 @@ module.exports = [
   {
     // `dist/` e `tcc-build/` são artefatos gerados; `public/` é servido
     // como está e pode conter snippets de terceiros.
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'tcc-build/**', 'public/**', '.vercel/**'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'coverage/**',
+      'tcc-build/**',
+      'public/**',
+      '.vercel/**',
+    ],
   },
 
   // ── Frontend (browser, ESM, JSX) ────────────────────────────────────

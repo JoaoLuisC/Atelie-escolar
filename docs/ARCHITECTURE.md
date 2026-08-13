@@ -1,5 +1,19 @@
 # Arquitetura — Ateliê da Escola
 
+> ## ⚠️ Documento em retirada
+>
+> **A versão canônica de arquitetura é [ProjectDocs/02-ARQUITETURA.md](./ProjectDocs/02-ARQUITETURA.md).**
+>
+> Regra F2 (`CONTRIBUTING.md`): cada tema tem exatamente um arquivo canônico.
+> Este arquivo é a versão curta de um par duplicado — as duas descrevem o mesmo
+> assunto, com estruturas diferentes, e nada garante que estejam de acordo.
+>
+> **Não edite este arquivo.** Correção vai na versão canônica.
+>
+> Ele não foi apagado ainda porque a versão canônica está organizada por outros títulos, então a sobreposição não pôde ser conferida por comparação mecânica. A remoção depende de alguém que
+> conheça o estado atual do sistema confirmar, seção a seção, que a versão
+> canônica cobre tudo o que está aqui.
+
 > Visão de alto nível. A documentação canônica e detalhada está em
 > [ProjectDocs/](./ProjectDocs/) — em especial
 > [02-ARQUITETURA](./ProjectDocs/02-ARQUITETURA.md),

@@ -1,5 +1,19 @@
 # Setup detalhado
 
+> ## ⚠️ Documento em retirada
+>
+> **A versão canônica de setup é [ProjectDocs/03-SETUP.md](./ProjectDocs/03-SETUP.md).**
+>
+> Regra F2 (`CONTRIBUTING.md`): cada tema tem exatamente um arquivo canônico.
+> Este arquivo é a versão curta de um par duplicado — as duas descrevem o mesmo
+> assunto, com estruturas diferentes, e nada garante que estejam de acordo.
+>
+> **Não edite este arquivo.** Correção vai na versão canônica.
+>
+> Ele não foi apagado ainda porque ele contém procedimentos operacionais (OAuth do Google, SMTP do Supabase, túnel de webhook, cron) cuja presença na versão canônica não pôde ser confirmada mecanicamente — e setup incompleto custa uma tarde de quem chega. A remoção depende de alguém que
+> conheça o estado atual do sistema confirmar, seção a seção, que a versão
+> canônica cobre tudo o que está aqui.
+
 ## Variáveis de ambiente
 
 Arquivo principal: `.env.local` (não comitar; templates em `.env.example` e `.env.local.template`).

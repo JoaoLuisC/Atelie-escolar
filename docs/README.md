@@ -136,6 +136,7 @@ npm run check            # test + build (CI)
 
 | Documento | Sobre |
 |-----------|-------|
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | **Padrões de código** — 25 regras de convenção (contrato HTTP, validação, frontend, qualidade, dinheiro, logs), cada uma com a divergência medida que a motivou |
 | [PLANO_ECOMMERCE.md](./NextFeatures/PLANO_ECOMMERCE.md) | Plano de implementação em 6 fases para chegar a um e-commerce de alta qualidade (absorve o antigo `plano-melhorias-fluxo-cliente.md`) |
 | [REGRAS_ECOMMERCE.md](./NextFeatures/REGRAS_ECOMMERCE.md) | Princípios invioláveis, anti-padrões e checklist obrigatório antes de PRs |
 | [PENDENCIAS.md](./NextFeatures/PENDENCIAS.md) | Lista única e atual de pendências de execução por fase (substitui os antigos `FASE*_PENDENCIAS` e `MELHORIAS_CLIENTE_PENDENCIAS`) |
@@ -145,11 +146,12 @@ npm run check            # test + build (CI)
 
 | Documento | Sobre |
 |-----------|-------|
+| [adr/](./adr/README.md) | **Decisões estruturais** (ADRs) — por que CommonJS no backend e ESM no frontend, por que um handler serve Vercel e Express, por que a reconciliação de pagamento é módulo único |
 | [ProjectDocs/](./ProjectDocs/README.md) | Suíte consolidada em 13 volumes (visão geral, arquitetura, setup, banco, fluxos, admin, segurança, API, marketing, deploy, roadmap) — versão que está substituindo os MDs avulsos abaixo |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Estrutura de pastas, dependências, decisões |
-| [FLOWS.md](./FLOWS.md) | Fluxogramas (auth, checkout, admin, mídia) |
-| [SETUP.md](./SETUP.md) | Setup detalhado de Supabase, Google OAuth, Mercado Pago |
-| [SECURITY.md](./SECURITY.md) | RLS, autenticação, dados sensíveis |
+| ~~[ARCHITECTURE.md](./ARCHITECTURE.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/02-ARQUITETURA.md](./ProjectDocs/02-ARQUITETURA.md) |
+| ~~[FLOWS.md](./FLOWS.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/05-FLUXOS.md](./ProjectDocs/05-FLUXOS.md) |
+| ~~[SETUP.md](./SETUP.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/03-SETUP.md](./ProjectDocs/03-SETUP.md) |
+| ~~[SECURITY.md](./SECURITY.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/08-SEGURANCA.md](./ProjectDocs/08-SEGURANCA.md) |
 | [SUPABASE-SETUP.md](./SUPABASE-SETUP.md) | Setup específico do Supabase (legado) |
 | [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) | Pré-deploy |
 | [SPRING-SECURITY-BFF.md](./SPRING-SECURITY-BFF.md) | Referência de port para Spring Boot do BFF de auth (não usado em produção) |

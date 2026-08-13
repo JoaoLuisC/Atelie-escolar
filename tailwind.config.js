@@ -1,9 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: [
-    './index.html',
-    './src/**/*.{js,jsx}',
-  ],
+  content: ['./index.html', './src/**/*.{js,jsx}'],
   // O HomePage aplica a animação `float` via `style` inline (com durações/delays
   // escalonados por ícone), então a classe `animate-float` nunca aparece no
   // conteúdo escaneado — sem isto o JIT não emitiria `@keyframes float` e a
@@ -36,7 +33,8 @@ module.exports = {
         sans: ['Roboto', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        brand: '0 1px 2px 0 rgba(122, 61, 192, 0.08), 0 8px 24px -8px rgba(122, 61, 192, 0.25), 0 16px 32px -16px rgba(122, 61, 192, 0.20)',
+        brand:
+          '0 1px 2px 0 rgba(122, 61, 192, 0.08), 0 8px 24px -8px rgba(122, 61, 192, 0.25), 0 16px 32px -16px rgba(122, 61, 192, 0.20)',
         'brand-soft': '0 1px 2px 0 rgba(15, 23, 42, 0.05), 0 4px 12px -2px rgba(15, 23, 42, 0.08)',
       },
       keyframes: {
