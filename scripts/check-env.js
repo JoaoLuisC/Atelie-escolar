@@ -15,6 +15,14 @@
 //   • `vercel.json` → buildCommand: `npm run check:env && npm run build`.
 //     No build da Vercel o ambiente já tem APP_ENV/VERCEL_ENV e os segredos
 //     do projeto; faltando qualquer um, o DEPLOY falha em vez do cliente.
+//     PEGADINHA DE OPERAÇÃO: só enxergamos aqui o que a Vercel expõe ao BUILD.
+//     Variável cadastrada em Settings → Environment Variables é exposta ao
+//     build e ao runtime; um "secret" legado mapeado apenas pelo bloco `env`
+//     do vercel.json é RUNTIME. Se um deploy passar a falhar listando uma
+//     variável que você sabe que existe, é este o caso — recadastre-a em
+//     Settings para o ambiente correspondente, não desligue o gate.
+//     Em PREVIEW a lista aplicada é só a de escopo 'core' (ver VARS), então
+//     preview não exige SUPABASE_SERVICE_ROLE_KEY nem os segredos de produção.
 //   • CI (GitHub Actions) → `npm run check:env` roda em modo permissivo,
 //     porque o runner não tem (nem deve ter) os segredos de produção. Ali o
 //     valor é de VISIBILIDADE: lista o que produção vai exigir e falha se o

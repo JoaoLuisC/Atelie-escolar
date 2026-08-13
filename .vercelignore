@@ -19,13 +19,14 @@ HANDOFF.md
 
 # Scripts de manutenção (check-advisor, db-inspect, configure-auth, fix-utf8…).
 # Rodam na máquina do dev ou no CI, nunca dentro de uma função serverless.
-# EXCEÇÃO: check-env.js. Ele NÃO é mais chamado pelo buildCommand — hoje o
-# vercel.json roda só `npm run build` (vite build), e a validação de segredos
-# vive no CI (.github/workflows/test.yml, step "Validar variáveis de ambiente"),
-# de propósito: quebrar o BUILD por env faltando trancaria justamente o deploy
-# de hotfix durante um incidente, que é quando ele mais precisa passar. A
-# exceção fica porque o arquivo é pequeno e porque é ele que precisa continuar
-# existindo no bundle se um dia alguém devolver o `check:env` ao buildCommand.
+# EXCEÇÃO: check-env.js. Ele É chamado pelo buildCommand do vercel.json
+# (`npm run check:env && npm run build`), então PRECISA existir durante o build —
+# excluí-lo daqui derruba todo deploy com "Cannot find module".
+# Este é o único ponto do pipeline onde os segredos de produção existem, e por
+# isso é o único que pode bloquear de verdade: o step de CI roda o mesmo script
+# em modo permissivo (o runner não tem, nem deve ter, os segredos) e sempre sai
+# com 0. Sem o gate aqui, o achado P0-3 continua aberto — deploy fica verde sem
+# segredos e quebra no primeiro cliente.
 # Padrão é `scripts/*` e não `scripts/` de propósito: a sintaxe é a do
 # .gitignore, onde um `!` não consegue reincluir arquivo cujo DIRETÓRIO pai
 # foi excluído. Ignorando o conteúdo (e não a pasta), a exceção funciona.
