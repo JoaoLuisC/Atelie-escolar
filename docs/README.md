@@ -153,6 +153,7 @@ npm run check            # test + build (CI)
 | ~~[SETUP.md](./SETUP.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/03-SETUP.md](./ProjectDocs/03-SETUP.md) |
 | ~~[SECURITY.md](./SECURITY.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/08-SEGURANCA.md](./ProjectDocs/08-SEGURANCA.md) |
 | [SUPABASE-SETUP.md](./SUPABASE-SETUP.md) | Setup específico do Supabase (legado) |
+| [SECURITY-ADVISORIES.md](./SECURITY-ADVISORIES.md) | Análise das advisories de dependência: o que é alcançável, o que não é, e por quê |
 | [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) | Pré-deploy |
 | [SPRING-SECURITY-BFF.md](./SPRING-SECURITY-BFF.md) | Referência de port para Spring Boot do BFF de auth (não usado em produção) |
 | [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md) | Prompts de review profundo por área |
