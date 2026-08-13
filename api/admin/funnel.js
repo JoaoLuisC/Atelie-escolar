@@ -1,5 +1,19 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { getSupabaseConfig, serviceRoleHelpers: { listTableRows } } = require('../lib/supabase');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-funnel');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { listTableRows },
+} = require('../../lib/supabase');
+const {
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
+  setCachePolicy,
+} = require('../../lib/http');
 
 const FUNNEL_STEPS = [
   { key: 'view_catalog', label: 'Visitas ao catálogo' },
@@ -9,32 +23,19 @@ const FUNNEL_STEPS = [
   { key: 'purchase', label: 'Compra aprovada' },
 ];
 
-// Cache em memória do processo (regra F5: dashboards cacheados por 1h
-// no servidor). Por janela de dias — admin trocando o range gera entrada
-// nova. Em Vercel serverless, cada cold start zera o cache; em Express
-// long-running vale por 1h. Tradeoff aceitável: dados podem atrasar até
-// 1h, mas evita N consultas pesadas em analytics_events + orders.
-const CACHE_TTL_MS = 60 * 60 * 1000;
-const funnelCache = new Map();
-
-function getCachedFunnel(days) {
-  const entry = funnelCache.get(days);
-  if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
-    funnelCache.delete(days);
-    return null;
-  }
-  return entry.data;
-}
-
-function setCachedFunnel(days, data) {
-  funnelCache.set(days, { data, expiresAt: Date.now() + CACHE_TTL_MS });
-}
-
-function invalidateFunnelCache() {
-  funnelCache.clear();
-}
-
+// ── POR QUE NÃO HÁ MAIS CACHE EM MEMÓRIA AQUI (regra E2) ─────────────
+// Havia um `Map` por janela de dias com TTL de 1h. O comentário que ficava
+// aqui já registrava metade do problema — "em Vercel serverless, cada cold
+// start zera o cache" — mas tratava isso como um tradeoff aceitável. Não é:
+// a Vercel É o alvo de produção, então o cache praticamente nunca acertava,
+// e quando acertava valia para uma instância só. O `X-Cache: HIT` que
+// acompanhava afirmava uma garantia que o runtime não dá.
+//
+// Fica o mecanismo real: `Cache-Control: private, max-age=3600` (regra E4,
+// CACHE_POLICIES.adminReport). Mesmo TTL, num lugar que vale — e a intenção
+// original ("evitar N consultas pesadas em analytics_events + orders" a cada
+// troca de range) passa a ser cumprida de fato pelo cache do navegador.
+// `?nocache=1` continua furando, agora por construção, já que muda a URL.
 function parseRange(req) {
   const days = Math.max(1, Math.min(180, Number.parseInt(req.query?.days || '30', 10) || 30));
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -108,8 +109,12 @@ function buildAttribution(orders) {
   for (const order of orders) {
     if (order.payment_status !== 'approved') continue;
     const data = order.attribution_data || {};
-    const source = String(data.utm_source || 'direct').slice(0, 60).toLowerCase();
-    const medium = String(data.utm_medium || '').slice(0, 60).toLowerCase();
+    const source = String(data.utm_source || 'direct')
+      .slice(0, 60)
+      .toLowerCase();
+    const medium = String(data.utm_medium || '')
+      .slice(0, 60)
+      .toLowerCase();
     const campaign = String(data.utm_campaign || '').slice(0, 80);
     const revenue = Number(order.total_amount || 0);
     totalRevenue += revenue;
@@ -123,19 +128,26 @@ function buildAttribution(orders) {
     entry.revenue += revenue;
 
     const detailKey = `${medium || '—'}|${campaign || '—'}`;
-    const detail = entry.breakdown.get(detailKey) || { medium: medium || '', campaign: campaign || '', orders: 0, revenue: 0 };
+    const detail = entry.breakdown.get(detailKey) || {
+      medium: medium || '',
+      campaign: campaign || '',
+      orders: 0,
+      revenue: 0,
+    };
     detail.orders += 1;
     detail.revenue += revenue;
     entry.breakdown.set(detailKey, detail);
   }
 
-  const items = [...bySource.values()].map((entry) => ({
-    source: entry.source,
-    orders: entry.orders,
-    revenue: entry.revenue,
-    sharePct: totalRevenue > 0 ? (entry.revenue / totalRevenue) * 100 : 0,
-    details: [...entry.breakdown.values()].sort((a, b) => b.revenue - a.revenue),
-  })).sort((a, b) => b.revenue - a.revenue);
+  const items = [...bySource.values()]
+    .map((entry) => ({
+      source: entry.source,
+      orders: entry.orders,
+      revenue: entry.revenue,
+      sharePct: totalRevenue > 0 ? (entry.revenue / totalRevenue) * 100 : 0,
+      details: [...entry.breakdown.values()].sort((a, b) => b.revenue - a.revenue),
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
 
   return { items, totalRevenue, totalApproved };
 }
@@ -149,18 +161,20 @@ function buildDailyPurchases(orders) {
     const key = dt.toISOString().slice(0, 10);
     map.set(key, (map.get(key) || 0) + 1);
   }
-  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, count]) => ({ date, count }));
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, count]) => ({ date, count }));
 }
 
 module.exports = async function adminFunnelHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return preflight(res);
   }
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'OPTIONS']);
   }
 
   if (!ensureAdminSession(req, res)) {
@@ -169,22 +183,14 @@ module.exports = async function adminFunnelHandler(req, res) {
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const { days, sinceIso } = parseRange(req);
-
-    // `?nocache=1` força recálculo (útil para validação manual).
-    if (req.query?.nocache === '1') {
-      invalidateFunnelCache();
-    } else {
-      const cached = getCachedFunnel(days);
-      if (cached) {
-        res.setHeader('X-Cache', 'HIT');
-        res.setHeader('Cache-Control', 'private, max-age=3600');
-        return res.status(200).json(cached);
-      }
-    }
 
     const [events, orders] = await Promise.all([
       loadFunnelEvents(sinceIso),
@@ -214,15 +220,14 @@ module.exports = async function adminFunnelHandler(req, res) {
       generatedAt: new Date().toISOString(),
     };
 
-    setCachedFunnel(days, payload);
-    res.setHeader('X-Cache', 'MISS');
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-    return res.status(200).json(payload);
+    setCachePolicy(res, 'adminReport');
+    return ok(res, payload);
   } catch (error) {
-    console.error('Admin funnel error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao carregar dados do funil.',
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao carregar dados do funil.',
     });
   }
 };

@@ -1,6 +1,9 @@
 const crypto = require('node:crypto');
 const { getPaymentInfo, inspectWebhookSignature } = require('../lib/mercadopago-config');
-const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable } } = require('../lib/supabase');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable },
+} = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
 const { recordEvent } = require('../lib/analytics-events');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
@@ -9,10 +12,15 @@ const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger
 // lib/payment-integrity.js: as duas cópias que existiam aqui e lá divergiram e
 // a proteção passou a valer o que valia a mais frouxa (regressão R3).
 const { checkPaymentIntegrity } = require('../lib/payment-integrity');
+const { ERROR_CODES, fail, methodNotAllowed, ok } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('webhook');
 
 async function loadOrder(orderId) {
   return getTableRow('orders', {
-    select: 'id,order_code,customer_name,customer_email,status,payment_status,total_amount,created_at,completed_at',
+    select:
+      'id,order_code,customer_name,customer_email,status,payment_status,total_amount,created_at,completed_at',
     filters: [{ column: 'order_code', value: orderId }],
   });
 }
@@ -42,9 +50,11 @@ async function createDownloadTokens(order, items) {
   // como "outro processo venceu a corrida", o pedido pago terminava SEM nenhum
   // token. Um token por produto é o modelo correto: ele autoriza o arquivo, não
   // a unidade comprada.
-  const uniqueItems = [...new Map(
-    items.filter((item) => item?.product_id).map((item) => [String(item.product_id), item]),
-  ).values()];
+  const uniqueItems = [
+    ...new Map(
+      items.filter((item) => item?.product_id).map((item) => [String(item.product_id), item]),
+    ).values(),
+  ];
 
   if (uniqueItems.length) {
     const now = Date.now();
@@ -84,12 +94,16 @@ async function createDownloadTokens(order, items) {
 
 module.exports = async function webhookHandler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return methodNotAllowed(res, ['POST', 'OPTIONS']);
   }
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ error: 'Supabase não configurado' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado',
+      });
     }
 
     // `inspectWebhookSignature` agora também impõe uma janela de frescor sobre
@@ -112,18 +126,23 @@ module.exports = async function webhookHandler(req, res) {
           payment_id: String(req.body?.data?.id || ''),
           // Só fazem sentido no caso de idade; nulos nos demais.
           age_seconds: signature.ageSeconds,
-          tolerance_seconds: signature.reason === 'stale_timestamp' ? signature.toleranceSeconds : null,
+          tolerance_seconds:
+            signature.reason === 'stale_timestamp' ? signature.toleranceSeconds : null,
         },
       });
       // Mesmo 401 genérico de antes: a resposta não revela ao emissor QUAL das
       // checagens falhou (um atacante não deve descobrir pelo status que a
       // assinatura estava certa e só o horário estava velho).
-      return res.status(401).json({ error: 'Invalid signature' });
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'Invalid signature',
+      });
     }
 
     const { type, data } = req.body;
     if (type !== 'payment') {
-      return res.status(200).json({ message: 'Event type not handled' });
+      return ok(res, { message: 'Event type not handled' });
     }
 
     const paymentId = data.id;
@@ -131,12 +150,16 @@ module.exports = async function webhookHandler(req, res) {
     const orderId = payment.external_reference;
 
     if (!orderId) {
-      return res.status(400).json({ error: 'Invalid payment data' });
+      return fail(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: 'Invalid payment data',
+      });
     }
 
     const order = await loadOrder(orderId);
     if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
+      return fail(res, { status: 404, code: ERROR_CODES.NOT_FOUND, message: 'Order not found' });
     }
 
     if (payment.status === 'approved') {
@@ -182,21 +205,23 @@ module.exports = async function webhookHandler(req, res) {
         // acorda alguém (SECURITY_ALERT_WEBHOOK_URL). Fica o trade-off
         // consciente: se um dia o bug for NOSSO (total_amount errado), o MP não
         // vai reinsistir — a recuperação é manual, guiada pelo evento.
-        return res.status(200).json({ message: 'Payment did not reconcile with the order; not approved' });
+        return ok(res, { message: 'Payment did not reconcile with the order; not approved' });
       }
 
       // Transição idempotente e ATÔMICA: só a primeira notificação que muda o
       // pedido de !approved → approved "vence". Reentregas/webhooks concorrentes
       // veem 0 linhas afetadas e apenas devolvem os tokens já existentes, sem
       // sobrescrever completed_at nem re-emitir eventos.
-      const transitioned = await updateTable('orders',
+      const transitioned = await updateTable(
+        'orders',
         { id: `eq.${order.id}`, payment_status: 'neq.approved' },
         {
           payment_status: 'approved',
           payment_id: payment.id,
           status: 'completed',
           completed_at: new Date().toISOString(),
-        });
+        },
+      );
       const isFirstApproval = Array.isArray(transitioned) && transitioned.length > 0;
 
       // Emissão dos tokens continua idempotente: só cria quando ainda não há
@@ -216,7 +241,7 @@ module.exports = async function webhookHandler(req, res) {
             name: order.customer_name,
           });
         } catch (provisionErr) {
-          console.error('[webhook] Falha ao provisionar conta de cliente:', provisionErr.message);
+          log.error('falha_ao_provisionar_conta_de_cliente', { reason: provisionErr.message });
         }
 
         await recordEvent({
@@ -246,7 +271,7 @@ module.exports = async function webhookHandler(req, res) {
       // conferidos em tempo constante) e api/customer-orders.js (sessão do
       // cliente). Nada no frontend lia este campo — DownloadsPage.jsx consome
       // `order.downloadTokens` daqueles dois, não do webhook.
-      return res.status(200).json({ message: 'Webhook processed successfully' });
+      return ok(res, { message: 'Webhook processed successfully' });
     }
 
     if (payment.status === 'rejected' || payment.status === 'cancelled') {
@@ -255,16 +280,18 @@ module.exports = async function webhookHandler(req, res) {
       // cancelamento (o MP reentrega por horas) rebaixava para 'failed' um
       // pedido JÁ APROVADO — mantendo os download_tokens válidos e deixando o
       // pedido pago invisível para o cliente e para o painel.
-      const demoted = await updateTable('orders',
+      const demoted = await updateTable(
+        'orders',
         { id: `eq.${order.id}`, payment_status: 'neq.approved' },
         {
           payment_status: payment.status,
           payment_id: payment.id,
           status: 'failed',
-        });
+        },
+      );
 
       if (!Array.isArray(demoted) || demoted.length === 0) {
-        return res.status(200).json({ message: 'Order already approved; ignoring stale notification' });
+        return ok(res, { message: 'Order already approved; ignoring stale notification' });
       }
 
       await recordEvent({
@@ -282,9 +309,13 @@ module.exports = async function webhookHandler(req, res) {
       });
     }
 
-    return res.status(200).json({ message: 'Webhook processed successfully' });
+    return ok(res, { message: 'Webhook processed successfully' });
   } catch (error) {
-    console.error('Webhook error:', error);
-    return res.status(500).json({ error: 'Webhook processing failed' });
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Webhook processing failed',
+    });
   }
 };

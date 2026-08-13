@@ -1,8 +1,19 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-cohort');
+const {
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
+  setCachePolicy,
+} = require('../../lib/http');
 const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
-} = require('../lib/supabase');
+} = require('../../lib/supabase');
 
 /**
  * GET /api/admin-cohort?months=12
@@ -19,58 +30,50 @@ const {
  * Cache 1h.
  */
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
-let cached = null;
+// ── POR QUE NÃO HÁ MAIS CACHE EM MEMÓRIA AQUI (regra E2) ─────────────
+// Havia um `let cached` de módulo com TTL de 1h. Numa função serverless isso
+// não é cache: cada invocação pode cair numa instância nova, o acerto é
+// acidental e vale só para aquela instância — e o `X-Cache: HIT` que
+// acompanhava afirmava uma garantia que o runtime não dá.
+//
+// Fica o mecanismo real: `Cache-Control: private, max-age=3600` (regra E4,
+// CACHE_POLICIES.adminReport). Mesmo TTL, num lugar que vale. `?nocache=1`
+// continua furando, agora por construção, já que muda a URL.
 
 function monthKey(date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 function monthsBetween(start, end) {
-  return (end.getUTCFullYear() - start.getUTCFullYear()) * 12
-    + (end.getUTCMonth() - start.getUTCMonth());
-}
-
-function getCached() {
-  if (!cached || cached.expiresAt <= Date.now()) {
-    cached = null;
-    return null;
-  }
-  return cached.data;
-}
-
-function setCachedData(data) {
-  cached = { data, expiresAt: Date.now() + CACHE_TTL_MS };
+  return (
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + (end.getUTCMonth() - start.getUTCMonth())
+  );
 }
 
 module.exports = async function adminCohortHandler(req, res) {
   setAdminCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') return preflight(res);
+  if (req.method !== 'GET') return methodNotAllowed(res, ['GET', 'OPTIONS']);
   if (!ensureAdminSession(req, res)) return;
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const months = Math.max(1, Math.min(36, Number.parseInt(req.query?.months || '12', 10) || 12));
-    const nocache = req.query?.nocache === '1';
-
-    if (!nocache) {
-      const hit = getCached();
-      if (hit && hit.months === months) {
-        res.setHeader('X-Cache', 'HIT');
-        res.setHeader('Cache-Control', 'private, max-age=3600');
-        return res.status(200).json(hit);
-      }
-    }
 
     // Janela por MÊS DE CALENDÁRIO (alinha com monthsBetween, que itera meses
     // reais). Aproximar mês=30 dias encurtava a janela e subcontava as coortes
     // mais antigas. +1 mês de folga para cobrir a coorte de borda.
     const nowDate = new Date();
-    const since = new Date(Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth() - (months + 1), 1));
+    const since = new Date(
+      Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth() - (months + 1), 1),
+    );
 
     const orders = await listTableRows('orders', {
       select: 'customer_email,completed_at,total_amount',
@@ -91,9 +94,8 @@ module.exports = async function adminCohortHandler(req, res) {
         totalCustomers: 0,
         generatedAt: new Date().toISOString(),
       };
-      setCachedData({ ...empty, months });
-      res.setHeader('X-Cache', 'MISS');
-      return res.status(200).json(empty);
+      setCachePolicy(res, 'adminReport');
+      return ok(res, empty);
     }
 
     // Para cada cliente: primeiro mês + set de meses ativos
@@ -105,7 +107,11 @@ module.exports = async function adminCohortHandler(req, res) {
       if (Number.isNaN(dt.getTime())) continue;
       const key = monthKey(dt);
 
-      const entry = customerData.get(email) || { firstMonth: key, firstDate: dt, activeMonths: new Set() };
+      const entry = customerData.get(email) || {
+        firstMonth: key,
+        firstDate: dt,
+        activeMonths: new Set(),
+      };
       if (dt < entry.firstDate) {
         entry.firstDate = dt;
         entry.firstMonth = key;
@@ -165,12 +171,14 @@ module.exports = async function adminCohortHandler(req, res) {
       generatedAt: new Date().toISOString(),
     };
 
-    setCachedData(payload);
-    res.setHeader('X-Cache', 'MISS');
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-    return res.status(200).json(payload);
+    setCachePolicy(res, 'adminReport');
+    return ok(res, payload);
   } catch (error) {
-    console.error('[admin-cohort]', error.message);
-    return res.status(500).json({ success: false, error: 'Erro ao gerar matriz de coorte.' });
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao gerar matriz de coorte.',
+    });
   }
 };

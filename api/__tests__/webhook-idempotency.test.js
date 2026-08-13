@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  expectApiError,
   buildSignedWebhookHeaders,
   createMockRes,
   createSupabaseStore,
@@ -95,7 +96,14 @@ function arrange({ payment = approvedPayment(), order = baseOrder(), items, toke
   const store = createSupabaseStore({
     orders: [order],
     order_items: items || [
-      { id: 1, order_id: ORDER_ID, product_id: 'p1', product_name: 'Kit de Atividades', unit_price: 200, quantity: 1 },
+      {
+        id: 1,
+        order_id: ORDER_ID,
+        product_id: 'p1',
+        product_name: 'Kit de Atividades',
+        unit_price: 200,
+        quantity: 1,
+      },
     ],
     download_tokens: tokens,
   });
@@ -109,11 +117,20 @@ function arrange({ payment = approvedPayment(), order = baseOrder(), items, toke
   // Supabase Auth e dispara o convite de definição de senha. Chamá-la duas
   // vezes numa reentrega é e-mail duplicado para o comprador.
   const ensureCustomerAccountFromCheckout = vi.fn(async () => {});
-  installModuleMock('../../lib/customer-account-provisioning', { ensureCustomerAccountFromCheckout });
+  installModuleMock('../../lib/customer-account-provisioning', {
+    ensureCustomerAccountFromCheckout,
+  });
 
   const sdk = installMercadoPagoSdkMock({ payment });
 
-  return { store, security, recordEvent, ensureCustomerAccountFromCheckout, sdk, handler: loadHandler('../webhook.js') };
+  return {
+    store,
+    security,
+    recordEvent,
+    ensureCustomerAccountFromCheckout,
+    sdk,
+    handler: loadHandler('../webhook.js'),
+  };
 }
 
 function webhookRequest(paymentId = 'MP-1', { requestId = 'req-1', tsSeconds } = {}) {
@@ -131,7 +148,14 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
   const originalEnv = {};
 
   beforeEach(() => {
-    for (const key of ['APP_ENV', 'NODE_ENV', 'VERCEL_ENV', 'WEBHOOK_SECRET', 'WEBHOOK_TOLERANCE_SECONDS', 'MERCADOPAGO_ACCESS_TOKEN']) {
+    for (const key of [
+      'APP_ENV',
+      'NODE_ENV',
+      'VERCEL_ENV',
+      'WEBHOOK_SECRET',
+      'WEBHOOK_TOLERANCE_SECONDS',
+      'MERCADOPAGO_ACCESS_TOKEN',
+    ]) {
       originalEnv[key] = process.env[key];
     }
     process.env.APP_ENV = 'test';
@@ -208,12 +232,17 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
       // Cenário real: o polling do frontend (verify-payment) venceu a corrida e
       // já emitiu o token antes de a notificação chegar.
       const { handler, store, recordEvent } = arrange({
-        tokens: [{
-          order_id: ORDER_ID, product_id: 'p1', product_name: 'Kit de Atividades',
-          token: 'token-ja-existente', used: false,
-          expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          created_at: '2026-08-12T10:05:00.000Z',
-        }],
+        tokens: [
+          {
+            order_id: ORDER_ID,
+            product_id: 'p1',
+            product_name: 'Kit de Atividades',
+            token: 'token-ja-existente',
+            used: false,
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            created_at: '2026-08-12T10:05:00.000Z',
+          },
+        ],
       });
       const res = createMockRes();
 
@@ -232,8 +261,22 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
     it('emite UM token por produto mesmo com o produto repetido em duas linhas do pedido', async () => {
       const { handler, store } = arrange({
         items: [
-          { id: 1, order_id: ORDER_ID, product_id: 'p1', product_name: 'Kit', unit_price: 100, quantity: 1 },
-          { id: 2, order_id: ORDER_ID, product_id: 'p1', product_name: 'Kit', unit_price: 100, quantity: 1 },
+          {
+            id: 1,
+            order_id: ORDER_ID,
+            product_id: 'p1',
+            product_name: 'Kit',
+            unit_price: 100,
+            quantity: 1,
+          },
+          {
+            id: 2,
+            order_id: ORDER_ID,
+            product_id: 'p1',
+            product_name: 'Kit',
+            unit_price: 100,
+            quantity: 1,
+          },
         ],
       });
       const res = createMockRes();
@@ -285,7 +328,7 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
       await handler(webhookRequest('MP-1', { requestId: 'req-replay', tsSeconds: velho }), res);
 
       expect(res.statusCode).toBe(401);
-      expect(res.body).toEqual({ error: 'Invalid signature' });
+      expectApiError(res, { status: 401, code: 'UNAUTHORIZED', message: 'Invalid signature' });
 
       // Nada foi consultado nem escrito: o gate é a primeira coisa do handler.
       // Esta é a metade do teste que NÃO depende do tamanho da janela e que
@@ -355,7 +398,10 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
       const res = createMockRes();
 
       const seisHorasAtras = nowSeconds() - 6 * 60 * 60;
-      await handler(webhookRequest('MP-1', { requestId: 'req-reentrega', tsSeconds: seisHorasAtras }), res);
+      await handler(
+        webhookRequest('MP-1', { requestId: 'req-reentrega', tsSeconds: seisHorasAtras }),
+        res,
+      );
 
       expect(res.statusCode).toBe(200);
       expect(sdk.get).toHaveBeenCalledTimes(1);
@@ -373,8 +419,9 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
         resEstreito,
       );
       expect(resEstreito.statusCode).toBe(401);
-      expect(estreito.security.recordSecurityEvent.mock.calls[0][0].properties.tolerance_seconds)
-        .toBe(30);
+      expect(
+        estreito.security.recordSecurityEvent.mock.calls[0][0].properties.tolerance_seconds,
+      ).toBe(30);
 
       // …mas um erro de digitação não pode significar "sem proteção": cai no
       // DEFAULT do módulo em vez de desligar a checagem. O que importa aqui não
@@ -384,12 +431,16 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
       const invalido = arrange();
       const resInvalido = createMockRes();
       await invalido.handler(
-        webhookRequest('MP-1', { requestId: 'req-b', tsSeconds: nowSeconds() - (TOLERANCE_SECONDS + 60) }),
+        webhookRequest('MP-1', {
+          requestId: 'req-b',
+          tsSeconds: nowSeconds() - (TOLERANCE_SECONDS + 60),
+        }),
         resInvalido,
       );
       expect(resInvalido.statusCode).toBe(401);
-      expect(invalido.security.recordSecurityEvent.mock.calls[0][0].properties.tolerance_seconds)
-        .toBe(TOLERANCE_SECONDS);
+      expect(
+        invalido.security.recordSecurityEvent.mock.calls[0][0].properties.tolerance_seconds,
+      ).toBe(TOLERANCE_SECONDS);
     });
 
     it('CLAMPA valor acima do teto em vez de aceitá-lo (um zero a mais não desliga a proteção)', async () => {
@@ -407,8 +458,9 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
 
       expect(res.statusCode).toBe(401);
       expect(sdk.get).not.toHaveBeenCalled();
-      expect(security.recordSecurityEvent.mock.calls[0][0].properties.tolerance_seconds)
-        .toBe(TOLERANCE_MAX_SECONDS);
+      expect(security.recordSecurityEvent.mock.calls[0][0].properties.tolerance_seconds).toBe(
+        TOLERANCE_MAX_SECONDS,
+      );
     });
   });
 
@@ -429,7 +481,14 @@ describe('webhook — idempotência de reentrega e frescor da assinatura', () =>
       // (verify-payment e customer-orders).
       expect(res.body).not.toHaveProperty('downloadTokens');
       expect(JSON.stringify(res.body)).not.toContain(tokenEmitido);
-      expect(res.body).toEqual({ message: 'Webhook processed successfully' });
+
+      // O corpo carrega EXATAMENTE o flag do envelope (regra A1) e a mensagem —
+      // nada mais. Afirmado por igualdade estrita de propósito: o valor deste
+      // teste está em falhar quando QUALQUER campo novo aparecer aqui, porque é
+      // assim que um token voltaria a vazar.
+      expect(Object.keys(res.body).sort()).toEqual(['message', 'success']);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe('Webhook processed successfully');
     });
   });
 });

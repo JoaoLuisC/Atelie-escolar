@@ -1,6 +1,13 @@
-const { getSupabaseConfig, serviceRoleHelpers: { listTableRows, updateTable } } = require('../lib/supabase');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { listTableRows, updateTable },
+} = require('../lib/supabase');
 const { getCustomerSessionFromRequest } = require('../lib/customer-session');
 const { getAdminClient } = require('../services/supabase-auth');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('customer-orders');
 
 // ════════════════════════════════════════════════════════════════════
 // AuthZ deste endpoint — por que a âncora é `customer_id`, e não o e-mail.
@@ -84,7 +91,9 @@ async function resolveAuthIdentity(uid) {
     return null;
   }
 
-  const email = String(user.email || '').trim().toLowerCase();
+  const email = String(user.email || '')
+    .trim()
+    .toLowerCase();
   const confirmed = Boolean(user.email_confirmed_at || user.confirmed_at);
   if (!email || !confirmed) {
     return null;
@@ -133,16 +142,20 @@ function listOwnOrders(uid) {
 
 module.exports = async function customerOrdersHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'OPTIONS']);
   }
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ error: 'Supabase não configurado' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado',
+      });
     }
 
     // O uid vem da sessão de cliente (cookie HttpOnly assinado), NUNCA de um
@@ -151,7 +164,11 @@ module.exports = async function customerOrdersHandler(req, res) {
     const session = getCustomerSessionFromRequest(req);
     const uid = String(session?.uid || '').trim();
     if (!uid) {
-      return res.status(401).json({ error: 'Autenticação necessária.' });
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'Autenticação necessária.',
+      });
     }
 
     // As duas chamadas são independentes: a leitura já vale por si, e a
@@ -160,7 +177,7 @@ module.exports = async function customerOrdersHandler(req, res) {
     const [linkedOrders, identity] = await Promise.all([
       listOwnOrders(uid),
       resolveAuthIdentity(uid).catch((err) => {
-        console.warn('[customer-orders] identidade não resolvida:', err.message);
+        log.warn('identidade_nao_resolvida', { reason: err.message });
         return null;
       }),
     ]);
@@ -177,12 +194,12 @@ module.exports = async function customerOrdersHandler(req, res) {
       } catch (err) {
         // Degrada em vez de derrubar a página: o cliente vê os pedidos já
         // vinculados. Falhar aqui nunca amplia o escopo — só o reduz.
-        console.warn('[customer-orders] adoção de pedidos órfãos falhou:', err.message);
+        log.warn('adocao_de_pedidos_orfaos_falhou', { reason: err.message });
       }
     }
 
     if (!ordersRows.length) {
-      return res.status(200).json({ success: true, orders: [] });
+      return ok(res, { success: true, orders: [] });
     }
 
     // Filtra por order_id NA QUERY (in.(...)), em vez de baixar as tabelas
@@ -208,9 +225,13 @@ module.exports = async function customerOrdersHandler(req, res) {
     const groupedTokens = groupBy(tokensRows, 'order_id');
 
     const orders = ordersRows.map((order) => mapOrder(order, groupedItems, groupedTokens));
-    return res.status(200).json({ success: true, orders });
+    return ok(res, { success: true, orders });
   } catch (error) {
-    console.error('Error fetching customer orders:', error);
-    return res.status(500).json({ error: 'Erro ao buscar pedidos do cliente' });
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao buscar pedidos do cliente',
+    });
   }
 };

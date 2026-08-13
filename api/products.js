@@ -1,5 +1,13 @@
-const { getSupabaseConfig, serviceRoleHelpers: { listTableRows } } = require('../lib/supabase');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { listTableRows },
+} = require('../lib/supabase');
 const { loadSoldCountByProduct } = require('../lib/sales-counts');
+const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('products');
 
 /**
  * API: Listar produtos disponíveis
@@ -7,16 +15,25 @@ const { loadSoldCountByProduct } = require('../lib/sales-counts');
  */
 module.exports = async function productsHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'OPTIONS']);
   }
+
+  // Regra E1: sem isto o endpoint fica sem contador em produção — o limiter
+  // global do server.js só existe no Express de dev. Ver RATE_LIMITS.catalog.
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.catalog);
+  if (gate.blocked) return;
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ error: 'Supabase não configurado' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado',
+      });
     }
 
     // Achado M7: até aqui este endpoint público e anônimo baixava `orders` e
@@ -29,7 +46,8 @@ module.exports = async function productsHandler(req, res) {
         // download_url NÃO entra aqui: é o localizador do arquivo pago e este é
         // um endpoint público. Era selecionado e nem chegava a ser emitido no
         // map abaixo — vazamento gratuito pelo corpo da resposta.
-        select: 'id,slug,name,description,price,original_price,image_url,images,videos,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
+        select:
+          'id,slug,name,description,price,original_price,image_url,images,videos,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,created_at,updated_at',
         filters: [{ column: 'active', value: true }],
         orderBy: 'created_at',
         ascending: false,
@@ -43,7 +61,9 @@ module.exports = async function productsHandler(req, res) {
       loadSoldCountByProduct(),
     ]);
 
-    const categoryById = new Map(categoriesRows.map((category) => [String(category.id), category.name]));
+    const categoryById = new Map(
+      categoriesRows.map((category) => [String(category.id), category.name]),
+    );
 
     const products = productsRows.map((row) => {
       const images = Array.isArray(row.images) ? row.images : [];
@@ -72,15 +92,21 @@ module.exports = async function productsHandler(req, res) {
       };
     });
 
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=3600');
-    return res.status(200).json({
+    res.setHeader(
+      'Cache-Control',
+      'public, max-age=300, s-maxage=300, stale-while-revalidate=3600',
+    );
+    return ok(res, {
       success: true,
       products,
       total: products.length,
     });
-
   } catch (error) {
-    console.error('Error fetching products:', error);
-    return res.status(500).json({ error: 'Erro ao buscar produtos' });
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao buscar produtos',
+    });
   }
 };

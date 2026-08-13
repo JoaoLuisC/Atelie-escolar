@@ -1,14 +1,18 @@
 const { isClientEventAllowed, recordEvent } = require('../lib/analytics-events');
 const { getSupabaseConfig } = require('../lib/supabase'); // helpers vêm de lib/analytics-events.js
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { methodNotAllowed, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('track-event');
 
 module.exports = async function trackEventHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['POST', 'OPTIONS']);
   }
 
   // RATE_LIMITS.trackEvent existia desde a rodada do P1-3, mas nenhum handler o
@@ -50,7 +54,7 @@ module.exports = async function trackEventHandler(req, res) {
     return res.status(204).end();
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
-      console.warn('[track-event]', error.message);
+      log.warn('handler_failed', { reason: error.message });
     }
     return res.status(204).end();
   }

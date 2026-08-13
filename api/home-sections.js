@@ -1,5 +1,13 @@
-const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, listTableRows } } = require('../lib/supabase');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { getTableRow, listTableRows },
+} = require('../lib/supabase');
 const { loadSoldCountByProduct } = require('../lib/sales-counts');
+const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('home-sections');
 
 function safeJsonParse(value, fallback) {
   if (value === null || value === undefined) {
@@ -33,7 +41,9 @@ function normalizeLabel(value, fallback) {
 function buildDefaultSections(categories) {
   const topCategories = categories
     .filter((category) => category.active !== false)
-    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }))
+    .sort((a, b) =>
+      String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }),
+    )
     .slice(0, 3)
     .map((category) => ({
       type: 'category',
@@ -104,16 +114,24 @@ function normalizeSections(rawSetting, categories) {
 
 module.exports = async function homeSectionsHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'OPTIONS']);
   }
+
+  // Regra E1 — ver RATE_LIMITS.catalog.
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.catalog);
+  if (gate.blocked) return;
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase nao configurado' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase nao configurado',
+      });
     }
 
     // Achado M7: a vitrine da home é pública e anônima, e até aqui baixava
@@ -167,7 +185,9 @@ module.exports = async function homeSectionsHandler(req, res) {
 
       if (section.type === 'category') {
         const category = categoryById.get(String(section.categoryId));
-        list = normalizedProducts.filter((product) => String(product.categoryId || '') === String(section.categoryId));
+        list = normalizedProducts.filter(
+          (product) => String(product.categoryId || '') === String(section.categoryId),
+        );
         if (category?.name) {
           link = `/produtos?categoria=${encodeURIComponent(category.name)}`;
         }
@@ -199,13 +219,20 @@ module.exports = async function homeSectionsHandler(req, res) {
       };
     });
 
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=3600');
-    return res.status(200).json({
+    res.setHeader(
+      'Cache-Control',
+      'public, max-age=300, s-maxage=300, stale-while-revalidate=3600',
+    );
+    return ok(res, {
       success: true,
       sections: responseSections,
     });
   } catch (error) {
-    console.error('Home sections error:', error);
-    return res.status(500).json({ success: false, error: 'Erro ao carregar vitrine da home.' });
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao carregar vitrine da home.',
+    });
   }
 };

@@ -1,9 +1,20 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
 const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
-} = require('../lib/supabase');
-const { buildAbcCurve } = require('../lib/abc-classification');
+} = require('../../lib/supabase');
+const { buildAbcCurve } = require('../../lib/abc-classification');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-abc-customers');
+const {
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
+  setCachePolicy,
+} = require('../../lib/http');
 
 /**
  * GET /api/admin-abc-customers?period=month|quarter|year
@@ -17,8 +28,15 @@ const { buildAbcCurve } = require('../lib/abc-classification');
  * Cache 1h (regra F5).
  */
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
-const cache = new Map();
+// ── POR QUE NÃO HÁ MAIS CACHE EM MEMÓRIA AQUI (regra E2) ─────────────
+// Havia um `Map` de módulo com TTL de 1h. Numa função serverless isso não é
+// cache: cada invocação pode cair numa instância nova, o acerto é acidental e
+// vale só para aquela instância — e o `X-Cache: HIT` que acompanhava afirmava
+// uma garantia que o runtime não dá.
+//
+// Fica o mecanismo real: `Cache-Control: private, max-age=3600` (regra E4,
+// CACHE_POLICIES.adminReport). Mesmo TTL, num lugar que vale. `?nocache=1`
+// continua furando, agora por construção, já que muda a URL.
 
 const PERIOD_DAYS = {
   month: 30,
@@ -32,19 +50,6 @@ function parseQuery(req) {
   const days = PERIOD_DAYS[period] || PERIOD_DAYS.quarter;
   const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
   return { period, days, sinceIso };
-}
-
-function getCached(key) {
-  const entry = cache.get(key);
-  if (!entry || entry.expiresAt <= Date.now()) {
-    cache.delete(key);
-    return null;
-  }
-  return entry.data;
-}
-
-function setCached(key, data) {
-  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
 function classifyRelationship(orders, curve) {
@@ -67,28 +72,21 @@ function maskEmail(email) {
 
 module.exports = async function adminAbcCustomersHandler(req, res) {
   setAdminCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') return preflight(res);
+  if (req.method !== 'GET') return methodNotAllowed(res, ['GET', 'OPTIONS']);
   if (!ensureAdminSession(req, res)) return;
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const query = parseQuery(req);
-    const nocache = req.query?.nocache === '1';
     const includePII = req.query?.includePII === '1'; // só para export interno
-    const key = `${query.period}|${includePII ? 'full' : 'masked'}`;
-
-    if (!nocache) {
-      const cached = getCached(key);
-      if (cached) {
-        res.setHeader('X-Cache', 'HIT');
-        res.setHeader('Cache-Control', 'private, max-age=3600');
-        return res.status(200).json(cached);
-      }
-    }
 
     const orders = await listTableRows('orders', {
       select: 'customer_email,customer_name,total_amount,completed_at',
@@ -102,7 +100,9 @@ module.exports = async function adminAbcCustomersHandler(req, res) {
     // Agrega por email
     const byEmail = new Map();
     for (const order of orders) {
-      const email = String(order.customer_email || '').trim().toLowerCase();
+      const email = String(order.customer_email || '')
+        .trim()
+        .toLowerCase();
       if (!email) continue;
       const entry = byEmail.get(email) || {
         id: email,
@@ -114,8 +114,10 @@ module.exports = async function adminAbcCustomersHandler(req, res) {
       };
       entry.revenue += Number(order.total_amount || 0);
       entry.orderCount += 1;
-      if (order.completed_at && order.completed_at < entry.firstOrderAt) entry.firstOrderAt = order.completed_at;
-      if (order.completed_at && order.completed_at > entry.lastOrderAt) entry.lastOrderAt = order.completed_at;
+      if (order.completed_at && order.completed_at < entry.firstOrderAt)
+        entry.firstOrderAt = order.completed_at;
+      if (order.completed_at && order.completed_at > entry.lastOrderAt)
+        entry.lastOrderAt = order.completed_at;
       if (!entry.name && order.customer_name) entry.name = order.customer_name;
       byEmail.set(email, entry);
     }
@@ -138,10 +140,13 @@ module.exports = async function adminAbcCustomersHandler(req, res) {
       };
     });
 
-    const relationshipSummary = items.reduce((acc, item) => {
-      acc[item.relationship] = (acc[item.relationship] || 0) + 1;
-      return acc;
-    }, { vip: 0, recorrente: 0, eventual: 0 });
+    const relationshipSummary = items.reduce(
+      (acc, item) => {
+        acc[item.relationship] = (acc[item.relationship] || 0) + 1;
+        return acc;
+      },
+      { vip: 0, recorrente: 0, eventual: 0 },
+    );
 
     const payload = {
       success: true,
@@ -154,12 +159,14 @@ module.exports = async function adminAbcCustomersHandler(req, res) {
       generatedAt: new Date().toISOString(),
     };
 
-    setCached(key, payload);
-    res.setHeader('X-Cache', 'MISS');
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-    return res.status(200).json(payload);
+    setCachePolicy(res, 'adminReport');
+    return ok(res, payload);
   } catch (error) {
-    console.error('[admin-abc-customers]', error.message);
-    return res.status(500).json({ success: false, error: 'Erro ao gerar Curva ABC de clientes.' });
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao gerar Curva ABC de clientes.',
+    });
   }
 };

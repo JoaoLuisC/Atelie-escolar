@@ -1,7 +1,8 @@
 const { customerGoogleCallback } = require('../../../../lib/customer-auth-handlers');
+const { methodNotAllowed, preflight } = require('../../../../lib/http');
 
-module.exports = function handler(req, res) {
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
+module.exports = function callbackHandler(req, res) {
+  if (req.method === 'OPTIONS') return preflight(res);
+  if (req.method !== 'POST') return methodNotAllowed(res, ['POST', 'OPTIONS']);
   return customerGoogleCallback(req, res);
 };

@@ -1,5 +1,6 @@
 const { customerLogin } = require('../../../lib/customer-auth-handlers');
 const { enforceRateLimit, RATE_LIMITS } = require('../../../lib/rate-limit');
+const { methodNotAllowed, preflight } = require('../../../lib/http');
 
 // Login de CLIENTE por senha, sem nenhum contador em produção até aqui: o
 // limiter de 5/10min citado em docs/SECURITY.md vive em routes/auth.routes.js,
@@ -8,9 +9,9 @@ const { enforceRateLimit, RATE_LIMITS } = require('../../../lib/rate-limit');
 // aceitava tentativas ilimitadas enquanto /api/admin-login já estava contido.
 // Ver RATE_LIMITS.customerLogin para o desenho dos dois baldes (por conta e por
 // conexão) e por que um teto por IP puro erraria nos dois sentidos.
-module.exports = async function handler(req, res) {
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
+module.exports = async function loginHandler(req, res) {
+  if (req.method === 'OPTIONS') return preflight(res);
+  if (req.method !== 'POST') return methodNotAllowed(res, ['POST', 'OPTIONS']);
 
   // Depois do 405 (uma requisição rejeitada por método não faz trabalho nenhum,
   // então cobrá-la custaria uma escrita no Postgres sem proteger nada) e ANTES

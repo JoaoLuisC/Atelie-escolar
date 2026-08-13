@@ -1,9 +1,18 @@
-const { getSupabaseConfig, serviceRoleHelpers: { getTableRow } } = require('../lib/supabase');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { getTableRow },
+} = require('../lib/supabase');
+const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('product-details');
 
 // download_url NÃO entra aqui: este é um endpoint público sem auth. O link do
 // arquivo só pode ser resolvido server-side em api/download.js, após validar o
 // token de uso único. Expô-lo aqui contornaria todo o gate de pagamento.
-const SELECT_FIELDS = 'id,slug,name,description,price,original_price,image_url,images,videos,category_id,product_type,tags,is_kit,page_size,paper_type,kit_items,panel_sizes,featured,active,faq,reviews,benefits';
+const SELECT_FIELDS =
+  'id,slug,name,description,price,original_price,image_url,images,videos,category_id,product_type,tags,is_kit,page_size,paper_type,kit_items,panel_sizes,featured,active,faq,reviews,benefits';
 
 function pickIdentifier(query) {
   const raw = String(query?.slug || query?.id || '').trim();
@@ -17,32 +26,51 @@ function pickIdentifier(query) {
 
 module.exports = async function productDetailsHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'OPTIONS']);
   }
+
+  // Regra E1 — ver RATE_LIMITS.catalog.
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.catalog);
+  if (gate.blocked) return;
 
   try {
     const { type, value } = pickIdentifier(req.query);
 
     if (!value) {
-      return res.status(400).json({ error: 'slug ou id é obrigatório' });
+      return fail(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: 'slug ou id é obrigatório',
+      });
     }
 
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ error: 'Supabase não configurado' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado',
+      });
     }
 
     const product = await getTableRow('products', {
       select: SELECT_FIELDS,
       // Endpoint público: nunca expor produto inativo (mesmo filtro de api/products.js).
-      filters: [{ column: type, value }, { column: 'active', value: true }],
+      filters: [
+        { column: type, value },
+        { column: 'active', value: true },
+      ],
     });
 
     if (!product) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
+      return fail(res, {
+        status: 404,
+        code: ERROR_CODES.NOT_FOUND,
+        message: 'Produto não encontrado',
+      });
     }
 
     let category = null;
@@ -54,8 +82,11 @@ module.exports = async function productDetailsHandler(req, res) {
     }
 
     const images = Array.isArray(product.images) ? product.images : [];
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=3600');
-    return res.status(200).json({
+    res.setHeader(
+      'Cache-Control',
+      'public, max-age=300, s-maxage=300, stale-while-revalidate=3600',
+    );
+    return ok(res, {
       success: true,
       product: {
         id: String(product.id),
@@ -85,7 +116,11 @@ module.exports = async function productDetailsHandler(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error fetching product details:', error);
-    return res.status(500).json({ error: 'Erro ao buscar detalhes do produto' });
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao buscar detalhes do produto',
+    });
   }
 };

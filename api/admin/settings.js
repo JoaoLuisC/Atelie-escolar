@@ -1,22 +1,22 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { logAdminAction } = require('../lib/admin-audit');
-const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
-const { enforceRateLimit } = require('../lib/rate-limit');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { logAdminAction } = require('../../lib/admin-audit');
+const { recordSecurityEvent, extractClientIp } = require('../../lib/security-logger');
+const { enforceRateLimit } = require('../../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-settings');
 const {
   getSupabaseConfig,
-  serviceRoleHelpers: {
-    getTableRow,
-    insertIntoTable,
-    updateTable,
-  },
-} = require('../lib/supabase');
+  serviceRoleHelpers: { getTableRow, insertIntoTable, updateTable },
+} = require('../../lib/supabase');
 // Primitivos de 2º fator anexados ao handler de login (ver nota no fim de
 // api/admin-login.js sobre a dívida de extrair um lib/admin-2fa.js).
 const {
   isSecondFactorRequired,
   extractSecondFactorMethods,
   verifySecondFactorCode,
-} = require('./admin-login');
+} = require('./login');
 
 const ALLOWED_KEYS = new Set(['homeSections', 'adminConfig']);
 
@@ -105,9 +105,28 @@ const TRANSIENT_FIELDS = Object.freeze(['has2FA', 'hasPin']);
 // pela whitelist na próxima gravação de qualquer forma), falso NEGATIVO é um
 // segredo em texto puro numa tabela de auditoria.
 const LEGACY_SENSITIVE_TOKENS = new Set([
-  'secret', 'secrets', 'senha', 'senhas', 'password', 'passwd', 'pass',
-  'pin', 'pins', 'token', 'tokens', 'key', 'keys', 'apikey',
-  'hash', 'salt', 'recovery', 'seed', 'otp', 'totp', 'credential', 'credentials',
+  'secret',
+  'secrets',
+  'senha',
+  'senhas',
+  'password',
+  'passwd',
+  'pass',
+  'pin',
+  'pins',
+  'token',
+  'tokens',
+  'key',
+  'keys',
+  'apikey',
+  'hash',
+  'salt',
+  'recovery',
+  'seed',
+  'otp',
+  'totp',
+  'credential',
+  'credentials',
 ]);
 
 function isField(field) {
@@ -141,7 +160,9 @@ function coerceTotpSecret(value) {
   // Base32 (RFC 4648) é o formato que os apps autenticadores exportam e o
   // único que decodeBase32 (api/admin-login.js) entende. Validar aqui evita
   // gravar um segredo que só falharia na hora do login.
-  const normalized = String(value ?? '').toUpperCase().replaceAll(/[\s-]+/g, '');
+  const normalized = String(value ?? '')
+    .toUpperCase()
+    .replaceAll(/[\s-]+/g, '');
   if (!normalized) return { value: '' };
   if (!/^[A-Z2-7]+$/.test(normalized)) {
     return { error: 'o TOTP secret deve estar em Base32 (letras A-Z e dígitos 2-7)' };
@@ -162,7 +183,9 @@ function coercePin(value) {
     return { error: `o PIN de fallback deve ter no máximo ${MAX_FALLBACK_PIN_LENGTH} caracteres` };
   }
   if (/^(\d)\1+$/.test(pin) || pin === '123456' || pin === '000000') {
-    return { error: 'o PIN de fallback é fraco demais (evite dígitos repetidos ou sequências óbvias)' };
+    return {
+      error: 'o PIN de fallback é fraco demais (evite dígitos repetidos ou sequências óbvias)',
+    };
   }
   return { value: pin };
 }
@@ -183,7 +206,8 @@ const COERCERS = Object.freeze({
  * @returns {{error: string}|{value: object, ignored: string[]}}
  */
 function sanitizeAdminConfig(incoming, existing) {
-  const source = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
+  const source =
+    incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
   const current = existing && typeof existing === 'object' ? existing : {};
   const result = {};
   const ignored = [];
@@ -387,8 +411,8 @@ async function prepareAdminConfigWrite(req, res, incoming) {
   // Só faz sentido exigir o 2º fator para mudar o 2º fator quando existe um
   // método funcionando — senão o admin ficaria trancado fora da própria
   // configuração (e o login já responde 500 nesse estado inconsistente).
-  const enforcedNow = isSecondFactorRequired(existingConfig)
-    && extractSecondFactorMethods(existingConfig).length > 0;
+  const enforcedNow =
+    isSecondFactorRequired(existingConfig) && extractSecondFactorMethods(existingConfig).length > 0;
 
   const changedFields = enforcedNow ? changedSecurityFields(existingConfig, sanitized.value) : [];
 
@@ -433,7 +457,8 @@ async function prepareAdminConfigWrite(req, res, incoming) {
           body: {
             success: false,
             code: 'second_factor_required',
-            error: 'Alterações no segundo fator exigem o código TOTP (ou PIN) atual em "confirmationCode".',
+            error:
+              'Alterações no segundo fator exigem o código TOTP (ou PIN) atual em "confirmationCode".',
           },
         },
       };
@@ -447,7 +472,7 @@ module.exports = async function adminSettingsHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return preflight(res);
   }
 
   if (!ensureAdminSession(req, res)) {
@@ -456,12 +481,20 @@ module.exports = async function adminSettingsHandler(req, res) {
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const key = String(req.query?.key || req.body?.key || '').trim();
     if (!ALLOWED_KEYS.has(key)) {
-      return res.status(400).json({ success: false, error: 'Chave de configuração inválida.' });
+      return fail(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: 'Chave de configuração inválida.',
+      });
     }
 
     if (req.method === 'GET') {
@@ -469,9 +502,9 @@ module.exports = async function adminSettingsHandler(req, res) {
       // adminConfig guarda segredos (totpSecret, fallbackPin). NUNCA os
       // devolvemos no GET — o painel só precisa saber se estão configurados.
       if (key === 'adminConfig' && value && typeof value === 'object') {
-        return res.status(200).json({ success: true, key, value: toPublicAdminConfig(value) });
+        return ok(res, { success: true, key, value: toPublicAdminConfig(value) });
       }
-      return res.status(200).json({ success: true, key, value });
+      return ok(res, { success: true, key, value });
     }
 
     if (req.method === 'PUT') {
@@ -505,15 +538,16 @@ module.exports = async function adminSettingsHandler(req, res) {
           ...(ignoredFields.length ? { ignoredFields } : {}),
         },
       });
-      return res.status(200).json({ success: true, key, ...(ignoredFields.length ? { ignoredFields } : {}) });
+      return ok(res, { success: true, key, ...(ignoredFields.length ? { ignoredFields } : {}) });
     }
 
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['OPTIONS']);
   } catch (error) {
-    console.error('Admin settings error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao processar configurações do admin.',
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao processar configurações do admin.',
     });
   }
 };

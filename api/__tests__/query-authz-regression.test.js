@@ -62,9 +62,17 @@ function createMockRes() {
     statusCode: 200,
     headers: {},
     body: undefined,
-    setHeader: vi.fn((key, value) => { res.headers[key] = value; }),
-    status: vi.fn((code) => { res.statusCode = code; return res; }),
-    json: vi.fn((payload) => { res.body = payload; return res; }),
+    setHeader: vi.fn((key, value) => {
+      res.headers[key] = value;
+    }),
+    status: vi.fn((code) => {
+      res.statusCode = code;
+      return res;
+    }),
+    json: vi.fn((payload) => {
+      res.body = payload;
+      return res;
+    }),
     end: vi.fn(() => res),
     redirect: vi.fn(() => res),
   };
@@ -117,16 +125,25 @@ function installIdentity(user) {
     getAnonClient: () => null,
     getProfileRoleByUserId: async () => '',
     getProfileRoleByEmail: async () => '',
-    getAdminClient: () => (user ? {
-      auth: {
-        admin: {
-          getUserById: async (uid) => ({
-            data: { user: { id: uid, email: user.email, email_confirmed_at: '2026-01-01T00:00:00Z' } },
-            error: null,
-          }),
-        },
-      },
-    } : null),
+    getAdminClient: () =>
+      user
+        ? {
+            auth: {
+              admin: {
+                getUserById: async (uid) => ({
+                  data: {
+                    user: {
+                      id: uid,
+                      email: user.email,
+                      email_confirmed_at: '2026-01-01T00:00:00Z',
+                    },
+                  },
+                  error: null,
+                }),
+              },
+            },
+          }
+        : null,
   });
 }
 
@@ -163,7 +180,12 @@ describe('regressões de autorização nas queries PostgREST', () => {
     installIdentity(null);
     stubFetch(({ url }) => (url.includes('orders?') ? [ORDER_ROW] : []));
 
-    const cookie = sessionCookie({ uid: SESSION_UID, email: SESSION_EMAIL, name: 'Ana', role: 'customer' });
+    const cookie = sessionCookie({
+      uid: SESSION_UID,
+      email: SESSION_EMAIL,
+      name: 'Ana',
+      role: 'customer',
+    });
     const handler = loadHandler('../customer-orders.js');
     const res = createMockRes();
 
@@ -235,7 +257,12 @@ describe('regressões de autorização nas queries PostgREST', () => {
       return [];
     });
 
-    const cookie = sessionCookie({ uid: SESSION_UID, email: SESSION_EMAIL, name: 'Ana', role: 'customer' });
+    const cookie = sessionCookie({
+      uid: SESSION_UID,
+      email: SESSION_EMAIL,
+      name: 'Ana',
+      role: 'customer',
+    });
     const handler = loadHandler('../customer-orders.js');
     const res = createMockRes();
 
@@ -256,7 +283,9 @@ describe('regressões de autorização nas queries PostgREST', () => {
     expect(patchUrl).not.toContain('ilike');
 
     // Adotou ⇒ relê, e a releitura continua escopada pelo uid.
-    const leiturasDeOrders = requests.filter((entry) => entry.url.includes('orders?') && entry.method === 'GET');
+    const leiturasDeOrders = requests.filter(
+      (entry) => entry.url.includes('orders?') && entry.method === 'GET',
+    );
     expect(leiturasDeOrders).toHaveLength(2);
     for (const entry of leiturasDeOrders) {
       expect(decodeURIComponent(entry.url)).toContain(`customer_id=eq.${SESSION_UID}`);

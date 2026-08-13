@@ -88,7 +88,11 @@ const KNOWN_ENVS = ['development', 'test', 'preview', 'production'];
 
 function resolveEnv(cliEnv) {
   const raw = String(
-    cliEnv || process.env.APP_ENV || process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
+    cliEnv ||
+      process.env.APP_ENV ||
+      process.env.VERCEL_ENV ||
+      process.env.NODE_ENV ||
+      'development',
   )
     .trim()
     .toLowerCase();
@@ -173,13 +177,25 @@ const VARS = [
   { name: 'SMTP_PASS', scope: 'production', why: 'lib/email-sender.js' },
 
   // — Avisos: têm default no código, mas o default raramente é o desejado —
-  { name: 'SMTP_FROM', scope: 'advisory', why: 'default cai no SMTP_USER (domínio não verificado)' },
+  {
+    name: 'SMTP_FROM',
+    scope: 'advisory',
+    why: 'default cai no SMTP_USER (domínio não verificado)',
+  },
   { name: 'APP_ENV', scope: 'advisory', why: 'define o gate de fail-closed dos segredos' },
   { name: 'CORS_ORIGINS', scope: 'advisory', why: 'vazio libera qualquer localhost (server.js)' },
-  { name: 'SUPABASE_STORAGE_BUCKET', scope: 'advisory', why: 'default "public" em lib/supabase.js' },
+  {
+    name: 'SUPABASE_STORAGE_BUCKET',
+    scope: 'advisory',
+    why: 'default "public" em lib/supabase.js',
+  },
   { name: 'VITE_GA4_ID', scope: 'advisory', why: 'vazio desliga a medição GA4' },
   { name: 'VITE_META_PIXEL_ID', scope: 'advisory', why: 'vazio desliga o Meta Pixel' },
-  { name: 'SECURITY_ALERT_WEBHOOK_URL', scope: 'advisory', why: 'sem ele alertas só vão pro stdout' },
+  {
+    name: 'SECURITY_ALERT_WEBHOOK_URL',
+    scope: 'advisory',
+    why: 'sem ele alertas só vão pro stdout',
+  },
 ];
 
 // Fragmentos que aparecem nos placeholders de .env.example e nos fallbacks
@@ -327,8 +343,12 @@ function main() {
   // Coerência entre APP_ENV e o ambiente real da Vercel: um APP_ENV
   // != production num deploy de produção reabre o fallback de segredo
   // de dev em lib/env-secret.js.
-  const appEnv = String(process.env.APP_ENV || '').trim().toLowerCase();
-  const vercelEnv = String(process.env.VERCEL_ENV || '').trim().toLowerCase();
+  const appEnv = String(process.env.APP_ENV || '')
+    .trim()
+    .toLowerCase();
+  const vercelEnv = String(process.env.VERCEL_ENV || '')
+    .trim()
+    .toLowerCase();
   if (vercelEnv === 'production' && appEnv && appEnv !== 'production') {
     errors.push('APP_ENV — deploy de produção da Vercel com APP_ENV diferente de "production"');
   }

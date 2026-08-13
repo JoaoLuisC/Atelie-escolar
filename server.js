@@ -10,7 +10,9 @@ const apiCompatRoutes = require('./routes/api-compat.routes');
 const { notFoundHandler, errorHandler } = require('./middleware/error.middleware');
 
 function loadEnvFiles() {
-  const initialEnv = String(process.env.APP_ENV || process.env.NODE_ENV || 'development').trim().toLowerCase();
+  const initialEnv = String(process.env.APP_ENV || process.env.NODE_ENV || 'development')
+    .trim()
+    .toLowerCase();
 
   const candidates = [
     `.env.${initialEnv}.local`,
@@ -31,7 +33,9 @@ function loadEnvFiles() {
 
 loadEnvFiles();
 
-const RUNTIME_ENV = String(process.env.APP_ENV || process.env.NODE_ENV || 'development').trim().toLowerCase();
+const RUNTIME_ENV = String(process.env.APP_ENV || process.env.NODE_ENV || 'development')
+  .trim()
+  .toLowerCase();
 process.env.NODE_ENV = RUNTIME_ENV;
 
 // Segredos exigidos no boot. A lista contém APENAS variáveis que algum código
@@ -53,7 +57,9 @@ const REQUIRED_PRODUCTION_SECRETS = [
 ];
 
 if (RUNTIME_ENV === 'production') {
-  const missing = REQUIRED_PRODUCTION_SECRETS.filter((key) => !String(process.env[key] || '').trim());
+  const missing = REQUIRED_PRODUCTION_SECRETS.filter(
+    (key) => !String(process.env[key] || '').trim(),
+  );
   if (missing.length) {
     throw new Error(`Missing required production secrets: ${missing.join(', ')}`);
   }
@@ -165,4 +171,3 @@ app.listen(PORT, () => {
   console.log('Frontend React (Vite): http://localhost:5173');
   console.log('Pressione Ctrl+C para parar o servidor');
 });
-

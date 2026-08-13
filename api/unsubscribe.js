@@ -5,6 +5,10 @@ const {
 const { sendEmail, getAppUrl } = require('../lib/email-sender');
 const { unsubscribeSuccess } = require('../lib/email-templates');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('unsubscribe');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -12,8 +16,8 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // existente, inexistente, já descadastrado. Uma mensagem diferente por caso
 // transformaria o endpoint em oráculo de enumeração da lista.
 const NEUTRAL_EMAIL_MESSAGE =
-  'Se este e-mail estiver na nossa lista, enviamos um link para concluir o cancelamento. '
-  + 'Abra o e-mail e clique no link.';
+  'Se este e-mail estiver na nossa lista, enviamos um link para concluir o cancelamento. ' +
+  'Abra o e-mail e clique no link.';
 
 /**
  * Unsubscribe (regra D2 — link de descadastro obrigatório).
@@ -52,18 +56,22 @@ const NEUTRAL_EMAIL_MESSAGE =
  * disparo em massa do e-mail com o link.
  */
 module.exports = async function unsubscribeHandler(req, res) {
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method === 'OPTIONS') return preflight(res);
 
   const gate = await enforceRateLimit(req, res, RATE_LIMITS.unsubscribe);
   if (gate.blocked) return;
 
   if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'POST', 'OPTIONS']);
   }
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const token = String(req.query?.token || req.body?.token || '').trim();
@@ -72,7 +80,10 @@ module.exports = async function unsubscribeHandler(req, res) {
     // e o endereço ficaria em log de acesso e no Referer (mesma política de
     // api/me-delete-account.js). O slice antecede o regex para não jogar
     // entrada gigante no backtracking.
-    const emailInput = String(req.body?.email || '').trim().toLowerCase().slice(0, 200);
+    const emailInput = String(req.body?.email || '')
+      .trim()
+      .toLowerCase()
+      .slice(0, 200);
 
     // ── Caminho 1: token (única forma de EFETIVAR o descadastro) ──────
     if (token) {
@@ -86,13 +97,18 @@ module.exports = async function unsubscribeHandler(req, res) {
 
     // Nem token nem e-mail utilizável: erro de forma da requisição, não de
     // dados — não revela nada sobre a lista.
-    return res.status(400).json({
-      success: false,
-      error: 'Informe um e-mail válido ou use o link de cancelamento do e-mail.',
+    return fail(res, {
+      status: 400,
+      code: ERROR_CODES.VALIDATION_FAILED,
+      message: 'Informe um e-mail válido ou use o link de cancelamento do e-mail.',
     });
   } catch (error) {
-    console.error('[unsubscribe]', error.message);
-    return res.status(500).json({ success: false, error: 'Erro ao processar cancelamento.' });
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao processar cancelamento.',
+    });
   }
 };
 
@@ -110,16 +126,20 @@ async function unsubscribeByToken(token, res) {
   // quais tokens existem. (E o link de e-mail antigo de alguém já removido
   // continua "funcionando" do ponto de vista do usuário.)
   if (!subscriber) {
-    return res.status(200).json({
+    return ok(res, {
       success: true,
       message: 'Inscrição cancelada. Você não receberá mais e-mails de marketing.',
     });
   }
 
   if (!subscriber.unsubscribed_at) {
-    await updateTable('email_subscribers', { id: `eq.${subscriber.id}` }, {
-      unsubscribed_at: new Date().toISOString(),
-    });
+    await updateTable(
+      'email_subscribers',
+      { id: `eq.${subscriber.id}` },
+      {
+        unsubscribed_at: new Date().toISOString(),
+      },
+    );
 
     // Confirmação visual do unsub (kind transacional, sem rodapé de marketing).
     const { subject, html } = unsubscribeSuccess();
@@ -132,7 +152,7 @@ async function unsubscribeByToken(token, res) {
     });
   }
 
-  return res.status(200).json({
+  return ok(res, {
     success: true,
     message: 'Inscrição cancelada. Você não receberá mais e-mails de marketing.',
   });
@@ -188,7 +208,7 @@ async function requestUnsubscribeLink(email, res) {
   // quando `success === true`, e aqui NADA foi removido ainda. Com false ela
   // mantém o formulário e exibe a mensagem — que é exatamente o estado real.
   // `code` deixa o front distinguir isto de um erro de verdade sem parsear texto.
-  return res.status(200).json({
+  return ok(res, {
     success: false,
     code: 'confirmation_required',
     message: NEUTRAL_EMAIL_MESSAGE,

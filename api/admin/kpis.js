@@ -1,8 +1,19 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-kpis');
+const {
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
+  setCachePolicy,
+} = require('../../lib/http');
 const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
-} = require('../lib/supabase');
+} = require('../../lib/supabase');
 
 /**
  * GET /api/admin-kpis?window=12  (window em meses)
@@ -23,21 +34,22 @@ const {
  * Cache 1h.
  */
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
-const cache = new Map();
-
-function getCached(key) {
-  const entry = cache.get(key);
-  if (!entry || entry.expiresAt <= Date.now()) {
-    cache.delete(key);
-    return null;
-  }
-  return entry.data;
-}
-
-function setCached(key, data) {
-  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
-}
+// ── POR QUE NÃO HÁ MAIS UM `Map` DE CACHE AQUI (regra E2) ────────────
+// Este arquivo mantinha `const cache = new Map()` com TTL de 1 hora. Numa
+// função serverless isso não é cache: cada invocação pode cair numa instância
+// nova, então o acerto é acidental e, quando acontece, vale só para aquela
+// instância. Pior, o handler respondia `X-Cache: HIT` — um header afirmando
+// algo que o runtime não garante, que atrapalha exatamente quem for investigar
+// por que o relatório está lento.
+//
+// O que sobra é o mecanismo que sempre foi o real: `Cache-Control`. Como o
+// relatório é por usuário, a política é `private, max-age=3600`
+// (CACHE_POLICIES.adminReport) — quem guarda é o navegador do admin, não um
+// cache compartilhado. O TTL de 1h que o Map tentava aplicar é o mesmo, agora
+// num lugar que funciona.
+//
+// `?nocache=1` continua funcionando e ficou mais honesto: como muda a URL, ele
+// fura o cache do navegador por construção, sem precisar de código.
 
 function startOfMonth(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -45,32 +57,30 @@ function startOfMonth(date) {
 
 module.exports = async function adminKpisHandler(req, res) {
   setAdminCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') return preflight(res);
+  if (req.method !== 'GET') return methodNotAllowed(res, ['GET', 'OPTIONS']);
   if (!ensureAdminSession(req, res)) return;
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
-    const windowMonths = Math.max(1, Math.min(36, Number.parseInt(req.query?.window || '12', 10) || 12));
-    const nocache = req.query?.nocache === '1';
-    const key = `kpis|${windowMonths}`;
-
-    if (!nocache) {
-      const hit = getCached(key);
-      if (hit) {
-        res.setHeader('X-Cache', 'HIT');
-        res.setHeader('Cache-Control', 'private, max-age=3600');
-        return res.status(200).json(hit);
-      }
-    }
+    const windowMonths = Math.max(
+      1,
+      Math.min(36, Number.parseInt(req.query?.window || '12', 10) || 12),
+    );
 
     const now = new Date();
     const monthStart = startOfMonth(now);
     const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-    const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - windowMonths, 1));
+    const windowStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - windowMonths, 1),
+    );
 
     const orders = await listTableRows('orders', {
       select: 'customer_email,total_amount,completed_at',
@@ -118,9 +128,8 @@ module.exports = async function adminKpisHandler(req, res) {
     const cac = null;
     const ltvCacRatio = cac ? ltvAvg / cac : null;
 
-    const monthDeltaPct = revenuePrev > 0
-      ? ((revenueMTD - revenuePrev) / revenuePrev) * 100
-      : revenueMTD > 0 ? 100 : 0;
+    const monthDeltaPct =
+      revenuePrev > 0 ? ((revenueMTD - revenuePrev) / revenuePrev) * 100 : revenueMTD > 0 ? 100 : 0;
 
     const payload = {
       success: true,
@@ -143,12 +152,14 @@ module.exports = async function adminKpisHandler(req, res) {
       },
     };
 
-    setCached(key, payload);
-    res.setHeader('X-Cache', 'MISS');
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-    return res.status(200).json(payload);
+    setCachePolicy(res, 'adminReport');
+    return ok(res, payload);
   } catch (error) {
-    console.error('[admin-kpis]', error.message);
-    return res.status(500).json({ success: false, error: 'Erro ao calcular KPIs.' });
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao calcular KPIs.',
+    });
   }
 };

@@ -46,11 +46,19 @@ function matchOperator(row, column, operator, rawValue) {
   const actual = row[column];
   const value = String(rawValue);
   switch (operator) {
-    case 'eq': return String(actual) === value;
-    case 'gte': return String(actual) >= value;
-    case 'lt': return String(actual) < value;
-    case 'in': return value.replace(/^\(|\)$/g, '').split(',').includes(String(actual));
-    default: throw new Error(`fake supabase: operador não suportado "${operator}"`);
+    case 'eq':
+      return String(actual) === value;
+    case 'gte':
+      return String(actual) >= value;
+    case 'lt':
+      return String(actual) < value;
+    case 'in':
+      return value
+        .replace(/^\(|\)$/g, '')
+        .split(',')
+        .includes(String(actual));
+    default:
+      throw new Error(`fake supabase: operador não suportado "${operator}"`);
   }
 }
 
@@ -95,7 +103,9 @@ function createStore(initial = {}, failReads = []) {
 
   const listTableRows = vi.fn(async (name, options = {}) => {
     if (failReads.includes(name)) throw new Error(`falha simulada de leitura em ${name}`);
-    return table(name).filter((row) => matchFilters(row, options.filters)).map((row) => ({ ...row }));
+    return table(name)
+      .filter((row) => matchFilters(row, options.filters))
+      .map((row) => ({ ...row }));
   });
 
   const getTableRow = vi.fn(async (name, options = {}) => {
@@ -104,12 +114,17 @@ function createStore(initial = {}, failReads = []) {
   });
 
   const insertIntoTable = vi.fn(async (name, rows) => {
-    const incoming = (Array.isArray(rows) ? rows : [rows]).map((row) => ({ id: `${name}-${table(name).length + 1}`, ...row }));
+    const incoming = (Array.isArray(rows) ? rows : [rows]).map((row) => ({
+      id: `${name}-${table(name).length + 1}`,
+      ...row,
+    }));
     if (name === 'email_subscribers') {
       // Índice único em lower(email) (migration phase3).
-      const collides = incoming.some((row) => table(name).some(
-        (existing) => String(existing.email).toLowerCase() === String(row.email).toLowerCase(),
-      ));
+      const collides = incoming.some((row) =>
+        table(name).some(
+          (existing) => String(existing.email).toLowerCase() === String(row.email).toLowerCase(),
+        ),
+      );
       if (collides) {
         const error = new Error('duplicate key value violates unique constraint');
         error.statusCode = 409;
@@ -129,7 +144,10 @@ function createStore(initial = {}, failReads = []) {
   return {
     state,
     helpers: {
-      getTableRow, listTableRows, insertIntoTable, updateTable,
+      getTableRow,
+      listTableRows,
+      insertIntoTable,
+      updateTable,
     },
     rows: (name) => table(name).map((row) => ({ ...row })),
   };
@@ -142,7 +160,11 @@ async function runCron(initial = {}, failReads = []) {
   const store = createStore(initial, failReads);
 
   installModuleMock('../../lib/supabase', {
-    getSupabaseConfig: () => ({ url: 'https://projeto-teste.supabase.co', anonKey: 'anon', serviceRoleKey: 'service' }),
+    getSupabaseConfig: () => ({
+      url: 'https://projeto-teste.supabase.co',
+      anonKey: 'anon',
+      serviceRoleKey: 'service',
+    }),
     serviceRoleHelpers: store.helpers,
     ...store.helpers,
   });
@@ -162,7 +184,10 @@ async function runCron(initial = {}, failReads = []) {
 
   const handler = loadHandler('../cron-email-jobs.js');
   const res = createMockRes();
-  await handler({ method: 'POST', headers: { 'x-cron-secret': CRON_SECRET }, query: {}, body: {} }, res);
+  await handler(
+    { method: 'POST', headers: { 'x-cron-secret': CRON_SECRET }, query: {}, body: {} },
+    res,
+  );
 
   return { res, store, report: res.body, recipients: sendEmail.mock.calls.map(([args]) => args) };
 }
@@ -224,17 +249,21 @@ describe('sequência pós-compra (base contratual)', () => {
   it('reusa o token do assinante existente em vez de criar linha duplicada', async () => {
     const { store, recipients } = await runCron({
       orders: [buyerOrder],
-      email_subscribers: [{
-        id: 'sub-1',
-        email: 'compradora@exemplo.com',
-        confirmed: true,
-        unsubscribed_at: null,
-        unsubscribe_token: 'token-existente',
-      }],
+      email_subscribers: [
+        {
+          id: 'sub-1',
+          email: 'compradora@exemplo.com',
+          confirmed: true,
+          unsubscribed_at: null,
+          unsubscribe_token: 'token-existente',
+        },
+      ],
     });
 
     expect(store.rows('email_subscribers')).toHaveLength(1);
-    expect(recipients.filter((c) => c.kind === 'post_purchase_d3')[0].unsubscribeToken).toBe('token-existente');
+    expect(recipients.filter((c) => c.kind === 'post_purchase_d3')[0].unsubscribeToken).toBe(
+      'token-existente',
+    );
   });
 
   it('NÃO envia para quem pediu para sair, mesmo tendo comprado', async () => {
@@ -242,13 +271,15 @@ describe('sequência pós-compra (base contratual)', () => {
     // exatamente como vale contra o consentimento.
     const { report, recipients } = await runCron({
       orders: [buyerOrder],
-      email_subscribers: [{
-        id: 'sub-1',
-        email: 'compradora@exemplo.com',
-        confirmed: true,
-        unsubscribed_at: new Date().toISOString(),
-        unsubscribe_token: 'token-existente',
-      }],
+      email_subscribers: [
+        {
+          id: 'sub-1',
+          email: 'compradora@exemplo.com',
+          confirmed: true,
+          unsubscribed_at: new Date().toISOString(),
+          unsubscribe_token: 'token-existente',
+        },
+      ],
     });
 
     expect(sentTo(recipients, 'post_purchase_d3')).toEqual([]);
@@ -278,7 +309,9 @@ describe('carrinho abandonado (opt-in OU pedido aprovado)', () => {
 
   it('NÃO envia para e-mail injetado por terceiro (sem opt-in e sem pedido)', async () => {
     // O relay do M1: qualquer um POSTa { email, items } em /api/abandoned-cart.
-    const { report, recipients } = await runCron({ abandoned_carts: [cart('vitima@terceiro.com')] });
+    const { report, recipients } = await runCron({
+      abandoned_carts: [cart('vitima@terceiro.com')],
+    });
 
     expect(recipients).toHaveLength(0);
     expect(report.abandoned.firstReminder).toBe(0);
@@ -288,9 +321,15 @@ describe('carrinho abandonado (opt-in OU pedido aprovado)', () => {
   it('NÃO envia para inscrito que ainda não confirmou o double opt-in', async () => {
     const { report, recipients } = await runCron({
       abandoned_carts: [cart('pendente@exemplo.com')],
-      email_subscribers: [{
-        id: 'sub-1', email: 'pendente@exemplo.com', confirmed: false, unsubscribed_at: null, unsubscribe_token: 't1',
-      }],
+      email_subscribers: [
+        {
+          id: 'sub-1',
+          email: 'pendente@exemplo.com',
+          confirmed: false,
+          unsubscribed_at: null,
+          unsubscribe_token: 't1',
+        },
+      ],
     });
 
     expect(recipients).toHaveLength(0);
@@ -300,9 +339,15 @@ describe('carrinho abandonado (opt-in OU pedido aprovado)', () => {
   it('envia para quem tem opt-in confirmado', async () => {
     const { report, recipients } = await runCron({
       abandoned_carts: [cart('optin@exemplo.com')],
-      email_subscribers: [{
-        id: 'sub-1', email: 'optin@exemplo.com', confirmed: true, unsubscribed_at: null, unsubscribe_token: 't1',
-      }],
+      email_subscribers: [
+        {
+          id: 'sub-1',
+          email: 'optin@exemplo.com',
+          confirmed: true,
+          unsubscribed_at: null,
+          unsubscribe_token: 't1',
+        },
+      ],
     });
 
     expect(sentTo(recipients, 'abandoned_cart_1h')).toEqual(['optin@exemplo.com']);
@@ -314,13 +359,15 @@ describe('carrinho abandonado (opt-in OU pedido aprovado)', () => {
     // e-mail o atacante digitou no formulário público.
     const { recipients } = await runCron({
       abandoned_carts: [cart('cliente@exemplo.com')],
-      orders: [{
-        id: 'ord-9',
-        customer_email: 'cliente@exemplo.com',
-        customer_name: 'Cliente',
-        payment_status: 'approved',
-        completed_at: daysAgo(200),
-      }],
+      orders: [
+        {
+          id: 'ord-9',
+          customer_email: 'cliente@exemplo.com',
+          customer_name: 'Cliente',
+          payment_status: 'approved',
+          completed_at: daysAgo(200),
+        },
+      ],
     });
 
     expect(sentTo(recipients, 'abandoned_cart_1h')).toEqual(['cliente@exemplo.com']);
@@ -329,12 +376,14 @@ describe('carrinho abandonado (opt-in OU pedido aprovado)', () => {
   it('pedido NÃO aprovado não serve de prova', async () => {
     const { report, recipients } = await runCron({
       abandoned_carts: [cart('pendente-pgto@exemplo.com')],
-      orders: [{
-        id: 'ord-9',
-        customer_email: 'pendente-pgto@exemplo.com',
-        payment_status: 'pending',
-        completed_at: daysAgo(200),
-      }],
+      orders: [
+        {
+          id: 'ord-9',
+          customer_email: 'pendente-pgto@exemplo.com',
+          payment_status: 'pending',
+          completed_at: daysAgo(200),
+        },
+      ],
     });
 
     expect(recipients).toHaveLength(0);
@@ -344,19 +393,23 @@ describe('carrinho abandonado (opt-in OU pedido aprovado)', () => {
   it('descadastrado não recebe nem tendo pedido aprovado', async () => {
     const { report, recipients } = await runCron({
       abandoned_carts: [cart('saiu@exemplo.com')],
-      orders: [{
-        id: 'ord-9',
-        customer_email: 'saiu@exemplo.com',
-        payment_status: 'approved',
-        completed_at: daysAgo(200),
-      }],
-      email_subscribers: [{
-        id: 'sub-1',
-        email: 'saiu@exemplo.com',
-        confirmed: true,
-        unsubscribed_at: new Date().toISOString(),
-        unsubscribe_token: 't1',
-      }],
+      orders: [
+        {
+          id: 'ord-9',
+          customer_email: 'saiu@exemplo.com',
+          payment_status: 'approved',
+          completed_at: daysAgo(200),
+        },
+      ],
+      email_subscribers: [
+        {
+          id: 'sub-1',
+          email: 'saiu@exemplo.com',
+          confirmed: true,
+          unsubscribed_at: new Date().toISOString(),
+          unsubscribe_token: 't1',
+        },
+      ],
     });
 
     expect(recipients).toHaveLength(0);
@@ -368,13 +421,15 @@ describe('carrinho abandonado (opt-in OU pedido aprovado)', () => {
 describe('reativação 90 dias', () => {
   it('envia para comprador inativo sem opt-in de newsletter', async () => {
     const { report, recipients } = await runCron({
-      orders: [{
-        id: 'ord-antigo',
-        customer_email: 'sumiu@exemplo.com',
-        customer_name: 'Sumida',
-        payment_status: 'approved',
-        completed_at: daysAgo(120, 0),
-      }],
+      orders: [
+        {
+          id: 'ord-antigo',
+          customer_email: 'sumiu@exemplo.com',
+          customer_name: 'Sumida',
+          payment_status: 'approved',
+          completed_at: daysAgo(120, 0),
+        },
+      ],
     });
 
     expect(sentTo(recipients, 'reactivation_90d')).toEqual(['sumiu@exemplo.com']);
@@ -383,20 +438,24 @@ describe('reativação 90 dias', () => {
 
   it('não envia para comprador inativo que se descadastrou', async () => {
     const { report, recipients } = await runCron({
-      orders: [{
-        id: 'ord-antigo',
-        customer_email: 'sumiu@exemplo.com',
-        customer_name: 'Sumida',
-        payment_status: 'approved',
-        completed_at: daysAgo(120, 0),
-      }],
-      email_subscribers: [{
-        id: 'sub-1',
-        email: 'sumiu@exemplo.com',
-        confirmed: true,
-        unsubscribed_at: new Date().toISOString(),
-        unsubscribe_token: 't1',
-      }],
+      orders: [
+        {
+          id: 'ord-antigo',
+          customer_email: 'sumiu@exemplo.com',
+          customer_name: 'Sumida',
+          payment_status: 'approved',
+          completed_at: daysAgo(120, 0),
+        },
+      ],
+      email_subscribers: [
+        {
+          id: 'sub-1',
+          email: 'sumiu@exemplo.com',
+          confirmed: true,
+          unsubscribed_at: new Date().toISOString(),
+          unsubscribe_token: 't1',
+        },
+      ],
     });
 
     expect(recipients).toHaveLength(0);

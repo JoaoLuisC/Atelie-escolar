@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { expectApiError } from './money-path-harness.js';
+
 function createMockRes() {
   const res = {
     statusCode: 200,
@@ -45,8 +47,11 @@ describe('API contracts', () => {
 
     await handler(req, res);
 
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toBe('Items são obrigatórios');
+    expectApiError(res, {
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      message: 'Items são obrigatórios',
+    });
   });
 
   it('verify-payment exige orderId', async () => {
@@ -56,29 +61,39 @@ describe('API contracts', () => {
 
     await handler(req, res);
 
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toBe('orderId é obrigatório');
+    expectApiError(res, {
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      message: 'orderId é obrigatório.',
+    });
   });
 
   it('download valida token obrigatorio', async () => {
     const handler = (await import('../download.js')).default;
-    const req = { method: 'GET', query: {}, headers: {}, connection: { remoteAddress: '127.0.0.1' } };
+    const req = {
+      method: 'GET',
+      query: {},
+      headers: {},
+      connection: { remoteAddress: '127.0.0.1' },
+    };
     const res = createMockRes();
 
     await handler(req, res);
 
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toBe('Token é obrigatório');
+    expectApiError(res, { status: 400, code: 'VALIDATION_FAILED', message: 'Token é obrigatório' });
   });
 
-  it('admin-products responde preflight OPTIONS', async () => {
-    const handler = (await import('../admin-products.js')).default;
+  it('admin-products responde preflight OPTIONS com 204 e sem corpo', async () => {
+    const handler = (await import('../admin/products.js')).default;
     const req = { method: 'OPTIONS', headers: {}, query: {}, body: {} };
     const res = createMockRes();
 
     await handler(req, res);
 
-    expect(res.statusCode).toBe(200);
+    // 204, não 200 (regra A4): preflight não tem corpo a devolver. A medição de
+    // 13/08/2026 encontrou os dois em uso — 23 handlers com 204 e 17 com 200.
+    expect(res.statusCode).toBe(204);
     expect(res.end).toHaveBeenCalledTimes(1);
+    expect(res.json).not.toHaveBeenCalled();
   });
 });

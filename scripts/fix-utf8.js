@@ -13,27 +13,113 @@ if (!pat || !ref) {
 // Identifica pelo slug (que é ASCII puro, então não pode ter sido corrompido).
 const FIXES = [
   // categorias
-  { table: 'categories', column: 'name', where: { slug: 'volta-as-aulas' }, value: 'Volta às Aulas' },
-  { table: 'categories', column: 'name', where: { slug: 'decoracao-de-sala' }, value: 'Decoração de Sala' },
-  { table: 'categories', column: 'name', where: { slug: 'atividades-pedagogicas' }, value: 'Atividades Pedagógicas' },
+  {
+    table: 'categories',
+    column: 'name',
+    where: { slug: 'volta-as-aulas' },
+    value: 'Volta às Aulas',
+  },
+  {
+    table: 'categories',
+    column: 'name',
+    where: { slug: 'decoracao-de-sala' },
+    value: 'Decoração de Sala',
+  },
+  {
+    table: 'categories',
+    column: 'name',
+    where: { slug: 'atividades-pedagogicas' },
+    value: 'Atividades Pedagógicas',
+  },
 
   // produtos
-  { table: 'products', column: 'name', where: { slug: 'caderno-atividades-1o-ano' }, value: 'Caderno de Atividades 1º Ano' },
-  { table: 'products', column: 'name', where: { slug: 'dia-das-maes-premium' }, value: 'Dia das Mães Premium' },
-  { table: 'products', column: 'name', where: { slug: 'kit-volta-as-aulas' }, value: 'Kit Volta às Aulas' },
-  { table: 'products', column: 'description', where: { slug: 'kit-volta-as-aulas' }, value: 'Etiquetas, calendário, varal de boas-vindas e atividades introdutórias.' },
-  { table: 'products', column: 'name', where: { slug: 'pascoa-pedagogica' }, value: 'Páscoa Pedagógica' },
-  { table: 'products', column: 'description', where: { slug: 'pascoa-pedagogica' }, value: 'Atividades, máscaras e enfeites de Páscoa para Educação Infantil.' },
-  { table: 'products', column: 'description', where: { slug: 'kit-festa-junina-completo' }, value: 'Pacote com banners, painéis, lembrancinhas e atividades temáticas. PDF em alta resolução, pronto para imprimir.' },
-  { table: 'products', column: 'description', where: { slug: 'painel-formatura-infantil' }, value: 'Painel completo com nome dos alunos, espaço para foto e moldura decorada.' },
-  { table: 'products', column: 'description', where: { slug: 'convite-formatura-abc' }, value: 'Modelo de convite para formatura do 5º ano. Editável no Canva.' },
-  { table: 'products', column: 'description', where: { slug: 'dia-das-maes-premium' }, value: 'Cartões, painéis e lembrancinhas temáticas para o Dia das Mães.' },
-  { table: 'products', column: 'description', where: { slug: 'caderno-atividades-1o-ano' }, value: 'Coletânea de 50 atividades alfabetização e numeralização para 1º ano.' },
-  { table: 'products', column: 'description', where: { slug: 'varal-alfabeto-colorido' }, value: 'Letras de A a Z em estilo cartoon para decorar a sala de aula.' },
-  { table: 'products', column: 'description', where: { slug: 'banner-quadrilha' }, value: 'Banner decorativo para festa junina. Tamanho 2x1m, alta resolução.' },
+  {
+    table: 'products',
+    column: 'name',
+    where: { slug: 'caderno-atividades-1o-ano' },
+    value: 'Caderno de Atividades 1º Ano',
+  },
+  {
+    table: 'products',
+    column: 'name',
+    where: { slug: 'dia-das-maes-premium' },
+    value: 'Dia das Mães Premium',
+  },
+  {
+    table: 'products',
+    column: 'name',
+    where: { slug: 'kit-volta-as-aulas' },
+    value: 'Kit Volta às Aulas',
+  },
+  {
+    table: 'products',
+    column: 'description',
+    where: { slug: 'kit-volta-as-aulas' },
+    value: 'Etiquetas, calendário, varal de boas-vindas e atividades introdutórias.',
+  },
+  {
+    table: 'products',
+    column: 'name',
+    where: { slug: 'pascoa-pedagogica' },
+    value: 'Páscoa Pedagógica',
+  },
+  {
+    table: 'products',
+    column: 'description',
+    where: { slug: 'pascoa-pedagogica' },
+    value: 'Atividades, máscaras e enfeites de Páscoa para Educação Infantil.',
+  },
+  {
+    table: 'products',
+    column: 'description',
+    where: { slug: 'kit-festa-junina-completo' },
+    value:
+      'Pacote com banners, painéis, lembrancinhas e atividades temáticas. PDF em alta resolução, pronto para imprimir.',
+  },
+  {
+    table: 'products',
+    column: 'description',
+    where: { slug: 'painel-formatura-infantil' },
+    value: 'Painel completo com nome dos alunos, espaço para foto e moldura decorada.',
+  },
+  {
+    table: 'products',
+    column: 'description',
+    where: { slug: 'convite-formatura-abc' },
+    value: 'Modelo de convite para formatura do 5º ano. Editável no Canva.',
+  },
+  {
+    table: 'products',
+    column: 'description',
+    where: { slug: 'dia-das-maes-premium' },
+    value: 'Cartões, painéis e lembrancinhas temáticas para o Dia das Mães.',
+  },
+  {
+    table: 'products',
+    column: 'description',
+    where: { slug: 'caderno-atividades-1o-ano' },
+    value: 'Coletânea de 50 atividades alfabetização e numeralização para 1º ano.',
+  },
+  {
+    table: 'products',
+    column: 'description',
+    where: { slug: 'varal-alfabeto-colorido' },
+    value: 'Letras de A a Z em estilo cartoon para decorar a sala de aula.',
+  },
+  {
+    table: 'products',
+    column: 'description',
+    where: { slug: 'banner-quadrilha' },
+    value: 'Banner decorativo para festa junina. Tamanho 2x1m, alta resolução.',
+  },
 
   // badge_label de categorias
-  { table: 'categories', column: 'badge_label', where: { slug: 'volta-as-aulas' }, value: 'LANÇAMENTO' },
+  {
+    table: 'categories',
+    column: 'badge_label',
+    where: { slug: 'volta-as-aulas' },
+    value: 'LANÇAMENTO',
+  },
 ];
 
 function sqlEscape(str) {

@@ -1,24 +1,24 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { logAdminAction } = require('../lib/admin-audit');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { logAdminAction } = require('../../lib/admin-audit');
+const { ERROR_CODES, fail, methodNotAllowed, preflight } = require('../../lib/http');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-products');
 const {
   getSupabaseConfig,
-  serviceRoleHelpers: {
-    deleteFromTable,
-    getTableRow,
-    insertIntoTable,
-    listTableRows,
-    updateTable,
-  },
-} = require('../lib/supabase');
+  serviceRoleHelpers: { deleteFromTable, getTableRow, insertIntoTable, listTableRows, updateTable },
+} = require('../../lib/supabase');
 
 function normalizeSlug(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replaceAll(/[\u0300-\u036f]/g, '')
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '') || 'sem-categoria';
+  return (
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replaceAll(/[\u0300-\u036f]/g, '')
+      .replaceAll(/[^a-z0-9]+/g, '-')
+      .replaceAll(/^-+|-+$/g, '') || 'sem-categoria'
+  );
 }
 
 function resolveArray(input, fallback) {
@@ -81,7 +81,10 @@ function toProductPayload(body = {}, existing = {}) {
 
   // Campos de conversão (Fase 2): editáveis pela aba Conversão do ProductWizard.
   const faq = resolveArray(body.faq, existing.faq)
-    .map((entry) => ({ question: String(entry?.question || '').trim(), answer: String(entry?.answer || '').trim() }))
+    .map((entry) => ({
+      question: String(entry?.question || '').trim(),
+      answer: String(entry?.answer || '').trim(),
+    }))
     .filter((entry) => entry.question && entry.answer);
   const reviews = resolveArray(body.reviews, existing.reviews)
     .map((entry) => ({
@@ -93,9 +96,11 @@ function toProductPayload(body = {}, existing = {}) {
     }))
     .filter((entry) => entry.author && entry.text);
   const benefits = resolveArray(body.benefits, existing.benefits)
-    .map((entry) => (typeof entry === 'string'
-      ? { icon: '', label: entry.trim() }
-      : { icon: String(entry?.icon || '').trim(), label: String(entry?.label || '').trim() }))
+    .map((entry) =>
+      typeof entry === 'string'
+        ? { icon: '', label: entry.trim() }
+        : { icon: String(entry?.icon || '').trim(), label: String(entry?.label || '').trim() },
+    )
     .filter((entry) => entry.label);
 
   const incomingImages = resolveArray(body.images, existing.images)
@@ -106,7 +111,9 @@ function toProductPayload(body = {}, existing = {}) {
     .filter(Boolean);
 
   // image_url (campo legado/principal) = primeira da galeria OU o campo `image` direto
-  const primaryImage = String(body.image ?? body.imageUrl ?? incomingImages[0] ?? existing.image_url ?? '').trim();
+  const primaryImage = String(
+    body.image ?? body.imageUrl ?? incomingImages[0] ?? existing.image_url ?? '',
+  ).trim();
 
   return {
     name: String(body.name ?? existing.name ?? '').trim(),
@@ -136,7 +143,8 @@ function toProductPayload(body = {}, existing = {}) {
 async function listProducts() {
   const [productsRows, categoriesRows] = await Promise.all([
     listTableRows('products', {
-      select: 'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,faq,reviews,benefits,created_at,updated_at',
+      select:
+        'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,faq,reviews,benefits,created_at,updated_at',
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -147,7 +155,9 @@ async function listProducts() {
     }),
   ]);
 
-  const categoryById = new Map(categoriesRows.map((category) => [String(category.id), category.name]));
+  const categoryById = new Map(
+    categoriesRows.map((category) => [String(category.id), category.name]),
+  );
   return productsRows.map((row) => {
     const images = Array.isArray(row.images) ? row.images : [];
     return {
@@ -199,7 +209,8 @@ async function updateProduct(body) {
   }
 
   const existing = await getTableRow('products', {
-    select: 'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,faq,reviews,benefits',
+    select:
+      'id,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,faq,reviews,benefits',
     filters: [{ column: 'id', value: id }],
   });
 
@@ -247,7 +258,7 @@ module.exports = async function adminProductsHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return preflight(res);
   }
 
   if (!ensureAdminSession(req, res)) {
@@ -256,7 +267,11 @@ module.exports = async function adminProductsHandler(req, res) {
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ error: 'Supabase não configurado' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado',
+      });
     }
 
     const handlers = {
@@ -269,7 +284,7 @@ module.exports = async function adminProductsHandler(req, res) {
 
     const handler = handlers[req.method];
     if (!handler) {
-      return res.status(405).json({ error: 'Method not allowed' });
+      return methodNotAllowed(res, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
     }
 
     const result = await handler();
@@ -281,18 +296,21 @@ module.exports = async function adminProductsHandler(req, res) {
         req,
         action: actionByMethod[req.method] || String(req.method).toLowerCase(),
         targetType: 'product',
-        targetId: req.method === 'DELETE'
-          ? String(req.query?.id || req.body?.id || '').trim()
-          : (req.body?.id ?? result.body?.id ?? null),
-        after: req.method === 'DELETE' ? null : (req.body || null),
+        targetId:
+          req.method === 'DELETE'
+            ? String(req.query?.id || req.body?.id || '').trim()
+            : (req.body?.id ?? result.body?.id ?? null),
+        after: req.method === 'DELETE' ? null : req.body || null,
       });
     }
 
     return res.status(result.status).json(result.body);
   } catch (error) {
-    console.error('Admin products error:', error);
-    return res.status(500).json({
-      error: 'Erro ao processar produtos do admin',
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao processar produtos do admin',
     });
   }
 };

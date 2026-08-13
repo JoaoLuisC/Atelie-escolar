@@ -7,6 +7,10 @@ const { sendEmail } = require('../lib/email-sender');
 const { optInConfirmation } = require('../lib/email-templates');
 const { sanitizeAttribution } = require('../lib/attribution-sanitize');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('subscribe');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -34,7 +38,7 @@ function newToken() {
  * em produção quem conta é lib/rate-limit.js.
  */
 module.exports = async function subscribeHandler(req, res) {
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method === 'OPTIONS') return preflight(res);
 
   // Antes do método e de qualquer consulta: o balde precisa contar a requisição
   // mesmo quando ela é malformada, senão o atacante escapa do contador só
@@ -42,18 +46,28 @@ module.exports = async function subscribeHandler(req, res) {
   const gate = await enforceRateLimit(req, res, RATE_LIMITS.subscribe);
   if (gate.blocked) return;
 
-  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
+  if (req.method !== 'POST') return methodNotAllowed(res, ['POST', 'OPTIONS']);
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const body = req.body || {};
-    const email = String(body.email || '').trim().toLowerCase();
+    const email = String(body.email || '')
+      .trim()
+      .toLowerCase();
 
     if (!email || !EMAIL_REGEX.test(email)) {
-      return res.status(400).json({ success: false, error: 'Informe um e-mail válido.' });
+      return fail(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: 'Informe um e-mail válido.',
+      });
     }
 
     const source = String(body.source || 'unknown').slice(0, 32);
@@ -69,7 +83,7 @@ module.exports = async function subscribeHandler(req, res) {
 
     if (existing) {
       if (existing.confirmed && !existing.unsubscribed_at) {
-        return res.status(200).json({
+        return ok(res, {
           success: true,
           alreadyConfirmed: true,
           message: 'Você já está inscrito.',
@@ -84,13 +98,17 @@ module.exports = async function subscribeHandler(req, res) {
       confirmationToken = reuseToken ? existing.confirmation_token : newToken();
       subscriberId = existing.id;
 
-      await updateTable('email_subscribers', { id: `eq.${existing.id}` }, {
-        confirmation_token: confirmationToken,
-        confirmation_sent_at: new Date().toISOString(),
-        unsubscribed_at: null,
-        source,
-        attribution_data: attribution,
-      });
+      await updateTable(
+        'email_subscribers',
+        { id: `eq.${existing.id}` },
+        {
+          confirmation_token: confirmationToken,
+          confirmation_sent_at: new Date().toISOString(),
+          unsubscribed_at: null,
+          source,
+          attribution_data: attribution,
+        },
+      );
     } else {
       confirmationToken = newToken();
       const unsubscribeToken = newToken();
@@ -114,12 +132,16 @@ module.exports = async function subscribeHandler(req, res) {
       entityId: String(subscriberId),
     });
 
-    return res.status(200).json({
+    return ok(res, {
       success: true,
       message: 'Confirmação enviada para seu email. Verifique a caixa de entrada.',
     });
   } catch (error) {
-    console.error('[subscribe]', error.message);
-    return res.status(500).json({ success: false, error: 'Erro ao processar inscrição.' });
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao processar inscrição.',
+    });
   }
 };

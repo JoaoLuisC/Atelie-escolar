@@ -1,6 +1,14 @@
-const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, insertIntoTable, updateTable } } = require('../lib/supabase');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { getTableRow, insertIntoTable, updateTable },
+} = require('../lib/supabase');
 const { createSignedDownloadUrl, parseStorageRef } = require('../lib/storage-signed-url');
 const { extractClientIp, recordSecurityEvent } = require('../lib/security-logger');
+const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('download');
 
 module.exports = async function downloadHandler(req, res) {
   // ── Headers de privacidade aplicados a TODAS as respostas ────────────
@@ -18,8 +26,16 @@ module.exports = async function downloadHandler(req, res) {
   res.setHeader('Cache-Control', 'no-store, max-age=0');
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'OPTIONS']);
   }
+
+  // Regra E1. ANTES de qualquer consulta: o custo de enumerar tokens não pode
+  // ser pago pelo banco, e a diferença entre 401 "Token inválido" e o redirect
+  // já é o oráculo que torna a varredura interessante. Dois baldes — repetição
+  // do mesmo token é barata, tokens DISTINTOS é que ficam caros. Ver
+  // RATE_LIMITS.download.
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.download);
+  if (gate.blocked) return;
 
   try {
     // ── POR QUE O TOKEN CONTINUA NA QUERY STRING (achado M6) ───────────
@@ -34,11 +50,19 @@ module.exports = async function downloadHandler(req, res) {
     // acima. Um token vazado em log já foi queimado no primeiro uso.
     const token = String(req.query?.token || '').trim();
     if (!token) {
-      return res.status(400).json({ error: 'Token é obrigatório' });
+      return fail(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: 'Token é obrigatório',
+      });
     }
 
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ error: 'Supabase não configurado' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado',
+      });
     }
 
     const tokenRecord = await getTableRow('download_tokens', {
@@ -47,15 +71,27 @@ module.exports = async function downloadHandler(req, res) {
     });
 
     if (!tokenRecord) {
-      return res.status(401).json({ error: 'Token inválido' });
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.DOWNLOAD_TOKEN_INVALID,
+        message: 'Token inválido',
+      });
     }
 
     if (tokenRecord.used === true) {
-      return res.status(401).json({ error: 'Token já utilizado' });
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.DOWNLOAD_TOKEN_USED,
+        message: 'Token já utilizado',
+      });
     }
 
     if (tokenRecord.expires_at && new Date(tokenRecord.expires_at).getTime() < Date.now()) {
-      return res.status(401).json({ error: 'Token expirado' });
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.DOWNLOAD_TOKEN_EXPIRED,
+        message: 'Token expirado',
+      });
     }
 
     const product = await getTableRow('products', {
@@ -64,11 +100,19 @@ module.exports = async function downloadHandler(req, res) {
     });
 
     if (!product) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
+      return fail(res, {
+        status: 404,
+        code: ERROR_CODES.PRODUCT_NOT_FOUND,
+        message: 'Produto não encontrado',
+      });
     }
 
     if (!product.download_url) {
-      return res.status(404).json({ error: 'Link de download não encontrado' });
+      return fail(res, {
+        status: 404,
+        code: ERROR_CODES.DOWNLOAD_UNAVAILABLE,
+        message: 'Link de download não encontrado',
+      });
     }
 
     // FAIL-CLOSED, antes de queimar o token: só entregamos via Storage assinado.
@@ -86,7 +130,11 @@ module.exports = async function downloadHandler(req, res) {
         userAgent: req.headers['user-agent'],
         properties: { product_id: String(tokenRecord.product_id) },
       });
-      return res.status(500).json({ error: 'Arquivo indisponível. Fale com o suporte.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.DOWNLOAD_UNAVAILABLE,
+        message: 'Arquivo indisponível. Fale com o suporte.',
+      });
     }
 
     // Uso único ATÔMICO: marca used=false → true condicionando no próprio UPDATE.
@@ -94,12 +142,18 @@ module.exports = async function downloadHandler(req, res) {
     // mesmo token recebem 0 linhas afetadas e são barradas (evita download duplo).
     // Feito ANTES de gerar a signed URL, mas só depois de validar o produto para
     // não consumir o token por erro de dado.
-    const claimed = await updateTable('download_tokens',
+    const claimed = await updateTable(
+      'download_tokens',
       { token: `eq.${tokenRecord.token}`, used: 'is.false' },
-      { used: true, used_at: new Date().toISOString() });
+      { used: true, used_at: new Date().toISOString() },
+    );
 
     if (!Array.isArray(claimed) || claimed.length === 0) {
-      return res.status(401).json({ error: 'Token já utilizado' });
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.DOWNLOAD_TOKEN_USED,
+        message: 'Token já utilizado',
+      });
     }
 
     // Signed URL temporário (5 min) para o objeto privado do Storage.
@@ -109,13 +163,19 @@ module.exports = async function downloadHandler(req, res) {
       // já foi reivindicado, então devolvemos o claim para o comprador poder
       // repetir. Seguro contra corrida: só quem venceu o claim chega aqui.
       try {
-        await updateTable('download_tokens',
+        await updateTable(
+          'download_tokens',
           { token: `eq.${tokenRecord.token}` },
-          { used: false, used_at: null });
+          { used: false, used_at: null },
+        );
       } catch (revertErr) {
-        console.error('[download] falha ao devolver o claim do token:', revertErr.message);
+        log.error('falha_ao_devolver_o_claim_do_token', { reason: revertErr.message });
       }
-      return res.status(502).json({ error: 'Não foi possível preparar o download. Tente novamente.' });
+      return fail(res, {
+        status: 502,
+        code: ERROR_CODES.DOWNLOAD_UNAVAILABLE,
+        message: 'Não foi possível preparar o download. Tente novamente.',
+      });
     }
 
     const finalUrl = signedUrl;
@@ -142,7 +202,7 @@ module.exports = async function downloadHandler(req, res) {
         downloaded_at: new Date().toISOString(),
       });
     } catch (logErr) {
-      console.error('[download] falha ao gravar download_logs (entrega segue):', logErr.message);
+      log.error('falha_ao_gravar_download_logs_entrega_segue', { reason: logErr.message });
     }
 
     // Referrer-Policy: no-referrer e Cache-Control: no-store já foram postos no
@@ -150,7 +210,11 @@ module.exports = async function downloadHandler(req, res) {
     res.setHeader('X-Download-Mode', 'signed-storage');
     return res.redirect(finalUrl);
   } catch (error) {
-    console.error('Download error:', error);
-    return res.status(500).json({ error: 'Erro ao processar download' });
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao processar download',
+    });
   }
 };

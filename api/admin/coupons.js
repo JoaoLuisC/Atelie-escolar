@@ -1,15 +1,13 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { logAdminAction } = require('../lib/admin-audit');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { logAdminAction } = require('../../lib/admin-audit');
+const { ERROR_CODES, fail, methodNotAllowed, preflight } = require('../../lib/http');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-coupons');
 const {
   getSupabaseConfig,
-  serviceRoleHelpers: {
-    deleteFromTable,
-    getTableRow,
-    insertIntoTable,
-    listTableRows,
-    updateTable,
-  },
-} = require('../lib/supabase');
+  serviceRoleHelpers: { deleteFromTable, getTableRow, insertIntoTable, listTableRows, updateTable },
+} = require('../../lib/supabase');
 
 // ════════════════════════════════════════════════════════════════════
 // CRUD de cupons pelo painel admin. Antes (pendência §3.4) os cupons só
@@ -90,7 +88,7 @@ function toCouponPayload(body = {}, existing = {}) {
     valid_until: validUntil,
     max_uses: maxUses != null ? Math.max(0, Math.floor(maxUses)) : null,
     min_order_amount: minOrderAmount != null ? Math.max(0, minOrderAmount) : null,
-    active: Object.hasOwn(body, 'active') ? Boolean(body.active) : (existing.active !== false),
+    active: Object.hasOwn(body, 'active') ? Boolean(body.active) : existing.active !== false,
     applies_to: existing.applies_to ?? {},
   };
 }
@@ -112,7 +110,8 @@ function toCouponView(row) {
   };
 }
 
-const SELECT_FIELDS = 'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,used_count,min_order_amount,applies_to,active,created_at';
+const SELECT_FIELDS =
+  'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,used_count,min_order_amount,applies_to,active,created_at';
 
 async function listCoupons() {
   const rows = await listTableRows('coupons', {
@@ -150,7 +149,8 @@ async function updateCoupon(body) {
   }
 
   const existing = await getTableRow('coupons', {
-    select: 'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,min_order_amount,applies_to,active',
+    select:
+      'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,min_order_amount,applies_to,active',
     filters: [{ column: 'id', value: id }],
   });
   if (!existing) {
@@ -170,7 +170,10 @@ async function updateCoupon(body) {
       filters: [{ column: 'code', value: payload.code }],
     });
     if (clash && String(clash.id) !== id) {
-      return { status: 409, body: { success: false, error: 'Já existe um cupom com esse código.' } };
+      return {
+        status: 409,
+        body: { success: false, error: 'Já existe um cupom com esse código.' },
+      };
     }
   }
 
@@ -190,7 +193,7 @@ module.exports = async function adminCouponsHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return preflight(res);
   }
 
   if (!ensureAdminSession(req, res)) {
@@ -199,7 +202,11 @@ module.exports = async function adminCouponsHandler(req, res) {
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const handlers = {
@@ -211,7 +218,7 @@ module.exports = async function adminCouponsHandler(req, res) {
 
     const handler = handlers[req.method];
     if (!handler) {
-      return res.status(405).json({ success: false, error: 'Method not allowed' });
+      return methodNotAllowed(res, ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']);
     }
 
     const result = await handler();
@@ -223,19 +230,21 @@ module.exports = async function adminCouponsHandler(req, res) {
         req,
         action: actionByMethod[req.method] || String(req.method).toLowerCase(),
         targetType: 'coupon',
-        targetId: req.method === 'DELETE'
-          ? String(req.query?.id || req.body?.id || '').trim()
-          : (req.body?.id ?? result.body?.id ?? null),
-        after: req.method === 'DELETE' ? null : (req.body || null),
+        targetId:
+          req.method === 'DELETE'
+            ? String(req.query?.id || req.body?.id || '').trim()
+            : (req.body?.id ?? result.body?.id ?? null),
+        after: req.method === 'DELETE' ? null : req.body || null,
       });
     }
 
     return res.status(result.status).json(result.body);
   } catch (error) {
-    console.error('Admin coupons error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao processar cupons do admin.',
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao processar cupons do admin.',
     });
   }
 };

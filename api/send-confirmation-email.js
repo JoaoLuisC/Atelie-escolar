@@ -4,6 +4,10 @@ const {
 } = require('../lib/supabase');
 const { sendEmail } = require('../lib/email-sender');
 const { orderConfirmation } = require('../lib/email-templates');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('send-confirmation-email');
 
 /**
  * POST /api/send-confirmation-email
@@ -17,18 +21,22 @@ const { orderConfirmation } = require('../lib/email-templates');
  * tinha template inline; agora delega para `lib/email-templates.js`.
  */
 module.exports = async function sendConfirmationEmailHandler(req, res) {
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') return preflight(res);
+  if (req.method !== 'POST') return methodNotAllowed(res, ['POST', 'OPTIONS']);
 
   try {
     const { orderId, customerName, customerEmail, isNewAccount } = req.body || {};
 
     if (!orderId || !customerEmail) {
-      return res.status(400).json({ error: 'orderId e customerEmail são obrigatórios' });
+      return fail(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: 'orderId e customerEmail são obrigatórios',
+      });
     }
 
     if (!getSupabaseConfig()) {
-      return res.status(200).json({ success: true, sent: false, reason: 'supabase_not_configured' });
+      return ok(res, { success: true, sent: false, reason: 'supabase_not_configured' });
     }
 
     const order = await getTableRow('orders', {
@@ -39,7 +47,7 @@ module.exports = async function sendConfirmationEmailHandler(req, res) {
     // Não envia para pedido inexistente (evita e-mail "pagamento confirmado"
     // forjado). Best-effort: 200 sem falhar o checkout.
     if (!order || !order.customer_email) {
-      return res.status(200).json({ success: true, sent: false, reason: 'order_not_found' });
+      return ok(res, { success: true, sent: false, reason: 'order_not_found' });
     }
 
     const orderItems = await listTableRows('order_items', {
@@ -68,15 +76,15 @@ module.exports = async function sendConfirmationEmailHandler(req, res) {
       entityId: orderId,
     });
 
-    return res.status(200).json({
+    return ok(res, {
       success: true,
       sent: result.sent,
       skipped: Boolean(result.skipped),
       reason: result.reason || null,
     });
   } catch (error) {
-    console.error('[send-confirmation-email] Erro:', error.message);
+    log.error('handler_failed', { reason: error.message });
     // Não falha o checkout por causa do email; sem vazar detalhe interno ao client.
-    return res.status(200).json({ success: true, sent: false, reason: 'internal_error' });
+    return ok(res, { success: true, sent: false, reason: 'internal_error' });
   }
 };

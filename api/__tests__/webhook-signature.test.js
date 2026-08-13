@@ -1,14 +1,24 @@
 import crypto from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { expectApiError } from './money-path-harness.js';
+
 function createMockRes() {
   const res = {
     statusCode: 200,
     body: undefined,
     headers: {},
-    setHeader: vi.fn((k, v) => { res.headers[k] = v; }),
-    status: vi.fn((code) => { res.statusCode = code; return res; }),
-    json: vi.fn((payload) => { res.body = payload; return res; }),
+    setHeader: vi.fn((k, v) => {
+      res.headers[k] = v;
+    }),
+    status: vi.fn((code) => {
+      res.statusCode = code;
+      return res;
+    }),
+    json: vi.fn((payload) => {
+      res.body = payload;
+      return res;
+    }),
     end: vi.fn(() => res),
   };
   return res;
@@ -67,7 +77,7 @@ describe('webhook signature regression', () => {
     await handler(req, res);
 
     expect(res.statusCode).toBe(401);
-    expect(res.body).toMatchObject({ error: 'Invalid signature' });
+    expectApiError(res, { status: 401, code: 'UNAUTHORIZED', message: 'Invalid signature' });
   });
 
   it('retorna 401 para assinatura invalida quando APP_ENV=development (nao mais apenas production)', async () => {
@@ -85,7 +95,7 @@ describe('webhook signature regression', () => {
     await handler(req, res);
 
     expect(res.statusCode).toBe(401);
-    expect(res.body).toMatchObject({ error: 'Invalid signature' });
+    expectApiError(res, { status: 401, code: 'UNAUTHORIZED', message: 'Invalid signature' });
   });
 
   it('rejeita request sem assinatura mesmo quando APP_ENV=test (bypass removido)', async () => {
@@ -104,7 +114,7 @@ describe('webhook signature regression', () => {
 
     // Bypass por ambiente removido: sem assinatura válida, 401 em qualquer env.
     expect(res.statusCode).toBe(401);
-    expect(res.body).toMatchObject({ error: 'Invalid signature' });
+    expectApiError(res, { status: 401, code: 'UNAUTHORIZED', message: 'Invalid signature' });
   });
 
   it('rejeita GET (Method Not Allowed)', async () => {

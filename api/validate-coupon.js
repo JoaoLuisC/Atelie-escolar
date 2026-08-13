@@ -1,24 +1,24 @@
 const { getSupabaseConfig } = require('../lib/supabase');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { parseOrFail } = require('../validation');
+const { validateCouponSchema } = require('../validation/payment.schemas');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('validate-coupon');
 const {
-  normalizeCode,
   loadCoupon,
   validateCouponState,
   buildEligibleSet,
   computeDiscount,
 } = require('../lib/coupons');
 
-// Mesmo teto de itens de api/create-payment.js: um carrinho que este endpoint
-// aceitaria mas o checkout recusaria não serviria para nada, e a soma abaixo
-// roda sobre um array vindo direto do cliente.
-const MAX_ITEMS = 100;
-
 module.exports = async function validateCouponHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['POST', 'OPTIONS']);
   }
 
   // Rate limit ANTES de qualquer consulta (achado P1-3). Este endpoint é um
@@ -32,52 +32,48 @@ module.exports = async function validateCouponHandler(req, res) {
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
-    const body = req.body || {};
-    const code = normalizeCode(body.code);
-    if (!code) {
-      return res.status(400).json({ success: false, error: 'Informe o código do cupom.' });
-    }
+    // Regra B1: o schema aplica o MESMO teto de itens de api/create-payment.js
+    // (importado de validation/payment.schemas.js, não redigitado aqui) e já
+    // devolve `price`/`quantity` numéricos — por isso as somas abaixo não
+    // precisam mais de `Number(item.price || 0)`, que era a coerção defensiva
+    // que a regra B2 proíbe.
+    const parsed = parseOrFail(res, validateCouponSchema, req.body || {});
+    if (!parsed.ok) return;
+    const { code, items } = parsed.data;
 
-    const items = Array.isArray(body.items) ? body.items : [];
-    if (items.length > MAX_ITEMS) {
-      return res.status(400).json({ success: false, error: 'Quantidade de itens inválida.' });
-    }
-
-    const subtotal = items.reduce(
-      (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
-      0,
-    );
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
     const coupon = await loadCoupon(code);
     const state = validateCouponState(coupon, subtotal);
     if (!state.ok) {
       // 422: cupom sintaticamente válido mas semanticamente não aplicável
-      // (inexistente, expirado, esgotado, abaixo do mínimo etc.).
-      return res.status(422).json({ success: false, error: state.message, code: state.code });
+      // (inexistente, expirado, esgotado, abaixo do mínimo etc.). O `code` já
+      // vem canônico de lib/coupons.js — ver a nota da regra A2 lá.
+      return fail(res, { status: 422, code: state.code, message: state.message });
     }
 
     const { eligible, restricted } = buildEligibleSet(coupon.applies_to, items);
-    const eligibleSubtotal = eligible.reduce(
-      (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
-      0,
-    );
+    const eligibleSubtotal = eligible.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
     if (restricted && eligibleSubtotal === 0) {
-      return res.status(422).json({
-        success: false,
-        code: 'not_eligible',
-        error: 'Os itens do carrinho não são elegíveis para este cupom.',
+      return fail(res, {
+        status: 422,
+        code: ERROR_CODES.COUPON_NOT_ELIGIBLE,
+        message: 'Os itens do carrinho não são elegíveis para este cupom.',
       });
     }
 
     const discount = computeDiscount(coupon, subtotal, eligibleSubtotal);
     const total = Math.max(0, subtotal - discount);
 
-    return res.status(200).json({
-      success: true,
+    return ok(res, {
       coupon: {
         code: coupon.code,
         discountType: coupon.discount_type,
@@ -88,10 +84,11 @@ module.exports = async function validateCouponHandler(req, res) {
       total,
     });
   } catch (error) {
-    console.error('[validate-coupon]', error.message);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao validar cupom.',
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao validar cupom.',
     });
   }
 };

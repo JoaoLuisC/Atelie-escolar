@@ -1,9 +1,20 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
 const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
-} = require('../lib/supabase');
-const { buildAbcCurve } = require('../lib/abc-classification');
+} = require('../../lib/supabase');
+const { buildAbcCurve } = require('../../lib/abc-classification');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-abc-products');
+const {
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
+  setCachePolicy,
+} = require('../../lib/http');
 
 /**
  * GET /api/admin-abc-products?period=month|quarter|year&categoryId=X
@@ -13,8 +24,15 @@ const { buildAbcCurve } = require('../lib/abc-classification');
  * (regra F5 — dashboards cacheados server-side).
  */
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
-const cache = new Map();
+// ── POR QUE NÃO HÁ MAIS CACHE EM MEMÓRIA AQUI (regra E2) ─────────────
+// Havia um `Map` de módulo com TTL de 1h. Numa função serverless isso não é
+// cache: cada invocação pode cair numa instância nova, o acerto é acidental e
+// vale só para aquela instância — e o `X-Cache: HIT` que acompanhava afirmava
+// uma garantia que o runtime não dá.
+//
+// Fica o mecanismo real: `Cache-Control: private, max-age=3600` (regra E4,
+// CACHE_POLICIES.adminReport). Mesmo TTL, num lugar que vale. `?nocache=1`
+// continua furando, agora por construção, já que muda a URL.
 
 const PERIOD_DAYS = {
   month: 30,
@@ -28,23 +46,6 @@ function parseQuery(req) {
   const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
   const categoryId = String(req.query?.categoryId || '').trim() || null;
   return { period, days, sinceIso, categoryId };
-}
-
-function cacheKey({ period, categoryId }) {
-  return `${period}|${categoryId || '*'}`;
-}
-
-function getCached(key) {
-  const entry = cache.get(key);
-  if (!entry || entry.expiresAt <= Date.now()) {
-    cache.delete(key);
-    return null;
-  }
-  return entry.data;
-}
-
-function setCached(key, data) {
-  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
 async function loadApprovedOrderIds(sinceIso) {
@@ -70,9 +71,7 @@ async function loadOrderItems(orderIds) {
 
 async function loadProducts(productIds, categoryFilter) {
   if (productIds.length === 0) return [];
-  const filters = [
-    { column: 'id', operator: 'in', value: `(${productIds.join(',')})` },
-  ];
+  const filters = [{ column: 'id', operator: 'in', value: `(${productIds.join(',')})` }];
   if (categoryFilter) {
     filters.push({ column: 'category_id', value: categoryFilter });
   }
@@ -93,27 +92,20 @@ async function loadCategoryMap() {
 
 module.exports = async function adminAbcProductsHandler(req, res) {
   setAdminCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') return preflight(res);
+  if (req.method !== 'GET') return methodNotAllowed(res, ['GET', 'OPTIONS']);
   if (!ensureAdminSession(req, res)) return;
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const query = parseQuery(req);
-    const nocache = req.query?.nocache === '1';
-    const key = cacheKey(query);
-
-    if (!nocache) {
-      const cached = getCached(key);
-      if (cached) {
-        res.setHeader('X-Cache', 'HIT');
-        res.setHeader('Cache-Control', 'private, max-age=3600');
-        return res.status(200).json(cached);
-      }
-    }
 
     const orderIds = await loadApprovedOrderIds(query.sinceIso);
     if (orderIds.length === 0) {
@@ -126,23 +118,26 @@ module.exports = async function adminAbcProductsHandler(req, res) {
         summary: { A: 0, B: 0, C: 0 },
         generatedAt: new Date().toISOString(),
       };
-      setCached(key, empty);
-      res.setHeader('X-Cache', 'MISS');
-      return res.status(200).json(empty);
+      setCachePolicy(res, 'adminReport');
+      return ok(res, empty);
     }
 
-    const [items, categoryMap] = await Promise.all([
-      loadOrderItems(orderIds),
-      loadCategoryMap(),
-    ]);
+    const [items, categoryMap] = await Promise.all([loadOrderItems(orderIds), loadCategoryMap()]);
 
     // Agrega por product_id
     const byProduct = new Map();
     for (const item of items) {
       const pid = String(item.product_id || '');
       if (!pid) continue;
-      const revenue = Number(item.total_price || (Number(item.unit_price || 0) * Number(item.quantity || 0)));
-      const entry = byProduct.get(pid) || { id: pid, name: item.product_name || `Produto ${pid}`, revenue: 0, qty: 0 };
+      const revenue = Number(
+        item.total_price || Number(item.unit_price || 0) * Number(item.quantity || 0),
+      );
+      const entry = byProduct.get(pid) || {
+        id: pid,
+        name: item.product_name || `Produto ${pid}`,
+        revenue: 0,
+        qty: 0,
+      };
       entry.revenue += revenue;
       entry.qty += Number(item.quantity || 0);
       byProduct.set(pid, entry);
@@ -185,12 +180,14 @@ module.exports = async function adminAbcProductsHandler(req, res) {
       generatedAt: new Date().toISOString(),
     };
 
-    setCached(key, payload);
-    res.setHeader('X-Cache', 'MISS');
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-    return res.status(200).json(payload);
+    setCachePolicy(res, 'adminReport');
+    return ok(res, payload);
   } catch (error) {
-    console.error('[admin-abc-products]', error.message);
-    return res.status(500).json({ success: false, error: 'Erro ao gerar Curva ABC de produtos.' });
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao gerar Curva ABC de produtos.',
+    });
   }
 };

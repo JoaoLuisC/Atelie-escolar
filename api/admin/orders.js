@@ -1,6 +1,13 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { logAdminAction } = require('../lib/admin-audit');
-const { getSupabaseConfig, serviceRoleHelpers: { deleteFromTable, getTableRow, listTableRows, updateTable } } = require('../lib/supabase');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { logAdminAction } = require('../../lib/admin-audit');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { deleteFromTable, getTableRow, listTableRows, updateTable },
+} = require('../../lib/supabase');
+const { ERROR_CODES, fail, methodNotAllowed, preflight } = require('../../lib/http');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-orders');
 
 function sortByDateDesc(items) {
   return [...items].sort((a, b) => {
@@ -13,7 +20,8 @@ function sortByDateDesc(items) {
 async function listOrders(statusFilter) {
   const [ordersRows, itemRows] = await Promise.all([
     listTableRows('orders', {
-      select: 'id,order_code,customer_name,customer_email,total_amount,status,payment_status,created_at,completed_at',
+      select:
+        'id,order_code,customer_name,customer_email,total_amount,status,payment_status,created_at,completed_at',
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -52,7 +60,9 @@ async function listOrders(statusFilter) {
 
   if (statusFilter) {
     const normalized = statusFilter.toLowerCase();
-    orders = orders.filter((order) => String(order.paymentStatus || '').toLowerCase() === normalized);
+    orders = orders.filter(
+      (order) => String(order.paymentStatus || '').toLowerCase() === normalized,
+    );
   }
 
   return sortByDateDesc(orders);
@@ -75,9 +85,14 @@ async function updateOrder(body) {
 
   const payload = {};
   if (body.status !== undefined) payload.status = String(body.status || '').trim();
-  if (body.paymentStatus !== undefined) payload.payment_status = String(body.paymentStatus || '').trim();
-  if (body.customerName !== undefined) payload.customer_name = String(body.customerName || '').trim();
-  if (body.customerEmail !== undefined) payload.customer_email = String(body.customerEmail || '').trim().toLowerCase();
+  if (body.paymentStatus !== undefined)
+    payload.payment_status = String(body.paymentStatus || '').trim();
+  if (body.customerName !== undefined)
+    payload.customer_name = String(body.customerName || '').trim();
+  if (body.customerEmail !== undefined)
+    payload.customer_email = String(body.customerEmail || '')
+      .trim()
+      .toLowerCase();
   if (body.totalAmount !== undefined) {
     const totalAmount = Number(body.totalAmount);
     if (!Number.isFinite(totalAmount) || totalAmount < 0) {
@@ -86,15 +101,15 @@ async function updateOrder(body) {
     payload.total_amount = totalAmount;
   }
 
-  if (
-    payload.status === 'completed'
-    || payload.payment_status === 'approved'
-  ) {
+  if (payload.status === 'completed' || payload.payment_status === 'approved') {
     payload.completed_at = existing.completed_at || new Date().toISOString();
   }
 
   if (Object.keys(payload).length === 0) {
-    return { status: 400, body: { success: false, error: 'Nenhum campo válido para atualização.' } };
+    return {
+      status: 400,
+      body: { success: false, error: 'Nenhum campo válido para atualização.' },
+    };
   }
 
   await updateTable('orders', { id: `eq.${id}` }, payload);
@@ -123,7 +138,7 @@ module.exports = async function adminOrdersHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return preflight(res);
   }
 
   if (!ensureAdminSession(req, res)) {
@@ -132,7 +147,11 @@ module.exports = async function adminOrdersHandler(req, res) {
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const handlers = {
@@ -147,7 +166,7 @@ module.exports = async function adminOrdersHandler(req, res) {
 
     const handler = handlers[req.method];
     if (!handler) {
-      return res.status(405).json({ success: false, error: 'Method not allowed' });
+      return methodNotAllowed(res, ['GET', 'PUT', 'DELETE', 'OPTIONS']);
     }
 
     const result = await handler();
@@ -159,19 +178,21 @@ module.exports = async function adminOrdersHandler(req, res) {
         req,
         action: actionByMethod[req.method] || String(req.method).toLowerCase(),
         targetType: 'order',
-        targetId: req.method === 'DELETE'
-          ? String(req.query?.id || req.body?.id || '').trim()
-          : (req.body?.id ?? result.body?.id ?? null),
-        after: req.method === 'DELETE' ? null : (req.body || null),
+        targetId:
+          req.method === 'DELETE'
+            ? String(req.query?.id || req.body?.id || '').trim()
+            : (req.body?.id ?? result.body?.id ?? null),
+        after: req.method === 'DELETE' ? null : req.body || null,
       });
     }
 
     return res.status(result.status).json(result.body);
   } catch (error) {
-    console.error('Admin orders error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao buscar pedidos do admin.',
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao buscar pedidos do admin.',
     });
   }
 };

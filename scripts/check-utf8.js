@@ -25,7 +25,10 @@ order by name;
   });
   console.log('HTTP', r.status);
   const data = await r.json();
-  if (!r.ok) { console.error(data); process.exit(1); }
+  if (!r.ok) {
+    console.error(data);
+    process.exit(1);
+  }
   for (const row of data) {
     // U+FFFD em UTF-8 = ef bf bd. Se aparecer, ainda tem corrupção.
     const corrupted = row.hex.includes('efbfbd');

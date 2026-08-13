@@ -88,7 +88,9 @@ let securityEvents;
 function installSupportMocks() {
   auditCalls = [];
   installModuleMock('../../lib/admin-audit', {
-    logAdminAction: vi.fn(async (entry) => { auditCalls.push(entry); }),
+    logAdminAction: vi.fn(async (entry) => {
+      auditCalls.push(entry);
+    }),
   });
   installModuleMock('../../lib/admin-session', {
     // A sessão é considerada VÁLIDA em todos os testes: o ponto é justamente
@@ -113,7 +115,7 @@ function putRequest(value, extra = {}) {
 
 async function runHandler(req) {
   const res = createMockRes();
-  const handler = loadHandler('../admin-settings.js');
+  const handler = loadHandler('../admin/settings.js');
   await handler(req, res);
   return res;
 }
@@ -131,15 +133,19 @@ afterEach(() => {
 describe('gate de reautenticação do adminConfig', () => {
   it('R5: plantar um totpSecret INÉDITO exige reautenticação', async () => {
     // Cenário exato do achado: 2FA exigido, PIN cadastrado, totpSecret VAZIO.
-    const store = installSettingsStore([{
-      setting_key: 'adminConfig',
-      setting_value: { requireSecondFactor: true, fallbackPin: FALLBACK_PIN },
-    }]);
+    const store = installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: { requireSecondFactor: true, fallbackPin: FALLBACK_PIN },
+      },
+    ]);
 
-    const res = await runHandler(putRequest({
-      requireSecondFactor: true,
-      totpSecret: ATTACKER_TOTP,
-    }));
+    const res = await runHandler(
+      putRequest({
+        requireSecondFactor: true,
+        totpSecret: ATTACKER_TOTP,
+      }),
+    );
 
     expect(res.statusCode).toBe(403);
     expect(res.body.code).toBe('second_factor_required');
@@ -157,15 +163,19 @@ describe('gate de reautenticação do adminConfig', () => {
   it('R5: com o código correto, plantar o totpSecret inédito é permitido', async () => {
     // O gate não pode virar um bloqueio absoluto: o admin legítimo, de posse do
     // fator vigente, continua conseguindo acrescentar um fator novo.
-    const store = installSettingsStore([{
-      setting_key: 'adminConfig',
-      setting_value: { requireSecondFactor: true, fallbackPin: FALLBACK_PIN },
-    }]);
+    const store = installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: { requireSecondFactor: true, fallbackPin: FALLBACK_PIN },
+      },
+    ]);
 
-    const res = await runHandler(putRequest(
-      { requireSecondFactor: true, totpSecret: ATTACKER_TOTP },
-      { confirmationCode: FALLBACK_PIN },
-    ));
+    const res = await runHandler(
+      putRequest(
+        { requireSecondFactor: true, totpSecret: ATTACKER_TOTP },
+        { confirmationCode: FALLBACK_PIN },
+      ),
+    );
 
     expect(res.statusCode).toBe(200);
     expect(store.stored('adminConfig').totpSecret).toBe(ATTACKER_TOTP);
@@ -174,10 +184,16 @@ describe('gate de reautenticação do adminConfig', () => {
   });
 
   it('M3: desligar requireSecondFactor exige reautenticação', async () => {
-    const store = installSettingsStore([{
-      setting_key: 'adminConfig',
-      setting_value: { requireSecondFactor: true, totpSecret: STORED_TOTP, fallbackPin: FALLBACK_PIN },
-    }]);
+    const store = installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: {
+          requireSecondFactor: true,
+          totpSecret: STORED_TOTP,
+          fallbackPin: FALLBACK_PIN,
+        },
+      },
+    ]);
 
     const res = await runHandler(putRequest({ requireSecondFactor: false }));
 
@@ -189,10 +205,12 @@ describe('gate de reautenticação do adminConfig', () => {
     // O campo ausente volta ao default `false` na gravação — desligar por
     // omissão tem exatamente o mesmo efeito que desligar explicitamente, e a
     // detecção compara valores EFETIVOS justamente para não cair nisso.
-    const store = installSettingsStore([{
-      setting_key: 'adminConfig',
-      setting_value: { requireSecondFactor: true, fallbackPin: FALLBACK_PIN },
-    }]);
+    const store = installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: { requireSecondFactor: true, fallbackPin: FALLBACK_PIN },
+      },
+    ]);
 
     const res = await runHandler(putRequest({ allowPinFallback: true }));
 
@@ -201,20 +219,24 @@ describe('gate de reautenticação do adminConfig', () => {
   });
 
   it('reabrir o fallback por PIN exige reautenticação', async () => {
-    const store = installSettingsStore([{
-      setting_key: 'adminConfig',
-      setting_value: {
-        requireSecondFactor: true,
-        totpSecret: STORED_TOTP,
-        fallbackPin: FALLBACK_PIN,
-        allowPinFallback: false,
+    const store = installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: {
+          requireSecondFactor: true,
+          totpSecret: STORED_TOTP,
+          fallbackPin: FALLBACK_PIN,
+          allowPinFallback: false,
+        },
       },
-    }]);
+    ]);
 
-    const res = await runHandler(putRequest({
-      requireSecondFactor: true,
-      allowPinFallback: true,
-    }));
+    const res = await runHandler(
+      putRequest({
+        requireSecondFactor: true,
+        allowPinFallback: true,
+      }),
+    );
 
     expect(res.statusCode).toBe(403);
     expect(store.stored('adminConfig').allowPinFallback).toBe(false);
@@ -224,23 +246,27 @@ describe('gate de reautenticação do adminConfig', () => {
     // Este é o contrapeso: o GET redige os segredos, então o painel devolve no
     // PUT as flags iguais e os segredos ausentes. Se isso pedisse código, todo
     // "Salvar" da tela de configurações quebraria.
-    const store = installSettingsStore([{
-      setting_key: 'adminConfig',
-      setting_value: {
+    const store = installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: {
+          requireSecondFactor: true,
+          allowPinFallback: true,
+          totpSecret: STORED_TOTP,
+          fallbackPin: FALLBACK_PIN,
+        },
+      },
+    ]);
+
+    const res = await runHandler(
+      putRequest({
         requireSecondFactor: true,
         allowPinFallback: true,
-        totpSecret: STORED_TOTP,
-        fallbackPin: FALLBACK_PIN,
-      },
-    }]);
-
-    const res = await runHandler(putRequest({
-      requireSecondFactor: true,
-      allowPinFallback: true,
-      has2FA: true,   // flags transitórias que o GET adicionou
-      hasPin: true,
-      corDoBotao: 'azul', // campo fora da whitelist: descartado, não 400
-    }));
+        has2FA: true, // flags transitórias que o GET adicionou
+        hasPin: true,
+        corDoBotao: 'azul', // campo fora da whitelist: descartado, não 400
+      }),
+    );
 
     expect(res.statusCode).toBe(200);
     expect(res.body.ignoredFields).toEqual(['corDoBotao']);
@@ -259,10 +285,12 @@ describe('gate de reautenticação do adminConfig', () => {
     // mora atrás de `enforcedNow`, e não dentro da detecção de mudança.
     const store = installSettingsStore([]);
 
-    const res = await runHandler(putRequest({
-      requireSecondFactor: true,
-      totpSecret: STORED_TOTP,
-    }));
+    const res = await runHandler(
+      putRequest({
+        requireSecondFactor: true,
+        totpSecret: STORED_TOTP,
+      }),
+    );
 
     expect(res.statusCode).toBe(200);
     expect(store.stored('adminConfig').totpSecret).toBe(STORED_TOTP);
@@ -284,21 +312,25 @@ describe('gate de reautenticação do adminConfig', () => {
 
 describe('vazamento de segredo', () => {
   it('o audit log não registra segredo em claro (nem no before, nem no after)', async () => {
-    installSettingsStore([{
-      setting_key: 'adminConfig',
-      setting_value: {
-        requireSecondFactor: true,
-        fallbackPin: FALLBACK_PIN,
-        // Sobra legada: chave que a whitelist nunca aceitaria, mas que está
-        // gravada e entra no `before` do audit cru.
-        totpSecretBackup: 'OLDSECRETVALUE234',
+    installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: {
+          requireSecondFactor: true,
+          fallbackPin: FALLBACK_PIN,
+          // Sobra legada: chave que a whitelist nunca aceitaria, mas que está
+          // gravada e entra no `before` do audit cru.
+          totpSecretBackup: 'OLDSECRETVALUE234',
+        },
       },
-    }]);
+    ]);
 
-    const res = await runHandler(putRequest(
-      { requireSecondFactor: true, totpSecret: STORED_TOTP },
-      { confirmationCode: FALLBACK_PIN },
-    ));
+    const res = await runHandler(
+      putRequest(
+        { requireSecondFactor: true, totpSecret: STORED_TOTP },
+        { confirmationCode: FALLBACK_PIN },
+      ),
+    );
 
     expect(res.statusCode).toBe(200);
     expect(auditCalls).toHaveLength(1);
@@ -315,15 +347,17 @@ describe('vazamento de segredo', () => {
   });
 
   it('o GET devolve flags de "configurado", nunca os segredos', async () => {
-    installSettingsStore([{
-      setting_key: 'adminConfig',
-      setting_value: {
-        requireSecondFactor: true,
-        totpSecret: STORED_TOTP,
-        fallbackPin: FALLBACK_PIN,
-        totpSecretBackup: 'OLDSECRETVALUE234',
+    installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: {
+          requireSecondFactor: true,
+          totpSecret: STORED_TOTP,
+          fallbackPin: FALLBACK_PIN,
+          totpSecretBackup: 'OLDSECRETVALUE234',
+        },
       },
-    }]);
+    ]);
 
     const res = await runHandler({
       method: 'GET',
@@ -360,11 +394,13 @@ describe('validação de entrada', () => {
     // com o acesso cru, o handler tentaria coagir com um coercer inexistente e
     // devolveria 500 em vez de tratar a chave como qualquer desconhecida.
     const store = installSettingsStore([]);
-    const res = await runHandler(putRequest({
-      constructor: 'x',
-      toString: 'y',
-      requireSecondFactor: true,
-    }));
+    const res = await runHandler(
+      putRequest({
+        constructor: 'x',
+        toString: 'y',
+        requireSecondFactor: true,
+      }),
+    );
 
     expect(res.statusCode).toBe(200);
     expect(res.body.ignoredFields).toEqual(expect.arrayContaining(['constructor', 'toString']));

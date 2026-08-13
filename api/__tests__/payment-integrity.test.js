@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  expectApiError,
   buildSignedWebhookHeaders,
   createMockRes,
   createSupabaseStore,
@@ -46,7 +47,14 @@ const ORDER_TOTAL = 200;
 const OWNER_EMAIL = 'dono@real.com';
 
 const ORDER_ITEMS = [
-  { id: 1, order_id: ORDER_ID, product_id: 'p1', product_name: 'Kit de Atividades', unit_price: 200, quantity: 1 },
+  {
+    id: 1,
+    order_id: ORDER_ID,
+    product_id: 'p1',
+    product_name: 'Kit de Atividades',
+    unit_price: 200,
+    quantity: 1,
+  },
 ];
 
 function baseOrder(overrides = {}) {
@@ -95,7 +103,9 @@ function arrangeWebhook({ payment, order = baseOrder(), items = ORDER_ITEMS, tok
   installModuleMock('../../lib/analytics-events', { recordEvent });
 
   const ensureCustomerAccountFromCheckout = vi.fn(async () => {});
-  installModuleMock('../../lib/customer-account-provisioning', { ensureCustomerAccountFromCheckout });
+  installModuleMock('../../lib/customer-account-provisioning', {
+    ensureCustomerAccountFromCheckout,
+  });
 
   const sdk = installMercadoPagoSdkMock({ payment });
 
@@ -121,7 +131,12 @@ function webhookRequest(paymentId = 'MP-1', { requestId = 'req-1', tsSeconds } =
 }
 
 // ─── Arranjo do verify-payment ───────────────────────────────────────
-function arrangeVerify({ order = baseOrder(), items = ORDER_ITEMS, tokens = [], searchResults = [] } = {}) {
+function arrangeVerify({
+  order = baseOrder(),
+  items = ORDER_ITEMS,
+  tokens = [],
+  searchResults = [],
+} = {}) {
   const store = createSupabaseStore({
     orders: order ? [order] : [],
     order_items: items,
@@ -132,7 +147,9 @@ function arrangeVerify({ order = baseOrder(), items = ORDER_ITEMS, tokens = [], 
   installRateLimitPassthrough();
 
   const ensureCustomerAccountFromCheckout = vi.fn(async () => {});
-  installModuleMock('../../lib/customer-account-provisioning', { ensureCustomerAccountFromCheckout });
+  installModuleMock('../../lib/customer-account-provisioning', {
+    ensureCustomerAccountFromCheckout,
+  });
 
   // Aqui o HMAC não participa: o gate é o valor. Basta o cliente do SDK.
   installModuleMock('../../lib/mercadopago-config', {
@@ -154,14 +171,25 @@ function arrangeVerify({ order = baseOrder(), items = ORDER_ITEMS, tokens = [], 
 }
 
 function verifyRequest({ orderId = ORDER_CODE, email = OWNER_EMAIL } = {}) {
-  return { method: 'POST', headers: { 'user-agent': 'jsdom' }, body: { orderId, email }, query: {} };
+  return {
+    method: 'POST',
+    headers: { 'user-agent': 'jsdom' },
+    body: { orderId, email },
+    query: {},
+  };
 }
 
 describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
   const originalEnv = {};
 
   beforeEach(() => {
-    for (const key of ['APP_ENV', 'NODE_ENV', 'VERCEL_ENV', 'WEBHOOK_SECRET', 'MERCADOPAGO_ACCESS_TOKEN']) {
+    for (const key of [
+      'APP_ENV',
+      'NODE_ENV',
+      'VERCEL_ENV',
+      'WEBHOOK_SECRET',
+      'MERCADOPAGO_ACCESS_TOKEN',
+    ]) {
       originalEnv[key] = process.env[key];
     }
     process.env.APP_ENV = 'test';
@@ -230,7 +258,9 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
 
       expect(store.rows('orders')[0].payment_status).toBe('pending');
       expect(store.rows('download_tokens')).toHaveLength(0);
-      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe('currency_mismatch');
+      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe(
+        'currency_mismatch',
+      );
     });
 
     it('recusa quando transaction_amount está ausente (fail-closed)', async () => {
@@ -244,7 +274,9 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
       // "Não consegui conferir o valor" nunca pode significar "libera".
       expect(store.rows('orders')[0].payment_status).toBe('pending');
       expect(store.rows('download_tokens')).toHaveLength(0);
-      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe('payment_amount_unusable');
+      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe(
+        'payment_amount_unusable',
+      );
     });
 
     it('recusa quando orders.total_amount é null (fail-closed no total do pedido)', async () => {
@@ -258,7 +290,9 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
 
       expect(store.rows('orders')[0].payment_status).toBe('pending');
       expect(store.rows('download_tokens')).toHaveLength(0);
-      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe('order_total_unusable');
+      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe(
+        'order_total_unusable',
+      );
     });
 
     it('recusa um centavo abaixo da tolerância (199,98 para um pedido de 200)', async () => {
@@ -288,9 +322,10 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
     });
 
     it('aprova e emite os tokens quando o valor bate exatamente', async () => {
-      const { handler, store, recordEvent, ensureCustomerAccountFromCheckout, security } = arrangeWebhook({
-        payment: approvedPayment(),
-      });
+      const { handler, store, recordEvent, ensureCustomerAccountFromCheckout, security } =
+        arrangeWebhook({
+          payment: approvedPayment(),
+        });
       const res = createMockRes();
 
       await handler(webhookRequest(), res);
@@ -350,7 +385,9 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
       // dinheiro que não existe.
       expect(store.rows('orders')[0].payment_status).toBe('pending');
       expect(store.rows('download_tokens')).toHaveLength(0);
-      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe('test_payment_in_production');
+      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe(
+        'test_payment_in_production',
+      );
     });
 
     it('aceita live_mode=false fora de produção (é assim que se roda em sandbox)', async () => {
@@ -404,7 +441,9 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
 
       expect(store.rows('orders')[0].payment_status).toBe('pending');
       expect(store.rows('download_tokens')).toHaveLength(0);
-      expect(security.recordSecurityEvent.mock.calls[0][0].eventName).toBe('payment_amount_mismatch');
+      expect(security.recordSecurityEvent.mock.calls[0][0].eventName).toBe(
+        'payment_amount_mismatch',
+      );
     });
 
     it('aprova, emite tokens e os devolve quando o valor reconcilia', async () => {
@@ -467,7 +506,9 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
 
       expect(store.rows('orders')[0].payment_status).toBe('pending');
       expect(store.rows('download_tokens')).toHaveLength(0);
-      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe('payment_amount_unusable');
+      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe(
+        'payment_amount_unusable',
+      );
     });
 
     it('recusa um centavo abaixo da tolerância (199,98 para um pedido de 200)', async () => {
@@ -521,7 +562,9 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
 
       expect(store.rows('orders')[0].payment_status).toBe('pending');
       expect(store.rows('download_tokens')).toHaveLength(0);
-      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe('test_payment_in_production');
+      expect(security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe(
+        'test_payment_in_production',
+      );
     });
 
     it('aceita live_mode=false fora de produção (é assim que se roda em sandbox)', async () => {
@@ -546,12 +589,17 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
       // painel, fora do faturamento, e invisível para a sequência pós-compra,
       // que filtra `payment_status = 'approved'`.
       const { handler, store } = arrangeVerify({
-        tokens: [{
-          order_id: ORDER_ID, product_id: 'p1', product_name: 'Kit de Atividades',
-          token: 'token-de-poll-anterior', used: false,
-          expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          created_at: '2026-08-12T10:05:00.000Z',
-        }],
+        tokens: [
+          {
+            order_id: ORDER_ID,
+            product_id: 'p1',
+            product_name: 'Kit de Atividades',
+            token: 'token-de-poll-anterior',
+            used: false,
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            created_at: '2026-08-12T10:05:00.000Z',
+          },
+        ],
         searchResults: [approvedPayment({ id: 'MP-OK' })],
       });
       const res = createMockRes();
@@ -628,20 +676,60 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
   // não a necessidade do teste.
   describe('paridade webhook × verify-payment', () => {
     const CENARIOS = [
-      { nome: 'total do pedido nulo', order: { total_amount: null }, payment: { transaction_amount: 0.01 }, reason: 'order_total_unusable' },
-      { nome: 'total do pedido negativo', order: { total_amount: -10 }, payment: { transaction_amount: 0.01 }, reason: 'order_total_unusable' },
-      { nome: 'total do pedido em string vazia', order: { total_amount: '' }, payment: { transaction_amount: 0.01 }, reason: 'order_total_unusable' },
+      {
+        nome: 'total do pedido nulo',
+        order: { total_amount: null },
+        payment: { transaction_amount: 0.01 },
+        reason: 'order_total_unusable',
+      },
+      {
+        nome: 'total do pedido negativo',
+        order: { total_amount: -10 },
+        payment: { transaction_amount: 0.01 },
+        reason: 'order_total_unusable',
+      },
+      {
+        nome: 'total do pedido em string vazia',
+        order: { total_amount: '' },
+        payment: { transaction_amount: 0.01 },
+        reason: 'order_total_unusable',
+      },
       // ZERO reprova desde a extração (`due <= 0`). A linha zerada é real e não
       // hipotética: api/create-payment.js grava o pedido ANTES de criar a
       // preference, então um cupom de 100% deixa `total_amount = 0` em `orders`
       // mesmo quando o Mercado Pago recusa a cobrança de valor zero. Com o
       // antigo `due < 0`, esse pedido aceitava qualquer pagamento — `0.01 +
       // 0.01 >= 0` — e entregava os produtos por um centavo.
-      { nome: 'total do pedido zerado (cupom de 100% deixa a linha gravada)', order: { total_amount: 0 }, payment: { transaction_amount: 0.01 }, reason: 'order_total_unusable' },
-      { nome: 'valor pago ausente', order: {}, payment: { transaction_amount: undefined }, reason: 'payment_amount_unusable' },
-      { nome: 'valor pago negativo', order: {}, payment: { transaction_amount: -200 }, reason: 'payment_amount_unusable' },
-      { nome: 'moeda diferente de BRL', order: {}, payment: { currency_id: 'USD' }, reason: 'currency_mismatch' },
-      { nome: 'valor abaixo do total', order: {}, payment: { transaction_amount: 199.98 }, reason: 'amount_below_order_total' },
+      {
+        nome: 'total do pedido zerado (cupom de 100% deixa a linha gravada)',
+        order: { total_amount: 0 },
+        payment: { transaction_amount: 0.01 },
+        reason: 'order_total_unusable',
+      },
+      {
+        nome: 'valor pago ausente',
+        order: {},
+        payment: { transaction_amount: undefined },
+        reason: 'payment_amount_unusable',
+      },
+      {
+        nome: 'valor pago negativo',
+        order: {},
+        payment: { transaction_amount: -200 },
+        reason: 'payment_amount_unusable',
+      },
+      {
+        nome: 'moeda diferente de BRL',
+        order: {},
+        payment: { currency_id: 'USD' },
+        reason: 'currency_mismatch',
+      },
+      {
+        nome: 'valor abaixo do total',
+        order: {},
+        payment: { transaction_amount: 199.98 },
+        reason: 'amount_below_order_total',
+      },
     ];
 
     for (const cenario of CENARIOS) {
@@ -682,13 +770,20 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
     it('as duas aprovam exatamente na mesma borda de tolerância', async () => {
       // 199,99 aprova nas duas; 199,98 recusa nas duas. Sem o par, afrouxar a
       // tolerância de uma das portas passaria despercebido.
-      for (const [valor, esperado] of [[199.99, 'approved'], [199.98, 'pending']]) {
+      for (const [valor, esperado] of [
+        [199.99, 'approved'],
+        [199.98, 'pending'],
+      ]) {
         resetModuleRegistry();
-        const noWebhook = arrangeWebhook({ payment: approvedPayment({ transaction_amount: valor }) });
+        const noWebhook = arrangeWebhook({
+          payment: approvedPayment({ transaction_amount: valor }),
+        });
         await noWebhook.handler(webhookRequest(), createMockRes());
 
         resetModuleRegistry();
-        const noVerify = arrangeVerify({ searchResults: [approvedPayment({ transaction_amount: valor })] });
+        const noVerify = arrangeVerify({
+          searchResults: [approvedPayment({ transaction_amount: valor })],
+        });
         await noVerify.handler(verifyRequest(), createMockRes());
 
         expect(noWebhook.store.rows('orders')[0].payment_status).toBe(esperado);
@@ -706,7 +801,10 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
       const centavo = { total_amount: 2.29 };
       const pago = { transaction_amount: 2.28 };
 
-      const noWebhook = arrangeWebhook({ order: baseOrder(centavo), payment: approvedPayment(pago) });
+      const noWebhook = arrangeWebhook({
+        order: baseOrder(centavo),
+        payment: approvedPayment(pago),
+      });
       await noWebhook.handler(webhookRequest(), createMockRes());
 
       resetModuleRegistry();
@@ -735,10 +833,12 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
 
       expect(noWebhook.store.rows('orders')[0].payment_status).toBe('pending');
       expect(noVerify.store.rows('orders')[0].payment_status).toBe('pending');
-      expect(noWebhook.security.recordSecurityEvent.mock.calls[0][0].properties.reason)
-        .toBe('test_payment_in_production');
-      expect(noVerify.security.recordSecurityEvent.mock.calls[0][0].properties.reason)
-        .toBe('test_payment_in_production');
+      expect(noWebhook.security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe(
+        'test_payment_in_production',
+      );
+      expect(noVerify.security.recordSecurityEvent.mock.calls[0][0].properties.reason).toBe(
+        'test_payment_in_production',
+      );
     });
   });
 
@@ -763,7 +863,11 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
       expect(resErrado.statusCode).toBe(404);
       expect(resInexistente.statusCode).toBe(404);
       expect(resErrado.body).toEqual(resInexistente.body);
-      expect(resErrado.body).toEqual({ error: 'Pedido não encontrado' });
+      expectApiError(resErrado, {
+        status: 404,
+        code: 'ORDER_NOT_FOUND',
+        message: 'Pedido não encontrado',
+      });
 
       // E nada do pedido vaza junto do 404.
       expect(JSON.stringify(resErrado.body)).not.toContain(OWNER_EMAIL);
@@ -782,7 +886,11 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
       await handler(verifyRequest({ email: 'a@b.co' }), res);
 
       expect(res.statusCode).toBe(404);
-      expect(res.body).toEqual({ error: 'Pedido não encontrado' });
+      expectApiError(res, {
+        status: 404,
+        code: 'ORDER_NOT_FOUND',
+        message: 'Pedido não encontrado',
+      });
       expect(security.recordSecurityEvent).toHaveBeenCalledTimes(1);
     });
 

@@ -1,11 +1,13 @@
 const crypto = require('node:crypto');
 const {
   getSupabaseConfig,
-  serviceRoleHelpers: {
-    getTableRow, insertIntoTable, listTableRows, updateTable,
-  },
+  serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable },
 } = require('../lib/supabase');
 const { sendEmail } = require('../lib/email-sender');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('cron-email-jobs');
 const {
   abandonedCart,
   postPurchaseD3,
@@ -57,10 +59,7 @@ function isAuthorized(req) {
   const header = String(req.headers['x-cron-secret'] || '').trim();
   if (!header) return false;
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(header),
-      Buffer.from(expected),
-    );
+    return crypto.timingSafeEqual(Buffer.from(header), Buffer.from(expected));
   } catch {
     return false;
   }
@@ -109,7 +108,9 @@ function isAuthorized(req) {
 // ════════════════════════════════════════════════════════════════════
 
 function normalizeEmail(email) {
-  return String(email || '').trim().toLowerCase();
+  return String(email || '')
+    .trim()
+    .toLowerCase();
 }
 
 function deny(reason, token = null) {
@@ -244,7 +245,10 @@ async function ensureContractContactRow(email) {
       unsubscribe_token: unsubscribeToken,
       source: 'post_purchase',
     });
-    return { token: created?.unsubscribe_token || unsubscribeToken, reason: 'contract_contact_created' };
+    return {
+      token: created?.unsubscribe_token || unsubscribeToken,
+      reason: 'contract_contact_created',
+    };
   } catch {
     // Corrida com /api/subscribe (índice único em lower(email)) ou falha real.
     // Relê: se a linha passou a existir, usa o token DELA — e se ela vier
@@ -269,7 +273,11 @@ async function resolveContractRecipient(email) {
 
   if (state.found) {
     if (!state.token) return deny('no_unsubscribe_token');
-    return { allowed: true, token: state.token, reason: state.confirmed ? 'confirmed' : 'contract' };
+    return {
+      allowed: true,
+      token: state.token,
+      reason: state.confirmed ? 'confirmed' : 'contract',
+    };
   }
 
   const ensured = await ensureContractContactRow(email);
@@ -343,7 +351,9 @@ async function processAbandonedCarts() {
   // (inclusive contra abuso do endpoint público), o segundo é o fluxo normal.
   const results = { firstReminder: 0, secondReminder: 0, skipped: 0, blocked: newBlockTally() };
 
-  const firstWindowStart = new Date(Date.now() - (ABANDONED_FIRST_H + 1) * 60 * 60 * 1000).toISOString();
+  const firstWindowStart = new Date(
+    Date.now() - (ABANDONED_FIRST_H + 1) * 60 * 60 * 1000,
+  ).toISOString();
   const firstWindowEnd = new Date(Date.now() - ABANDONED_FIRST_H * 60 * 60 * 1000).toISOString();
 
   // Candidatos a primeiro lembrete: criados há 1-2h, sem recovered_at,
@@ -394,14 +404,20 @@ async function processAbandonedCarts() {
     });
     if (result.sent) {
       results.firstReminder += 1;
-      await updateTable('abandoned_carts', { id: `eq.${cart.id}` }, {
-        reminder_sent_at: new Date().toISOString(),
-      });
+      await updateTable(
+        'abandoned_carts',
+        { id: `eq.${cart.id}` },
+        {
+          reminder_sent_at: new Date().toISOString(),
+        },
+      );
     }
   }
 
   // Segundo lembrete: 24h+ e o primeiro já foi
-  const secondWindowStart = new Date(Date.now() - (ABANDONED_SECOND_H + 1) * 60 * 60 * 1000).toISOString();
+  const secondWindowStart = new Date(
+    Date.now() - (ABANDONED_SECOND_H + 1) * 60 * 60 * 1000,
+  ).toISOString();
   const secondWindowEnd = new Date(Date.now() - ABANDONED_SECOND_H * 60 * 60 * 1000).toISOString();
 
   const secondCandidates = await listTableRows('abandoned_carts', {
@@ -496,9 +512,7 @@ async function inferCategoryAndSuggestions(items) {
   return {
     category: category?.name || null,
     categorySlug: category?.slug || null,
-    suggestions: suggestions
-      .filter((p) => !productIds.includes(String(p.id)))
-      .slice(0, 3),
+    suggestions: suggestions.filter((p) => !productIds.includes(String(p.id))).slice(0, 3),
   };
 }
 
@@ -506,7 +520,9 @@ async function processPostPurchaseStep({ daysAgo, kind, templateFn, lookbackHour
   // Janela: pedidos aprovados há ~daysAgo dias, com tolerância de algumas horas
   const targetMs = daysAgo * 24 * 60 * 60 * 1000;
   const windowEnd = new Date(Date.now() - targetMs).toISOString();
-  const windowStart = new Date(Date.now() - targetMs - lookbackHours * 60 * 60 * 1000).toISOString();
+  const windowStart = new Date(
+    Date.now() - targetMs - lookbackHours * 60 * 60 * 1000,
+  ).toISOString();
 
   const orders = await listTableRows('orders', {
     select: 'id,order_code,customer_name,customer_email,total_amount,completed_at',
@@ -544,7 +560,11 @@ async function processPostPurchaseStep({ daysAgo, kind, templateFn, lookbackHour
     } else if (kind === 'post_purchase_d15') {
       payload = templateFn({ customerName: order.customer_name, category, suggestions });
     } else if (kind === 'post_purchase_d45') {
-      payload = templateFn({ customerName: order.customer_name, category, newProducts: suggestions });
+      payload = templateFn({
+        customerName: order.customer_name,
+        category,
+        newProducts: suggestions,
+      });
     } else {
       continue;
     }
@@ -595,7 +615,9 @@ async function processReactivation() {
   const blocked = newBlockTally();
 
   for (const [email, lastOrder] of lastByEmail) {
-    const days = Math.floor((Date.now() - new Date(lastOrder.completed_at).getTime()) / (24 * 60 * 60 * 1000));
+    const days = Math.floor(
+      (Date.now() - new Date(lastOrder.completed_at).getTime()) / (24 * 60 * 60 * 1000),
+    );
     if (days < REACTIVATION_MIN || days >= REACTIVATION_MAX) continue;
     // Teto de trabalho por execução: como o entityId é o bucket mensal, quem
     // ficar de fora é reprocessado na próxima hora dentro do mesmo mês (idempotente).
@@ -636,25 +658,41 @@ async function processReactivation() {
 // HANDLER
 // ════════════════════════════════════════════════════════════════════
 module.exports = async function cronEmailJobsHandler(req, res) {
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method === 'OPTIONS') return preflight(res);
   if (req.method !== 'POST' && req.method !== 'GET') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['POST', 'GET', 'OPTIONS']);
   }
 
   if (!isAuthorized(req)) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
+    return fail(res, { status: 401, code: ERROR_CODES.UNAUTHORIZED, message: 'Unauthorized' });
   }
 
   if (!getSupabaseConfig()) {
-    return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Supabase não configurado.',
+    });
   }
 
   try {
     const start = Date.now();
     const abandoned = await processAbandonedCarts();
-    const d3 = await processPostPurchaseStep({ daysAgo: 3, kind: 'post_purchase_d3', templateFn: postPurchaseD3 });
-    const d15 = await processPostPurchaseStep({ daysAgo: 15, kind: 'post_purchase_d15', templateFn: postPurchaseD15 });
-    const d45 = await processPostPurchaseStep({ daysAgo: 45, kind: 'post_purchase_d45', templateFn: postPurchaseD45 });
+    const d3 = await processPostPurchaseStep({
+      daysAgo: 3,
+      kind: 'post_purchase_d3',
+      templateFn: postPurchaseD3,
+    });
+    const d15 = await processPostPurchaseStep({
+      daysAgo: 15,
+      kind: 'post_purchase_d15',
+      templateFn: postPurchaseD15,
+    });
+    const d45 = await processPostPurchaseStep({
+      daysAgo: 45,
+      kind: 'post_purchase_d45',
+      templateFn: postPurchaseD45,
+    });
     const reactivation = await processReactivation();
 
     const elapsedMs = Date.now() - start;
@@ -669,13 +707,16 @@ module.exports = async function cronEmailJobsHandler(req, res) {
       postPurchase: { d3, d15, d45 },
       reactivation,
     };
-    console.log('[cron-email-jobs]', JSON.stringify(report));
-    return res.status(200).json(report);
+    // O relatório JÁ é o contexto: emitir os campos soltos (e não uma string
+    // com JSON dentro) é o que permite filtrar "rodadas em que reactivation > 0"
+    // sem reparsear a linha.
+    log.info('rodada_concluida', report);
+    return ok(res, report);
   } catch (error) {
     // Detalhe só no log server-side; ao cliente vai mensagem genérica para não
     // vazar mensagens internas do Supabase/PostgREST (nomes de tabela/coluna etc.).
-    console.error('[cron-email-jobs] erro fatal:', error.message);
-    return res.status(500).json({ success: false, error: 'Erro interno.' });
+    log.error('rodada_falhou', { reason: error.message });
+    return fail(res, { status: 500, code: ERROR_CODES.INTERNAL_ERROR, message: 'Erro interno.' });
   }
 };
 

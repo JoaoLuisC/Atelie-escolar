@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createMockRes,
   createSupabaseStore,
+  expectApiError,
   installPartialMock,
+  installRateLimitPassthrough,
   installSecurityLoggerMock,
   installSupabaseMock,
   loadHandler,
@@ -35,7 +37,8 @@ import {
 const TOKEN = 'a'.repeat(64);
 const ORDER_ID = 10;
 const PRODUCT_ID = 'p1';
-const SIGNED_URL = 'https://projeto-teste.supabase.co/storage/v1/object/sign/product_files/kit.pdf?token=assinatura';
+const SIGNED_URL =
+  'https://projeto-teste.supabase.co/storage/v1/object/sign/product_files/kit.pdf?token=assinatura';
 
 function tokenRow(overrides = {}) {
   return {
@@ -60,10 +63,21 @@ function productRow(overrides = {}) {
   };
 }
 
-function arrange({ tokens = [tokenRow()], products = [productRow()], signedUrl = SIGNED_URL } = {}) {
+function arrange({
+  tokens = [tokenRow()],
+  products = [productRow()],
+  signedUrl = SIGNED_URL,
+} = {}) {
   const store = createSupabaseStore({ download_tokens: tokens, products });
   installSupabaseMock(store);
   const security = installSecurityLoggerMock();
+
+  // O handler passou a chamar enforceRateLimit (regra E1) ANTES de olhar o
+  // token. Sem este duplo, o gate real tenta a RPC do Postgres, falha aberto e
+  // emite um `rate_limit_unavailable` — que não muda nenhum resultado abaixo,
+  // mas passa a ser o primeiro evento de segurança da rodada. O contador tem
+  // suíte própria em lib/__tests__/rate-limit.test.js; aqui ele é ruído.
+  installRateLimitPassthrough();
 
   // parseStorageRef entra o REAL: é função pura, é ela que decide se o
   // download_url cadastrado é do Storage (o gate fail-closed), e trocá-la por
@@ -128,8 +142,9 @@ describe('download — uso único do token', () => {
 
     // …e vem ANTES de gerar a URL: nunca deve existir uma signed URL válida
     // enquanto o token ainda está por queimar.
-    expect(store.spies.updateTable.mock.invocationCallOrder[0])
-      .toBeLessThan(createSignedDownloadUrl.mock.invocationCallOrder[0]);
+    expect(store.spies.updateTable.mock.invocationCallOrder[0]).toBeLessThan(
+      createSignedDownloadUrl.mock.invocationCallOrder[0],
+    );
 
     expect(store.rows('download_tokens')[0].used).toBe(true);
 
@@ -152,8 +167,11 @@ describe('download — uso único do token', () => {
 
     await handler(downloadRequest(), res);
 
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'Token já utilizado' });
+    expectApiError(res, {
+      status: 401,
+      code: 'DOWNLOAD_TOKEN_USED',
+      message: 'Token já utilizado',
+    });
     expect(createSignedDownloadUrl).not.toHaveBeenCalled();
     expect(store.spies.updateTable).not.toHaveBeenCalled();
     expect(store.rows('download_logs')).toHaveLength(0);
@@ -185,12 +203,18 @@ describe('download — uso único do token', () => {
 
     // O UPDATE saiu, com o filtro condicional, e voltou vazio.
     expect(store.spies.updateTable).toHaveBeenCalledTimes(1);
-    expect(store.spies.updateTable.mock.calls[0][1]).toEqual({ token: `eq.${TOKEN}`, used: 'is.false' });
+    expect(store.spies.updateTable.mock.calls[0][1]).toEqual({
+      token: `eq.${TOKEN}`,
+      used: 'is.false',
+    });
     expect(await store.spies.updateTable.mock.results[0].value).toEqual([]);
 
     // 0 linhas afetadas ⇒ perdeu a corrida ⇒ nada é entregue.
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'Token já utilizado' });
+    expectApiError(res, {
+      status: 401,
+      code: 'DOWNLOAD_TOKEN_USED',
+      message: 'Token já utilizado',
+    });
     expect(createSignedDownloadUrl).not.toHaveBeenCalled();
     expect(res.redirect).not.toHaveBeenCalled();
     expect(store.rows('download_logs')).toHaveLength(0);
@@ -220,8 +244,7 @@ describe('download — uso único do token', () => {
 
     await handler(downloadRequest(), res);
 
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'Token expirado' });
+    expectApiError(res, { status: 401, code: 'DOWNLOAD_TOKEN_EXPIRED', message: 'Token expirado' });
     expect(store.spies.updateTable).not.toHaveBeenCalled();
     expect(createSignedDownloadUrl).not.toHaveBeenCalled();
   });
@@ -232,8 +255,7 @@ describe('download — uso único do token', () => {
 
     await handler(downloadRequest('token-que-nao-existe'), res);
 
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'Token inválido' });
+    expectApiError(res, { status: 401, code: 'DOWNLOAD_TOKEN_INVALID', message: 'Token inválido' });
     expect(store.callsFor(store.spies.getTableRow, 'products')).toHaveLength(0);
     expect(createSignedDownloadUrl).not.toHaveBeenCalled();
   });
@@ -248,8 +270,7 @@ describe('download — uso único do token', () => {
 
     // Redirecionar cru para uma URL externa entregaria o produto pago sem
     // assinatura e sem expiração. É erro de cadastro, não modo de entrega.
-    expect(res.statusCode).toBe(500);
-    expect(res.body.error).toMatch(/suporte/i);
+    expectApiError(res, { status: 500, code: 'DOWNLOAD_UNAVAILABLE', message: /suporte/i });
     expect(res.redirect).not.toHaveBeenCalled();
     expect(createSignedDownloadUrl).not.toHaveBeenCalled();
 
@@ -258,7 +279,9 @@ describe('download — uso único do token', () => {
     expect(store.spies.updateTable).not.toHaveBeenCalled();
     expect(store.rows('download_tokens')[0].used).toBe(false);
 
-    expect(security.recordSecurityEvent.mock.calls[0][0].eventName).toBe('download_url_not_storage');
+    expect(security.recordSecurityEvent.mock.calls[0][0].eventName).toBe(
+      'download_url_not_storage',
+    );
   });
 
   it('falha ao assinar devolve o claim para o comprador poder repetir', async () => {

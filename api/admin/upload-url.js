@@ -1,8 +1,12 @@
 const crypto = require('node:crypto');
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { getSupabaseConfig } = require('../lib/supabase');
-const { isSafeObjectPath } = require('../lib/storage-signed-url');
-const { recordSecurityEvent } = require('../lib/security-logger');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { getSupabaseConfig } = require('../../lib/supabase');
+const { isSafeObjectPath } = require('../../lib/storage-signed-url');
+const { recordSecurityEvent } = require('../../lib/security-logger');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-upload-url');
 
 // ════════════════════════════════════════════════════════════════════
 // LIMITE DA API DE SIGNED UPLOAD (achado M4) — leia antes de mexer.
@@ -36,9 +40,25 @@ const { recordSecurityEvent } = require('../lib/security-logger');
 // é apenas conferida e reportada: o front serve essas mídias direto pela URL
 // (<img>/<video>), então virar o flag aqui quebraria a vitrine.
 const BUCKETS = {
-  image: { name: 'product_images', isPublic: true, maxSize: 10 * 1024 * 1024, mimes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif'] },
-  video: { name: 'product_videos', isPublic: false, maxSize: 50 * 1024 * 1024, mimes: ['video/mp4', 'video/webm', 'video/quicktime'] },
-  download: { name: 'product_files', isPublic: false, enforcePrivate: true, maxSize: 50 * 1024 * 1024, mimes: null },
+  image: {
+    name: 'product_images',
+    isPublic: true,
+    maxSize: 10 * 1024 * 1024,
+    mimes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif'],
+  },
+  video: {
+    name: 'product_videos',
+    isPublic: false,
+    maxSize: 50 * 1024 * 1024,
+    mimes: ['video/mp4', 'video/webm', 'video/quicktime'],
+  },
+  download: {
+    name: 'product_files',
+    isPublic: false,
+    enforcePrivate: true,
+    maxSize: 50 * 1024 * 1024,
+    mimes: null,
+  },
 };
 
 // Extensões aceitas por bucket com whitelist (image/video). Para 'download'
@@ -48,12 +68,36 @@ const EXT_ALLOW = {
   image: new Set(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']),
   video: new Set(['mp4', 'webm', 'mov', 'quicktime']),
 };
-const EXT_DENY = new Set(['svg', 'svgz', 'html', 'htm', 'xhtml', 'shtml', 'xml', 'js', 'mjs', 'php', 'phtml', 'phar', 'htaccess', 'exe', 'bat', 'cmd', 'sh']);
+const EXT_DENY = new Set([
+  'svg',
+  'svgz',
+  'html',
+  'htm',
+  'xhtml',
+  'shtml',
+  'xml',
+  'js',
+  'mjs',
+  'php',
+  'phtml',
+  'phar',
+  'htaccess',
+  'exe',
+  'bat',
+  'cmd',
+  'sh',
+]);
 
 // MIMEs que o navegador RENDERIZA como documento ativo. Nunca podem ficar
 // gravados no bucket público: o Storage serve o objeto no domínio do projeto
 // Supabase, então um text/html ou image/svg+xml ali é XSS armazenado.
-const ACTIVE_CONTENT_MIMES = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml', 'text/xml', 'application/xml']);
+const ACTIVE_CONTENT_MIMES = new Set([
+  'text/html',
+  'application/xhtml+xml',
+  'image/svg+xml',
+  'text/xml',
+  'application/xml',
+]);
 
 // O XHR do painel só manda Content-Type quando o browser reconhece o arquivo
 // (`if (file.type)` em src/services/admin-panel.js). Sem isso o storage-api
@@ -63,7 +107,9 @@ const ACTIVE_CONTENT_MIMES = new Set(['text/html', 'application/xhtml+xml', 'ima
 const NEUTRAL_MIME = 'application/octet-stream';
 
 function getExtension(name) {
-  const match = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  const match = String(name || '')
+    .toLowerCase()
+    .match(/\.([a-z0-9]+)$/);
   return match ? match[1] : '';
 }
 
@@ -75,8 +121,10 @@ function getExtension(name) {
  */
 function slugifyBase(name) {
   const withoutExt = String(name || '').replace(/\.[a-z0-9]+$/i, '');
-  const cleaned = withoutExt.toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const cleaned = withoutExt
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9\-_]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
@@ -109,10 +157,13 @@ function encodePath(path) {
 const bucketPolicyApplied = new Set();
 
 async function fetchBucketConfig(config, bucketName) {
-  const response = await fetch(`${storageBase(config)}/storage/v1/bucket/${encodeURIComponent(bucketName)}`, {
-    method: 'GET',
-    headers: storageHeaders(config),
-  });
+  const response = await fetch(
+    `${storageBase(config)}/storage/v1/bucket/${encodeURIComponent(bucketName)}`,
+    {
+      method: 'GET',
+      headers: storageHeaders(config),
+    },
+  );
   if (!response.ok) return null;
   return response.json().catch(() => null);
 }
@@ -138,7 +189,11 @@ async function resolveBucketVisibility(bucket, current) {
   if (currentPublic !== bucket.isPublic) {
     // Divergência sem risco de entrega paga: apenas reportar. Trocar o flag
     // aqui mudaria como o site serve mídia de vitrine.
-    console.warn('[admin-upload-url] visibilidade divergente:', bucket.name, `esperado public=${bucket.isPublic}, atual public=${currentPublic}`);
+    log.warn('visibilidade_divergente', {
+      bucket: bucket.name,
+      esperado: bucket.isPublic,
+      atual: currentPublic,
+    });
   }
 
   return currentPublic;
@@ -154,36 +209,46 @@ async function ensureBucketPolicy(config, bucket) {
   try {
     const current = await fetchBucketConfig(config, bucket.name);
     if (!current) {
-      console.warn('[admin-upload-url] não foi possível ler a config do bucket:', bucket.name);
+      log.warn('nao_foi_possivel_ler_a_config_do_bucket', { bucket: bucket.name });
       return;
     }
 
-    const response = await fetch(`${storageBase(config)}/storage/v1/bucket/${encodeURIComponent(bucket.name)}`, {
-      method: 'PUT',
-      headers: storageHeaders(config, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        public: await resolveBucketVisibility(bucket, current),
-        file_size_limit: bucket.maxSize,
-        allowed_mime_types: bucket.mimes ? [...bucket.mimes, NEUTRAL_MIME] : null,
-      }),
-    });
+    const response = await fetch(
+      `${storageBase(config)}/storage/v1/bucket/${encodeURIComponent(bucket.name)}`,
+      {
+        method: 'PUT',
+        headers: storageHeaders(config, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          public: await resolveBucketVisibility(bucket, current),
+          file_size_limit: bucket.maxSize,
+          allowed_mime_types: bucket.mimes ? [...bucket.mimes, NEUTRAL_MIME] : null,
+        }),
+      },
+    );
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
-      console.warn('[admin-upload-url] política do bucket não aplicada:', bucket.name, response.status, body.slice(0, 200));
+      log.warn('politica_do_bucket_nao_aplicada', {
+        bucket: bucket.name,
+        status: response.status,
+        body: body.slice(0, 200),
+      });
     }
   } catch (err) {
-    console.warn('[admin-upload-url] política do bucket falhou:', bucket.name, err.message);
+    log.warn('politica_do_bucket_falhou', { bucket: bucket.name, reason: err.message });
   }
 }
 
 /** Metadados reais do objeto gravado (tamanho e content-type). */
 async function fetchObjectMetadata(config, bucket, path) {
-  const response = await fetch(`${storageBase(config)}/storage/v1/object/list/${encodeURIComponent(bucket.name)}`, {
-    method: 'POST',
-    headers: storageHeaders(config, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ prefix: '', limit: 100, offset: 0, search: path }),
-  });
+  const response = await fetch(
+    `${storageBase(config)}/storage/v1/object/list/${encodeURIComponent(bucket.name)}`,
+    {
+      method: 'POST',
+      headers: storageHeaders(config, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ prefix: '', limit: 100, offset: 0, search: path }),
+    },
+  );
 
   if (!response.ok) return null;
 
@@ -208,7 +273,11 @@ async function deleteObject(config, bucket, path) {
       body: JSON.stringify({ prefixes: [path] }),
     });
   } catch (err) {
-    console.warn('[admin-upload-url] falha ao remover objeto rejeitado:', bucket.name, path, err.message);
+    log.warn('falha_ao_remover_objeto_rejeitado', {
+      bucket: bucket.name,
+      path,
+      reason: err.message,
+    });
   }
 }
 
@@ -241,7 +310,13 @@ function rejectDeclaredFile(kind, bucket, filename, mimeType) {
 
   // Cinturão e suspensório: nunca deixar SVG/HTML entrar no bucket público
   // (renderizados pelo navegador executam <script> → stored XSS no domínio do storage).
-  if (bucket.isPublic && (ext === 'svg' || ext === 'svgz' || ACTIVE_CONTENT_MIMES.has(normalizedMime) || normalizedMime.includes('html'))) {
+  if (
+    bucket.isPublic &&
+    (ext === 'svg' ||
+      ext === 'svgz' ||
+      ACTIVE_CONTENT_MIMES.has(normalizedMime) ||
+      normalizedMime.includes('html'))
+  ) {
     return 'Tipo de arquivo não permitido em bucket público.';
   }
 
@@ -252,12 +327,20 @@ function rejectDeclaredFile(kind, bucket, filename, mimeType) {
 async function handleSign(req, res, { kind, bucket, config }) {
   const { filename, mimeType } = req.body || {};
   if (!filename || typeof filename !== 'string') {
-    return res.status(400).json({ success: false, error: 'filename obrigatório' });
+    return fail(res, {
+      status: 400,
+      code: ERROR_CODES.VALIDATION_FAILED,
+      message: 'filename obrigatório',
+    });
   }
 
   const declaredError = rejectDeclaredFile(kind, bucket, filename, mimeType);
   if (declaredError) {
-    return res.status(400).json({ success: false, error: declaredError });
+    return fail(res, {
+      status: 400,
+      code: ERROR_CODES.VALIDATION_FAILED,
+      message: declaredError,
+    });
   }
 
   await ensureBucketPolicy(config, bucket);
@@ -280,17 +363,25 @@ async function handleSign(req, res, { kind, bucket, config }) {
 
     if (!r.ok) {
       const body = await r.text().catch(() => '');
-      console.error('[admin-upload-url] storage sign falhou:', r.status, body.slice(0, 200));
-      return res.status(500).json({ success: false, error: 'Falha ao gerar URL de upload' });
+      log.error('storage_sign_falhou', { status: r.status, body: body.slice(0, 200) });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Falha ao gerar URL de upload',
+      });
     }
 
     const data = await r.json();
     const signedRel = data?.url || '';
     if (!signedRel) {
-      return res.status(500).json({ success: false, error: 'Resposta inválida do Storage' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Resposta inválida do Storage',
+      });
     }
 
-    return res.status(200).json({
+    return ok(res, {
       success: true,
       uploadUrl: `${base}/storage/v1${signedRel.startsWith('/') ? '' : '/'}${signedRel}`,
       finalUrl: buildFinalUrl(config, bucket, path),
@@ -306,8 +397,8 @@ async function handleSign(req, res, { kind, bucket, config }) {
       confirmRequired: true,
     });
   } catch (err) {
-    console.error('[admin-upload-url] erro:', err.message);
-    return res.status(500).json({ success: false, error: 'Erro interno' });
+    log.error('handler_failed', { reason: err.message });
+    return fail(res, { status: 500, code: ERROR_CODES.INTERNAL_ERROR, message: 'Erro interno' });
   }
 }
 
@@ -319,19 +410,32 @@ async function handleConfirm(req, res, { bucket, config }) {
   // transformaria a confirmação numa primitiva de LEITURA/EXCLUSÃO de qualquer
   // objeto do bucket. Só o formato que handleSign gera passa.
   if (!isSafeObjectPath(path) || !/^\d{13}-[0-9a-f]{6}-[a-z0-9\-_]+(\.[a-z0-9]+)?$/.test(path)) {
-    return res.status(400).json({ success: false, error: 'path inválido' });
+    return fail(res, {
+      status: 400,
+      code: ERROR_CODES.VALIDATION_FAILED,
+      message: 'path inválido',
+    });
   }
 
   const meta = await fetchObjectMetadata(config, bucket, path);
   if (!meta) {
-    return res.status(404).json({ success: false, error: 'Objeto não encontrado no Storage.' });
+    return fail(res, {
+      status: 404,
+      code: ERROR_CODES.NOT_FOUND,
+      message: 'Objeto não encontrado no Storage.',
+    });
   }
 
   const reasons = [];
   if (meta.size > bucket.maxSize) {
     reasons.push('tamanho acima do limite');
   }
-  if (bucket.mimes && meta.mime && meta.mime !== NEUTRAL_MIME && !bucket.mimes.includes(meta.mime)) {
+  if (
+    bucket.mimes &&
+    meta.mime &&
+    meta.mime !== NEUTRAL_MIME &&
+    !bucket.mimes.includes(meta.mime)
+  ) {
     reasons.push(`content-type não permitido (${meta.mime})`);
   }
   if (bucket.isPublic && ACTIVE_CONTENT_MIMES.has(meta.mime)) {
@@ -342,14 +446,19 @@ async function handleConfirm(req, res, { bucket, config }) {
     // Apagar é obrigatório, não cosmético: o objeto já está no bucket e, no
     // bucket público, já é alcançável por quem souber o path.
     await deleteObject(config, bucket, path);
-    console.warn('[admin-upload-url] objeto rejeitado e removido:', bucket.name, path, reasons.join('; '));
-    return res.status(400).json({
-      success: false,
-      error: `Upload rejeitado (${reasons.join('; ')}). O arquivo foi removido.`,
+    log.warn('objeto_rejeitado_e_removido', {
+      bucket: bucket.name,
+      path,
+      reasons: reasons.join('; '),
+    });
+    return fail(res, {
+      status: 400,
+      code: ERROR_CODES.VALIDATION_FAILED,
+      message: `Upload rejeitado (${reasons.join('; ')}). O arquivo foi removido.`,
     });
   }
 
-  return res.status(200).json({
+  return ok(res, {
     success: true,
     verified: true,
     bucket: bucket.name,
@@ -361,31 +470,45 @@ async function handleConfirm(req, res, { bucket, config }) {
   });
 }
 
-module.exports = async function handler(req, res) {
+module.exports = async function adminUploadUrlHandler(req, res) {
   setAdminCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') return preflight(res);
+  if (req.method !== 'POST') return methodNotAllowed(res, ['POST', 'OPTIONS']);
   if (!ensureAdminSession(req, res)) return;
 
   const { kind, action } = req.body || {};
   const bucket = BUCKETS[kind];
-  if (!bucket) return res.status(400).json({ success: false, error: 'kind inválido (image|video|download)' });
+  if (!bucket)
+    return fail(res, {
+      status: 400,
+      code: ERROR_CODES.VALIDATION_FAILED,
+      message: 'kind inválido (image|video|download)',
+    });
 
   const config = getSupabaseConfig();
-  if (!config) return res.status(500).json({ success: false, error: 'Supabase não configurado' });
+  if (!config)
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Supabase não configurado',
+    });
 
   const normalizedAction = String(action || 'sign').toLowerCase();
   if (normalizedAction === 'confirm') {
     try {
       return await handleConfirm(req, res, { bucket, config });
     } catch (err) {
-      console.error('[admin-upload-url] confirm erro:', err.message);
-      return res.status(500).json({ success: false, error: 'Erro interno' });
+      log.error('handler_failed', { reason: err.message });
+      return fail(res, { status: 500, code: ERROR_CODES.INTERNAL_ERROR, message: 'Erro interno' });
     }
   }
 
   if (normalizedAction !== 'sign') {
-    return res.status(400).json({ success: false, error: 'action inválida (sign|confirm)' });
+    return fail(res, {
+      status: 400,
+      code: ERROR_CODES.VALIDATION_FAILED,
+      message: 'action inválida (sign|confirm)',
+    });
   }
 
   return handleSign(req, res, { kind, bucket, config });

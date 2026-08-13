@@ -2,6 +2,11 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { getTableRow, listTableRows },
 } = require('../lib/supabase');
+const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('cross-sell');
 
 /**
  * Cross-sell de produtos relacionados.
@@ -143,15 +148,23 @@ function shapeProduct(row) {
 
 module.exports = async function crossSellHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
   if (req.method !== 'GET') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'OPTIONS']);
   }
+
+  // Regra E1 — ver RATE_LIMITS.catalog.
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.catalog);
+  if (gate.blocked) return;
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const productId = String(req.query?.productId || req.query?.id || '').trim();
@@ -161,12 +174,20 @@ module.exports = async function crossSellHandler(req, res) {
     // converteria num 500 genérico, escondendo um pedido malformado atrás de
     // "erro do servidor". Com ele, o formato é decidido aqui.
     if (!UUID_RE.test(productId)) {
-      return res.status(400).json({ success: false, error: 'productId é obrigatório.' });
+      return fail(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: 'productId é obrigatório.',
+      });
     }
 
     const product = await loadProduct(productId);
     if (!product) {
-      return res.status(404).json({ success: false, error: 'Produto não encontrado.' });
+      return fail(res, {
+        status: 404,
+        code: ERROR_CODES.NOT_FOUND,
+        message: 'Produto não encontrado.',
+      });
     }
 
     // Camada 1: co-ocorrência real
@@ -176,23 +197,31 @@ module.exports = async function crossSellHandler(req, res) {
     // Camada 2: completar com mesma categoria se faltou
     if (products.length < MAX_RESULTS) {
       const excludeIds = new Set([String(productId), ...products.map((p) => String(p.id))]);
-      const fallback = await loadCategoryFallback(product, excludeIds, MAX_RESULTS - products.length);
+      const fallback = await loadCategoryFallback(
+        product,
+        excludeIds,
+        MAX_RESULTS - products.length,
+      );
       products = [...products, ...fallback];
     }
 
     // Cache curto: dados mudam quando há novas compras aprovadas
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=3600');
+    res.setHeader(
+      'Cache-Control',
+      'public, max-age=300, s-maxage=300, stale-while-revalidate=3600',
+    );
 
-    return res.status(200).json({
+    return ok(res, {
       success: true,
       strategy: coIds.length ? 'co_occurrence' : 'same_category',
       products: products.slice(0, MAX_RESULTS).map(shapeProduct),
     });
   } catch (error) {
-    console.error('[cross-sell]', error.message);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao buscar produtos relacionados.',
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao buscar produtos relacionados.',
     });
   }
 };

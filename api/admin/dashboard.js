@@ -1,5 +1,12 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { getSupabaseConfig, serviceRoleHelpers: { listTableRows } } = require('../lib/supabase');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { listTableRows },
+} = require('../../lib/supabase');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-dashboard');
 
 function safeJsonParse(value, fallback) {
   if (value === null || value === undefined) {
@@ -18,7 +25,9 @@ function safeJsonParse(value, fallback) {
 }
 
 function normalizeEmail(value) {
-  return String(value || '').trim().toLowerCase();
+  return String(value || '')
+    .trim()
+    .toLowerCase();
 }
 
 function buildSummary(payload) {
@@ -36,7 +45,10 @@ function buildSummary(payload) {
     return dt >= monthStart;
   });
 
-  const revenueMonth = approvedMonth.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+  const revenueMonth = approvedMonth.reduce(
+    (sum, order) => sum + Number(order.totalAmount || 0),
+    0,
+  );
   const revenueTotal = approved.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
 
   return {
@@ -51,11 +63,19 @@ function buildSummary(payload) {
   };
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity
 async function loadDashboard() {
-  const [productsRows, categoriesRows, profilesRows, ordersRows, orderItemsRows, downloadLogsRows, settingsRows] = await Promise.all([
+  const [
+    productsRows,
+    categoriesRows,
+    profilesRows,
+    ordersRows,
+    orderItemsRows,
+    downloadLogsRows,
+    settingsRows,
+  ] = await Promise.all([
     listTableRows('products', {
-      select: 'id,slug,name,description,price,image_url,download_url,category_id,active,featured,created_at,updated_at',
+      select:
+        'id,slug,name,description,price,image_url,download_url,category_id,active,featured,created_at,updated_at',
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -70,7 +90,8 @@ async function loadDashboard() {
       ascending: false,
     }),
     listTableRows('orders', {
-      select: 'id,order_code,customer_name,customer_email,total_amount,status,payment_status,created_at,completed_at',
+      select:
+        'id,order_code,customer_name,customer_email,total_amount,status,payment_status,created_at,completed_at',
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -89,7 +110,9 @@ async function loadDashboard() {
     }),
   ]);
 
-  const categoryById = new Map(categoriesRows.map((category) => [String(category.id), category.name]));
+  const categoryById = new Map(
+    categoriesRows.map((category) => [String(category.id), category.name]),
+  );
   const downloadCountByProduct = {};
   for (const row of downloadLogsRows) {
     const productId = String(row.product_id || '').trim();
@@ -197,11 +220,11 @@ module.exports = async function adminDashboardHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return preflight(res);
   }
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'OPTIONS']);
   }
 
   if (!ensureAdminSession(req, res)) {
@@ -210,22 +233,27 @@ module.exports = async function adminDashboardHandler(req, res) {
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     const payload = await loadDashboard();
     const summary = buildSummary(payload);
 
-    return res.status(200).json({
+    return ok(res, {
       success: true,
       ...payload,
       summary,
     });
   } catch (error) {
-    console.error('Admin dashboard error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao carregar dados do admin dashboard.',
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao carregar dados do admin dashboard.',
     });
   }
 };

@@ -1,7 +1,10 @@
 const crypto = require('node:crypto');
 const mercadopago = require('mercadopago');
 const { initializeMercadoPago } = require('../lib/mercadopago-config');
-const { getSupabaseConfig, serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable } } = require('../lib/supabase');
+const {
+  getSupabaseConfig,
+  serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable },
+} = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
@@ -25,6 +28,12 @@ const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 // extração porque apertar só um lado recriaria a assimetria.
 // ════════════════════════════════════════════════════════════════════
 const { checkPaymentIntegrity } = require('../lib/payment-integrity');
+const { parseOrFail } = require('../validation');
+const { verifyPaymentSchema } = require('../validation/payment.schemas');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('verify-payment');
 
 // A busca traz os pagamentos MAIS RECENTES primeiro, e avaliamos todos até
 // achar um que reconcilie (ver refreshApprovedOrderData). Com uma janela curta,
@@ -59,7 +68,7 @@ async function fetchApprovedPayments(orderId) {
   const results = searchResult.results || [];
   return {
     approved: results.filter(
-      (payment) => payment.status === 'approved' && payment.external_reference === orderId
+      (payment) => payment.status === 'approved' && payment.external_reference === orderId,
     ),
     // Página cheia = pode haver pagamento legítimo fora da janela.
     truncated: results.length >= APPROVED_SEARCH_LIMIT,
@@ -68,7 +77,8 @@ async function fetchApprovedPayments(orderId) {
 
 async function loadOrder(orderId) {
   return getTableRow('orders', {
-    select: 'id,order_code,customer_name,customer_email,status,payment_status,total_amount,created_at,completed_at',
+    select:
+      'id,order_code,customer_name,customer_email,status,payment_status,total_amount,created_at,completed_at',
     filters: [{ column: 'order_code', value: orderId }],
   });
 }
@@ -123,14 +133,16 @@ async function loadDownloadTokens(orderInternalId) {
  * `ok: true` — não existe checagem de valor aqui dentro.
  */
 async function markOrderApproved(order, paymentId) {
-  return updateTable('orders',
+  return updateTable(
+    'orders',
     { id: `eq.${order.id}`, payment_status: 'neq.approved' },
     {
       payment_status: 'approved',
       status: 'completed',
       payment_id: paymentId,
       completed_at: new Date().toISOString(),
-    });
+    },
+  );
 }
 
 async function createTokensForOrder(order, items) {
@@ -237,9 +249,8 @@ async function refreshApprovedOrderData(order, orderId, req) {
           currency_id: integrity.currency || null,
           transaction_amount: Number.isFinite(integrity.paid) ? integrity.paid : null,
           order_total_amount: Number.isFinite(integrity.due) ? integrity.due : null,
-          live_mode: suspect?.payment?.live_mode === undefined
-            ? null
-            : Boolean(suspect.payment.live_mode),
+          live_mode:
+            suspect?.payment?.live_mode === undefined ? null : Boolean(suspect.payment.live_mode),
           approved_candidates: approvedPayments.length,
           // `true` = a página da busca veio cheia, então PODE existir um
           // pagamento legítimo fora dela. Distingue "recusei o que vi" de "pode
@@ -277,7 +288,7 @@ async function refreshApprovedOrderData(order, orderId, req) {
           name: order.customer_name,
         });
       } catch (provisionErr) {
-        console.error('[verify-payment] Falha ao provisionar conta de cliente:', provisionErr.message);
+        log.error('falha_ao_provisionar_conta_de_cliente', { reason: provisionErr.message });
       }
     }
 
@@ -286,7 +297,7 @@ async function refreshApprovedOrderData(order, orderId, req) {
     // novo a cada poll); quando não afetou, outro processo já aprovou e relemos
     // para não inventar estado — é essa releitura que impede o pedido de ficar
     // `pending` no banco enquanto o cliente vê "aprovado" na tela.
-    const persisted = transitioned?.[0] || await loadOrder(orderId) || order;
+    const persisted = transitioned?.[0] || (await loadOrder(orderId)) || order;
 
     return {
       ...order,
@@ -296,7 +307,7 @@ async function refreshApprovedOrderData(order, orderId, req) {
       orderItems,
     };
   } catch (mpErr) {
-    console.error('[verify-payment] Erro ao consultar MercadoPago:', mpErr.message);
+    log.error('erro_ao_consultar_mercadopago', { reason: mpErr.message });
     return order;
   }
 }
@@ -320,14 +331,14 @@ function readVerifyPayload(req) {
 
 module.exports = async function verifyPaymentHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
 
   // GET mantido por compatibilidade: há polling em produção e possivelmente
   // links antigos apontando para a forma com query string. DEPRECIADO — ver
   // readVerifyPayload(). Novos clientes devem usar POST com { orderId, email }.
   if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return methodNotAllowed(res, ['GET', 'POST', 'OPTIONS']);
   }
 
   try {
@@ -339,32 +350,39 @@ module.exports = async function verifyPaymentHandler(req, res) {
     const gate = await enforceRateLimit(req, res, RATE_LIMITS.verifyPayment);
     if (gate.blocked) return;
 
-    const payload = readVerifyPayload(req);
-    const orderId = String(payload.orderId || '').trim();
-    const email = String(payload.email || '').trim().toLowerCase();
-
-    if (!orderId) {
-      return res.status(400).json({ error: 'orderId é obrigatório' });
-    }
-    if (!email || !email.includes('@')) {
-      return res.status(400).json({ error: 'email é obrigatório' });
-    }
+    // Regra B1: o schema decide a forma; daqui para baixo o handler confia no
+    // tipo. `orderId` já vem aparado e `email` já vem em minúsculas — a
+    // normalização que estava espalhada em três `String(...).trim()` agora
+    // acontece num lugar só, o mesmo que lib/rate-limit.js usa como escopo.
+    const parsed = parseOrFail(res, verifyPaymentSchema, readVerifyPayload(req));
+    if (!parsed.ok) return;
+    const { orderId, email } = parsed.data;
 
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ error: 'Supabase não configurado' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado',
+      });
     }
 
     const order = await loadOrder(orderId);
     if (!order) {
-      return res.status(404).json({ error: 'Pedido não encontrado' });
+      return fail(res, {
+        status: 404,
+        code: ERROR_CODES.ORDER_NOT_FOUND,
+        message: 'Pedido não encontrado',
+      });
     }
 
     // Defesa contra enumeração: order_code + email têm que bater (timing-safe).
-    const expectedEmail = String(order.customer_email || '').trim().toLowerCase();
+    const expectedEmail = String(order.customer_email || '')
+      .trim()
+      .toLowerCase();
     const expectedBuf = Buffer.from(expectedEmail);
     const providedBuf = Buffer.from(email);
-    const emailMatches = expectedBuf.length === providedBuf.length
-      && crypto.timingSafeEqual(expectedBuf, providedBuf);
+    const emailMatches =
+      expectedBuf.length === providedBuf.length && crypto.timingSafeEqual(expectedBuf, providedBuf);
     if (!emailMatches) {
       await recordSecurityEvent({
         eventName: 'verify_payment_email_mismatch',
@@ -376,17 +394,22 @@ module.exports = async function verifyPaymentHandler(req, res) {
           provided_email_hash: crypto.createHash('sha256').update(email).digest('hex').slice(0, 16),
         },
       });
-      return res.status(404).json({ error: 'Pedido não encontrado' });
+      return fail(res, {
+        status: 404,
+        code: ERROR_CODES.ORDER_NOT_FOUND,
+        message: 'Pedido não encontrado',
+      });
     }
 
     const orderData = await refreshApprovedOrderData(order, orderId, req);
-    const downloadTokens = orderData.downloadTokens || mapTokenRows(await loadDownloadTokens(order.id));
+    const downloadTokens =
+      orderData.downloadTokens || mapTokenRows(await loadDownloadTokens(order.id));
 
     // Reaproveita os itens já carregados no refresh (quando houve); só recarrega
     // se a chamada não passou pelo caminho que os buscou.
-    const items = orderData.orderItems || await loadOrderItems(order.id);
+    const items = orderData.orderItems || (await loadOrderItems(order.id));
 
-    return res.status(200).json({
+    return ok(res, {
       success: true,
       order: {
         orderId: orderData.order_code,
@@ -399,7 +422,11 @@ module.exports = async function verifyPaymentHandler(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error verifying payment:', error);
-    return res.status(500).json({ error: 'Erro ao verificar pagamento' });
+    log.error('handler_failed', { reason: error?.message || String(error) });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao verificar pagamento',
+    });
   }
 };

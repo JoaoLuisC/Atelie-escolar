@@ -1,5 +1,9 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../lib/admin-session');
-const { getSupabaseConfig, supabaseRequest } = require('../lib/supabase');
+const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { getSupabaseConfig, supabaseRequest } = require('../../lib/supabase');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
+const { createLogger } = require('../../lib/logger');
+
+const log = createLogger('admin-cleanup-events');
 
 /**
  * Fallback manual para limpar `analytics_events` > 180 dias.
@@ -16,11 +20,11 @@ module.exports = async function adminCleanupEventsHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return preflight(res);
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['POST', 'OPTIONS']);
   }
 
   if (!ensureAdminSession(req, res)) {
@@ -29,7 +33,11 @@ module.exports = async function adminCleanupEventsHandler(req, res) {
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     // RPC para a função criada na migration de retenção.
@@ -42,18 +50,20 @@ module.exports = async function adminCleanupEventsHandler(req, res) {
 
     const deleted = Number(result) || 0;
 
-    return res.status(200).json({
+    return ok(res, {
       success: true,
       deleted,
-      message: deleted > 0
-        ? `${deleted} eventos com mais de 180 dias foram removidos.`
-        : 'Nenhum evento antigo encontrado.',
+      message:
+        deleted > 0
+          ? `${deleted} eventos com mais de 180 dias foram removidos.`
+          : 'Nenhum evento antigo encontrado.',
     });
   } catch (error) {
-    console.error('[admin-cleanup-events]', error.message);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao limpar eventos antigos. Verifique se a migration de retenção foi aplicada.',
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao limpar eventos antigos. Verifique se a migration de retenção foi aplicada.',
     });
   }
 };

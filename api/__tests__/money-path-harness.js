@@ -37,7 +37,7 @@ import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 
 const requireCjs = createRequire(import.meta.url);
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -101,17 +101,59 @@ export function loadHandler(request) {
 
 // ─── Duplos de resposta/requisição ───────────────────────────────────
 
+/**
+ * Afirma o ENVELOPE DE ERRO da regra A1 — `{ success:false, error:{code,message} }`.
+ *
+ * Existe para que a forma do envelope seja afirmada num lugar só. Antes, cada
+ * suíte escrevia `expect(res.body).toEqual({ error: 'texto' })`, o que fixava
+ * DUAS coisas ao mesmo tempo: a forma da resposta e a redação da mensagem.
+ * Resultado: reescrever uma frase em português quebrava testes de segurança que
+ * nada tinham a ver com a frase, e a forma do envelope nunca era conferida de
+ * propósito — ela só era conferida por acidente.
+ *
+ * Aqui as duas coisas ficam separadas: `code` é o contrato (afirmado sempre),
+ * `message` é opcional e aceita RegExp para quando só o assunto importa.
+ *
+ * @param {object} res              duplo de createMockRes()
+ * @param {object} expected
+ * @param {number} expected.status
+ * @param {string} expected.code
+ * @param {string|RegExp} [expected.message]
+ */
+export function expectApiError(res, { status, code, message } = {}) {
+  expect(res.statusCode).toBe(status);
+  expect(res.body?.success).toBe(false);
+  expect(res.body?.error?.code).toBe(code);
+
+  if (message instanceof RegExp) {
+    expect(res.body?.error?.message).toMatch(message);
+  } else if (typeof message === 'string') {
+    expect(res.body?.error?.message).toBe(message);
+  }
+}
+
 export function createMockRes() {
   const res = {
     statusCode: 200,
     body: undefined,
     headers: {},
     redirectedTo: undefined,
-    setHeader: vi.fn((key, value) => { res.headers[key] = value; }),
-    status: vi.fn((code) => { res.statusCode = code; return res; }),
-    json: vi.fn((payload) => { res.body = payload; return res; }),
+    setHeader: vi.fn((key, value) => {
+      res.headers[key] = value;
+    }),
+    status: vi.fn((code) => {
+      res.statusCode = code;
+      return res;
+    }),
+    json: vi.fn((payload) => {
+      res.body = payload;
+      return res;
+    }),
     end: vi.fn(() => res),
-    redirect: vi.fn((url) => { res.redirectedTo = url; return res; }),
+    redirect: vi.fn((url) => {
+      res.redirectedTo = url;
+      return res;
+    }),
   };
   return res;
 }
@@ -156,7 +198,10 @@ function matchOperator(row, column, operator, rawValue) {
       if (value === 'true') return actual === true;
       throw new Error(`fake supabase: valor não suportado em is.${value}`);
     case 'in':
-      return value.replace(/^\(|\)$/g, '').split(',').includes(String(actual));
+      return value
+        .replace(/^\(|\)$/g, '')
+        .split(',')
+        .includes(String(actual));
     default:
       throw new Error(`fake supabase: operador não suportado "${operator}"`);
   }
@@ -194,11 +239,24 @@ function matchUpdateFilters(row, filters = {}) {
  */
 export function createSupabaseStore(initial = {}) {
   const state = {
-    orders: (initial.orders || []).map((row) => ({ ...row })),
-    order_items: (initial.order_items || []).map((row) => ({ ...row })),
-    download_tokens: (initial.download_tokens || []).map((row) => ({ ...row })),
-    products: (initial.products || []).map((row) => ({ ...row })),
+    orders: [],
+    order_items: [],
+    download_tokens: [],
+    products: [],
     download_logs: [],
+    // Tabelas extras declaradas pelo teste (ex.: `coupons` no checkout).
+    //
+    // A lista era FIXA, e o efeito colateral foi caro: um handler que tocasse
+    // qualquer outra tabela estourava "tabela desconhecida" dentro do try/catch
+    // do handler, virava um 500 genérico, e um teste que tolerasse "pedido não
+    // gravado" passava sem exercitar nada. Foi exatamente o que aconteceu em
+    // api/__tests__/checkout-money.test.js antes do assert duro.
+    ...Object.fromEntries(
+      Object.entries(initial).map(([name, rows]) => [
+        name,
+        (Array.isArray(rows) ? rows : []).map((row) => ({ ...row })),
+      ]),
+    ),
   };
 
   function table(name) {
@@ -206,9 +264,11 @@ export function createSupabaseStore(initial = {}) {
     return state[name];
   }
 
-  const listTableRows = vi.fn(async (name, options = {}) => (
-    table(name).filter((row) => matchListFilters(row, options.filters)).map((row) => ({ ...row }))
-  ));
+  const listTableRows = vi.fn(async (name, options = {}) =>
+    table(name)
+      .filter((row) => matchListFilters(row, options.filters))
+      .map((row) => ({ ...row })),
+  );
 
   const getTableRow = vi.fn(async (name, options = {}) => {
     const rows = await listTableRows(name, options);
@@ -219,10 +279,13 @@ export function createSupabaseStore(initial = {}) {
     const incoming = (Array.isArray(rows) ? rows : [rows]).map((row) => ({ ...row }));
 
     if (name === 'download_tokens') {
-      const collides = incoming.some((row) => table(name).some(
-        (existing) => String(existing.order_id) === String(row.order_id)
-          && String(existing.product_id) === String(row.product_id),
-      ));
+      const collides = incoming.some((row) =>
+        table(name).some(
+          (existing) =>
+            String(existing.order_id) === String(row.order_id) &&
+            String(existing.product_id) === String(row.product_id),
+        ),
+      );
       if (collides) {
         // Mesma forma do erro que lib/supabase.js constrói a partir do 409 do
         // PostgREST — é nela que webhook.js/verify-payment.js decidem tratar a
@@ -294,13 +357,23 @@ export function installMercadoPagoSdkMock({ payment = null, searchResults = [] }
   const search = vi.fn(async () => ({ results: searchResults }));
 
   class FakePayment {
-    constructor(client) { this.client = client; }
-    get(args) { return get(args); }
-    search(args) { return search(args); }
+    constructor(client) {
+      this.client = client;
+    }
+    get(args) {
+      return get(args);
+    }
+    search(args) {
+      return search(args);
+    }
   }
 
   installModuleMock('mercadopago', {
-    MercadoPagoConfig: class FakeConfig { constructor(options) { this.options = options; } },
+    MercadoPagoConfig: class FakeConfig {
+      constructor(options) {
+        this.options = options;
+      }
+    },
     Payment: FakePayment,
     Preference: class FakePreference {},
   });
@@ -308,13 +381,20 @@ export function installMercadoPagoSdkMock({ payment = null, searchResults = [] }
   return { get, search };
 }
 
-/** Rate limit sempre liberado: o gate tem testes próprios em lib/__tests__. */
+/**
+ * Rate limit sempre liberado: o gate tem testes próprios em lib/__tests__.
+ *
+ * PARCIAL, e não um módulo inventado: o `RATE_LIMITS` real continua valendo.
+ * A versão anterior devolvia um objeto com um único preset escrito à mão
+ * (`verifyPayment`), então um handler que lesse qualquer outro recebia
+ * `undefined` — o mock passava mesmo assim, porque o duplo ignora os
+ * argumentos. Resultado: um preset com nome errado passava despercebido no
+ * teste e só falharia em produção, onde `enforceRateLimit(req, res, undefined)`
+ * cai no bucket 'default'. Com o módulo real, o preset citado pelo handler
+ * precisa existir de verdade.
+ */
 export function installRateLimitPassthrough() {
   const enforceRateLimit = vi.fn(async () => ({ blocked: false, failOpen: false }));
-  installModuleMock('../../lib/rate-limit', {
-    enforceRateLimit,
-    RATE_LIMITS: { verifyPayment: { bucket: 'verify-payment', limit: 60, windowSeconds: 60 } },
-    resolveIdentifier: () => 'ip-de-teste',
-  });
+  installPartialMock('../../lib/rate-limit', { enforceRateLimit });
   return enforceRateLimit;
 }

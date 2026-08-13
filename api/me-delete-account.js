@@ -3,12 +3,19 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { deleteFromTable, getTableRow, listTableRows, updateTable },
 } = require('../lib/supabase');
-const { getCustomerSessionFromRequest, clearCustomerSessionCookie } = require('../lib/customer-session');
+const {
+  getCustomerSessionFromRequest,
+  clearCustomerSessionCookie,
+} = require('../lib/customer-session');
 const { getAdminClient } = require('../services/supabase-auth');
 const { sendEmail, getAppUrl } = require('../lib/email-sender');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const { resolveSecret, isLocalDevOrTest } = require('../lib/env-secret');
+const { ERROR_CODES, fail, methodNotAllowed, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('me-delete-account');
 
 // ════════════════════════════════════════════════════════════════════
 // LGPD — direito ao esquecimento self-service (pendência §3.8).
@@ -50,7 +57,9 @@ function signDeletionToken(user) {
   const payload = {
     purpose: 'account_deletion',
     uid: String(user.uid || '').trim(),
-    email: String(user.email || '').trim().toLowerCase(),
+    email: String(user.email || '')
+      .trim()
+      .toLowerCase(),
     iat: now,
     exp: now + TOKEN_TTL_SECONDS,
   };
@@ -70,7 +79,12 @@ function verifyDeletionToken(token) {
     const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
     if (payload.purpose !== 'account_deletion') return null;
     if (Number(payload.exp) <= Math.floor(Date.now() / 1000)) return null;
-    return { uid: String(payload.uid || '').trim(), email: String(payload.email || '').trim().toLowerCase() };
+    return {
+      uid: String(payload.uid || '').trim(),
+      email: String(payload.email || '')
+        .trim()
+        .toLowerCase(),
+    };
   } catch {
     return null;
   }
@@ -161,7 +175,9 @@ async function resolveAuthIdentity(admin, uid) {
     return null;
   }
 
-  const email = String(user.email || '').trim().toLowerCase();
+  const email = String(user.email || '')
+    .trim()
+    .toLowerCase();
   const confirmed = Boolean(user.email_confirmed_at || user.confirmed_at);
   if (!email || !confirmed) {
     return null;
@@ -196,7 +212,9 @@ async function adoptOrphanGuestOrders(uid, email) {
 }
 
 async function executeDeletion({ uid, email, req, res }) {
-  const tokenEmail = String(email || '').trim().toLowerCase();
+  const tokenEmail = String(email || '')
+    .trim()
+    .toLowerCase();
 
   const admin = getAdminClient();
   if (!admin) {
@@ -216,7 +234,7 @@ async function executeDeletion({ uid, email, req, res }) {
   try {
     identity = await resolveAuthIdentity(admin, uid);
   } catch (err) {
-    console.error('[me-delete-account] falha ao resolver identidade:', err.message);
+    log.error('falha_ao_resolver_identidade', { reason: err.message });
     return {
       status: 500,
       body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' },
@@ -226,7 +244,10 @@ async function executeDeletion({ uid, email, req, res }) {
   if (identity?.missing) {
     // Idempotência: a conta já não existe. Nada a apagar, só encerra a sessão.
     clearCustomerSessionCookie(res);
-    return { status: 200, body: { success: true, message: 'Sua conta foi excluída. Sentiremos sua falta.' } };
+    return {
+      status: 200,
+      body: { success: true, message: 'Sua conta foi excluída. Sentiremos sua falta.' },
+    };
   }
 
   if (!identity) {
@@ -234,7 +255,8 @@ async function executeDeletion({ uid, email, req, res }) {
       status: 409,
       body: {
         success: false,
-        error: 'Confirme seu e-mail antes de excluir a conta. Se o problema persistir, fale com o suporte.',
+        error:
+          'Confirme seu e-mail antes de excluir a conta. Se o problema persistir, fale com o suporte.',
       },
     };
   }
@@ -263,7 +285,7 @@ async function executeDeletion({ uid, email, req, res }) {
     });
     ownOrderIds = [...new Set(ownOrders.map((order) => order.id).filter(Boolean))];
   } catch (err) {
-    console.error('[me-delete-account] falha ao resolver pedidos do titular:', err.message);
+    log.error('falha_ao_resolver_pedidos_do_titular', { reason: err.message });
     return {
       status: 500,
       body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' },
@@ -279,14 +301,18 @@ async function executeDeletion({ uid, email, req, res }) {
   //    e devolveríamos "excluída" com o dado pessoal intacto).
   if (orderIdFilter) {
     try {
-      await updateTable('orders', { id: orderIdFilter }, {
-        customer_email: anonymizeEmail(normalizedEmail, uid),
-        customer_name: '',
-        customer_cpf: null,
-        customer_phone: null,
-      });
+      await updateTable(
+        'orders',
+        { id: orderIdFilter },
+        {
+          customer_email: anonymizeEmail(normalizedEmail, uid),
+          customer_name: '',
+          customer_cpf: null,
+          customer_phone: null,
+        },
+      );
     } catch (err) {
-      console.error('[me-delete-account] anonimização falhou:', err.message);
+      log.error('anonimizacao_falhou', { reason: err.message });
       await recordSecurityEvent({
         eventName: 'account_deletion_anonymize_failed',
         severity: 'error',
@@ -298,7 +324,8 @@ async function executeDeletion({ uid, email, req, res }) {
         status: 500,
         body: {
           success: false,
-          error: 'Não foi possível concluir a exclusão dos seus dados. Nada foi apagado — tente novamente.',
+          error:
+            'Não foi possível concluir a exclusão dos seus dados. Nada foi apagado — tente novamente.',
         },
       };
     }
@@ -308,7 +335,7 @@ async function executeDeletion({ uid, email, req, res }) {
     try {
       await deleteFromTable('download_tokens', { order_id: orderIdFilter });
     } catch (err) {
-      console.warn('[me-delete-account] limpeza de tokens falhou:', err.message);
+      log.warn('limpeza_de_tokens_falhou', { reason: err.message });
     }
   }
 
@@ -317,8 +344,11 @@ async function executeDeletion({ uid, email, req, res }) {
   //    passo 0 (resolveAuthIdentity), então não há guarda condicional aqui.
   const { error: deleteUserError } = await admin.auth.admin.deleteUser(uid);
   if (deleteUserError && !/not\s*found/i.test(String(deleteUserError.message || ''))) {
-    console.error('[me-delete-account] deleteUser falhou:', deleteUserError.message);
-    return { status: 500, body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' } };
+    log.error('delete_user_falhou', { reason: deleteUserError.message });
+    return {
+      status: 500,
+      body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' },
+    };
   }
 
   // 5. Marca unsubscribe na newsletter (best-effort).
@@ -328,12 +358,16 @@ async function executeDeletion({ uid, email, req, res }) {
       filters: [{ column: 'email', value: normalizedEmail }],
     });
     if (subscriber && !subscriber.unsubscribed_at) {
-      await updateTable('email_subscribers', { id: `eq.${subscriber.id}` }, {
-        unsubscribed_at: new Date().toISOString(),
-      });
+      await updateTable(
+        'email_subscribers',
+        { id: `eq.${subscriber.id}` },
+        {
+          unsubscribed_at: new Date().toISOString(),
+        },
+      );
     }
   } catch (err) {
-    console.warn('[me-delete-account] unsubscribe falhou:', err.message);
+    log.warn('unsubscribe_falhou', { reason: err.message });
   }
 
   // 6. Log de segurança (sem PII).
@@ -348,15 +382,18 @@ async function executeDeletion({ uid, email, req, res }) {
   // 7. Encerra a sessão do cliente.
   clearCustomerSessionCookie(res);
 
-  return { status: 200, body: { success: true, message: 'Sua conta foi excluída. Sentiremos sua falta.' } };
+  return {
+    status: 200,
+    body: { success: true, message: 'Sua conta foi excluída. Sentiremos sua falta.' },
+  };
 }
 
 module.exports = async function meDeleteAccountHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['POST', 'OPTIONS']);
   }
 
   // RATE_LIMITS.meDeleteAccount existia mas nunca era chamado — o preset
@@ -372,7 +409,11 @@ module.exports = async function meDeleteAccountHandler(req, res) {
 
   try {
     if (!getSupabaseConfig()) {
-      return res.status(500).json({ success: false, error: 'Supabase não configurado.' });
+      return fail(res, {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Supabase não configurado.',
+      });
     }
 
     // Token aceito SOMENTE no corpo POST (nunca na query string, que vaza
@@ -385,13 +426,18 @@ module.exports = async function meDeleteAccountHandler(req, res) {
     if (token) {
       const verified = verifyDeletionToken(token);
       if (!verified) {
-        return res.status(400).json({ success: false, error: 'Link inválido ou expirado. Solicite a exclusão novamente.' });
+        return fail(res, {
+          status: 400,
+          code: ERROR_CODES.VALIDATION_FAILED,
+          message: 'Link inválido ou expirado. Solicite a exclusão novamente.',
+        });
       }
       const sessionUser = getCustomerSessionFromRequest(req);
       if (!sessionUser || !sessionUser.uid || sessionUser.uid !== verified.uid) {
-        return res.status(401).json({
-          success: false,
-          error: 'Faça login na conta que deseja excluir para confirmar a exclusão.',
+        return fail(res, {
+          status: 401,
+          code: ERROR_CODES.UNAUTHORIZED,
+          message: 'Faça login na conta que deseja excluir para confirmar a exclusão.',
         });
       }
       const result = await executeDeletion({ uid: verified.uid, email: verified.email, req, res });
@@ -403,12 +449,20 @@ module.exports = async function meDeleteAccountHandler(req, res) {
     // executeDeletion), então um token emitido sem uid seria inutilizável.
     const user = getCustomerSessionFromRequest(req);
     if (!user || !user.uid || !user.email) {
-      return res.status(401).json({ success: false, error: 'Faça login para excluir sua conta.' });
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'Faça login para excluir sua conta.',
+      });
     }
     const result = await requestDeletion(user);
     return res.status(result.status).json(result.body);
   } catch (error) {
-    console.error('[me-delete-account]', error.message);
-    return res.status(500).json({ success: false, error: 'Erro ao processar exclusão de conta.' });
+    log.error('handler_failed', { reason: error.message });
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Erro ao processar exclusão de conta.',
+    });
   }
 };

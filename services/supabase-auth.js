@@ -54,11 +54,7 @@ async function getProfileRoleByUserId(userId) {
     return null;
   }
 
-  const primaryResult = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle();
+  const primaryResult = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
 
   if (!primaryResult.error && primaryResult.data?.role) {
     return primaryResult.data.role;
@@ -83,7 +79,9 @@ async function getProfileRoleByEmail(email) {
     return null;
   }
 
-  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedEmail = String(email || '')
+    .trim()
+    .toLowerCase();
   if (!normalizedEmail) {
     return null;
   }

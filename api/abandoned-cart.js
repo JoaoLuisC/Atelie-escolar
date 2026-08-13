@@ -4,6 +4,10 @@ const {
 } = require('../lib/supabase');
 const { sanitizeAttribution } = require('../lib/attribution-sanitize');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed, preflight } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+
+const log = createLogger('abandoned-cart');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_ITEMS = 20;
@@ -66,14 +70,14 @@ function sanitizeItems(items) {
  */
 module.exports = async function abandonedCartHandler(req, res) {
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return preflight(res);
   }
 
   const gate = await enforceRateLimit(req, res, RATE_LIMITS.abandonedCart);
   if (gate.blocked) return;
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['POST', 'OPTIONS']);
   }
 
   try {
@@ -84,9 +88,16 @@ module.exports = async function abandonedCartHandler(req, res) {
     const body = req.body || {};
     // O slice vem ANTES do regex de propósito: um endereço de 1 MB não deve nem
     // chegar ao regex (o `[^\s@]+` faria backtracking sobre a string inteira).
-    const email = String(body.email || '').trim().toLowerCase().slice(0, MAX_EMAIL_LEN);
+    const email = String(body.email || '')
+      .trim()
+      .toLowerCase()
+      .slice(0, MAX_EMAIL_LEN);
     if (!email || !EMAIL_REGEX.test(email)) {
-      return res.status(400).json({ success: false, error: 'E-mail inválido.' });
+      return fail(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: 'E-mail inválido.',
+      });
     }
 
     const items = sanitizeItems(body.items);
@@ -113,13 +124,17 @@ module.exports = async function abandonedCartHandler(req, res) {
     });
 
     if (existing) {
-      await updateTable('abandoned_carts', { id: `eq.${existing.id}` }, {
-        items,
-        total_amount: totalAmount,
-        attribution_data: attribution,
-        // Reset reminder se carrinho foi atualizado — ciclo recomeça
-        reminder_sent_at: null,
-      });
+      await updateTable(
+        'abandoned_carts',
+        { id: `eq.${existing.id}` },
+        {
+          items,
+          total_amount: totalAmount,
+          attribution_data: attribution,
+          // Reset reminder se carrinho foi atualizado — ciclo recomeça
+          reminder_sent_at: null,
+        },
+      );
     } else {
       await insertIntoTable('abandoned_carts', {
         email,
@@ -133,7 +148,7 @@ module.exports = async function abandonedCartHandler(req, res) {
     return res.status(204).end();
   } catch (error) {
     // Falha silenciosa — tracking de carrinho não pode quebrar checkout
-    console.warn('[abandoned-cart]', error.message);
+    log.warn('handler_failed', { reason: error.message });
     return res.status(204).end();
   }
 };

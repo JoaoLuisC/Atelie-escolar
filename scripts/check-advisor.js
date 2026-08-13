@@ -30,7 +30,9 @@ if (!pat || !ref) {
   console.log('');
   console.log('━━ Detalhes ━━');
   for (const l of lints) {
-    const detail = String(l.detail || '').replace(/`/g, '').slice(0, 100);
+    const detail = String(l.detail || '')
+      .replace(/`/g, '')
+      .slice(0, 100);
     console.log(` [${l.level.padEnd(8)}] ${l.title}`);
     console.log(`            ${detail}`);
   }

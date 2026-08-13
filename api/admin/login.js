@@ -3,12 +3,13 @@ const {
   getSupabaseConfig,
   supabaseRequest,
   serviceRoleHelpers: { getTableRow },
-} = require('../lib/supabase');
-const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
-const { safeCompare, setAdminCorsHeaders, setSessionCookie } = require('../lib/admin-session');
-const { resolveSecret } = require('../lib/env-secret');
-const { getAnonClient, getProfileRoleByEmail } = require('../services/supabase-auth');
-const { enforceRateLimit, resolveIdentifier, RATE_LIMITS } = require('../lib/rate-limit');
+} = require('../../lib/supabase');
+const { recordSecurityEvent, extractClientIp } = require('../../lib/security-logger');
+const { safeCompare, setAdminCorsHeaders, setSessionCookie } = require('../../lib/admin-session');
+const { resolveSecret } = require('../../lib/env-secret');
+const { getAnonClient, getProfileRoleByEmail } = require('../../services/supabase-auth');
+const { enforceRateLimit, resolveIdentifier, RATE_LIMITS } = require('../../lib/rate-limit');
+const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
 
 // TTL do desafio de 2º fator. Era 300s; caiu para 120s porque o desafio é um
 // portador de "a senha já foi conferida" e o único uso legítimo dele é o
@@ -57,7 +58,11 @@ function getChallengeSecret() {
 
 /** Impressão digital curta e não reversível — nunca gravar e-mail/IP crus. */
 function fingerprint(value) {
-  return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
+  return crypto
+    .createHash('sha256')
+    .update(String(value || ''))
+    .digest('hex')
+    .slice(0, 16);
 }
 
 function toBase64Url(input) {
@@ -69,7 +74,9 @@ function toBase64Url(input) {
 }
 
 function fromBase64Url(input) {
-  const normalized = String(input || '').replaceAll('-', '+').replaceAll('_', '/');
+  const normalized = String(input || '')
+    .replaceAll('-', '+')
+    .replaceAll('_', '/');
   const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
   return Buffer.from(padded, 'base64').toString('utf8');
 }
@@ -198,7 +205,9 @@ function verifyChallengeToken(token, expectedEmail, req) {
 
 function decodeBase32(input) {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  const sanitized = String(input || '').toUpperCase().replaceAll(/[^A-Z2-7]/g, '');
+  const sanitized = String(input || '')
+    .toUpperCase()
+    .replaceAll(/[^A-Z2-7]/g, '');
   if (!sanitized) return null;
 
   let bits = '';
@@ -222,10 +231,11 @@ function generateTotpCode(secretBuffer, counter) {
 
   const hmac = crypto.createHmac('sha1', secretBuffer).update(counterBuffer).digest();
   const offset = (hmac.at(-1) || 0) & 0xf;
-  const binary = ((hmac[offset] & 0x7f) << 24)
-    | ((hmac[offset + 1] & 0xff) << 16)
-    | ((hmac[offset + 2] & 0xff) << 8)
-    | (hmac[offset + 3] & 0xff);
+  const binary =
+    ((hmac[offset] & 0x7f) << 24) |
+    ((hmac[offset + 1] & 0xff) << 16) |
+    ((hmac[offset + 2] & 0xff) << 8) |
+    (hmac[offset + 3] & 0xff);
 
   return String(binary % 1_000_000).padStart(6, '0');
 }
@@ -237,7 +247,12 @@ function generateTotpCode(secretBuffer, counter) {
  * ele é a identidade do código dentro da janela — é o que permite marcar
  * "este código já foi usado" sem guardar o código em lugar nenhum.
  */
-function matchTotpCounter(secret, code, stepSeconds = TOTP_STEP_SECONDS, window = TOTP_DRIFT_WINDOW) {
+function matchTotpCounter(
+  secret,
+  code,
+  stepSeconds = TOTP_STEP_SECONDS,
+  window = TOTP_DRIFT_WINDOW,
+) {
   const normalizedCode = String(code || '').trim();
   if (!/^\d{6}$/.test(normalizedCode)) {
     return null;
@@ -261,9 +276,7 @@ function matchTotpCounter(secret, code, stepSeconds = TOTP_STEP_SECONDS, window 
 
 function isSecondFactorRequired(adminConfig) {
   return Boolean(
-    adminConfig?.requireSecondFactor
-    || adminConfig?.require2FA
-    || adminConfig?.twoFactorEnabled
+    adminConfig?.requireSecondFactor || adminConfig?.require2FA || adminConfig?.twoFactorEnabled,
   );
 }
 
@@ -302,8 +315,10 @@ function verifySecondFactorCode(adminConfig, code) {
     return true;
   }
 
-  return methods.includes('pin')
-    && safeCompare(normalized, String(adminConfig?.fallbackPin || '').trim());
+  return (
+    methods.includes('pin') &&
+    safeCompare(normalized, String(adminConfig?.fallbackPin || '').trim())
+  );
 }
 
 async function readAdminConfig() {
@@ -334,9 +349,10 @@ async function readAdminConfig() {
 async function handleSecondFactor(req, res, { adminConfig, email, emailKey, challenge }) {
   const methods = extractSecondFactorMethods(adminConfig);
   if (methods.length === 0) {
-    res.status(500).json({
-      success: false,
-      error: '2FA ativado sem método configurado no adminConfig.',
+    fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: '2FA ativado sem método configurado no adminConfig.',
     });
     return false;
   }
@@ -346,7 +362,7 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
   // É também o que mantém o TTL curto e o uso único indolores: o painel recebe
   // um desafio novo em vez de travar na tela do código.
   if (!challenge.valid) {
-    res.status(200).json({
+    ok(res, {
       success: false,
       requiresSecondFactor: true,
       methods,
@@ -357,7 +373,11 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
 
   const code = String(req.body?.factorCode || '').trim();
   if (!code) {
-    res.status(401).json({ success: false, error: 'Código de verificação obrigatório.' });
+    fail(res, {
+      status: 401,
+      code: ERROR_CODES.UNAUTHORIZED,
+      message: 'Código de verificação obrigatório.',
+    });
     return false;
   }
 
@@ -365,8 +385,8 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
   const totpCounter = methods.includes('totp')
     ? matchTotpCounter(adminConfig?.totpSecret, code)
     : null;
-  const pinValid = methods.includes('pin')
-    && safeCompare(code, String(adminConfig?.fallbackPin || '').trim());
+  const pinValid =
+    methods.includes('pin') && safeCompare(code, String(adminConfig?.fallbackPin || '').trim());
 
   if (totpCounter === null && !pinValid) {
     await recordSecurityEvent({
@@ -376,7 +396,11 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
       userAgent: req.headers['user-agent'],
       properties: { email_hash: emailKey, methods },
     });
-    res.status(401).json({ success: false, error: 'Código de verificação inválido.' });
+    fail(res, {
+      status: 401,
+      code: ERROR_CODES.UNAUTHORIZED,
+      message: 'Código de verificação inválido.',
+    });
     return false;
   }
 
@@ -393,9 +417,10 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
         userAgent: req.headers['user-agent'],
         properties: { email_hash: emailKey, counter: totpCounter },
       });
-      res.status(401).json({
-        success: false,
-        error: 'Código já utilizado. Aguarde o próximo código do autenticador.',
+      fail(res, {
+        status: 401,
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'Código já utilizado. Aguarde o próximo código do autenticador.',
       });
       return false;
     }
@@ -405,7 +430,9 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
   // de digitação queimar o desafio; consumir aqui garante o que importa — um
   // desafio emite no máximo UMA sessão. As tentativas com código errado ficam
   // limitadas pelo balde adminLoginSecondFactor (5 / 10 min) e pelo TTL de 120s.
-  const challengeUse = await consumeSingleUse('admin-2fa-challenge', challenge.payload.nonce, { ip });
+  const challengeUse = await consumeSingleUse('admin-2fa-challenge', challenge.payload.nonce, {
+    ip,
+  });
   if (!challengeUse.fresh) {
     await recordSecurityEvent({
       eventName: 'admin_2fa_challenge_replayed',
@@ -414,9 +441,10 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
       userAgent: req.headers['user-agent'],
       properties: { email_hash: emailKey },
     });
-    res.status(401).json({
-      success: false,
-      error: 'Desafio de 2FA já utilizado. Faça login novamente.',
+    fail(res, {
+      status: 401,
+      code: ERROR_CODES.UNAUTHORIZED,
+      message: 'Desafio de 2FA já utilizado. Faça login novamente.',
     });
     return false;
   }
@@ -428,19 +456,25 @@ module.exports = async function adminLoginHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return preflight(res);
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return methodNotAllowed(res, ['POST', 'OPTIONS']);
   }
 
-  const email = String(req.body?.email || '').trim().toLowerCase();
+  const email = String(req.body?.email || '')
+    .trim()
+    .toLowerCase();
   const password = String(req.body?.password || '');
   const challengeToken = String(req.body?.challengeToken || '').trim();
 
   if (!email || !password) {
-    return res.status(400).json({ success: false, error: 'E-mail e senha são obrigatórios.' });
+    return fail(res, {
+      status: 400,
+      code: ERROR_CODES.VALIDATION_FAILED,
+      message: 'E-mail e senha são obrigatórios.',
+    });
   }
 
   const emailKey = fingerprint(email);
@@ -463,11 +497,11 @@ module.exports = async function adminLoginHandler(req, res) {
 
   const gate = challenge.valid
     ? await enforceRateLimit(req, res, {
-      ...RATE_LIMITS.adminLoginSecondFactor,
-      // IP + e-mail: o balde do 2º fator não pode ser esvaziado trocando de
-      // conta, nem um admin pode trancar o outro.
-      identifier: `${resolveIdentifier(req)}|${emailKey}`,
-    })
+        ...RATE_LIMITS.adminLoginSecondFactor,
+        // IP + e-mail: o balde do 2º fator não pode ser esvaziado trocando de
+        // conta, nem um admin pode trancar o outro.
+        identifier: `${resolveIdentifier(req)}|${emailKey}`,
+      })
     : await enforceRateLimit(req, res, RATE_LIMITS.adminLogin);
 
   if (gate.blocked) {
@@ -476,9 +510,10 @@ module.exports = async function adminLoginHandler(req, res) {
 
   const supabase = getAnonClient();
   if (!supabase) {
-    return res.status(500).json({
-      success: false,
-      error: 'Configuração do Supabase indisponível no servidor.',
+    return fail(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Configuração do Supabase indisponível no servidor.',
     });
   }
 
@@ -495,11 +530,17 @@ module.exports = async function adminLoginHandler(req, res) {
       userAgent: req.headers['user-agent'],
       properties: { reason: 'invalid_credentials', email_hash: emailKey },
     });
-    return res.status(401).json({ success: false, error: 'Credenciais inválidas.' });
+    return fail(res, {
+      status: 401,
+      code: ERROR_CODES.UNAUTHORIZED,
+      message: 'Credenciais inválidas.',
+    });
   }
 
   const role = await getProfileRoleByEmail(authData.user.email || email);
-  const normalizedRole = String(role || '').trim().toLowerCase();
+  const normalizedRole = String(role || '')
+    .trim()
+    .toLowerCase();
 
   if (!['admin', 'master'].includes(normalizedRole)) {
     await recordSecurityEvent({
@@ -507,12 +548,20 @@ module.exports = async function adminLoginHandler(req, res) {
       severity: 'warn',
       ip: extractClientIp(req),
       userAgent: req.headers['user-agent'],
-      properties: { reason: 'non_admin_role', role: normalizedRole || 'none', email_hash: emailKey },
+      properties: {
+        reason: 'non_admin_role',
+        role: normalizedRole || 'none',
+        email_hash: emailKey,
+      },
     });
     // Resposta HTTP idêntica ao caso de credencial inválida (mesmo status e
     // mensagem) para não vazar que a senha está correta em conta não-admin.
     // O motivo distinto ('non_admin_role') fica apenas no log de segurança.
-    return res.status(401).json({ success: false, error: 'Credenciais inválidas.' });
+    return fail(res, {
+      status: 401,
+      code: ERROR_CODES.UNAUTHORIZED,
+      message: 'Credenciais inválidas.',
+    });
   }
 
   const adminConfig = await readAdminConfig();
@@ -530,7 +579,7 @@ module.exports = async function adminLoginHandler(req, res) {
 
   // Grava a identidade individual no cookie de sessão (não-repúdio no audit).
   setSessionCookie(res, { email: authData.user.email || email, role: normalizedRole });
-  return res.status(200).json({ success: true, user: { role: normalizedRole || 'admin', email } });
+  return ok(res, { success: true, user: { role: normalizedRole || 'admin', email } });
 };
 
 // Primitivos de 2º fator reaproveitados por api/admin-settings.js (reautenticação
