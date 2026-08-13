@@ -1,0 +1,26 @@
+# Commits que só mexeram em formatação — o `git blame` os ignora, para que a
+# autoria de cada linha continue apontando para quem escreveu a LÓGICA.
+#
+# Sem isto, o commit da regra D1 (Prettier em 189 arquivos, ou seja, o
+# repositório inteiro) apareceria como autor de praticamente toda linha do
+# projeto, e `git blame` deixaria de responder à única pergunta que ele existe
+# para responder.
+#
+# ── COMO USAR ────────────────────────────────────────────────────────
+# Configure uma vez por clone (o arquivo sozinho não faz efeito):
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# O GitHub aplica automaticamente, sem configuração.
+#
+# ── COMO ACRESCENTAR ─────────────────────────────────────────────────
+# Depois de commitar uma mudança PURAMENTE de formatação:
+#
+#     git rev-parse HEAD >> .git-blame-ignore-revs
+#
+# Só entram aqui commits sem nenhuma alteração de comportamento. Um commit
+# misto (formatação + lógica) não pode ser ignorado — separe os dois.
+
+# Formatação inicial do repositório com Prettier (regra D1).
+# Preencha com o hash do commit de formatação assim que ele existir:
+#   git rev-parse HEAD >> .git-blame-ignore-revs

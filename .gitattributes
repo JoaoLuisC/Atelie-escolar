@@ -1,0 +1,28 @@
+# Regra D6: encoding e fim de linha decididos aqui, não pela configuração
+# local de cada máquina.
+#
+# Sem este arquivo, `core.autocrlf` do Windows converte tudo para CRLF no
+# working copy. O Prettier grava LF, então cada `npm run format` produzia um
+# aviso "LF will be replaced by CRLF" em 189 arquivos — e, pior, um clone em
+# Linux e um em Windows podiam gerar diffs de linha inteira sem ninguém ter
+# mudado código.
+#
+# `text=auto eol=lf`: normaliza para LF no repositório E no working copy.
+# O Windows moderno (VS Code, PowerShell, Node) lida com LF sem problema.
+* text=auto eol=lf
+
+# Binários — nunca normalizar, sob risco de corromper o arquivo.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.pdf binary
+*.docx binary
+*.woff binary
+*.woff2 binary
+
+# `.ps1` roda no PowerShell do Windows, que é o único consumidor deste arquivo.
+scripts/fix-dns.ps1 text eol=crlf

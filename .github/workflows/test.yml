@@ -43,6 +43,18 @@ jobs:
       # Os passos abaixo são o mesmo conteúdo de `npm run check`, quebrado em
       # steps separados de propósito: na UI do Actions dá para ver de cara SE
       # foi lint, env, teste ou build que caiu, sem abrir o log.
+      # Formatação é decidida pelo Prettier, não em review (regra D1). Vem
+      # ANTES do lint de propósito: é o passo mais barato e o que falha com a
+      # correção mais óbvia (`npm run format`), então é o primeiro sinal útil.
+      - name: Formatação
+        run: npm run format:check
+
+      # `npm run lint` carrega `--max-warnings=21` — uma catraca, não zero.
+      # Os avisos restantes são diagnósticos do React Compiler (setState dentro
+      # de efeito), que são backlog real de performance e exigem refatorar
+      # componente por componente. A catraca impede que o número CRESÇA
+      # enquanto o backlog é queimado; ao corrigir um, baixe o número no
+      # package.json no mesmo commit.
       - name: Lint
         run: npm run lint
 

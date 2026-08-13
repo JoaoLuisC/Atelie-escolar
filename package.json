@@ -15,12 +15,12 @@
     "test": "vitest run",
     "test:web": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=19",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"{src,api,lib,routes,middleware,services,utils,validation,scripts}/**/*.{js,jsx,css}\" \"*.config.js\" server.js",
     "format:check": "prettier --check \"{src,api,lib,routes,middleware,services,utils,validation,scripts}/**/*.{js,jsx,css}\" \"*.config.js\" server.js",
     "check:env": "node scripts/check-env.js",
-    "check": "npm run check:env && npm run test && npm run build && npm run lint",
+    "check": "npm run check:env && npm run format:check && npm run lint && npm run test && npm run build",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "rebuild": "npm run clean && npm run build",
     "supabase:login": "npx supabase login",
@@ -28,7 +28,17 @@
     "supabase:link": "npx supabase link",
     "supabase:db:pull": "npx supabase db pull",
     "supabase:db:push": "npx supabase db push",
-    "supabase:migration:new": "npx supabase migration new"
+    "supabase:migration:new": "npx supabase migration new",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,json,md}": [
+      "prettier --write"
+    ]
   },
   "keywords": [
     "banners",
@@ -70,12 +80,15 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.5.0",
     "concurrently": "^9.2.1",
     "eslint": "^10.6.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.7.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.0.1",
+    "lint-staged": "^17.3.0",
     "postcss": "^8.5.10",
     "prettier": "^3.4.2",
     "supabase": "^2.88.1",

@@ -17,7 +17,8 @@ export default defineConfig({
             if (id.includes('react-router')) return 'router';
             if (id.includes('@supabase')) return 'supabase';
             if (id.includes('react-hook-form')) return 'forms';
-            if (id.includes('react-dom') || id.includes('react/jsx') || id.includes('/react/')) return 'react';
+            if (id.includes('react-dom') || id.includes('react/jsx') || id.includes('/react/'))
+              return 'react';
             return 'vendor';
           }
           return undefined;
@@ -40,7 +41,13 @@ export default defineConfig({
       // Medir só o código de aplicação. Sem isto o relatório mistura
       // configs de build, artefatos e os próprios testes, e qualquer
       // threshold vira número sem significado.
-      include: ['src/**/*.{js,jsx}', 'api/**/*.js', 'lib/**/*.js', 'services/**/*.js', 'validation/**/*.js'],
+      include: [
+        'src/**/*.{js,jsx}',
+        'api/**/*.js',
+        'lib/**/*.js',
+        'services/**/*.js',
+        'validation/**/*.js',
+      ],
       exclude: [
         '**/__tests__/**',
         '**/*.test.{js,jsx}',
@@ -50,28 +57,39 @@ export default defineConfig({
       ],
 
       // ─────────────────────────────────────────────────────────────
-      // THRESHOLDS — DESLIGADOS PROPOSITALMENTE.
+      // THRESHOLDS — PISO MEDIDO, NÃO META (regra D2).
       //
-      // O pacote `@vitest/coverage-v8` NÃO está instalado neste repo
-      // (nem como dependência transitiva do vitest 4), então não foi
-      // possível medir a cobertura real para calibrar números honestos.
-      // Ligar threshold no chute quebraria o CI sem informação nenhuma.
+      // O roteiro de 3 passos que ficava comentado aqui foi executado em
+      // 13/08/2026: `@vitest/coverage-v8` instalado, `npm run test:coverage`
+      // rodado, e os números abaixo são os MEDIDOS menos ~2pp de folga.
       //
-      // Para ativar:
-      //   1. npm i -D @vitest/coverage-v8
-      //   2. npm run test:coverage   → anote os % de "All files"
-      //   3. descomente o bloco abaixo com os números MEDIDOS menos ~2pp
-      //      de folga. A intenção é TRAVAR REGRESSÃO, não forçar salto:
-      //      o piso deve ser o que já existe hoje, e sobe junto com os
-      //      testes do caminho do dinheiro (webhook approved, reentrega,
-      //      download de uso único) descritos na §5 da revisão.
+      //   medido            piso
+      //   statements 27.30%  25
+      //   branches   21.01%  19
+      //   functions  23.30%  21
+      //   lines      27.78%  25
       //
-      // thresholds: {
-      //   lines: 0,
-      //   functions: 0,
-      //   branches: 0,
-      //   statements: 0,
-      // },
+      // Recalibrado em 13/08/2026 depois das suítes da regra D3 (money, http,
+      // logger, coupons, abc-classification, error-codes e o invariante de
+      // dinheiro do checkout): 274 → 368 testes.
+      //
+      // A intenção é TRAVAR REGRESSÃO, não forçar salto: quem apagar um teste
+      // ou acrescentar um módulo grande sem cobertura derruba o CI, mas
+      // ninguém é obrigado a escrever teste que não ia escrever. Os números
+      // SOBEM junto com as suítes — quando uma leva de testes entrar, recalibre
+      // para o novo medido menos a folga, no mesmo commit.
+      //
+      // A folga de 2pp não é superstição: a cobertura de branches oscila com a
+      // ordem de execução em código que lê env (`process.env.NODE_ENV`), e um
+      // piso colado no medido transforma essa oscilação em CI vermelho
+      // intermitente — que é a forma mais rápida de ensinar o time a ignorar
+      // o gate.
+      thresholds: {
+        statements: 25,
+        branches: 19,
+        functions: 21,
+        lines: 25,
+      },
       // ─────────────────────────────────────────────────────────────
     },
   },

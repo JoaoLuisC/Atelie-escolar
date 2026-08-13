@@ -1,0 +1,12 @@
+# Regra D7: lint + format SÓ no que mudou, antes do commit.
+#
+# Por que no pré-commit e não só no CI: depois da formatação em massa da regra
+# D1, nada impede a divergência de voltar arquivo por arquivo. O CI pegaria —
+# mas só depois do push, e a correção vira um commit "fix lint" que polui o
+# histórico. Aqui o custo é de milissegundos, porque `lint-staged` roda apenas
+# sobre os arquivos em stage, não sobre os 262 do repositório.
+#
+# Para pular num commit específico (WIP, rebase): `git commit --no-verify`.
+# Se você precisar disso com frequência, o hook está errado — abra um PR
+# mudando a regra em CONTRIBUTING.md em vez de conviver com o atalho.
+npx lint-staged

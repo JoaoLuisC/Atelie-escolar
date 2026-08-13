@@ -35,6 +35,11 @@ yarn-error.log*
 dist/
 build/
 
+# Relatório de cobertura (regra D2) — gerado por `npm run test:coverage`.
+# O piso que importa está em vite.config.js e é conferido no CI; o HTML aqui é
+# artefato local e mudaria a cada execução.
+coverage/
+
 # Temporary files
 *.tmp
 temp/
