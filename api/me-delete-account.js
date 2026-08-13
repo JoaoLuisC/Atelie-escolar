@@ -7,6 +7,7 @@ const { getCustomerSessionFromRequest, clearCustomerSessionCookie } = require('.
 const { getAdminClient } = require('../services/supabase-auth');
 const { sendEmail, getAppUrl } = require('../lib/email-sender');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
+const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const { resolveSecret, isLocalDevOrTest } = require('../lib/env-secret');
 
 // ════════════════════════════════════════════════════════════════════
@@ -357,6 +358,17 @@ module.exports = async function meDeleteAccountHandler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
+
+  // RATE_LIMITS.meDeleteAccount existia mas nunca era chamado — o preset
+  // prometia paridade com o meDeleteAccountLimiter de 5/min do Express de dev e
+  // entregava zero em produção. O passo 1 deste fluxo DISPARA E-MAIL
+  // (requestDeletion), então sem contador um cliente autenticado em laço vira
+  // mail bomb contra o próprio endereço e queima a reputação do domínio de
+  // envio; e a verificação de token do passo 2 roda HMAC + consulta ao Auth por
+  // requisição, sem teto. É ação rara e irreversível: 5/min é folga enorme para
+  // uso legítimo e corta o abuso.
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.meDeleteAccount);
+  if (gate.blocked) return;
 
   try {
     if (!getSupabaseConfig()) {

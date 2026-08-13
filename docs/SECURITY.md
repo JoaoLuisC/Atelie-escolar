@@ -47,14 +47,34 @@ serverless não compartilha memória entre invocações: só o Postgres vê toda
 > rate limiting **inexistente em produção**. Rate limit no Vercel Firewall continua recomendado
 > como contenção de borda, independente disso.
 
-Os limites abaixo descrevem **apenas o comportamento em desenvolvimento** (Express):
+**Cobertura em `lib/rate-limit.js` (vale em produção assim que a migration estiver aplicada).**
+Todo preset de `RATE_LIMITS` tem chamador — não há configuração morta prometendo proteção que
+não existe, e é assim que precisa continuar: um preset sem `enforceRateLimit` no handler lê como
+endpoint protegido e não é.
 
-- `rate-limit` global — 250 req/15min global (`RATE_LIMIT_MAX`); 30 req/15min em `/auth/*` (`AUTH_RATE_LIMIT_MAX`)
-- `rate-limit` em `/admin-login` — 5 tentativas falhas / 10 min (definido em [routes/api-compat.routes.js](../routes/api-compat.routes.js); `skipSuccessfulRequests: true` para não punir admin legítimo fazendo logins repetidos)
-- `rate-limit` em `/auth/customer/login` — 5 tentativas / 10 min
-- `rate-limit` em `/verify-payment` — 60 req/min por IP (mitiga enumeração de `order_code`)
-- `rate-limit` em `/track-event` — 120 req/min (analytics) · `/validate-coupon` — 20 req/min (anti-enumeração de cupons)
-- `rate-limit` em `/me-delete-account` — 5 req/min (LGPD §3.8, ação sensível) · `/subscribe` — 5 req/min · `/unsubscribe` — 20 req/min · `/abandoned-cart` — 30 req/min
+| Endpoint | Limite | Chave |
+|---|---|---|
+| `/api/admin-login` | 5 / 10 min (senha) + 5 / 10 min (2º fator, balde próprio) | IP · IP+e-mail no 2º fator |
+| `/api/auth/customer/login` | 5 / 10 min **por conta** + 20 contas distintas / 10 min por IP | IP+e-mail · IP |
+| `/api/verify-payment` | 600 / 10 min **por pedido** + 40 pedidos distintos / 10 min por IP | IP+`order_code` · IP |
+| `/api/create-payment` | 20 / min | IP |
+| `/api/validate-coupon` · `/api/unsubscribe` | 20 / min | IP |
+| `/api/abandoned-cart` | 30 / min | IP |
+| `/api/track-event` | 120 / min | IP |
+| `/api/subscribe` · `/api/me-delete-account` | 5 / min | IP |
+
+Os dois casos de **dois baldes** (login de cliente e verify-payment) existem porque um teto por
+IP puro erra nos dois sentidos com o público desta loja: professoras atrás do mesmo CGNAT/escola
+somam tentativas e se trancam mutuamente, enquanto o ataque real (força bruta numa conta,
+enumeração de `order_code`) não é distinguido do uso legítimo. O balde primário acompanha o
+RECURSO (conta, pedido) e o secundário conta RECURSOS DISTINTOS por IP — que é a única forma de
+fugir do primeiro. Ver o bloco de comentário em `RATE_LIMITS.verifyPayment`.
+
+Ainda **sem** limite em produção: `/api/auth/customer/register` (não tinha nem no Express),
+`/api/download`, `/api/confirm-subscription` e os endpoints de leitura do catálogo.
+
+Só no Express de desenvolvimento (store em memória, nunca implantado): o limitador global de
+250 req/15min (`RATE_LIMIT_MAX`) e o de 30 req/15min em `/auth/*` (`AUTH_RATE_LIMIT_MAX`).
 
 > A mesma divergência de runtime vale para os schemas Zod em `validation/`: eles são
 > aplicados por `middleware/validate.middleware.js`, usado só pelas rotas Express. Os
@@ -224,7 +244,7 @@ Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Res
 - `order_code` tem 128 bits de entropia (`crypto.randomBytes(16).toString('hex')`).
 - Comparação do email usa `crypto.timingSafeEqual` para não vazar diferenças por tempo.
 - Resposta uniforme `404 "Pedido não encontrado"` em ambos os casos (order não existe vs email não bate).
-- Rate-limit por IP (60 req/min) contra tentativas em massa — **só em dev/Express**; em produção depende do limitador da pendência API-03 (ver camada 1).
+- Rate-limit em dois baldes contra tentativas em massa (600/10min no MESMO pedido, 40 pedidos distintos/10min por IP) via `lib/rate-limit.js` — vale em produção, condicionado à migration aplicada (ver camada 1). Quem faz polling legítimo já conhece um `order_code` de 128 bits e nunca toca o segundo balde; estouro dele é sinal de enumeração quase sem falso positivo.
 
 ### 10. Retenção de logs (LGPD princípio da minimização)
 
@@ -260,7 +280,7 @@ Eventos emitidos hoje:
 | `account_self_deleted` | [api/me-delete-account.js](../api/me-delete-account.js) | info | Exclusão de conta LGPD concluída (sem PII; só contagem de pedidos anonimizados) |
 | `admin_audit_write_failed` | [lib/admin-audit.js](../lib/admin-audit.js) | error | Insert no `admin_audit_log` falhou — auditoria não pode falhar em silêncio |
 
-Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 16)` para correlação cross-event sem violar LGPD. Rate-limits relacionados (só dev/Express — ver limitação na camada 1):
+Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 16)` para correlação cross-event sem violar LGPD. O mesmo vale para a chave do rate limit: o valor do escopo (e-mail, `order_code`) entra como hash, nunca em claro, porque `rate_limit_hit` sobrevive 24h à requisição. Rate-limits relacionados (ver a tabela de cobertura na camada 1):
 
 - `/verify-payment` — 60 req/min por IP ([routes/api-compat.routes.js](../routes/api-compat.routes.js)).
 - `/admin-login` — 5 falhas/10min por IP (skipSuccessfulRequests, mesmo arquivo).
