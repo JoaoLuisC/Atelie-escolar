@@ -95,10 +95,13 @@ async function main() {
  */
 @font-face {
   font-family: 'bootstrap-icons';
-  /* font-display: swap — o ícone aparece quando a fonte chega, em vez de
-   * segurar o texto. Numa UI cheia de ícones, block produziria caixas vazias
-   * durante o carregamento. */
-  font-display: swap;
+  /* font-display: block — o mesmo do bootstrap-icons original, e é o certo
+   * para fonte de ÍCONE: os glifos vivem em codepoints de uso privado, e com
+   * \`swap\` o navegador pintaria a fonte de fallback nesse intervalo, o que
+   * para PUA é uma caixa vazia (tofu). \`block\` segura o \`::before\` invisível
+   * por até 3s e troca sem piscar. Com 8,7 KB da mesma origem, o intervalo é
+   * imperceptível na prática. */
+  font-display: block;
   src: url('./bootstrap-icons-subset.woff2') format('woff2');
 }
 

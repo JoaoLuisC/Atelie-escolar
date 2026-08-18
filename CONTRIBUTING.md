@@ -20,7 +20,7 @@ regras — e a execução que a fechou.
 | -------------------------------------------------- | ---------: | -----------------------: | ---------------------------: |
 | Arquivos que reprovam `prettier --check`           |        189 |                        0 |                        **0** |
 | Idem, contando `.md` e `.json`                     |  não media |                       56 |         **0** (gate estende) |
-| Sites que devolvem `error` como string             |         41 |                       58 |                        **0** |
+| Sites que devolvem `error` como string             |          — |                       58 |                        **0** |
 | Códigos de erro fora de SCREAMING_SNAKE            |          — |                        3 |                        **0** |
 | Handlers usando `guardMethod`                      |          — |                0 (de 44) |                   **35** (¹) |
 | Handlers com o par `OPTIONS`/405 manual            |          — |                       40 |                        **0** |
@@ -30,13 +30,13 @@ regras — e a execução que a fechou.
 | Caminhos de rota literais no JSX                   |         50 |                        0 |                        **0** |
 | Mecanismos de rate limit concorrentes              |          2 |                        2 |             **1** (ADR 0007) |
 | Endpoints usando `validation/` + zod               |          0 |                        3 |                        **8** |
-| Módulos de `lib/` sem suíte                        |         16 |                       10 |                    **0** (²) |
+| Módulos de `lib/` sem suíte                        | 13 (de 21) |               10 (de 24) |            **0** (de 26) (²) |
 | Testes                                             |        274 |                      387 |                      **691** |
 | Cobertura medida (statements)                      | não rodava |                    27,3% | **39,8%** (piso 39, no CI ³) |
 | Erros de lint                                      |          0 |                        0 |                        **0** |
 | Avisos de lint                                     |         30 |                       19 |             **17** (catraca) |
 | Pares de documento duplicados                      |          4 | 0 ativos (4 em retirada) |             **0** (apagados) |
-| Caminho crítico do bundle (gzip)                   |          — |                 157,8 KB |         **98,2 KB** (−37,8%) |
+| Caminho crítico do bundle (gzip)                   |          — |                 157,8 KB |        **100,5 KB** (−36,3%) |
 
 ¹ Os 9 restantes não têm o par método/OPTIONS a substituir: são os cinco recursos CRUD (que o
 recebem pela factory do [ADR 0005](./docs/adr/0005-factory-para-recursos-crud-do-admin.md)),

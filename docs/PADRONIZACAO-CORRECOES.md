@@ -7,6 +7,15 @@
 
 Levantamento em **18/08/2026** sobre o commit `4b42fe8`, medido no código — não estimado.
 
+> ## ✅ Executado em 18/08/2026 — 26 de 26 itens fechados
+>
+> Os números da seção "Resumo da medição" e o "Hoje" de cada item são o **retrato do
+> levantamento**, e ficam como estão: são eles que explicam por que cada correção existiu. O
+> estado atual está na [tabela de acompanhamento](#acompanhamento) ao final, e a medição de
+> hoje está no [CONTRIBUTING.md](../CONTRIBUTING.md#estado-da-padronização). Onde a execução
+> divergiu do que o item previa, a divergência está na mensagem do commit que o fechou
+> (`git log --grep=P0.1`, por exemplo).
+
 O diagnóstico de 13/08/2026 foi _"o problema não é falta de padrão — é padrão não executado"_.
 A rodada daquele dia construiu a infraestrutura: `lib/http.js`, `validation/`, `lib/logger.js`,
 `src/constants/routes.js`, husky, catraca de lint. **Este documento é sobre a segunda metade do
