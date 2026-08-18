@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import { useEffect, useId, useState } from 'react';
 import { formatPrice } from '../../../utils/currency';
+import { formatRatio } from '../../../utils/number';
 import { fetchAdminKpis } from '../../../services/admin-panel';
 import { Card } from '../ui/Card';
 import { StatusChip } from '../ui/StatusChip';
@@ -680,7 +681,7 @@ export function DashboardTab({
         />
         <MiniStat
           label="LTV / CAC"
-          value={advancedKpis?.ltvCacRatio ? `${advancedKpis.ltvCacRatio.toFixed(1)}x` : 'Fase 5'}
+          value={advancedKpis?.ltvCacRatio ? formatRatio(advancedKpis.ltvCacRatio) : 'Fase 5'}
           icon="speedometer2"
           accent={advancedKpis?.ltvCacRatio >= 3 ? 'success' : 'warning'}
         />

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { formatCsvNumber } from '../../../utils/currency';
+import { formatCsvPercent } from '../../../utils/number';
 import { Card } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
 import { Button } from '../ui/Button';
@@ -451,8 +452,10 @@ export function AnalysisTab({ categories = [] }) {
       ...Array.from({ length: maxOffset + 1 }, (_, offset) => ({
         key: `m${offset}`,
         label: `M+${offset}`,
-        format: (v) =>
-          v === null || v === undefined ? '' : Number(v).toFixed(1).replace('.', ','),
+        // CSV, não tela: vírgula decimal e SEM o `%`, senão o Excel pt-BR
+        // trata a célula como texto e a coluna deixa de somar. Era este site
+        // que reimplementava à mão o `.replace('.', ',')` de currency.js.
+        format: (v) => (v === null || v === undefined ? '' : formatCsvPercent(v)),
       })),
     ];
     const rows = cohort.cohorts.map((c) => {

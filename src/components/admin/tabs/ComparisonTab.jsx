@@ -1,12 +1,14 @@
 import PropTypes from 'prop-types';
 import { formatPrice } from '../../../utils/currency';
+import { formatPercent } from '../../../utils/number';
 import { Card } from '../ui/Card';
 
 function DeltaBadge({ trend, pct }) {
   if (trend === 'up') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-bold text-emerald-700 ring-1 ring-emerald-200">
-        <i className="bi bi-arrow-up-right" />+{pct.toFixed(1)}%
+        <i className="bi bi-arrow-up-right" />
+        {formatPercent(pct, { withSign: true })}
       </span>
     );
   }
@@ -14,7 +16,7 @@ function DeltaBadge({ trend, pct }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-sm font-bold text-rose-700 ring-1 ring-rose-200">
         <i className="bi bi-arrow-down-right" />
-        {pct.toFixed(1)}%
+        {formatPercent(pct)}
       </span>
     );
   }

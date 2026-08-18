@@ -1,7 +1,8 @@
 // ════════════════════════════════════════════════════════════════════
 // Formatação de data para o browser (regra C4).
 //
-// Estava em `src/components/admin/utils/format.js`, junto de um helper que É
+// Estava em `src/components/admin/utils/format.js` (apagado no item P5.3),
+// junto de um helper que É
 // específico do admin (`isSessionError`). Nada aqui tem a ver com o painel:
 // `formatDateTime` formata um ISO qualquer, e a página de downloads do CLIENTE
 // já tinha a própria versão inline da mesma coisa.

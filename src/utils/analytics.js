@@ -121,6 +121,12 @@ function postEventToBackend(eventName, payload) {
       if (ok) return;
     }
 
+    // Mesma exceção nomeada de `src/components/ErrorBoundary.jsx`: `fetch` cru
+    // é o FALLBACK do `sendBeacon` acima, e um envio `keepalive` existe
+    // justamente para sobreviver ao descarregamento da página — o
+    // `AbortController` de 15s do `apiRequest` cancelaria o que se quer que
+    // sobreviva. Não há resposta a normalizar; o `.catch` vazio é o contrato.
+    // Ver item P5.1 do docs/PADRONIZACAO-CORRECOES.md.
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

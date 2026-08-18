@@ -337,6 +337,23 @@ específico mora junto do componente; utilitário genérico não.
 
 `src/components/admin/utils/format.js` tem `formatDateTime`, que não é específico do admin.
 
+> **Exceção NOMEADA (18/08/2026, item `P5.3`).** `src/components/admin/utils/` continua
+> existindo, com exatamente dois arquivos, e isso É a regra sendo cumprida — não um desvio
+> tolerado:
+>
+> | Arquivo     | Por que fica                                                                               |
+> | ----------- | ------------------------------------------------------------------------------------------ |
+> | `derive.js` | Derivações do painel (curva ABC, séries de faturamento, coorte). Zero consumidor fora dele |
+> | `tabs.js`   | Rótulos e o conjunto `TABS_NEEDING_DASHBOARD`. Descreve a navegação do painel e nada mais  |
+>
+> A regra diz "utilitário de um componente específico mora junto do componente", e os dois são
+> exatamente isso. O que saiu foi o que **não** era: `formatDateTime` foi para `src/utils/date.js`
+> em 13/08, e `isSessionError` foi para junto de `src/constants/error-codes.js` em 18/08 — ele
+> vivia num `format.js` que exportava uma única função, que não formatava nada.
+>
+> **Exceção escrita é padrão; exceção tácita é divergência.** Esta linha existe para que a próxima
+> varredura não conte `src/components/admin/utils/` como violação e "corrija" o que está certo.
+
 ### C5 · Rota vem de `src/constants/routes.js` — `P2`
 
 **Regra.** Caminho literal em JSX é uma rota que ninguém consegue renomear com segurança.
@@ -345,9 +362,19 @@ específico mora junto do componente; utilitário genérico não.
 literais em `to="/…"` e `navigate('/…')`. O caso que dói: o caminho obscurecido do painel
 (`ADMIN_LOGIN_PATH`) só é seguro enquanto for único e centralizado.
 
-### C6 · Import nomeado do React, export nomeado do componente, `propTypes` sempre — `P2`
+### C6 · Import nomeado do React, export nomeado do componente, `propTypes` em quem recebe props — `P2`
 
 **Regra.** Já é a prática do repositório; falta escrever e travar no lint.
+
+> **Correção da regra (18/08/2026, item `P5.4`).** A redação era "`propTypes` **sempre**", e a
+> remedição a mediu contra 14 componentes. Mas **11 deles não recebem prop nenhuma**: são páginas
+> montadas por rota (`AdminPage`, `CheckoutPage`, `DownloadsPage`, `NotFoundPage`…). Declarar
+> `propTypes = {}` neles não verifica nada — é cerimônia que ocupa linha e ensina a tratar
+> `propTypes` como ritual em vez de contrato.
+>
+> Regra reprovada por 11 arquivos em que obedecê-la não melhora nada é regra que treina o time a
+> ignorar a lista inteira de violações. A dívida real eram **três**: `HomePage`, `ProductsPage` e
+> `SubscriptionPages` — os únicos da lista que de fato recebem props.
 
 **O que motivou.** Praticamente aplicada:
 

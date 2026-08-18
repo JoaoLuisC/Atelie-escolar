@@ -50,8 +50,8 @@ mediu depois de escrever**, e **abstrações que foram criadas mas não adotadas
 | --- | ------------------------------------------------------------------------------- | ---------- | ---------- | ------------------------ | ---------- |
 | 1.1 | SDK do Supabase (48 KB gz) baixado por toda visita; só 4 funções usam           | Bundle     | `ALTO`     | ~30 linhas em 4 arquivos | ✅         |
 | 1.2 | `manualChunks` não produz o split que o comentário descreve                     | Bundle     | `ALTO`     | reescrever 1 função      | ✅         |
-| 1.3 | `AdminPage` = 147 KB num chunk só (14 abas + 2 wizards)                         | Bundle     | `MÉDIO`    | 14 linhas                | 🔧         |
-| 1.4 | bootstrap-icons via CDN: fonte inteira + CSS render-blocking de terceiro        | Bundle     | `MÉDIO`    | self-host + subset       | 🔧         |
+| 1.3 | `AdminPage` = 147 KB num chunk só (14 abas + 2 wizards)                         | Bundle     | `MÉDIO`    | 14 linhas                | ✅         |
+| 1.4 | bootstrap-icons via CDN: fonte inteira + CSS render-blocking de terceiro        | Bundle     | `MÉDIO`    | self-host + subset       | ✅         |
 | 2.1 | `/admin/dashboard` varre 7 tabelas sem `limit`; truncamento silencioso          | Backend    | `ALTO`     | agregar no servidor      | ✅ piso    |
 | 2.2 | 1 conexão SMTP nova por e-mail, em série, sob `maxDuration: 60`                 | Backend    | `ALTO`     | ~10 linhas               | ✅         |
 | 2.3 | Dois loops sequenciais que deveriam ser lote (tokens, busca de usuário)         | Backend    | `MÉDIO`    | ~20 linhas               | ✅         |

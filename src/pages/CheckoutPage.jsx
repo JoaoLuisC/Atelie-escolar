@@ -8,7 +8,7 @@ import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
-import { apiRequest, errorMessageOf } from '../utils/api';
+import { captureAbandonedCart, createPayment, verifyPayment } from '../services/checkout';
 import { formatPrice } from '../utils/currency';
 import { buildCartPayload, getAttributionPayload, trackEvent } from '../utils/analytics';
 import { getSessionId } from '../utils/attribution';
@@ -102,26 +102,18 @@ export function CheckoutPage() {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return undefined;
 
     const timeoutId = setTimeout(() => {
-      // apiRequest (e não fetch cru): traz o AbortController com timeout e a
-      // normalização de erro da camada de API. `keepalive` continua valendo —
-      // a captura precisa sobreviver ao fechamento da aba.
-      apiRequest('/abandoned-cart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true,
-        body: JSON.stringify({
-          email,
-          sessionId: getSessionId(),
-          items: cart.map((item) => ({
-            productId: String(item.id),
-            name: item.name,
-            price: Number(item.price || 0),
-            quantity: Number(item.quantity || 1),
-          })),
-          attribution: getAttributionPayload(),
-        }),
-      }).catch(() => {
-        /* silencioso — não pode quebrar checkout */
+      // Regra C2: a chamada mora em `src/services/checkout.js`, que já engole
+      // a falha — captura de marketing não pode quebrar o checkout.
+      captureAbandonedCart({
+        email,
+        sessionId: getSessionId(),
+        items: cart.map((item) => ({
+          productId: String(item.id),
+          name: item.name,
+          price: Number(item.price || 0),
+          quantity: Number(item.quantity || 1),
+        })),
+        attribution: getAttributionPayload(),
       });
     }, ABANDONED_CART_DEBOUNCE_MS);
 
@@ -202,15 +194,12 @@ export function CheckoutPage() {
       }
 
       try {
-        // POST com o e-mail no CORPO (achado M6): na query string ele vazaria
-        // para os access logs da Vercel, para o histórico do navegador e para o
-        // header Referer. O backend ainda aceita GET por compatibilidade, mas
-        // este é o caminho preferencial. apiRequest dá timeout (AbortController)
-        // ao polling — antes, uma requisição pendurada ficava presa para sempre.
-        const { response, data: verifyData } = await apiRequest('/verify-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: pendingOrderId, email: pendingOrderEmail }),
+        // A `response` vem junto do corpo de propósito: este laço precisa
+        // distinguir 429 — que é o servidor pedindo ritmo, não falha — para
+        // aplicar backoff sem limpar o pedido pendente.
+        const { response, data: verifyData } = await verifyPayment({
+          orderId: pendingOrderId,
+          email: pendingOrderEmail,
         });
         if (cancelled) return;
 
@@ -329,23 +318,13 @@ export function CheckoutPage() {
         setGuestEmail(email);
       }
 
-      const { response, data } = await apiRequest('/create-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      // O serviço já valida o envelope e a presença da URL de pagamento — sem
+      // isso, `undefined` viajava até o `window.open` e o navegador abria uma
+      // aba em branco, sem nenhum erro na tela.
+      const { orderId: novoPedido, paymentUrl: nextPaymentUrl } = await createPayment(payload);
 
-      if (!response.ok || !data.success) {
-        throw new Error(errorMessageOf(data) || 'Erro ao criar pagamento.');
-      }
-
-      localStorage.setItem('lastOrderId', String(data.orderId || ''));
+      localStorage.setItem('lastOrderId', novoPedido);
       localStorage.setItem('lastOrderEmail', email);
-
-      const nextPaymentUrl = data.initPoint || data.sandboxInitPoint;
-      if (!nextPaymentUrl) {
-        throw new Error('URL de pagamento não retornada pela API.');
-      }
 
       // Guarda a URL para o botão de fallback e tenta abrir o popup. Em iOS/
       // Safari o popup pode ser bloqueado — por isso o link fica sempre visível.
@@ -357,7 +336,7 @@ export function CheckoutPage() {
         'Aguardando confirmação do pagamento. Use o botão "Abrir pagamento" caso a cobrança não tenha aberto — vamos te avisar aqui assim que aprovar.',
       );
       setPendingOrderEmail(email);
-      setPendingOrderId(String(data.orderId || ''));
+      setPendingOrderId(novoPedido);
     } catch (submitError) {
       setProcessing(false);
       setStatusTone('error');

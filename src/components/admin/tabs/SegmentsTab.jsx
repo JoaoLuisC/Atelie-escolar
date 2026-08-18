@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
 import { fetchAdminSegments } from '../../../services/admin-panel';
+import { formatCount } from '../../../utils/number';
 
 const TAG_LABELS = {
   cliente_ativo: { label: 'Cliente ativo', color: 'emerald', hint: 'Comprou nos últimos 90 dias' },
@@ -88,7 +89,7 @@ export function SegmentsTab() {
             Inscritos totais
           </p>
           <p className="mt-2 text-2xl font-extrabold text-slate-900">
-            {(data.totalSubscribers || 0).toLocaleString('pt-BR')}
+            {formatCount(data.totalSubscribers)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -96,7 +97,7 @@ export function SegmentsTab() {
             Confirmados
           </p>
           <p className="mt-2 text-2xl font-extrabold text-emerald-700">
-            {(data.confirmedCount || 0).toLocaleString('pt-BR')}
+            {formatCount(data.confirmedCount)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -104,7 +105,7 @@ export function SegmentsTab() {
             Aguardando opt-in
           </p>
           <p className="mt-2 text-2xl font-extrabold text-amber-700">
-            {(data.pendingConfirmation || 0).toLocaleString('pt-BR')}
+            {formatCount(data.pendingConfirmation)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -112,7 +113,7 @@ export function SegmentsTab() {
             Cancelaram
           </p>
           <p className="mt-2 text-2xl font-extrabold text-slate-700">
-            {(data.unsubscribedCount || 0).toLocaleString('pt-BR')}
+            {formatCount(data.unsubscribedCount)}
           </p>
         </div>
       </div>
@@ -138,9 +139,7 @@ export function SegmentsTab() {
                     <p className="text-sm font-bold">{meta.label}</p>
                     {meta.hint ? <p className="mt-0.5 text-xs opacity-75">{meta.hint}</p> : null}
                   </div>
-                  <span className="shrink-0 text-lg font-extrabold">
-                    {count.toLocaleString('pt-BR')}
-                  </span>
+                  <span className="shrink-0 text-lg font-extrabold">{formatCount(count)}</span>
                 </li>
               );
             })}

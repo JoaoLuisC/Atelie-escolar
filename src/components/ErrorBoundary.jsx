@@ -23,6 +23,20 @@ function reportErrorToBackend(error, info) {
       return;
     }
 
+    // ── EXCEÇÃO DELIBERADA À REGRA C1 ───────────────────────────────
+    // `fetch` cru de propósito, NÃO por esquecimento. Isto é telemetria de
+    // erro emitida do `componentDidCatch`: o React já derrubou a árvore, e o
+    // que sobra é entregar a mensagem antes de a aba fechar.
+    //
+    // `apiRequest` não serve aqui por dois motivos concretos:
+    //   • ele aborta em 15s — mas este `fetch` é o FALLBACK do `sendBeacon`
+    //     acima, e um `AbortController` num envio `keepalive` cancela
+    //     exatamente o que se quer que sobreviva ao descarregamento da página;
+    //   • ele normaliza a RESPOSTA, e aqui não há resposta a ler — o `.catch`
+    //     vazio é o contrato: se a telemetria falhar, ninguém pode saber.
+    //
+    // Uma falha aqui não pode virar outro erro dentro do handler de erro.
+    // Ver item P5.1 do docs/PADRONIZACAO-CORRECOES.md.
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

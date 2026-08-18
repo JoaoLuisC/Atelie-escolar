@@ -12,16 +12,24 @@
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <!-- Fontes trim: só pesos efetivamente usados pela UI; display=swap evita FOIT/CLS. -->
     <link
       href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Raleway:wght@800&family=Roboto:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-    />
+    <!--
+      Ícones AUTO-HOSPEDADOS com subset (§1.4). Antes vinha do cdn.jsdelivr.net:
+      folha render-blocking, de terceiro, puxando a família inteira (~131 KB de
+      woff2 para ~2.000 glifos) para usar 107. Agora são 8,7 KB, na mesma
+      origem — sem DNS+TLS extra no caminho crítico e sem depender da
+      disponibilidade de um host que não é nosso.
+
+      Gerado por `npm run icons:subset` e versionado. O teste
+      `scripts/__tests__/icon-subset.test.js` falha se o código passar a usar um
+      ícone fora do subset — sem ele, o `<i>` simplesmente ficaria em branco,
+      sem erro em lugar nenhum.
+    -->
+    <link rel="stylesheet" href="/fonts/bootstrap-icons-subset.css" />
   </head>
   <body>
     <div id="root"></div>

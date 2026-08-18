@@ -1,8 +1,13 @@
+import PropTypes from 'prop-types';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
-import { apiRequest, errorMessageOf } from '../utils/api';
+import {
+  confirmSubscription,
+  unsubscribeByEmail,
+  unsubscribeByToken,
+} from '../services/subscription';
 import { ROUTES } from '../constants/routes';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -16,6 +21,11 @@ function Container({ children }) {
     </Shell>
   );
 }
+
+// Regra C6: componente que RECEBE props declara `propTypes`.
+Container.propTypes = {
+  children: PropTypes.node,
+};
 
 // ════════════════════════════════════════════════════════════════════
 // /confirmar-inscricao?token=...
@@ -43,27 +53,14 @@ export function ConfirmSubscriptionPage() {
 
     (async () => {
       try {
-        // Regra C1: `apiRequest` no lugar de `fetch` cru — traz timeout de 15s
-        // (esta tela ficava carregando para sempre numa rede ruim) e normaliza
-        // a resposta. Regra A1: o backend agora usa status real (404 token
-        // inválido, 409 cancelada, 410 expirada) em vez de 200 com
-        // `confirmed:false`, então a checagem é `success`, não `confirmed`.
-        const { data } = await apiRequest(
-          `/confirm-subscription?token=${encodeURIComponent(token)}`,
-        );
-        if (!data.success) {
-          setStatus({
-            state: 'error',
-            message: errorMessageOf(data) || 'Token inválido ou expirado.',
-          });
-          return;
-        }
+        // Regra C2: a chamada mora em `src/services/subscription.js`. Regra
+        // A1: o backend usa status real (404 token inválido, 409 cancelada,
+        // 410 expirada) em vez de 200 com `confirmed:false`, então a checagem
+        // é `success`, não `confirmed`.
+        const resultado = await confirmSubscription(token);
         setStatus({
-          state: 'success',
-          message: data.alreadyConfirmed
-            ? 'Você já tinha confirmado antes — está tudo certo!'
-            : 'Inscrição confirmada! Você vai receber as novidades por email.',
-          email: data.email,
+          state: resultado.ok ? 'success' : 'error',
+          message: resultado.message,
         });
       } catch (err) {
         setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });
@@ -121,11 +118,10 @@ export function UnsubscribePage() {
     (async () => {
       setStatus({ state: 'loading', message: 'Cancelando sua inscrição…' });
       try {
-        // Regra C1: cliente HTTP único, com timeout.
-        const { data } = await apiRequest(`/unsubscribe?token=${encodeURIComponent(token)}`);
+        const resultado = await unsubscribeByToken(token);
         setStatus({
-          state: data.success ? 'success' : 'error',
-          message: data.message || errorMessageOf(data) || 'Algo deu errado.',
+          state: resultado.ok ? 'success' : 'error',
+          message: resultado.message,
         });
       } catch (err) {
         setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });
@@ -143,19 +139,15 @@ export function UnsubscribePage() {
     setStatus({ state: 'loading', message: 'Cancelando…' });
 
     try {
-      const { data } = await apiRequest('/unsubscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
+      const resultado = await unsubscribeByEmail(email);
       // `confirmationRequired` é o estado "enviamos um e-mail de confirmação e
       // NADA foi removido ainda". Antes ele chegava como `success: false`, o
       // que pintava a tela de erro para uma operação que deu certo — e obrigava
       // o backend a mentir no envelope da regra A1. Aqui ele é o que é: um
       // estado de domínio, num corpo de sucesso.
       setStatus({
-        state: data.confirmationRequired ? 'pending' : data.success ? 'success' : 'error',
-        message: data.message || errorMessageOf(data) || 'Algo deu errado.',
+        state: resultado.confirmationRequired ? 'pending' : resultado.ok ? 'success' : 'error',
+        message: resultado.message,
       });
     } catch (err) {
       setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });

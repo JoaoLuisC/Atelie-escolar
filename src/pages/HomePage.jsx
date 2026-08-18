@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { SEO } from '../components/SEO';
@@ -162,6 +163,15 @@ function Marquee({ items, dark = false, reverse = false }) {
     </div>
   );
 }
+
+// Regra C6: componente que RECEBE props declara `propTypes`. `items` é a lista
+// que o marquee duplica quatro vezes — um valor não-array quebra o `...items`
+// com uma mensagem que não diz de onde veio.
+Marquee.propTypes = {
+  items: PropTypes.arrayOf(PropTypes.node).isRequired,
+  dark: PropTypes.bool,
+  reverse: PropTypes.bool,
+};
 
 export function HomePage() {
   const [homeSections, setHomeSections] = useState([]);

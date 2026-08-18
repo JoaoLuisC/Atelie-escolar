@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
 import { fetchAdminFunnel } from '../../../services/admin-panel';
 import { formatPrice } from '../../../utils/currency';
+import { formatCount } from '../../../utils/number';
 
 const RANGE_OPTIONS = [
   { value: 7, label: '7 dias' },
@@ -25,7 +26,7 @@ function FunnelBar({ step, maxCount }) {
       <div className="flex items-baseline justify-between gap-3 text-sm">
         <span className="truncate font-medium text-slate-700">{step.label}</span>
         <span className="shrink-0 text-right">
-          <span className="font-bold text-slate-900">{step.count.toLocaleString('pt-BR')}</span>
+          <span className="font-bold text-slate-900">{formatCount(step.count)}</span>
           <span className="ml-2 text-xs text-slate-500">
             conv. {formatPct(step.conversionFromPrevious)}
           </span>
@@ -87,7 +88,7 @@ function AttributionTable({ items }) {
                 ) : null}
               </td>
               <td className="px-3 py-2 text-right font-semibold text-slate-800">
-                {entry.orders.toLocaleString('pt-BR')}
+                {formatCount(entry.orders)}
               </td>
               <td className="px-3 py-2 text-right font-semibold text-slate-900">
                 {formatPrice(entry.revenue)}
@@ -176,7 +177,7 @@ export function FunnelTab() {
             Sessões únicas
           </p>
           <p className="mt-2 text-2xl font-extrabold text-slate-900">
-            {totals.sessions.toLocaleString('pt-BR')}
+            {formatCount(totals.sessions)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -184,7 +185,7 @@ export function FunnelTab() {
             Eventos registrados
           </p>
           <p className="mt-2 text-2xl font-extrabold text-slate-900">
-            {totals.events.toLocaleString('pt-BR')}
+            {formatCount(totals.events)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -192,7 +193,7 @@ export function FunnelTab() {
             Compras aprovadas
           </p>
           <p className="mt-2 text-2xl font-extrabold text-slate-900">
-            {totals.approvedOrders.toLocaleString('pt-BR')}
+            {formatCount(totals.approvedOrders)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

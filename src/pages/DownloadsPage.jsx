@@ -6,7 +6,8 @@ import { SkeletonDownloadList } from '../components/Skeleton';
 import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { apiRequest, errorMessageOf, getApiBaseUrl } from '../utils/api';
+import { buildDownloadUrl, fetchMyOrders, fetchOrderStatus } from '../services/downloads';
+import { errorMessageOf } from '../utils/api';
 import { formatPrice } from '../utils/currency';
 import { trackPurchaseOnce } from '../utils/analytics';
 import { ROUTES } from '../constants/routes';
@@ -43,15 +44,10 @@ function usePendingOrderPolling({
       }
 
       try {
-        // POST com e-mail no CORPO (achado M6): na query string o e-mail do
-        // comprador vaza para access logs, histórico e Referer. Este polling
-        // não recebe AbortSignal de fora, então usa apiRequest — que traz o
-        // timeout e a normalização de erro da camada de API.
-        const { response, data } = await apiRequest('/verify-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, email: orderEmail }),
-        });
+        // Regra C2: a chamada mora em `src/services/downloads.js`. Este
+        // polling não recebe AbortSignal de fora — o intervalo é limpo pelo
+        // próprio efeito.
+        const { response, data } = await fetchOrderStatus({ orderId, email: orderEmail });
 
         if (!response.ok || !data.success) {
           return;
@@ -150,17 +146,11 @@ export function DownloadsPage() {
         // access log/histórico/Referer.
         //
         // Já foi `fetch` cru: `apiRequest` criava o próprio AbortController e
-        // SOBRESCREVIA o `signal` do chamador, o que desligaria o cancelamento em
-        // troca de pedido/desmontagem. A causa foi corrigida na origem (regra C1)
-        // — `apiRequest` agora COMPÕE os dois sinais, então este caminho ganhou o
-        // timeout de 15s sem abrir mão do cancelamento. Polling numa rede ruim
-        // ficava pendurado para sempre exatamente aqui.
-        const { response, data } = await apiRequest('/verify-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, email: orderEmail }),
-          signal,
-        });
+        // SOBRESCREVIA o `signal` do chamador, o que desligaria o cancelamento
+        // em troca de pedido/desmontagem. A causa foi corrigida na origem
+        // (regra C1) — os dois sinais agora se COMPÕEM, então este caminho tem
+        // timeout de 15s sem abrir mão do cancelamento.
+        const { response, data } = await fetchOrderStatus({ orderId, email: orderEmail, signal });
         // Requisição substituída por outra (troca de pedido) ou desmontagem:
         // descarta o resultado para não sobrescrever o estado atual.
         if (signal?.aborted) return;
@@ -236,29 +226,24 @@ export function DownloadsPage() {
       setEmailStatus('Carregando seus pedidos...');
 
       try {
-        const { response, data } = await apiRequest('/customer-orders', {
-          credentials: 'include',
-          signal,
-        });
+        // Sessão expirada NÃO é exceção: é um estado da tela, com texto
+        // próprio e caminho de volta para o login. O serviço faz essa
+        // distinção.
+        const { orders: meusPedidos, sessionExpired } = await fetchMyOrders({ signal });
 
         if (signal?.aborted) return;
 
-        if (response.status === 401) {
+        if (sessionExpired) {
           setOrders([]);
           setEmailStatus('Sua sessão expirou. Faça login novamente para ver seus pedidos.');
           return;
         }
 
-        if (signal?.aborted) return;
-        if (!response.ok || !data.success) {
-          throw new Error(errorMessageOf(data) || 'Não foi possível carregar os pedidos.');
-        }
-
-        setOrders(data.orders || []);
+        setOrders(meusPedidos);
         setEmailStatus(
-          (data.orders || []).length === 0
+          meusPedidos.length === 0
             ? 'Nenhum pedido encontrado na sua conta.'
-            : `Encontramos ${(data.orders || []).length} pedido(s).`,
+            : `Encontramos ${meusPedidos.length} pedido(s).`,
         );
       } catch (error) {
         if (error?.name === 'AbortError' || signal?.aborted) return;
@@ -494,7 +479,7 @@ export function DownloadsPage() {
                           </p>
                         </div>
                         <a
-                          href={`${getApiBaseUrl()}/download?token=${encodeURIComponent(item.token)}`}
+                          href={buildDownloadUrl(item.token)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"

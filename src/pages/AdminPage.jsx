@@ -1,25 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ADMIN_LOGIN_PATH, ROUTES } from '../constants/routes';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { ProductWizard } from '../components/ProductWizard';
-import { CategoryWizard } from '../components/CategoryWizard';
 import { AdminLayout } from '../components/admin/AdminLayout';
-import { DashboardTab } from '../components/admin/tabs/DashboardTab';
-import { ProductsTab } from '../components/admin/tabs/ProductsTab';
-import { CategoriesTab } from '../components/admin/tabs/CategoriesTab';
-import { OrdersTab } from '../components/admin/tabs/OrdersTab';
-import { CouponsTab } from '../components/admin/tabs/CouponsTab';
-import { UsersTab } from '../components/admin/tabs/UsersTab';
-import { FinanceTab } from '../components/admin/tabs/FinanceTab';
-import { ComparisonTab } from '../components/admin/tabs/ComparisonTab';
-import { PerformanceTab } from '../components/admin/tabs/PerformanceTab';
-import { VitrineTab } from '../components/admin/tabs/VitrineTab';
-import { SecurityTab } from '../components/admin/tabs/SecurityTab';
-import { AnalysisTab } from '../components/admin/tabs/AnalysisTab';
-import { FunnelTab } from '../components/admin/tabs/FunnelTab';
-import { SegmentsTab } from '../components/admin/tabs/SegmentsTab';
 import { OrderDetailModal } from '../components/admin/OrderDetailModal';
 import {
   createAdminCategory,
@@ -56,8 +40,64 @@ import {
   parseHomeSectionsSetting,
   serializeHomeSections,
 } from '../components/admin/utils/derive';
-import { isSessionError } from '../components/admin/utils/format';
+import { isSessionError } from '../constants/error-codes';
 import { TAB_LABELS, TABS_NEEDING_DASHBOARD } from '../components/admin/utils/tabs';
+
+// ════════════════════════════════════════════════════════════════════
+// 14 ABAS E 2 WIZARDS POR `lazy()` — §1.3 do doc de otimização.
+//
+// Estaticamente, os 16 imports produziam um `AdminPage-*.js` de 147 KB
+// (36,2 KB gz), o maior chunk de aplicação do projeto. Quem abria a aba
+// "Produtos" baixava `DashboardTab` (809 linhas), `AnalysisTab` (673),
+// `FunnelTab` (242), `SegmentsTab` (157), `ComparisonTab` (78) e
+// `ProductWizard` (879) — sem abrir nenhum deles.
+//
+// Mesmo padrão do `App.jsx:5`. O `<Suspense>` envolve SÓ a área de conteúdo do
+// `AdminLayout`: a navegação lateral continua instantânea, então trocar de aba
+// não pisca o painel inteiro.
+// ════════════════════════════════════════════════════════════════════
+const lazyTab = (nome, carregar) => lazy(() => carregar().then((m) => ({ default: m[nome] })));
+
+const ProductWizard = lazyTab('ProductWizard', () => import('../components/ProductWizard'));
+const CategoryWizard = lazyTab('CategoryWizard', () => import('../components/CategoryWizard'));
+const DashboardTab = lazyTab('DashboardTab', () => import('../components/admin/tabs/DashboardTab'));
+const ProductsTab = lazyTab('ProductsTab', () => import('../components/admin/tabs/ProductsTab'));
+const CategoriesTab = lazyTab(
+  'CategoriesTab',
+  () => import('../components/admin/tabs/CategoriesTab'),
+);
+const OrdersTab = lazyTab('OrdersTab', () => import('../components/admin/tabs/OrdersTab'));
+const CouponsTab = lazyTab('CouponsTab', () => import('../components/admin/tabs/CouponsTab'));
+const UsersTab = lazyTab('UsersTab', () => import('../components/admin/tabs/UsersTab'));
+const FinanceTab = lazyTab('FinanceTab', () => import('../components/admin/tabs/FinanceTab'));
+const ComparisonTab = lazyTab(
+  'ComparisonTab',
+  () => import('../components/admin/tabs/ComparisonTab'),
+);
+const PerformanceTab = lazyTab(
+  'PerformanceTab',
+  () => import('../components/admin/tabs/PerformanceTab'),
+);
+const VitrineTab = lazyTab('VitrineTab', () => import('../components/admin/tabs/VitrineTab'));
+const SecurityTab = lazyTab('SecurityTab', () => import('../components/admin/tabs/SecurityTab'));
+const AnalysisTab = lazyTab('AnalysisTab', () => import('../components/admin/tabs/AnalysisTab'));
+const FunnelTab = lazyTab('FunnelTab', () => import('../components/admin/tabs/FunnelTab'));
+const SegmentsTab = lazyTab('SegmentsTab', () => import('../components/admin/tabs/SegmentsTab'));
+
+/** Mesmo indicador do `App.jsx`, restrito à área de conteúdo. */
+function TabFallback() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500">
+      <i className="bi bi-arrow-clockwise mr-2 animate-spin" />
+      Carregando…
+    </div>
+  );
+}
+
+// Identidade ESTÁVEL para o caso "esta aba não precisa desta derivação". Um
+// `[]` literal a cada render mudaria a referência e faria os `useMemo`
+// dependentes recalcularem — o oposto do que o recorte existe para fazer.
+const EMPTY_LIST = Object.freeze([]);
 
 const EMPTY_DASHBOARD = {
   summary: {
@@ -175,39 +215,66 @@ export function AdminPage() {
     };
   }, [activeTab, ordersFilter, allowAdminBypass, onAuthExpired]);
 
+  // ── As 12 derivações só rodam para as abas que as consomem (§1.3) ──
+  // Elas percorrem TODOS os pedidos aprovados e TODOS os produtos, e rodavam a
+  // cada carga do dashboard independentemente da aba aberta — inclusive em
+  // "Usuários" e "Segurança", que não usam nenhuma delas.
+  // `TABS_NEEDING_DASHBOARD` já existia em `tabs.js` para decidir se os dados
+  // são BUSCADOS; aqui ele decide se são PROCESSADOS.
+  const precisaDerivar = TABS_NEEDING_DASHBOARD.has(activeTab);
+
   const approvedOrders = useMemo(
-    () => deriveApprovedOrders(dashboardData.orders),
-    [dashboardData.orders],
+    () => (precisaDerivar ? deriveApprovedOrders(dashboardData.orders) : EMPTY_LIST),
+    [precisaDerivar, dashboardData.orders],
   );
   const productPerformance = useMemo(
-    () => deriveProductPerformance(dashboardData.products, approvedOrders),
-    [dashboardData.products, approvedOrders],
+    () =>
+      precisaDerivar
+        ? deriveProductPerformance(dashboardData.products, approvedOrders)
+        : EMPTY_LIST,
+    [precisaDerivar, dashboardData.products, approvedOrders],
   );
   const monthlyComparison = useMemo(
-    () => deriveMonthlyComparison(approvedOrders),
-    [approvedOrders],
+    () => (precisaDerivar ? deriveMonthlyComparison(approvedOrders) : EMPTY_LIST),
+    [precisaDerivar, approvedOrders],
   );
   const comparisonDelta = useMemo(
-    () => deriveComparisonDelta(monthlyComparison),
-    [monthlyComparison],
+    () => (precisaDerivar ? deriveComparisonDelta(monthlyComparison) : null),
+    [precisaDerivar, monthlyComparison],
   );
   const recentOrders = useMemo(
-    () => deriveRecentOrders(dashboardData.orders),
-    [dashboardData.orders],
+    () => (precisaDerivar ? deriveRecentOrders(dashboardData.orders) : EMPTY_LIST),
+    [precisaDerivar, dashboardData.orders],
   );
-  const dailyRevenue = useMemo(() => deriveDailyRevenue(approvedOrders), [approvedOrders]);
+  const dailyRevenue = useMemo(
+    () => (precisaDerivar ? deriveDailyRevenue(approvedOrders) : EMPTY_LIST),
+    [precisaDerivar, approvedOrders],
+  );
   const categoryRevenue = useMemo(
-    () => deriveCategoryRevenue(dashboardData.products, approvedOrders),
-    [dashboardData.products, approvedOrders],
+    () =>
+      precisaDerivar ? deriveCategoryRevenue(dashboardData.products, approvedOrders) : EMPTY_LIST,
+    [precisaDerivar, dashboardData.products, approvedOrders],
   );
   const faturamentoSeries = useMemo(
-    () => deriveFaturamentoSeries(approvedOrders),
-    [approvedOrders],
+    () => (precisaDerivar ? deriveFaturamentoSeries(approvedOrders) : EMPTY_LIST),
+    [precisaDerivar, approvedOrders],
   );
-  const ticketMedio = useMemo(() => deriveTicketMedio(monthlyComparison), [monthlyComparison]);
-  const customerMix = useMemo(() => deriveCustomerMix(dashboardData.users), [dashboardData.users]);
-  const abcCurve = useMemo(() => deriveAbcCurve(productPerformance), [productPerformance]);
-  const sparkline = useMemo(() => deriveMonthSparkline(approvedOrders, 14), [approvedOrders]);
+  const ticketMedio = useMemo(
+    () => (precisaDerivar ? deriveTicketMedio(monthlyComparison) : null),
+    [precisaDerivar, monthlyComparison],
+  );
+  const customerMix = useMemo(
+    () => (precisaDerivar ? deriveCustomerMix(dashboardData.users) : null),
+    [precisaDerivar, dashboardData.users],
+  );
+  const abcCurve = useMemo(
+    () => (precisaDerivar ? deriveAbcCurve(productPerformance) : EMPTY_LIST),
+    [precisaDerivar, productPerformance],
+  );
+  const sparkline = useMemo(
+    () => (precisaDerivar ? deriveMonthSparkline(approvedOrders, 14) : EMPTY_LIST),
+    [precisaDerivar, approvedOrders],
+  );
 
   async function refreshDashboard() {
     try {
@@ -548,23 +615,37 @@ export function AdminPage() {
             </div>
           </div>
         ) : null}
-        {renderActiveTab()}
+        {/* Suspense SÓ na área de conteúdo: a navegação lateral do
+            AdminLayout já está montada e continua instantânea. */}
+        <Suspense fallback={<TabFallback />}>{renderActiveTab()}</Suspense>
       </AdminLayout>
 
-      <ProductWizard
-        isOpen={productWizardOpen}
-        onClose={closeProductWizard}
-        onSubmit={handleProductSave}
-        categories={dashboardData.categories || []}
-        initialProduct={editingProduct}
-      />
+      {/* Os wizards só são BAIXADOS quando alguém abre um. Renderizá-los
+          incondicionalmente (mesmo com `isOpen={false}`) traria as ~1.280
+          linhas dos dois de volta para o carregamento inicial do painel e
+          anularia o `lazy()`. */}
+      {productWizardOpen ? (
+        <Suspense fallback={null}>
+          <ProductWizard
+            isOpen={productWizardOpen}
+            onClose={closeProductWizard}
+            onSubmit={handleProductSave}
+            categories={dashboardData.categories || []}
+            initialProduct={editingProduct}
+          />
+        </Suspense>
+      ) : null}
 
-      <CategoryWizard
-        isOpen={categoryWizardOpen}
-        onClose={closeCategoryWizard}
-        onSubmit={handleCategorySave}
-        initialCategory={editingCategory}
-      />
+      {categoryWizardOpen ? (
+        <Suspense fallback={null}>
+          <CategoryWizard
+            isOpen={categoryWizardOpen}
+            onClose={closeCategoryWizard}
+            onSubmit={handleCategorySave}
+            initialCategory={editingCategory}
+          />
+        </Suspense>
+      ) : null}
 
       {orderDetail ? (
         <OrderDetailModal order={orderDetail} onClose={() => setOrderDetail(null)} />

@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types';
 import { useEffect } from 'react';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
@@ -164,3 +165,10 @@ function CategoryChip({ active, onClick, children }) {
     </button>
   );
 }
+
+// Regra C6: componente que RECEBE props declara `propTypes`.
+CategoryChip.propTypes = {
+  active: PropTypes.bool,
+  onClick: PropTypes.func.isRequired,
+  children: PropTypes.node,
+};
