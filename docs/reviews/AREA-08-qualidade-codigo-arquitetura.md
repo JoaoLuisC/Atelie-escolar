@@ -1,3 +1,10 @@
+> ## 📅 Retrato histórico — 01/07/2026
+>
+> Levantamento anterior a toda a série de correções de 2026. **A maior parte dos
+> achados foi corrigida.** Este documento não se atualiza — ele é o retrato do
+> dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md) e
+> [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).
+
 > Review READ-ONLY — Area 8 (Qualidade de Codigo & Arquitetura). Gerado por auditoria multi-agente (9 dimensoes, 83 agentes, verificacao adversarial por achado). Data: 2026-07-01.
 > Achados: 73 brutos | 72 confirmados | 1 refutado.
 

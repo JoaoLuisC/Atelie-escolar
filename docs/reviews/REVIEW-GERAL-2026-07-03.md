@@ -1,3 +1,10 @@
+> ## 📅 Retrato histórico — 03/07/2026
+>
+> O mais antigo dos relatórios, anterior a toda a série de correções de 2026.
+> **A maior parte dos achados foi corrigida.** Este documento não se atualiza —
+> ele é o retrato do dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md) e
+> [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).
+
 # Review Geral Consolidado — Ateliê da Escola
 
 **Data:** 2026-07-03 · **Modo:** read-only (nenhum arquivo de código alterado) · **Método:** 5 auditorias paralelas (segurança, performance, frontend/UX/a11y, qualidade/arquitetura, testes/DevOps) com reconciliação e deduplicação manual. Achados marcados **[verificado]** foram confirmados diretamente no código durante a consolidação.

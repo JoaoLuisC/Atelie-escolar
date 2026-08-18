@@ -341,7 +341,7 @@ Mercado Pago Checkout Pro já entrega Pix, cartão e boleto. Não desabilitar op
 
 #### H1. Service role nunca exposta
 
-Confere em [SECURITY.md](../SECURITY.md). Browser jamais tem acesso a `SUPABASE_SERVICE_ROLE_KEY`.
+Confere em [SECURITY.md](../ProjectDocs/08-SEGURANCA.md). Browser jamais tem acesso a `SUPABASE_SERVICE_ROLE_KEY`.
 
 #### H2. RLS habilitado em todas as tabelas
 
@@ -498,7 +498,7 @@ Para cada PR que toque o fluxo do cliente, fluxo de pagamento ou admin:
 
 - [ ] [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md) atualizado se mudou roadmap
 - [ ] Este documento atualizado se criou nova regra
-- [ ] [ARCHITECTURE.md](../ARCHITECTURE.md) atualizado se mudou estrutura
+- [ ] [ARCHITECTURE.md](../ProjectDocs/02-ARQUITETURA.md) atualizado se mudou estrutura
 
 ---
 
@@ -540,4 +540,4 @@ Sem isso, é só achismo. E e-commerce é caro demais para ser tocado por achism
 - **MARQUEZ, W. T. et al.** Estratégias de marketing digital para a alavancagem em e-commerce. REAVI, 2018.
 - **GILIOLI, R. M.; GHIGGI, T.** E-commerce: reflexões sobre estratégias e desafios. Revista Eletrônica Gestão e Serviços, 2020.
 - **KOTLER, P.; KELLER, K. L.** Marketing Management. Pearson, 2016.
-- Documentação interna: [ARCHITECTURE.md](../ARCHITECTURE.md), [SECURITY.md](../SECURITY.md), [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md), [PENDENCIAS.md](./PENDENCIAS.md).
+- Documentação interna: [ARCHITECTURE.md](../ProjectDocs/02-ARQUITETURA.md), [SECURITY.md](../ProjectDocs/08-SEGURANCA.md), [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md), [PENDENCIAS.md](./PENDENCIAS.md).

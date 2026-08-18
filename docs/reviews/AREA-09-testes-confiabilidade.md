@@ -1,5 +1,17 @@
 # Área 9 — Testes & Confiabilidade — Relatório de Review
 
+> ## 📅 Retrato histórico — 12/08/2026
+>
+> Levantamento anterior às rodadas de padronização de 13/08 e 18/08/2026.
+> **Vários achados foram corrigidos** — inclusive o que abre o sumário abaixo:
+> _"nenhum workflow de CI executa `npm test`"_ é **falso desde o commit `4892de9`**,
+> e o gate de cobertura passou a rodar no item `P0.2` (18/08). A suíte foi de 12
+> arquivos para 55, e `lib/` deixou de ter módulo sem teste (item `P4.1`).
+>
+> Este documento **não se atualiza**: ele é o retrato do dia, e é ele que explica
+> por que as regras existem. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md) e
+> [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).
+
 ## Sumário executivo
 
 A postura de testes deste e-commerce é **estruturalmente frágil e mal-priorizada para o domínio (pagamentos digitais)**. Existem 12 arquivos de teste de boa qualidade em pontos isolados (validação de assinatura HMAC do webhook, security-headers, schemas Zod, utilitários de analytics/atribuição/consentimento), mas eles cobrem apenas ramos de borda rasos e — criticamente — **os núcleos de segurança e dinheiro não têm cobertura alguma**: todo o fluxo de login admin (2FA/TOTP), os três primitivos de sessão HMAC (`admin-session`, `customer-session`, `auth.middleware`), as políticas RLS (o boundary de autorização do browser), o caminho `approved` do webhook (idempotência de tokens), a defesa anti-enumeração timing-safe do `verify-payment`, o uso-único do `download` token e o recálculo server-side de preço. Agravante que multiplica todo o risco: **nenhum workflow de CI executa `npm test`** — os únicos gates de PR são Lighthouse (a11y/SEO/performance) e um cron de email. Ou seja, mesmo os testes existentes não bloqueiam merge, e qualquer regressão de segurança/pagamento entra em `main` sem detecção automática. **O risco nº 1 é a cobertura ZERO do único gate de autenticação do painel admin (`verifySessionToken`/`ensureAdminSession`) combinada à ausência de gate de testes em CI: uma regressão na verificação de assinatura/exp/safeCompare permitiria forjar o cookie `admin_session` e obter acesso administrativo total, sem nenhum teste falhar.**

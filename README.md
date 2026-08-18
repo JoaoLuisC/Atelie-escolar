@@ -22,20 +22,20 @@ Abra http://localhost:5173
 
 ## Documentação completa
 
-| 📖 Documento                                                                   | Conteúdo                                                                                     |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| **[CONTRIBUTING.md](./CONTRIBUTING.md)**                                       | **Padrões de código — 25 regras de convenção, ler antes de abrir PR**                        |
-| **[docs/README.md](./docs/README.md)**                                         | Visão geral, stack, scripts                                                                  |
-| **[docs/adr/](./docs/adr/README.md)**                                          | Decisões estruturais (ADRs) e por que o projeto é assim                                      |
-| **[docs/ProjectDocs/02-ARQUITETURA.md](./docs/ProjectDocs/02-ARQUITETURA.md)** | Estrutura de pastas, decisões, camada de dados                                               |
-| **[docs/ProjectDocs/05-FLUXOS.md](./docs/ProjectDocs/05-FLUXOS.md)**           | Fluxos de auth, checkout, admin e webhook                                                    |
-| **[docs/ProjectDocs/03-SETUP.md](./docs/ProjectDocs/03-SETUP.md)**             | Setup de Supabase, Google OAuth, Mercado Pago, deploy                                        |
-| **[docs/ProjectDocs/08-SEGURANCA.md](./docs/ProjectDocs/08-SEGURANCA.md)**     | Modelo de ameaça, RLS, secrets, auditoria                                                    |
-| [docs/SUPABASE-SETUP.md](./docs/SUPABASE-SETUP.md)                             | Setup específico Supabase (legado)                                                           |
-| [docs/RELEASE-CHECKLIST.md](./docs/RELEASE-CHECKLIST.md)                       | Pré-deploy                                                                                   |
-| [docs/SPRING-SECURITY-BFF.md](./docs/SPRING-SECURITY-BFF.md)                   | Referência: BFF de auth do cliente em Spring Boot                                            |
-| [docs/REVIEW-PROMPTS.md](./docs/REVIEW-PROMPTS.md)                             | Prompts de review profundo por área                                                          |
-| [docs/REVIEW-RESULTS.md](./docs/REVIEW-RESULTS.md)                             | Resultados dos reviews (área 9 em [REVIEW-AREA-9-TESTES.md](./docs/REVIEW-AREA-9-TESTES.md)) |
+| 📖 Documento                                                                   | Conteúdo                                                               |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| **[CONTRIBUTING.md](./CONTRIBUTING.md)**                                       | **Padrões de código — 25 regras de convenção, ler antes de abrir PR**  |
+| **[docs/README.md](./docs/README.md)**                                         | Visão geral, stack, scripts                                            |
+| **[docs/adr/](./docs/adr/README.md)**                                          | Decisões estruturais (ADRs) e por que o projeto é assim                |
+| **[docs/ProjectDocs/02-ARQUITETURA.md](./docs/ProjectDocs/02-ARQUITETURA.md)** | Estrutura de pastas, decisões, camada de dados                         |
+| **[docs/ProjectDocs/05-FLUXOS.md](./docs/ProjectDocs/05-FLUXOS.md)**           | Fluxos de auth, checkout, admin e webhook                              |
+| **[docs/ProjectDocs/03-SETUP.md](./docs/ProjectDocs/03-SETUP.md)**             | Setup de Supabase, Google OAuth, Mercado Pago, deploy                  |
+| **[docs/ProjectDocs/08-SEGURANCA.md](./docs/ProjectDocs/08-SEGURANCA.md)**     | Modelo de ameaça, RLS, secrets, auditoria                              |
+| [docs/SUPABASE-SETUP.md](./docs/SUPABASE-SETUP.md)                             | Setup específico Supabase (legado)                                     |
+| [docs/RELEASE-CHECKLIST.md](./docs/RELEASE-CHECKLIST.md)                       | Pré-deploy                                                             |
+| [docs/SPRING-SECURITY-BFF.md](./docs/SPRING-SECURITY-BFF.md)                   | Referência: BFF de auth do cliente em Spring Boot                      |
+| [docs/REVIEW-PROMPTS.md](./docs/REVIEW-PROMPTS.md)                             | Prompts de review profundo por área                                    |
+| [docs/reviews/](./docs/reviews/)                                               | Relatórios de review, um por retrato datado (não são documentos vivos) |
 
 ---
 

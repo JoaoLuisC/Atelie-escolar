@@ -20,6 +20,18 @@
 // ════════════════════════════════════════════════════════════════════
 
 /**
+ * "Este valor foi medido?" — `null`, `undefined` e string vazia significam NÃO.
+ *
+ * ⚠️ Sem esta função, `Number(null)` e `Number('')` são **0**, e um dado
+ * AUSENTE apareceria no painel como um zero legítimo. É o mesmo coerce que o
+ * comentário de `lib/payment-integrity.js` registra ter transformado total
+ * ausente em "pedido de R$ 0,00" — a regra B2 existe por causa dele.
+ */
+function estaAusente(value) {
+  return value === null || value === undefined || (typeof value === 'string' && !value.trim());
+}
+
+/**
  * PERCENTUAL para tela. `12,3%` — uma casa decimal, vírgula, com o sinal.
  *
  * O `%` faz parte da função de propósito: sem ele, cada chamada decidia se o
@@ -34,6 +46,8 @@
  * @param {string} [options.fallback='—']     o que mostrar quando não há número
  */
 export function formatPercent(value, { decimals = 1, withSign = false, fallback = '—' } = {}) {
+  if (estaAusente(value)) return fallback;
+
   const numero = Number(value);
   if (!Number.isFinite(numero)) return fallback;
 
@@ -51,6 +65,8 @@ export function formatPercent(value, { decimals = 1, withSign = false, fallback 
  * para dado ausente é inventar informação num painel de decisão.
  */
 export function formatCount(value, { fallback = '—' } = {}) {
+  if (estaAusente(value)) return fallback;
+
   const numero = Number(value);
   if (!Number.isFinite(numero)) return fallback;
 
@@ -64,6 +80,8 @@ export function formatCount(value, { fallback = '—' } = {}) {
  * `1,8x` são leituras completamente diferentes do mesmo número.
  */
 export function formatRatio(value, { decimals = 1, fallback = '—' } = {}) {
+  if (estaAusente(value)) return fallback;
+
   const numero = Number(value);
   if (!Number.isFinite(numero)) return fallback;
 
@@ -77,6 +95,8 @@ export function formatRatio(value, { decimals = 1, fallback = '—' } = {}) {
  * tratar a célula como texto, e a coluna deixa de somar.
  */
 export function formatCsvPercent(value, { decimals = 1 } = {}) {
+  if (estaAusente(value)) return '';
+
   const numero = Number(value);
   if (!Number.isFinite(numero)) return '';
 

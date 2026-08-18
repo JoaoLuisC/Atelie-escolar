@@ -1,11 +1,18 @@
 # Revisão geral — Ateliê da Escola (2026-08-12)
 
+> ## 📅 Retrato histórico — 12/08/2026
+>
+> Levantamento anterior às rodadas de padronização de 13/08 e 18/08/2026.
+> **Vários achados foram corrigidos.** Este documento não se atualiza — ele é o
+> retrato do dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md) e
+> [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).
+
 > Revisão de arquitetura, segurança e processos feita sobre o commit `e085971`
 > (`fix(security): corrige IDOR por curinga ILIKE, vazamento de download_url e bypass de max_uses`).
 > Objetivo: responder à ressalva sobre o "monolito", listar o que ainda falta endurecer
 > depois das correções de Supabase, e apontar buracos de processo/deploy.
 >
-> Complementa (não substitui) `REVIEW-GERAL-2026-07-03.md` e `docs/REVIEW-AREA-9-TESTES.md`.
+> Complementa (não substitui) `REVIEW-GERAL-2026-07-03.md` e `AREA-09-testes-confiabilidade.md`.
 > Itens marcados **[confirmado no código]** foram verificados linha a linha nesta revisão;
 > os demais vêm de varredura com evidência em arquivo:linha.
 
@@ -315,7 +322,7 @@ webhook HMAC fail-closed; open redirect pós-OAuth fechado; templates de e-mail 
 | `admin-login.js` (TOTP/challenge/gate de role)                          | **zero**                                     |
 | `ensureAdminSession` (guard de 16+ rotas)                               | **zero** (só `verifySessionToken` é testado) |
 
-Há esqueletos AAA prontos (TEST-A1…A10) em `docs/REVIEW-AREA-9-TESTES.md:677+`. Prioridade:
+Há esqueletos AAA prontos (TEST-A1…A10) em `AREA-09-testes-confiabilidade.md:677+`. Prioridade:
 o caminho `approved` do webhook + idempotência de reentrega + uso único do download.
 
 ### Pendências operacionais já reconhecidas e ainda abertas

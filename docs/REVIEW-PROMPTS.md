@@ -393,7 +393,7 @@ ESCOPO:
 - api/subscribe.js, confirm-subscription.js, unsubscribe.js (double opt-in)
 - supabase/migrations/*.sql (retenção/purge, colunas de PII, anonimização)
 - src/pages/LegalPages.jsx (política de privacidade/termos)
-- docs/SECURITY.md, docs/ProjectDocs/08-SEGURANCA.md, 10-MARKETING-ANALYTICS.md,
+- docs/ProjectDocs/08-SEGURANCA.md, 10-MARKETING-ANALYTICS.md,
   11-REGRAS-NEGOCIO.md
 - lib/security-logger.js, lib/admin-audit.js (PII em logs)
 
@@ -515,7 +515,7 @@ ESCOPO (amostragem ampla + pontos estruturais):
   — coerência e itens obsoletos.
 
 O QUE AUDITAR:
-1. Aderência à arquitetura descrita em docs/ARCHITECTURE.md e 02-ARQUITETURA.md — o
+1. Aderência à arquitetura descrita em docs/ProjectDocs/02-ARQUITETURA.md — o
    código bate com a doc? Onde divergiu?
 2. Acoplamento/coesão entre camadas; vazamento de responsabilidade (ex.: lógica de
    negócio em handler vs lib).
@@ -604,7 +604,8 @@ ESCOPO:
   segredos) — completude e consistência das variáveis exigidas
 - .github/workflows/* (CI/CD, cron de e-mail, lighthouse) e .github/appmod/*
 - supabase/ (fluxo de migrations, ordem, idempotência; pg_cron precisa de extensão)
-- docs/12-DEPLOY-OPERACAO.md, docs/RELEASE-CHECKLIST.md, docs/SETUP.md,
+- docs/ProjectDocs/12-DEPLOY-OPERACAO.md, docs/RELEASE-CHECKLIST.md,
+  docs/ProjectDocs/03-SETUP.md,
   docs/SUPABASE-SETUP.md, scripts/*
 
 O QUE AUDITAR:

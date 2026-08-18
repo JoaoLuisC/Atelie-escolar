@@ -1,6 +1,13 @@
 # Resultados de Review — Ateliê da Escola
 
-> Documento **companheiro** de [`REVIEW-PROMPTS.md`](./REVIEW-PROMPTS.md). Cada área
+> ## 📅 Retrato histórico — 12/08/2026
+>
+> Levantamento anterior às rodadas de padronização de 13/08 e 18/08/2026.
+> **Vários achados foram corrigidos.** Este documento não se atualiza — ele é o
+> retrato do dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md) e
+> [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).
+
+> Documento **companheiro** de [`REVIEW-PROMPTS.md`](../REVIEW-PROMPTS.md). Cada área
 > (1 a 10) escreve **sua seção aqui** conforme roda o prompt correspondente. Ao
 > consolidar, **deduplique** achados que aparecerem em mais de uma área (a
 > sobreposição entre lentes é intencional).

@@ -756,21 +756,21 @@ segurança, não só de linhas.
 **Documentos em retirada** — 1.143 linhas marcadas "⚠️ Documento em retirada. Não edite
 este arquivo":
 
-| Arquivo                                    | Linhas | Canônico                                                          |
-| ------------------------------------------ | -----: | ----------------------------------------------------------------- |
-| [docs/ARCHITECTURE.md](../ARCHITECTURE.md) |     95 | [ProjectDocs/02-ARQUITETURA.md](../ProjectDocs/02-ARQUITETURA.md) |
-| [docs/FLOWS.md](../FLOWS.md)               |    258 | [ProjectDocs/05-FLUXOS.md](../ProjectDocs/05-FLUXOS.md)           |
-| [docs/SETUP.md](../SETUP.md)               |    404 | [ProjectDocs/03-SETUP.md](../ProjectDocs/03-SETUP.md)             |
-| [docs/SECURITY.md](../SECURITY.md)         |    386 | [ProjectDocs/08-SEGURANCA.md](../ProjectDocs/08-SEGURANCA.md)     |
+| Arquivo                          | Linhas | Canônico                                                          |
+| -------------------------------- | -----: | ----------------------------------------------------------------- |
+| `docs/ARCHITECTURE.md` (apagado) |     95 | [ProjectDocs/02-ARQUITETURA.md](../ProjectDocs/02-ARQUITETURA.md) |
+| `docs/FLOWS.md` (apagado)        |    258 | [ProjectDocs/05-FLUXOS.md](../ProjectDocs/05-FLUXOS.md)           |
+| `docs/SETUP.md` (apagado)        |    404 | [ProjectDocs/03-SETUP.md](../ProjectDocs/03-SETUP.md)             |
+| `docs/SECURITY.md` (apagado)     |    386 | [ProjectDocs/08-SEGURANCA.md](../ProjectDocs/08-SEGURANCA.md)     |
 
 A regra **F2** pede um documento por assunto; o aviso no topo foi o passo 1. O passo 2 é
 apagar — o git guarda o histórico, e um arquivo que ninguém pode corrigir só existe para
 alguém ler a versão errada. Ao apagar, atualizar as 4 linhas riscadas em
 [docs/README.md](../README.md) e a menção em [README.md](../../README.md).
 
-> ⚠️ **Antes de apagar `SETUP.md`:** o [README.md](../../README.md) e o
-> [docs/README.md](../README.md) ainda o citam em instruções de setup ("veja
-> docs/SETUP.md para cada chave"). Redirecionar essas menções no mesmo commit.
+> ✅ **Feito em 18/08/2026.** Os quatro foram apagados (1.159 linhas) e as menções redirecionadas
+> no mesmo commit — em `README.md`, `docs/README.md`, `docs/SUPABASE-SETUP.md`,
+> `docs/REVIEW-PROMPTS.md` e nos quatro de `docs/NextFeatures/`, que o item não listava.
 
 ---
 

@@ -1,6 +1,6 @@
 # Supabase Setup
 
-> **Doc legado.** A migracao para Supabase ja foi concluida: o Supabase e o banco atual da aplicacao (project ref em producao ja vinculado). Para o setup atualizado do projeto (variaveis de ambiente, chaves, buckets), use [docs/SETUP.md](./SETUP.md). Este roteiro permanece como referencia para recriar o banco do zero em um novo projeto Supabase. Ultima atualizacao: 2026-07-19.
+> **Doc legado.** A migracao para Supabase ja foi concluida: o Supabase e o banco atual da aplicacao (project ref em producao ja vinculado). Para o setup atualizado do projeto (variaveis de ambiente, chaves, buckets), use [docs/ProjectDocs/03-SETUP.md](./ProjectDocs/03-SETUP.md). Este roteiro permanece como referencia para recriar o banco do zero em um novo projeto Supabase. Ultima atualizacao: 2026-07-19.
 
 ## Setup com Supabase CLI (recomendado)
 
@@ -78,4 +78,4 @@ Frontend (Vite):
 
 ## Proximo passo depois do schema
 
-Os endpoints da API ja usam somente Supabase (produtos, pedidos, downloads e configuracoes do admin). Para rodar o projeto, siga [docs/SETUP.md](./SETUP.md).
+Os endpoints da API ja usam somente Supabase (produtos, pedidos, downloads e configuracoes do admin). Para rodar o projeto, siga [docs/ProjectDocs/03-SETUP.md](./ProjectDocs/03-SETUP.md).

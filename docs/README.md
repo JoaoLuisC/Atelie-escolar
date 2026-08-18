@@ -94,12 +94,13 @@ npm install
 
 # 2. Configurar variáveis de ambiente
 cp .env.example .env.local
-# Edite .env.local — veja docs/SETUP.md para cada chave
+# Edite .env.local — veja docs/ProjectDocs/03-SETUP.md para cada chave
 # Lembretes:
 # - Supabase URL + ANON + SERVICE_ROLE (obrigatório)
 # - Mercado Pago TEST tokens (pra dev) ou APP_USR (prod)
 # - SMTP do Resend (email de pedido, newsletter e e-mails do cron; o reset de senha
-#   sai pelo SMTP custom do Supabase Auth, configurado no dashboard — ver docs/SETUP.md)
+#   sai pelo SMTP custom do Supabase Auth, configurado no dashboard —
+#   ver docs/ProjectDocs/03-SETUP.md)
 # - Segredos: ADMIN_SESSION_SECRET, CUSTOMER_SESSION_SECRET, WEBHOOK_SECRET, DOWNLOAD_TOKEN_SECRET
 #   (gere cada um com `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`)
 
@@ -149,31 +150,32 @@ npm run check            # test + build (CI)
 
 ### Técnico
 
-| Documento                                          | Sobre                                                                                                                                                                                    |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [adr/](./adr/README.md)                            | **Decisões estruturais** (ADRs) — por que CommonJS no backend e ESM no frontend, por que um handler serve Vercel e Express, por que a reconciliação de pagamento é módulo único          |
-| [ProjectDocs/](./ProjectDocs/README.md)            | Suíte consolidada em 13 volumes (visão geral, arquitetura, setup, banco, fluxos, admin, segurança, API, marketing, deploy, roadmap) — versão que está substituindo os MDs avulsos abaixo |
-| ~~[ARCHITECTURE.md](./ARCHITECTURE.md)~~           | **Em retirada** (regra F2) → [ProjectDocs/02-ARQUITETURA.md](./ProjectDocs/02-ARQUITETURA.md)                                                                                            |
-| ~~[FLOWS.md](./FLOWS.md)~~                         | **Em retirada** (regra F2) → [ProjectDocs/05-FLUXOS.md](./ProjectDocs/05-FLUXOS.md)                                                                                                      |
-| ~~[SETUP.md](./SETUP.md)~~                         | **Em retirada** (regra F2) → [ProjectDocs/03-SETUP.md](./ProjectDocs/03-SETUP.md)                                                                                                        |
-| ~~[SECURITY.md](./SECURITY.md)~~                   | **Em retirada** (regra F2) → [ProjectDocs/08-SEGURANCA.md](./ProjectDocs/08-SEGURANCA.md)                                                                                                |
-| [SUPABASE-SETUP.md](./SUPABASE-SETUP.md)           | Setup específico do Supabase (legado)                                                                                                                                                    |
-| [SECURITY-ADVISORIES.md](./SECURITY-ADVISORIES.md) | Análise das advisories de dependência: o que é alcançável, o que não é, e por quê                                                                                                        |
-| [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)     | Pré-deploy                                                                                                                                                                               |
-| [SPRING-SECURITY-BFF.md](./SPRING-SECURITY-BFF.md) | Referência de port para Spring Boot do BFF de auth (não usado em produção)                                                                                                               |
-| [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md)           | Prompts de review profundo por área                                                                                                                                                      |
-| [REVIEW-RESULTS.md](./REVIEW-RESULTS.md)           | Resultados dos reviews (área 9 em [REVIEW-AREA-9-TESTES.md](./REVIEW-AREA-9-TESTES.md))                                                                                                  |
+| Documento                                          | Sobre                                                                                                                                                                                                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [adr/](./adr/README.md)                            | **Decisões estruturais** (ADRs) — por que CommonJS no backend e ESM no frontend, por que um handler serve Vercel e Express, por que a reconciliação de pagamento é módulo único                                                             |
+| [ProjectDocs/](./ProjectDocs/README.md)            | Suíte consolidada em 13 volumes (visão geral, arquitetura, setup, banco, fluxos, admin, segurança, API, marketing, deploy, roadmap) — **a versão canônica**; os quatro MDs avulsos que a duplicavam foram apagados em 18/08/2026 (regra F2) |
+| [SUPABASE-SETUP.md](./SUPABASE-SETUP.md)           | Setup específico do Supabase (legado)                                                                                                                                                                                                       |
+| [SECURITY-ADVISORIES.md](./SECURITY-ADVISORIES.md) | Análise das advisories de dependência: o que é alcançável, o que não é, e por quê                                                                                                                                                           |
+| [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)     | Pré-deploy                                                                                                                                                                                                                                  |
+| [SPRING-SECURITY-BFF.md](./SPRING-SECURITY-BFF.md) | Referência de port para Spring Boot do BFF de auth (não usado em produção)                                                                                                                                                                  |
+| [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md)           | Prompts de review profundo por área                                                                                                                                                                                                         |
 
 ### Revisões pontuais (`reviews/`)
 
 Cada arquivo é um retrato datado, amarrado a um commit. **Não são documentos vivos** — não se editam para refletir o estado atual; quando o achado é corrigido, o commit é a prova e o item vira ✅ na tabela do próprio documento.
+
+**Uma casa só, uma convenção só** (item `P6.2`, regra F2). Todo relatório mora aqui, e a área vai com zero à esquerda (`AREA-08`, `AREA-09`). Antes havia duas localizações e duas formas de numerar (`AREA-9` na raiz de `docs/`, `AREA-08` na subpasta). Na raiz de `docs/` fica apenas o [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md), que é **ferramenta** e não relatório.
+
+Os relatórios anteriores a 13/08/2026 abrem com um cabeçalho de **📅 retrato histórico** (item `P6.1`): sem ele, um documento de 12/08 continuava sendo lido como estado atual — e o de testes chegava a afirmar que "nenhum workflow de CI executa `npm test`", falso desde o commit `4892de9`.
 
 | Documento                                                                                    | Sobre                                                                                                                                                                                                                                                                                                                                                                                            |
 | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [OTIMIZACAO-CODIGO-2026-08-18.md](./reviews/OTIMIZACAO-CODIGO-2026-08-18.md)                 | **Correções de otimização** — caminho crítico do bundle (−35% medido), tetos de escala do backend, duplicação estrutural e código sem consumidor. Traz a correção pronta e a forma de verificar cada uma. Complementa o [PADRONIZACAO-CORRECOES.md](./PADRONIZACAO-CORRECOES.md): **desempenho**, não conformidade com as regras — a fronteira entre os dois está declarada no topo do documento |
 | [REVIEW-GERAL-2026-08-12.md](./reviews/REVIEW-GERAL-2026-08-12.md)                           | Arquitetura, segurança e processos — a revisão que originou os P0/P1 e as 25 regras                                                                                                                                                                                                                                                                                                              |
 | [REVIEW-GERAL-2026-07-03.md](./reviews/REVIEW-GERAL-2026-07-03.md)                           | Revisão geral anterior                                                                                                                                                                                                                                                                                                                                                                           |
-| [AREA-08-qualidade-codigo-arquitetura.md](./reviews/AREA-08-qualidade-codigo-arquitetura.md) | Área 8 do [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md)                                                                                                                                                                                                                                                                                                                                               |
+| [AREA-09-testes-confiabilidade.md](./reviews/AREA-09-testes-confiabilidade.md)               | Área 9 do [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md) — testes e confiabilidade                                                                                                                                                                                                                                                                                                                     |
+| [AREA-08-qualidade-codigo-arquitetura.md](./reviews/AREA-08-qualidade-codigo-arquitetura.md) | Área 8 do [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md) — qualidade de código e arquitetura                                                                                                                                                                                                                                                                                                           |
+| [REVIEW-RESULTS-2026-08-12.md](./reviews/REVIEW-RESULTS-2026-08-12.md)                       | Consolidação dos resultados por área                                                                                                                                                                                                                                                                                                                                                             |
 
 ---
 
