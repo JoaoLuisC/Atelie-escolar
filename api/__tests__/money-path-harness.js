@@ -301,6 +301,47 @@ export function createSupabaseStore(initial = {}) {
     return incoming;
   });
 
+  /**
+   * `upsert` com a semântica REAL do PostgREST, incluindo a diferença entre
+   * `merge-duplicates` e `ignore-duplicates` (§2.3.a).
+   *
+   * A distinção não é cosmética em `download_tokens`: com `merge`, um segundo
+   * verify-payment reescreveria o `token` de um link já enviado por e-mail E
+   * devolveria `used: false` para um token já consumido, reabrindo o produto
+   * pago. É por isso que o harness modela os dois — um stub que sempre insere
+   * deixaria essa regressão passar sem barulho.
+   */
+  const upsertIntoTable = vi.fn(async (name, rows, onConflict, options = {}) => {
+    const resolution = options.resolution || 'merge-duplicates';
+    const chaves = String(onConflict || '')
+      .split(',')
+      .map((coluna) => coluna.trim())
+      .filter(Boolean);
+    const incoming = (Array.isArray(rows) ? rows : [rows]).map((row) => ({ ...row }));
+    const persistidas = [];
+
+    for (const row of incoming) {
+      const existente = chaves.length
+        ? table(name).find((linha) =>
+            chaves.every((coluna) => String(linha[coluna]) === String(row[coluna])),
+          )
+        : undefined;
+
+      if (!existente) {
+        table(name).push(row);
+        persistidas.push({ ...row });
+        continue;
+      }
+
+      if (resolution === 'merge-duplicates') {
+        Object.assign(existente, row);
+      }
+      persistidas.push({ ...existente });
+    }
+
+    return persistidas;
+  });
+
   const updateTable = vi.fn(async (name, filters, payload) => {
     const affected = table(name).filter((row) => matchUpdateFilters(row, filters));
     for (const row of affected) Object.assign(row, payload);
@@ -311,8 +352,14 @@ export function createSupabaseStore(initial = {}) {
     state,
     // Formato de `serviceRoleHelpers` — é o namespace que os handlers do
     // caminho do dinheiro importam (bypassa RLS por desenho).
-    serviceRoleHelpers: { getTableRow, listTableRows, insertIntoTable, updateTable },
-    spies: { getTableRow, listTableRows, insertIntoTable, updateTable },
+    serviceRoleHelpers: {
+      getTableRow,
+      listTableRows,
+      insertIntoTable,
+      updateTable,
+      upsertIntoTable,
+    },
+    spies: { getTableRow, listTableRows, insertIntoTable, updateTable, upsertIntoTable },
     /** Linhas de uma tabela, cópia — para afirmar sobre o estado final. */
     rows: (name) => table(name).map((row) => ({ ...row })),
     /** Chamadas de um spy restritas a uma tabela. */

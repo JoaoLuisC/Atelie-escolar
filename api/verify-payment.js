@@ -3,7 +3,7 @@ const mercadopago = require('mercadopago');
 const { initializeMercadoPago } = require('../lib/mercadopago-config');
 const {
   getSupabaseConfig,
-  serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable },
+  serviceRoleHelpers: { getTableRow, listTableRows, updateTable, upsertIntoTable },
 } = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
@@ -145,29 +145,49 @@ async function markOrderApproved(order, paymentId) {
   );
 }
 
+/**
+ * Cria os tokens de download do pedido — EM LOTE (§2.3.a).
+ *
+ * Antes era um `await insertIntoTable(...)` POR ITEM, em série, dentro da
+ * confirmação de pagamento: o momento em que a cliente está olhando para a
+ * tela esperando. Um pedido de 6 itens custava 6 round-trips ao PostgREST.
+ *
+ * ⚠️ `ignore-duplicates`, e NÃO o `merge-duplicates` padrão. Este é o ponto
+ * delicado do item, e ele tem duas consequências, não uma:
+ *
+ *   1. Se o webhook já criou a linha, `merge` reescreveria o `token` — e um
+ *      link de download JÁ ENVIADO POR E-MAIL deixaria de funcionar.
+ *   2. Pior: `merge` também reescreveria `used: false` sobre um token JÁ
+ *      CONSUMIDO, transformando o download de uso único em reutilizável. Uma
+ *      segunda chamada de verify-payment reabriria o produto pago.
+ *
+ * `ignore-duplicates` mantém a linha existente intacta — que é exatamente o
+ * que o `try/catch` por item fazia, só que numa chamada só. A corrida com o
+ * webhook continua resolvida pela `UNIQUE(order_id, product_id)` da migration
+ * `20260701000001_phase5_payment_hardening`.
+ */
 async function createTokensForOrder(order, items) {
-  for (const item of items) {
-    const token = crypto.randomBytes(32).toString('hex');
-    try {
-      await insertIntoTable('download_tokens', {
-        token,
+  if (items.length) {
+    const agora = Date.now();
+    await upsertIntoTable(
+      'download_tokens',
+      items.map((item) => ({
+        token: crypto.randomBytes(32).toString('hex'),
         order_id: order.id,
         product_id: item.product_id,
         product_name: item.product_name,
         used: false,
-        expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
-        created_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      // 409 / 23505 = corrida com o webhook (ou outra chamada de verify): a
-      // constraint UNIQUE(order_id, product_id) garante 1 token por par.
-      if (err?.statusCode !== 409 && err?.details?.code !== '23505') {
-        throw err;
-      }
-    }
+        expires_at: new Date(agora + 72 * 60 * 60 * 1000).toISOString(),
+        created_at: new Date(agora).toISOString(),
+      })),
+      'order_id,product_id',
+      { resolution: 'ignore-duplicates' },
+    );
   }
 
-  // Devolve o conjunto canônico efetivamente persistido (cobre a corrida).
+  // Devolve o conjunto canônico efetivamente persistido (cobre a corrida): com
+  // `ignore-duplicates` o token que vale pode ser o do webhook, não o que
+  // acabamos de gerar.
   return mapTokenRows(await loadDownloadTokens(order.id));
 }
 

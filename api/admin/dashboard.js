@@ -3,10 +3,78 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
 } = require('../../lib/supabase');
-const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  guardMethod,
+  ok,
+  setAdminCorsHeaders,
+  setCachePolicy,
+} = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-dashboard');
+
+// ════════════════════════════════════════════════════════════════════
+// TETO EXPLÍCITO E TRUNCAMENTO VISÍVEL — §2.1 do doc de otimização.
+//
+// ── O QUE ESTAVA ERRADO, E POR QUE É A PIOR CLASSE DE BUG DAQUI ─────
+// As sete chamadas abaixo não passavam `limit`. `listTableRows` só emite
+// `limit` se o chamador o passar, então quem decidia o corte era o
+// `db-max-rows` do PostgREST — e o corte acontece SEM ERRO. O faturamento
+// apareceria menor do que é, e nada no sistema avisaria. Um número de dinheiro
+// errado que não levanta exceção é o pior tipo de defeito que este projeto
+// pode ter.
+//
+// Agora todo teto é explícito e, quando encostado, vira sinal em DOIS lugares:
+// `log.warn('possivel_truncamento')` para a operação, e o campo `truncated` na
+// resposta, para a tela. Só o log seria insuficiente — a dona da loja não lê
+// log da Vercel, e é ela quem olha o número.
+//
+// ── O QUE NÃO FOI FEITO, E POR QUÊ ──────────────────────────────────
+// A janela de data prevista no item NÃO entrou. Ela mudaria, em silêncio,
+// números que a tela exibe hoje como ALL-TIME: `revenueTotal` do resumo,
+// `deriveProductPerformance`/`deriveAbcCurve` (receita por produto desde
+// sempre) e a contagem de downloads por produto. Trocar truncamento silencioso
+// por janela silenciosa é o MESMO defeito com outro nome.
+//
+// O caminho certo continua sendo a agregação server-side: só lá dá para
+// devolver "total desde sempre" e "últimos 90 dias" como campos distintos, em
+// vez de derivar os dois do mesmo array truncado. Registrado como pendência.
+// ════════════════════════════════════════════════════════════════════
+
+// Tetos dimensionados para caber com folga na loja de hoje e ainda assim ter
+// um teto: `orders` e `order_items` crescem com cada venda, `download_logs`
+// com cada download — é a que mais cresce.
+const LIMITS = Object.freeze({
+  products: 2000,
+  categories: 500,
+  profiles: 20000,
+  orders: 20000,
+  order_items: 50000,
+  download_logs: 50000,
+  settings: 200,
+});
+
+/**
+ * `listTableRows` com teto explícito e detecção de truncamento.
+ *
+ * `rows.length === limit` não PROVA truncamento (a tabela pode ter exatamente
+ * aquele número de linhas), mas é o único sinal disponível sem uma segunda
+ * consulta de contagem — e um falso positivo aqui custa um aviso, enquanto um
+ * falso negativo custa um número de dinheiro errado na tela.
+ */
+async function listCapped(table, options, truncated) {
+  const limit = LIMITS[table];
+  const rows = await listTableRows(table, { ...options, limit });
+
+  if (rows.length === limit) {
+    log.warn('possivel_truncamento', { table, limit });
+    truncated.push(table);
+  }
+
+  return rows;
+}
 
 function safeJsonParse(value, fallback) {
   if (value === null || value === undefined) {
@@ -63,7 +131,7 @@ function buildSummary(payload) {
   };
 }
 
-async function loadDashboard() {
+async function loadDashboard(truncated) {
   const [
     productsRows,
     categoriesRows,
@@ -73,41 +141,69 @@ async function loadDashboard() {
     downloadLogsRows,
     settingsRows,
   ] = await Promise.all([
-    listTableRows('products', {
-      select:
-        'id,slug,name,description,price,image_url,download_url,category_id,active,featured,created_at,updated_at',
-      orderBy: 'created_at',
-      ascending: false,
-    }),
-    listTableRows('categories', {
-      select: 'id,name,slug,color,active,featured,badge_label,sort_order,created_at',
-      orderBy: 'name',
-      ascending: true,
-    }),
-    listTableRows('profiles', {
-      select: 'id,email,display_name,role,provider,created_at,updated_at',
-      orderBy: 'created_at',
-      ascending: false,
-    }),
-    listTableRows('orders', {
-      select:
-        'id,order_code,customer_name,customer_email,total_amount,status,payment_status,created_at,completed_at',
-      orderBy: 'created_at',
-      ascending: false,
-    }),
-    listTableRows('order_items', {
-      select: 'order_id,product_id,product_name,unit_price,quantity',
-      orderBy: 'order_id',
-      ascending: false,
-    }),
-    listTableRows('download_logs', {
-      select: 'order_id,product_id',
-      orderBy: 'downloaded_at',
-      ascending: false,
-    }),
-    listTableRows('settings', {
-      select: 'setting_key,setting_value',
-    }),
+    listCapped(
+      'products',
+      {
+        select:
+          'id,slug,name,description,price,image_url,download_url,category_id,active,featured,created_at,updated_at',
+        orderBy: 'created_at',
+        ascending: false,
+      },
+      truncated,
+    ),
+    listCapped(
+      'categories',
+      {
+        select: 'id,name,slug,color,active,featured,badge_label,sort_order,created_at',
+        orderBy: 'name',
+        ascending: true,
+      },
+      truncated,
+    ),
+    listCapped(
+      'profiles',
+      {
+        select: 'id,email,display_name,role,provider,created_at,updated_at',
+        orderBy: 'created_at',
+        ascending: false,
+      },
+      truncated,
+    ),
+    listCapped(
+      'orders',
+      {
+        select:
+          'id,order_code,customer_name,customer_email,total_amount,status,payment_status,created_at,completed_at',
+        orderBy: 'created_at',
+        ascending: false,
+      },
+      truncated,
+    ),
+    listCapped(
+      'order_items',
+      {
+        select: 'order_id,product_id,product_name,unit_price,quantity',
+        orderBy: 'order_id',
+        ascending: false,
+      },
+      truncated,
+    ),
+    listCapped(
+      'download_logs',
+      {
+        select: 'order_id,product_id',
+        orderBy: 'downloaded_at',
+        ascending: false,
+      },
+      truncated,
+    ),
+    listCapped(
+      'settings',
+      {
+        select: 'setting_key,setting_value',
+      },
+      truncated,
+    ),
   ]);
 
   const categoryById = new Map(
@@ -234,13 +330,21 @@ module.exports = async function adminDashboardHandler(req, res) {
       });
     }
 
-    const payload = await loadDashboard();
+    const truncated = [];
+    const payload = await loadDashboard(truncated);
     const summary = buildSummary(payload);
 
+    // Regra E4: relatório administrativo é resposta por usuário, nunca em
+    // cache compartilhado.
+    setCachePolicy(res, 'adminReport');
+
     return ok(res, {
-      success: true,
       ...payload,
       summary,
+      // Vazio no caso normal. Não-vazio significa que ALGUMA tabela encostou no
+      // teto e os números desta resposta podem estar menores do que a verdade —
+      // é o que transforma o corte silencioso em informação para quem lê a tela.
+      truncated,
     });
   } catch (error) {
     log.error('handler_failed', { reason: error?.message || String(error) });
@@ -251,3 +355,7 @@ module.exports = async function adminDashboardHandler(req, res) {
     });
   }
 };
+
+// Exposto para o teste conferir que TODA consulta leva teto, e qual — sem
+// duplicar os números numa segunda lista que divergiria na primeira mudança.
+module.exports.LIMITS = LIMITS;
