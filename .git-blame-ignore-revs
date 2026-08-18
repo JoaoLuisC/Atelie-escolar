@@ -24,3 +24,9 @@
 # Formatação inicial do repositório com Prettier (regra D1).
 # Preencha com o hash do commit de formatação assim que ele existir:
 #   git rev-parse HEAD >> .git-blame-ignore-revs
+
+# style(P3.4): normalização dos 36 markdown e json com Prettier (18/08/2026).
+# Só formatação — conferido comparando o fluxo de palavras de cada arquivo
+# antes e depois. Sem isto, este commit apareceria como autor de quase toda
+# linha de documentação do projeto.
+d57f9c86dc9739860b85ae03ba3441b08003ac4d

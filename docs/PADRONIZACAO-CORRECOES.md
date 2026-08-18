@@ -681,7 +681,7 @@ descrever o repositório que existe.
 | `P3.1` rate limit nos 5 públicos        | E1       | **P0**     | ⬜ aberto  |
 | `P3.2` decidir CORS                     | A3       | P2         | ⬜ aberto  |
 | `P3.3` comentário do CI                 | D5       | P2         | ⬜ aberto  |
-| `P3.4` markdown fora do gate            | D1       | P2         | ⬜ aberto  |
+| `P3.4` markdown fora do gate            | D1       | P2         | ✅ fechado |
 | `P4.1` suítes de `lib/`                 | D3       | P1         | ⬜ aberto  |
 | `P4.2` teste de componente e serviço    | D3 / D5  | P1         | ⬜ aberto  |
 | `P5.1` serviços que faltam              | C2       | P1         | ⬜ aberto  |
