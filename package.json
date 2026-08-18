@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:web": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint . --max-warnings=19",
+    "lint": "eslint . --max-warnings=17",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"{src,api,lib,routes,middleware,services,utils,validation,scripts}/**/*.{js,jsx,css}\" \"*.config.js\" server.js \"**/*.{md,json}\"",
     "format:check": "prettier --check \"{src,api,lib,routes,middleware,services,utils,validation,scripts}/**/*.{js,jsx,css}\" \"*.config.js\" server.js \"**/*.{md,json}\"",

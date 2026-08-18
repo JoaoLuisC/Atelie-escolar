@@ -20,19 +20,26 @@ function Container({ children }) {
 // ════════════════════════════════════════════════════════════════════
 // /confirmar-inscricao?token=...
 // ════════════════════════════════════════════════════════════════════
+const LINK_INVALIDO = 'Link inválido. Volte ao seu email e clique no botão de confirmação.';
+
 export function ConfirmSubscriptionPage() {
   const [params] = useSearchParams();
-  const [status, setStatus] = useState({ state: 'loading', message: 'Confirmando sua inscrição…' });
+  const token = params.get('token') || '';
+
+  // ── Inicializador lazy em vez de setState no efeito (regra D5) ─────
+  // "Sem token" é conhecido no PRIMEIRO render — está na URL, não vem de
+  // rede. A versão anterior pintava "Confirmando sua inscrição…" e só então o
+  // efeito trocava para o erro: quem clicava num link truncado via, por um
+  // quadro, a promessa de que algo estava sendo confirmado. Agora o estado
+  // certo já nasce certo, e o efeito só faz o que É assíncrono.
+  const [status, setStatus] = useState(() =>
+    token
+      ? { state: 'loading', message: 'Confirmando sua inscrição…' }
+      : { state: 'error', message: LINK_INVALIDO },
+  );
 
   useEffect(() => {
-    const token = params.get('token') || '';
-    if (!token) {
-      setStatus({
-        state: 'error',
-        message: 'Link inválido. Volte ao seu email e clique no botão de confirmação.',
-      });
-      return;
-    }
+    if (!token) return;
 
     (async () => {
       try {
@@ -62,7 +69,7 @@ export function ConfirmSubscriptionPage() {
         setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });
       }
     })();
-  }, [params]);
+  }, [token]);
 
   const isSuccess = status.state === 'success';
   const isError = status.state === 'error';

@@ -158,20 +158,23 @@ export default defineConfig({
       // logger, coupons, abc-classification, error-codes e o invariante de
       // dinheiro do checkout): 274 → 368 testes.
       //
-      // REMEDIDO em 18/08/2026, depois de `test.projects` separar node de jsdom
-      // (item P0.3). O número CAIU ~1pp — com `environment: 'node'`, os ramos
-      // que só existem sob DOM deixam de ser executados pelas suítes de api/ e
-      // lib/. Duas execuções seguidas, para mostrar a oscilação:
+      // Remedido em 18/08/2026 depois de `test.projects` separar node de jsdom
+      // (item P0.3): o número caiu ~1pp, porque com `environment: 'node'` os
+      // ramos que só existem sob DOM deixam de ser executados pelas suítes de
+      // api/ e lib/. Os pisos não foram baixados então — baixar piso para
+      // acomodar queda de medição é o que transforma gate em enfeite.
       //
-      //   medida         run 1    run 2     piso
-      //   statements     26,60%   26,44%     25
-      //   branches       21,47%   21,37%     19
-      //   functions      23,06%   22,47%     21
-      //   lines          27,23%   27,11%     25
+      // RECALIBRADO em 18/08/2026 com as levas de teste dos itens P4.1 e P4.2
+      // (387 → 642 testes: as 11 suítes de lib/ que faltavam, os serviços do
+      // front, o cliente HTTP e as páginas). Duas execuções seguidas deram o
+      // MESMO número, então a oscilação que motivava a folga de 2pp sumiu
+      // junto — a suíte deixou de depender de ordem de execução e de rede:
       //
-      // Os pisos NÃO foram baixados: a folga menor (1,3–1,5pp) ainda é várias
-      // vezes maior que a oscilação medida (0,1–0,7pp), e baixar piso para
-      // acomodar queda de medição é justamente o que transforma gate em enfeite.
+      //   medida         medido     piso    folga
+      //   statements     41,46%      39      2,4pp
+      //   branches       31,75%      29      2,7pp
+      //   functions      34,63%      32      2,6pp
+      //   lines          42,87%      40      2,8pp
       //
       // A intenção é TRAVAR REGRESSÃO, não forçar salto: quem apagar um teste
       // ou acrescentar um módulo grande sem cobertura derruba o CI, mas
@@ -185,10 +188,10 @@ export default defineConfig({
       // intermitente — que é a forma mais rápida de ensinar o time a ignorar
       // o gate.
       thresholds: {
-        statements: 25,
-        branches: 19,
-        functions: 21,
-        lines: 25,
+        statements: 39,
+        branches: 29,
+        functions: 32,
+        lines: 40,
       },
       // ─────────────────────────────────────────────────────────────
     },

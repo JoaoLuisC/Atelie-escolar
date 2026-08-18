@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { SocialProofStrip } from '../components/SocialProofStrip';
@@ -107,17 +107,35 @@ const TESTIMONIALS = [
 // Respeita prefers-reduced-motion: desliga animações infinitas (float) que só
 // podem ser controladas via JS por usarem `style` inline. O marquee usa
 // `motion-reduce:animate-none` diretamente na classe (Tailwind).
+//
+// ── POR QUE `useSyncExternalStore` E NÃO useState + useEffect (regra D5) ──
+// A versão anterior fazia `setReduced(mq.matches)` DENTRO do efeito, e era o
+// exemplar do aviso `react-hooks/set-state-in-effect`: o componente pintava uma
+// vez com `false` e imediatamente repintava com o valor real. Além do render em
+// cascata, havia um erro visível — quem tem "reduzir movimento" ligado via a
+// animação rodar no primeiro quadro.
+//
+// `useSyncExternalStore` é exatamente a API para ler estado que mora FORA do
+// React: o valor certo já sai no primeiro render, sem efeito e sem repintura.
+// O `getServerSnapshot` (terceiro argumento) devolve `false` porque no servidor
+// não há `matchMedia` — e "não sei" tem de significar "não reduza", que é o
+// padrão do CSS.
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+function subscribeToReducedMotion(onChange) {
+  const mq = globalThis.matchMedia?.(REDUCED_MOTION_QUERY);
+  if (!mq?.addEventListener) return () => {};
+
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+}
+
+function getReducedMotionSnapshot() {
+  return globalThis.matchMedia?.(REDUCED_MOTION_QUERY)?.matches ?? false;
+}
+
 function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
-    if (!mq) return undefined;
-    setReduced(mq.matches);
-    const handler = (event) => setReduced(event.matches);
-    mq.addEventListener?.('change', handler);
-    return () => mq.removeEventListener?.('change', handler);
-  }, []);
-  return reduced;
+  return useSyncExternalStore(subscribeToReducedMotion, getReducedMotionSnapshot, () => false);
 }
 
 function Marquee({ items, dark = false, reverse = false }) {
