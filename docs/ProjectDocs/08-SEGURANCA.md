@@ -8,15 +8,15 @@
 
 ## 1. Modelo de ameaça
 
-| Ator | Acesso esperado | Como bloqueamos |
-|---|---|---|
-| Visitante anônimo | Catálogo público, criar pedido | RLS `public read` em `categories`/`products` com `active=true` |
-| Cliente logado | Próprios pedidos, downloads dos próprios produtos | RLS por `auth.uid()` em `orders`, `user_products` |
-| Admin | Tudo via painel `/admin` | Cookie `admin_session` + `service_role` no backend |
-| Atacante com anon key | **NADA além do catálogo público** | RLS bloqueia; sem policy = sem acesso |
-| Atacante com SERVICE_ROLE_KEY vazado | **Acesso total ao banco** | NUNCA expor no front; rotação trimestral; alerta em vazamento |
-| Atacante com webhook spoofado | — | HMAC-SHA256 valida assinatura; falha = 401 + log |
-| Atacante enumerando `order_code` | — | 128 bits de entropia + email obrigatório + rate-limit + resposta uniforme |
+| Ator                                 | Acesso esperado                                   | Como bloqueamos                                                           |
+| ------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------- |
+| Visitante anônimo                    | Catálogo público, criar pedido                    | RLS `public read` em `categories`/`products` com `active=true`            |
+| Cliente logado                       | Próprios pedidos, downloads dos próprios produtos | RLS por `auth.uid()` em `orders`, `user_products`                         |
+| Admin                                | Tudo via painel `/admin`                          | Cookie `admin_session` + `service_role` no backend                        |
+| Atacante com anon key                | **NADA além do catálogo público**                 | RLS bloqueia; sem policy = sem acesso                                     |
+| Atacante com SERVICE_ROLE_KEY vazado | **Acesso total ao banco**                         | NUNCA expor no front; rotação trimestral; alerta em vazamento             |
+| Atacante com webhook spoofado        | —                                                 | HMAC-SHA256 valida assinatura; falha = 401 + log                          |
+| Atacante enumerando `order_code`     | —                                                 | 128 bits de entropia + email obrigatório + rate-limit + resposta uniforme |
 
 ---
 
@@ -33,19 +33,19 @@ Configurado em `lib/security-headers.js` + `server.js`:
 
 ### 2.2 Rate limits específicos
 
-| Endpoint | Limite | Justificativa |
-|---|---|---|
-| Global | 250 req / 15 min | Throttle geral por IP |
-| `/auth/*` | 30 req / 15 min | Brute force em login |
-| `/auth/customer/login` | 5 / 10 min | Brute force específico cliente |
-| `/admin-login` | 5 / 10 min (`skipSuccessfulRequests`) | Brute force admin |
-| `/verify-payment` | 60 / min | Anti enumeração de `order_code` |
-| `/track-event` | 120 / min | Permite uso normal sem permitir flood |
-| `/validate-coupon` | 20 / min | Anti enumeração de códigos |
-| `/abandoned-cart` | 30 / min | Chamado a cada keystroke debounced |
-| `/subscribe` | 5 / min | Anti enumeração de e-mails |
-| `/unsubscribe` | 20 / min | Uso normal do 1-click |
-| `/me-delete-account` | 5 / min | Ação rara e sensível |
+| Endpoint               | Limite                                | Justificativa                         |
+| ---------------------- | ------------------------------------- | ------------------------------------- |
+| Global                 | 250 req / 15 min                      | Throttle geral por IP                 |
+| `/auth/*`              | 30 req / 15 min                       | Brute force em login                  |
+| `/auth/customer/login` | 5 / 10 min                            | Brute force específico cliente        |
+| `/admin-login`         | 5 / 10 min (`skipSuccessfulRequests`) | Brute force admin                     |
+| `/verify-payment`      | 60 / min                              | Anti enumeração de `order_code`       |
+| `/track-event`         | 120 / min                             | Permite uso normal sem permitir flood |
+| `/validate-coupon`     | 20 / min                              | Anti enumeração de códigos            |
+| `/abandoned-cart`      | 30 / min                              | Chamado a cada keystroke debounced    |
+| `/subscribe`           | 5 / min                               | Anti enumeração de e-mails            |
+| `/unsubscribe`         | 20 / min                              | Uso normal do 1-click                 |
+| `/me-delete-account`   | 5 / min                               | Ação rara e sensível                  |
 
 > ⚠️ Os limiters rodam no Express (`server.js` + `routes/`), ou seja, **em dev**. Na Vercel cada função serverless é isolada e o `express-rate-limit` em memória não vale entre invocações — rate limit por endpoint em produção depende de store compartilhado (KV), pendência **API-03**. `/cron-email-jobs` não tem limiter (autentica por `CRON_SECRET` timing-safe).
 
@@ -63,24 +63,24 @@ Configurado em `lib/security-headers.js` + `server.js`:
 
 17 tabelas, todas com RLS habilitado (baseline versionado na migration `20260702000000_phase6_db_rls_hardening.sql`, espelhado em `supabase/security-hardening.sql`). Resumo (detalhes em [04-BANCO-DE-DADOS §RLS](./04-BANCO-DE-DADOS.md)):
 
-| Tabela | Quem lê | Quem escreve |
-|---|---|---|
-| `categories` | anon + auth (active=true) | service_role |
-| `products` | anon + auth (active=true) | service_role |
-| `orders` | auth (próprios: `customer_id` ou `customer_email` do JWT) | service_role |
-| `order_items` | auth (via parent order) | service_role |
-| `profiles` | auth (próprio) | auth (linha própria; `id`/`email`/`role`/`provider` travados por trigger) + service_role |
-| `user_products` | auth (próprios) | service_role |
-| `download_tokens` | — | service_role |
-| `download_logs` | — | service_role |
-| `security_events` | — | service_role |
-| `settings` | — | service_role |
-| `coupons` | — | service_role |
-| `abandoned_carts` | — | service_role |
-| `email_subscribers` / `email_sent_log` | — | service_role |
-| `admin_audit_log` | — | service_role, só INSERT (append-only: UPDATE/DELETE bloqueados até para service_role) |
-| `analytics_events` | — | anon + auth (INSERT com whitelist de eventos, sem `order_id`/`customer_email`) |
-| `page_views` | — | service_role (INSERT público removido — RLS-04) |
+| Tabela                                 | Quem lê                                                   | Quem escreve                                                                             |
+| -------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `categories`                           | anon + auth (active=true)                                 | service_role                                                                             |
+| `products`                             | anon + auth (active=true)                                 | service_role                                                                             |
+| `orders`                               | auth (próprios: `customer_id` ou `customer_email` do JWT) | service_role                                                                             |
+| `order_items`                          | auth (via parent order)                                   | service_role                                                                             |
+| `profiles`                             | auth (próprio)                                            | auth (linha própria; `id`/`email`/`role`/`provider` travados por trigger) + service_role |
+| `user_products`                        | auth (próprios)                                           | service_role                                                                             |
+| `download_tokens`                      | —                                                         | service_role                                                                             |
+| `download_logs`                        | —                                                         | service_role                                                                             |
+| `security_events`                      | —                                                         | service_role                                                                             |
+| `settings`                             | —                                                         | service_role                                                                             |
+| `coupons`                              | —                                                         | service_role                                                                             |
+| `abandoned_carts`                      | —                                                         | service_role                                                                             |
+| `email_subscribers` / `email_sent_log` | —                                                         | service_role                                                                             |
+| `admin_audit_log`                      | —                                                         | service_role, só INSERT (append-only: UPDATE/DELETE bloqueados até para service_role)    |
+| `analytics_events`                     | —                                                         | anon + auth (INSERT com whitelist de eventos, sem `order_id`/`customer_email`)           |
+| `page_views`                           | —                                                         | service_role (INSERT público removido — RLS-04)                                          |
 
 **Princípio**: `service_role` bypassa RLS, então o **backend pode tudo**. Browser usando anon key fica restrito ao que está nas policies.
 
@@ -125,6 +125,7 @@ where instance_id is null;
 ### 2.8 Validação de input com Zod
 
 Schemas em `validation/`:
+
 - `payment.schemas.js` — `processPaymentSchema` (`items` 1–100, `customer`, `externalReference`); exercitado pela suíte de fuzz em `validation/__tests__/`
 - `product.schemas.js` — `createProductSchema`: campos de produto na criação (URLs só aceitam `http(s)://` — bloqueia `javascript:`/`data:`/`file:`)
 
@@ -140,21 +141,21 @@ No caminho serverless, `api/create-payment.js` valida manualmente: `productId` o
 
 ## 3. Dados sensíveis nunca expostos
 
-| Dado | Onde está | Cliente acessa? |
-|---|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | `.env` backend / Vercel Production | ❌ |
-| `MERCADOPAGO_ACCESS_TOKEN` | idem | ❌ |
-| `WEBHOOK_SECRET` | idem | ❌ |
-| `ADMIN_SESSION_SECRET` | idem | ❌ |
-| `CUSTOMER_SESSION_SECRET` | idem | ❌ |
-| `DOWNLOAD_TOKEN_SECRET` | idem | ❌ |
-| `CRON_SECRET` | idem | ❌ |
-| `RESEND_API_KEY` (via SMTP_PASS) | idem | ❌ |
-| `settings.adminConfig.totpSecret` | tabela `settings` | ❌ (RLS service-only; redigido no GET e no audit log) |
-| `settings.adminConfig.fallbackPin` | tabela `settings` | ❌ (RLS service-only; redigido no GET e no audit log; comparação timing-safe) |
-| `VITE_SUPABASE_ANON_KEY` | `.env` frontend | ✅ (por design, pública) |
-| `VITE_SUPABASE_URL` | `.env` frontend | ✅ (por design, pública) |
-| `VITE_GA4_ID` / `VITE_META_PIXEL_ID` | `.env` frontend | ✅ (por design, públicas) |
+| Dado                                 | Onde está                          | Cliente acessa?                                                               |
+| ------------------------------------ | ---------------------------------- | ----------------------------------------------------------------------------- |
+| `SUPABASE_SERVICE_ROLE_KEY`          | `.env` backend / Vercel Production | ❌                                                                            |
+| `MERCADOPAGO_ACCESS_TOKEN`           | idem                               | ❌                                                                            |
+| `WEBHOOK_SECRET`                     | idem                               | ❌                                                                            |
+| `ADMIN_SESSION_SECRET`               | idem                               | ❌                                                                            |
+| `CUSTOMER_SESSION_SECRET`            | idem                               | ❌                                                                            |
+| `DOWNLOAD_TOKEN_SECRET`              | idem                               | ❌                                                                            |
+| `CRON_SECRET`                        | idem                               | ❌                                                                            |
+| `RESEND_API_KEY` (via SMTP_PASS)     | idem                               | ❌                                                                            |
+| `settings.adminConfig.totpSecret`    | tabela `settings`                  | ❌ (RLS service-only; redigido no GET e no audit log)                         |
+| `settings.adminConfig.fallbackPin`   | tabela `settings`                  | ❌ (RLS service-only; redigido no GET e no audit log; comparação timing-safe) |
+| `VITE_SUPABASE_ANON_KEY`             | `.env` frontend                    | ✅ (por design, pública)                                                      |
+| `VITE_SUPABASE_URL`                  | `.env` frontend                    | ✅ (por design, pública)                                                      |
+| `VITE_GA4_ID` / `VITE_META_PIXEL_ID` | `.env` frontend                    | ✅ (por design, públicas)                                                     |
 
 ---
 
@@ -200,6 +201,7 @@ Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Res
 **b) E-mails transacionais do app** (confirmação de compra, abandoned cart, newsletter, sequência pós-compra, reativação) — `api/send-confirmation-email.js` + `api/cron-email-jobs.js` usam nodemailer com `SMTP_HOST/PORT/USER/PASS/FROM` em `.env.local`.
 
 **Modo sandbox vs domínio verificado:**
+
 - Sem verificar domínio no Resend ([resend.com/domains](https://resend.com/domains)): só entrega para o e-mail dono da conta Resend (uso dev).
 - Com domínio verificado (SPF + DKIM + DMARC nos DNS): entrega para qualquer destinatário; usar `pedidos@seudominio.com.br` como `from`.
 
@@ -234,15 +236,15 @@ Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Res
 
 A função `public.purge_old_logs()` nasceu na migration [`20260526100000_phase2_log_retention.sql`](../../supabase/migrations/20260526100000_phase2_log_retention.sql); a versão final está na [`20260702000000_phase6_db_rls_hardening.sql`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql):
 
-| Tabela | Retenção | Purga por |
-|---|---|---|
-| `download_logs` | 12 meses | `purge_old_logs()` — cobre auditoria de fraude e disputas |
-| `security_events` | 6 meses | `purge_old_logs()` — suficiente para investigar incidentes recentes |
-| `page_views` | 6 meses | `purge_old_logs()` |
-| `admin_audit_log` | 18 meses | `purge_old_logs()` |
-| `analytics_events` | 180 dias | `cleanup_old_analytics_events()` (regra D7), job mensal |
-| `email_sent_log` | 90 dias | `cleanup_old_email_logs()`, job mensal |
-| `email_subscribers` (não confirmados >30d / desinscritos >90d) | — | `purge_stale_email_subscribers()`, job mensal |
+| Tabela                                                         | Retenção | Purga por                                                           |
+| -------------------------------------------------------------- | -------- | ------------------------------------------------------------------- |
+| `download_logs`                                                | 12 meses | `purge_old_logs()` — cobre auditoria de fraude e disputas           |
+| `security_events`                                              | 6 meses  | `purge_old_logs()` — suficiente para investigar incidentes recentes |
+| `page_views`                                                   | 6 meses  | `purge_old_logs()`                                                  |
+| `admin_audit_log`                                              | 18 meses | `purge_old_logs()`                                                  |
+| `analytics_events`                                             | 180 dias | `cleanup_old_analytics_events()` (regra D7), job mensal             |
+| `email_sent_log`                                               | 90 dias  | `cleanup_old_email_logs()`, job mensal                              |
+| `email_subscribers` (não confirmados >30d / desinscritos >90d) | —        | `purge_stale_email_subscribers()`, job mensal                       |
 
 Jobs `pg_cron`: `purge_old_logs_daily` (diário 03:00 UTC), `cleanup-analytics-events` (mensal), `cleanup-email-logs-monthly` (mensal) e `purge-stale-subscribers-monthly` (mensal). Se `pg_cron` não estiver habilitado no Supabase (`create extension pg_cron;`), a migration cai num `notice` e o purge precisa ser rodado manualmente:
 
@@ -262,13 +264,13 @@ Eventos passam por `lib/security-logger.js` que escreve em **três** destinos:
 
 ### Eventos emitidos hoje
 
-| `event_name` | Origem | Severidade | Quando dispara |
-|---|---|---|---|
-| `webhook_invalid_signature` | `api/webhook.js` | warn | HMAC do MP não bate (ou header ausente) |
-| `admin_login_failed` | `api/admin-login.js` | warn | Credencial inválida **ou** conta sem role `admin`/`master` (resposta HTTP idêntica nos dois casos) |
-| `verify_payment_email_mismatch` | `api/verify-payment.js` | warn | Order existe mas email não bate |
-| `account_self_deleted` | `api/me-delete-account.js` | info | Exclusão de conta LGPD confirmada pelo cliente |
-| `admin_audit_write_failed` | `lib/admin-audit.js` | error | Insert no `admin_audit_log` falhou (para não passar silencioso) |
+| `event_name`                    | Origem                     | Severidade | Quando dispara                                                                                     |
+| ------------------------------- | -------------------------- | ---------- | -------------------------------------------------------------------------------------------------- |
+| `webhook_invalid_signature`     | `api/webhook.js`           | warn       | HMAC do MP não bate (ou header ausente)                                                            |
+| `admin_login_failed`            | `api/admin-login.js`       | warn       | Credencial inválida **ou** conta sem role `admin`/`master` (resposta HTTP idêntica nos dois casos) |
+| `verify_payment_email_mismatch` | `api/verify-payment.js`    | warn       | Order existe mas email não bate                                                                    |
+| `account_self_deleted`          | `api/me-delete-account.js` | info       | Exclusão de conta LGPD confirmada pelo cliente                                                     |
+| `admin_audit_write_failed`      | `lib/admin-audit.js`       | error      | Insert no `admin_audit_log` falhou (para não passar silencioso)                                    |
 
 Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 16)` para correlação cross-event sem violar LGPD.
 
@@ -277,6 +279,7 @@ Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 
 ## 10. LGPD / Privacidade
 
 ### Princípios aplicados
+
 - **Finalidade declarada** — Política de Privacidade em `/privacidade`
 - **Minimização** — coletamos nome + email no checkout. CPF apenas se necessário para nota futura. Endereço não coletado (produto digital, regra H6)
 - **Consentimento informado** — banner com Aceitar / Rejeitar / Personalizar (`ConsentBanner.jsx`)
@@ -286,6 +289,7 @@ Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 
 - **Transferência internacional** — Supabase em região `sa-east-1`, Resend em US — disclosed nos termos
 
 ### Dados pessoais que tratamos
+
 - Email (PII)
 - Nome (PII)
 - CPF (opcional)
@@ -294,17 +298,20 @@ Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 
 - UTM/attribution (não PII)
 
 ### Não tratamos
+
 - Endereço físico
 - Telefone
 - Dados de cartão (passam direto para Mercado Pago, não tocamos)
 - Dados sensíveis (saúde, etnia, religião, etc.)
 
 ### Em logs
+
 - Email aparece como `sha256(email).slice(0, 16)` em `security_events`
 - IP fica em claro nos logs (necessário para mitigação de ataques)
 - User agent fica em claro
 
 ### Banner de consentimento
+
 - Bloqueia GA4 e Meta Pixel até consentimento
 - Eventos essenciais (carrinho, checkout, `purchase`) podem rodar como `first-party only` sem consent
 - Estado em `localStorage` via `src/utils/consent.js`
@@ -327,15 +334,15 @@ Deve retornar **0 CRITICAL**. Os INFO "RLS Enabled No Policy" em `settings`, `do
 
 Secrets a rotacionar (todos no `.env.local` + Vercel):
 
-| Secret | Impacto da rotação | Ação extra |
-|---|---|---|
-| `ADMIN_SESSION_SECRET` | Logout forçado de admins | Avisar a equipe |
-| `CUSTOMER_SESSION_SECRET` | Logout forçado de clientes | Sem ação |
-| `DOWNLOAD_TOKEN_SECRET` | Nenhum (tokens são opacos) | — |
-| `WEBHOOK_SECRET` | Precisa sincronizar com painel MP | Atualizar no painel MP **antes** do redeploy |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role muda — rotacionar via dashboard Supabase | Atualizar Vercel imediatamente |
-| `MERCADOPAGO_ACCESS_TOKEN` | Pagamentos param se desincronizar | Gerar novo no painel MP **antes** de atualizar prod |
-| `CRON_SECRET` | Workflow falha 401 até atualizar | Sincronizar GitHub Secrets |
+| Secret                      | Impacto da rotação                                    | Ação extra                                          |
+| --------------------------- | ----------------------------------------------------- | --------------------------------------------------- |
+| `ADMIN_SESSION_SECRET`      | Logout forçado de admins                              | Avisar a equipe                                     |
+| `CUSTOMER_SESSION_SECRET`   | Logout forçado de clientes                            | Sem ação                                            |
+| `DOWNLOAD_TOKEN_SECRET`     | Nenhum (tokens são opacos)                            | —                                                   |
+| `WEBHOOK_SECRET`            | Precisa sincronizar com painel MP                     | Atualizar no painel MP **antes** do redeploy        |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role muda — rotacionar via dashboard Supabase | Atualizar Vercel imediatamente                      |
+| `MERCADOPAGO_ACCESS_TOKEN`  | Pagamentos param se desincronizar                     | Gerar novo no painel MP **antes** de atualizar prod |
+| `CRON_SECRET`               | Workflow falha 401 até atualizar                      | Sincronizar GitHub Secrets                          |
 
 Passo a passo:
 
@@ -352,6 +359,7 @@ Em caso de incidente (segredo vazado): rotacione tudo na hora, mesmo fora do tri
 **Próxima janela:** prévia a cada release maior (mínimo anual).
 
 Escopo mínimo recomendado:
+
 - Enumeração de `order_code` em `/verify-payment` (com e sem email)
 - IDOR em `/api/admin-*` (cookie de cliente tentando acessar endpoints de admin)
 - CSRF em endpoints POST que dependem só de cookie (`/auth/customer/login`, `/admin-login`)

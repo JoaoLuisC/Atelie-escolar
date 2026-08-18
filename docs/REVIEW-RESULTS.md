@@ -17,6 +17,7 @@ Cada seção de área deve conter:
 6. **Arquivos alterados / Ações pendentes** (migrations, rotação de segredo, infra).
 
 **Legendas**
+
 - Severidade: `CRÍTICO` · `ALTO` · `MÉDIO` · `BAIXO` · `INFO`
 - Status: ✅ Corrigido · 🟡 Parcial · ⛔ Não alterado (ver motivo) · 🏗 Infra/fora do código · 🔎 Verificado-OK
 
@@ -24,18 +25,18 @@ Cada seção de área deve conter:
 
 ## Índice / Progresso
 
-| # | Área | Status | Achados (C/A/M/B) |
-|---|---|---|---|
-| 1 | Pagamentos & Webhook (Mercado Pago) | ✅ Revisada + corrigida | 0 / 3 / 5 / 2 |
-| 2 | Autenticação & Sessões | ⏳ Pendente | — |
-| 3 | Banco de Dados & RLS (Supabase) | ✅ Revisada + corrigida | 1 / 2 / 5 / 2 (+1 INFO) |
-| 4 | API Backend / Handlers Serverless | ⏳ Pendente | — |
-| 5 | Frontend React | ⏳ Pendente | — |
-| 6 | LGPD / Privacidade & Compliance | ⏳ Pendente | — |
-| 7 | Segurança de Aplicação / AppSec | ⏳ Pendente | — |
-| 8 | Qualidade de Código & Arquitetura | ⏳ Pendente | — |
-| 9 | Testes & Confiabilidade | ⏳ Pendente | — |
-| 10 | DevOps, Deploy & Configuração | ⏳ Pendente | — |
+| #   | Área                                | Status                  | Achados (C/A/M/B)       |
+| --- | ----------------------------------- | ----------------------- | ----------------------- |
+| 1   | Pagamentos & Webhook (Mercado Pago) | ✅ Revisada + corrigida | 0 / 3 / 5 / 2           |
+| 2   | Autenticação & Sessões              | ⏳ Pendente             | —                       |
+| 3   | Banco de Dados & RLS (Supabase)     | ✅ Revisada + corrigida | 1 / 2 / 5 / 2 (+1 INFO) |
+| 4   | API Backend / Handlers Serverless   | ⏳ Pendente             | —                       |
+| 5   | Frontend React                      | ⏳ Pendente             | —                       |
+| 6   | LGPD / Privacidade & Compliance     | ⏳ Pendente             | —                       |
+| 7   | Segurança de Aplicação / AppSec     | ⏳ Pendente             | —                       |
+| 8   | Qualidade de Código & Arquitetura   | ⏳ Pendente             | —                       |
+| 9   | Testes & Confiabilidade             | ⏳ Pendente             | —                       |
+| 10  | DevOps, Deploy & Configuração       | ⏳ Pendente             | —                       |
 
 ---
 
@@ -48,7 +49,7 @@ Cada seção de área deve conter:
 Review multi-agente (8 dimensões + verificação adversarial) com reconciliação
 manual. Durante a execução, 5 dimensões de busca (`price-calc`, `coupons`,
 `download-tokens`, `signed-url`, `input-validation`) e vários verificadores
-sofreram *rate-limiting* transitório da API; essas lacunas foram fechadas
+sofreram _rate-limiting_ transitório da API; essas lacunas foram fechadas
 **relendo à mão, por inteiro, todos os arquivos do escopo**. Toda referência
 `arquivo:linha` foi confirmada no código.
 
@@ -61,25 +62,25 @@ AREA1-01 muito provável em produção.
 
 ### Achados
 
-| ID | Sev. | Conf. | Local | Status |
-|---|---|---|---|---|
-| AREA1-01 | ALTO | Alta | `lib/mercadopago-config.js:112` | ✅ Corrigido |
-| AREA1-02 | ALTO | Alta | `api/webhook.js:68-70` | ✅ Corrigido |
-| AREA1-03 | ALTO | Alta | `api/webhook.js:104-112`, `api/verify-payment.js:46-119` | ✅ Corrigido |
-| AREA1-04 | MÉDIO | Alta | `api/create-payment.js` (sem zod no path real; `quantity` sem clamp) | ✅ Corrigido |
-| AREA1-05 | MÉDIO | Alta | `api/webhook.js:114-119` (UPDATE incondicional) | ✅ Corrigido |
-| AREA1-07 | MÉDIO | Alta | `api/create-payment.js:166-178` (corrida `used_count`) | ✅ Corrigido |
-| AREA1-09 | MÉDIO | Alta | `api/download.js:29-60` (uso único não-atômico) | ✅ Corrigido |
-| AREA1-10 | MÉDIO | Alta | `server.js:115-130`; `api/verify-payment.js:159-182` | ⛔/🏗 Ver motivo |
-| AREA1-06 | BAIXO | Alta | `lib/mercadopago-config.js:104-129` (replay `ts`) | ⛔ Ver motivo |
-| AREA1-08 | BAIXO | Alta | `api/create-payment.js:32-43` (rateio de desconto) | ✅ Corrigido |
+| ID       | Sev.  | Conf. | Local                                                                | Status          |
+| -------- | ----- | ----- | -------------------------------------------------------------------- | --------------- |
+| AREA1-01 | ALTO  | Alta  | `lib/mercadopago-config.js:112`                                      | ✅ Corrigido    |
+| AREA1-02 | ALTO  | Alta  | `api/webhook.js:68-70`                                               | ✅ Corrigido    |
+| AREA1-03 | ALTO  | Alta  | `api/webhook.js:104-112`, `api/verify-payment.js:46-119`             | ✅ Corrigido    |
+| AREA1-04 | MÉDIO | Alta  | `api/create-payment.js` (sem zod no path real; `quantity` sem clamp) | ✅ Corrigido    |
+| AREA1-05 | MÉDIO | Alta  | `api/webhook.js:114-119` (UPDATE incondicional)                      | ✅ Corrigido    |
+| AREA1-07 | MÉDIO | Alta  | `api/create-payment.js:166-178` (corrida `used_count`)               | ✅ Corrigido    |
+| AREA1-09 | MÉDIO | Alta  | `api/download.js:29-60` (uso único não-atômico)                      | ✅ Corrigido    |
+| AREA1-10 | MÉDIO | Alta  | `server.js:115-130`; `api/verify-payment.js:159-182`                 | ⛔/🏗 Ver motivo |
+| AREA1-06 | BAIXO | Alta  | `lib/mercadopago-config.js:104-129` (replay `ts`)                    | ⛔ Ver motivo   |
+| AREA1-08 | BAIXO | Alta  | `api/create-payment.js:32-43` (rateio de desconto)                   | ✅ Corrigido    |
 
 ### Detalhe + correção aplicada
 
 - **AREA1-01 — Fallback de `WEBHOOK_SECRET` → `MERCADOPAGO_ACCESS_TOKEN`.** O HMAC do
   webhook usava o access token quando `WEBHOOK_SECRET` faltava (segredo errado →
   webhooks legítimos rejeitados; segredo crítico exposto logicamente).
-  **Fix:** removido o fallback; sem `WEBHOOK_SECRET` a validação é *fail-closed*.
+  **Fix:** removido o fallback; sem `WEBHOOK_SECRET` a validação é _fail-closed_.
 
 - **AREA1-02 — Bypass da assinatura com `APP_ENV`/`NODE_ENV = 'test'`.** Único gate de
   autenticidade do webhook era desligável por env var comum, aceitando webhooks
@@ -128,7 +129,7 @@ AREA1-01 muito provável em produção.
   `express-rate-limit` não roda; precisaria de rate limiting na borda (middleware
   Vercel + KV/Upstash). Fica registrado como pendência de infra. O oráculo de timing
   do `verify-payment` (evento de segurança `await`-ado só no ramo email-errado) também
-  fica pendente — corrigir tornaria a resposta simétrica (registro *fire-and-forget*).
+  fica pendente — corrigir tornaria a resposta simétrica (registro _fire-and-forget_).
 
 ### 🔎 Verificado-OK (hipóteses refutadas)
 
@@ -142,7 +143,7 @@ AREA1-01 muito provável em produção.
   traversal explorável.
 - **Construção/comparação do HMAC correta** (`mercadopago-config.js:117-129`): manifesto
   e `timingSafeEqual` com checagem de comprimento estão certos — o problema era o
-  *segredo* (AREA1-01) e o *replay* (AREA1-06), não o algoritmo.
+  _segredo_ (AREA1-01) e o _replay_ (AREA1-06), não o algoritmo.
 
 ### Correção ao próprio review
 
@@ -179,29 +180,29 @@ do Express **não rodam no serverless da Vercel** (AREA1-10).
 
 ### Metodologia
 
-Iniciado como review multi-agente (workflow de 4 fases: mapear → revisar 9 dimensões → verificação adversarial → síntese). A orquestração **abortou duas vezes** por *rate-limiting transitório do servidor* ("Server is temporarily limiting requests — not your usage limit", não limite de conta) — todos os 13 subagentes falharam em ~20s nas duas tentativas. O review foi então **concluído inline**, lendo por inteiro todos os arquivos do escopo e confirmando cada `arquivo:linha` no código atual (inclusive o caminho de autorização que usa `profiles.role`).
+Iniciado como review multi-agente (workflow de 4 fases: mapear → revisar 9 dimensões → verificação adversarial → síntese). A orquestração **abortou duas vezes** por _rate-limiting transitório do servidor_ ("Server is temporarily limiting requests — not your usage limit", não limite de conta) — todos os 13 subagentes falharam em ~20s nas duas tentativas. O review foi então **concluído inline**, lendo por inteiro todos os arquivos do escopo e confirmando cada `arquivo:linha` no código atual (inclusive o caminho de autorização que usa `profiles.role`).
 
 **Modelo de acesso (base para todos os achados):** `lib/supabase.js` usa **anon por default**; só o namespace `serviceRoleHelpers` bypassa RLS ([lib/supabase.js:91,192-200](../lib/supabase.js#L91-L200)). Logo, toda tabela cujas policies liberem `anon`/`authenticated` é atacável **direto no PostgREST** com a chave anon pública (embutida no front), sem passar pelo backend.
 
 ### Achados
 
-| ID | Sev. | Conf. | Local | Status |
-|---|---|---|---|---|
-| RLS-01 | CRÍTICO | Alta | `security-hardening.sql:42-47` (+ `middleware/auth.middleware.js:77`, `api/admin-login.js:234`, `routes/products.routes.js:32`) | ✅ Corrigido |
-| RLS-02 | ALTO | Alta | `migrations/…phase2_conversion.sql:84-95` | ✅ Corrigido |
-| RLS-03 | ALTO | Alta | `security-hardening.sql:9-18` (fora das migrations) | ✅ Corrigido |
-| RLS-04 | MÉDIO | Alta | `security-hardening.sql:85-89` + ausência em `purge_old_logs` | ✅ Corrigido |
-| RLS-05 | MÉDIO | Alta | `handle_new_user` não definida no SQL versionado | ✅ Corrigido |
-| RLS-06 | MÉDIO | Alta | `admin_audit_log`/`email_subscribers` sem purge; `cleanup_old_email_logs` não agendada | ✅ Corrigido |
-| RLS-07 | MÉDIO | Alta | `schema.sql:249-290` (FKs sem índice) | ✅ Corrigido |
-| RLS-08 | MÉDIO | Média | `schema.sql:78` (`orders.customer_id ON DELETE SET NULL`) | ⛔ Camada de app (Área 6) |
-| RLS-09 | BAIXO | Alta | `purge_old_logs` (24m) × `cleanup_old_analytics_events` (180d) | ✅ Corrigido |
-| RLS-10 | BAIXO | Alta | `schema.sql` × migrations (constraints/defaults) | ✅ Corrigido |
-| RLS-11 | INFO | Média | `migrations/…phase0_analytics.sql:49-66` (`properties`/`source` livres) | ⛔ Camada de app |
+| ID     | Sev.    | Conf. | Local                                                                                                                           | Status                    |
+| ------ | ------- | ----- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| RLS-01 | CRÍTICO | Alta  | `security-hardening.sql:42-47` (+ `middleware/auth.middleware.js:77`, `api/admin-login.js:234`, `routes/products.routes.js:32`) | ✅ Corrigido              |
+| RLS-02 | ALTO    | Alta  | `migrations/…phase2_conversion.sql:84-95`                                                                                       | ✅ Corrigido              |
+| RLS-03 | ALTO    | Alta  | `security-hardening.sql:9-18` (fora das migrations)                                                                             | ✅ Corrigido              |
+| RLS-04 | MÉDIO   | Alta  | `security-hardening.sql:85-89` + ausência em `purge_old_logs`                                                                   | ✅ Corrigido              |
+| RLS-05 | MÉDIO   | Alta  | `handle_new_user` não definida no SQL versionado                                                                                | ✅ Corrigido              |
+| RLS-06 | MÉDIO   | Alta  | `admin_audit_log`/`email_subscribers` sem purge; `cleanup_old_email_logs` não agendada                                          | ✅ Corrigido              |
+| RLS-07 | MÉDIO   | Alta  | `schema.sql:249-290` (FKs sem índice)                                                                                           | ✅ Corrigido              |
+| RLS-08 | MÉDIO   | Média | `schema.sql:78` (`orders.customer_id ON DELETE SET NULL`)                                                                       | ⛔ Camada de app (Área 6) |
+| RLS-09 | BAIXO   | Alta  | `purge_old_logs` (24m) × `cleanup_old_analytics_events` (180d)                                                                  | ✅ Corrigido              |
+| RLS-10 | BAIXO   | Alta  | `schema.sql` × migrations (constraints/defaults)                                                                                | ✅ Corrigido              |
+| RLS-11 | INFO    | Média | `migrations/…phase0_analytics.sql:49-66` (`properties`/`source` livres)                                                         | ⛔ Camada de app          |
 
 ### Detalhe + correção aplicada
 
-- **RLS-01 — Cliente se auto-promove a ADMIN via `profiles.role` (escalonamento de privilégio).** A policy `profiles_own_update` só checa `id = auth.uid()` e RLS **não filtra colunas**; não havia `revoke`/trigger. Como `profiles.role` é fonte de autorização (`checkRole` no [middleware/auth.middleware.js:77-86](../middleware/auth.middleware.js#L77-L86), gate do [api/admin-login.js:234](../api/admin-login.js#L234)), um cliente qualquer fazia `PATCH /rest/v1/profiles?id=eq.<uid>` com `{"role":"ADMIN"}` (chave anon + JWT próprio) e passava a ser aceito em `POST /produtos` (`checkRole('ADMIN')`, [routes/products.routes.js:32](../routes/products.routes.js#L32)) — **caminho direto, sem 2FA**. **Fix:** trigger `profiles_guard_privileged_cols` (BEFORE UPDATE, *invoker* → `current_user`) que preserva `id/email/role/provider` para qualquer papel que não seja `service_role`/DBA; o backend (service-role) segue livre. Adicionado à migration e ao `security-hardening.sql`.
+- **RLS-01 — Cliente se auto-promove a ADMIN via `profiles.role` (escalonamento de privilégio).** A policy `profiles_own_update` só checa `id = auth.uid()` e RLS **não filtra colunas**; não havia `revoke`/trigger. Como `profiles.role` é fonte de autorização (`checkRole` no [middleware/auth.middleware.js:77-86](../middleware/auth.middleware.js#L77-L86), gate do [api/admin-login.js:234](../api/admin-login.js#L234)), um cliente qualquer fazia `PATCH /rest/v1/profiles?id=eq.<uid>` com `{"role":"ADMIN"}` (chave anon + JWT próprio) e passava a ser aceito em `POST /produtos` (`checkRole('ADMIN')`, [routes/products.routes.js:32](../routes/products.routes.js#L32)) — **caminho direto, sem 2FA**. **Fix:** trigger `profiles_guard_privileged_cols` (BEFORE UPDATE, _invoker_ → `current_user`) que preserva `id/email/role/provider` para qualquer papel que não seja `service_role`/DBA; o backend (service-role) segue livre. Adicionado à migration e ao `security-hardening.sql`.
 
 - **RLS-02 — `abandoned_carts` com escrita/edição pública irrestrita.** `abandoned_carts_public_insert (with check(true))` + `abandoned_carts_public_update (using(true) with check(true))` deixavam qualquer `anon` **inserir e sobrescrever qualquer linha** (adulteração cross-user, supressão de e-mails de recuperação, relay de e-mail semeando carrinhos, e possível leitura de PII via `UPDATE … RETURNING`). O backend grava só via service-role ([api/abandoned-cart.js](../api/abandoned-cart.js#L3)); não há escrita direta do front. **Fix:** `drop policy` nas duas → tabela vira service-role only.
 
@@ -211,7 +212,7 @@ Iniciado como review multi-agente (workflow de 4 fases: mapear → revisar 9 dim
 
 - **RLS-05 — `handle_new_user()` referenciada/alterada mas nunca DEFINIDA no versionado.** `security-hardening.sql` fazia `alter function`/`revoke` de algo que o SQL versionado nunca cria, e não havia trigger em `auth.users` → em DB novo, o hardening falha e signups não geram `profiles`. **Fix:** função versionada (corpo documentado: `role='CUSTOMER'`, `SECURITY DEFINER`, `search_path` fixo, `revoke execute`) + criação do trigger `on_auth_user_created` **guardada** (só cria se ainda não houver trigger chamando `handle_new_user` → no-op em prod, cria em DB novo).
 
-- **RLS-06 — Retenção incompleta.** `admin_audit_log` (guarda IP) e `email_subscribers` (PII + *unconfirmed*) sem purge; `cleanup_old_email_logs()` existia mas **nunca era agendada**. **Fix:** `purge_old_logs()` agora inclui `admin_audit_log` (18m); nova `purge_stale_email_subscribers()` (unconfirmed >30d, unsubscribed >90d); jobs `cleanup-email-logs-monthly` e `purge-stale-subscribers-monthly` agendados no pg_cron.
+- **RLS-06 — Retenção incompleta.** `admin_audit_log` (guarda IP) e `email_subscribers` (PII + _unconfirmed_) sem purge; `cleanup_old_email_logs()` existia mas **nunca era agendada**. **Fix:** `purge_old_logs()` agora inclui `admin_audit_log` (18m); nova `purge_stale_email_subscribers()` (unconfirmed >30d, unsubscribed >90d); jobs `cleanup-email-logs-monthly` e `purge-stale-subscribers-monthly` agendados no pg_cron.
 
 - **RLS-07 — FKs sem índice.** `order_items.product_id`, `download_logs.order_id`, `analytics_events.{order_id,product_id}`, `user_products.{user_id,product_id,order_id}` faziam seq scan em joins e em `ON DELETE` (inclui exclusão de conta LGPD via `user_products.user_id`). **Fix:** 7 `create index if not exists` na migration + no `schema.sql`.
 
@@ -227,7 +228,7 @@ Iniciado como review multi-agente (workflow de 4 fases: mapear → revisar 9 dim
 ### 🔎 Verificado-OK (hipóteses refutadas)
 
 - **"Client grava PII em `analytics_events`" → REFUTADO.** A policy de INSERT exige `order_id is null AND customer_email is null` + whitelist de `event_name` ([…phase0_analytics.sql:49-66](../supabase/migrations/20260524000000_phase0_analytics.sql#L49-L66)). Bem projetada.
-- **"Alguma tabela sensível ficou sem RLS" → REFUTADO.** As 17 tabelas têm RLS habilitado (10 no hardening, 7 nas migrations). O problema era *policies permissivas* e *onde* o RLS é ligado (RLS-03), não ausência de RLS.
+- **"Alguma tabela sensível ficou sem RLS" → REFUTADO.** As 17 tabelas têm RLS habilitado (10 no hardening, 7 nas migrations). O problema era _policies permissivas_ e _onde_ o RLS é ligado (RLS-03), não ausência de RLS.
 - **`security_events`/`download_logs`/`download_tokens`/`settings`/`coupons`/`email_*`/`admin_audit_log`** confirmados **service-role only** (RLS ON, zero policy).
 - **`user_products`/`orders`/`order_items`** só têm policy de SELECT amarrada a `auth.uid()`/jwt email; escrita é service-role only. Sem caminho de escrita cross-user.
 

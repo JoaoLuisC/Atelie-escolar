@@ -37,6 +37,7 @@ cp .env.example .env.local
 ```
 
 A cascata de carregamento usada pelo `server.js`:
+
 1. `.env.{NODE_ENV}.local` (ex: `.env.development.local`)
 2. `.env.local`
 3. `.env.{NODE_ENV}` (ex: `.env.development`)
@@ -59,6 +60,7 @@ VITE_SUPABASE_ANON_KEY=<igual ao SUPABASE_ANON_KEY>
 ```
 
 **Onde obter:**
+
 - Dashboard → Project Settings → API Keys
 - `URL`: aba "Project URL" ou Project ID
 - `ANON_KEY`: aba "Publishable key" (formato novo) ou "anon public" (legado)
@@ -77,6 +79,7 @@ MERCADOPAGO_PUBLIC_KEY=TEST-xxxx-xxxx-xxxx
 ```
 
 **Onde obter:**
+
 - https://www.mercadopago.com.br/developers/panel/app
 - Selecione (ou crie) sua aplicação
 - Menu lateral → **Credenciais** → aba **Credenciais de teste**
@@ -125,6 +128,7 @@ SMTP_FROM="Ateliê da Escola <onboarding@resend.dev>"   # ou pedidos@seudominio.
 > **Por que Resend e não Gmail?** Gmail funciona até ~500/dia mas o `From:` precisa ser o próprio Gmail. Resend tem 3.000 e-mails/mês grátis, `From:` próprio e integração nativa no Supabase Dashboard.
 
 **Como obter a API key:**
+
 1. Conta em [resend.com](https://resend.com)
 2. O onboarding gera uma key automática (`re_...`)
 3. Em produção: [resend.com/domains](https://resend.com/domains) → adicionar SPF, DKIM, DMARC no DNS
@@ -172,11 +176,13 @@ Usadas por `api/cron-email-jobs.js` e `lib/customer-segmentation.js`.
 ### 3.2 Aplicar schema (uma das opções)
 
 **Opção A — Manual via SQL Editor:**
+
 1. Dashboard → SQL Editor → cole `supabase/schema.sql` → Run
 2. Cole `supabase/security-hardening.sql` → Run (RLS + policies + funções)
 3. (Opcional) Cole `supabase/seed-sample-data.sql` para popular dados de exemplo
 
 **Opção B — Via Supabase CLI:**
+
 ```bash
 npm run supabase:login
 npm run supabase:link -- --project-ref <seu-ref>
@@ -204,6 +210,7 @@ Há 13 migrations em `supabase/migrations/` (ver lista em [04-BANCO-DE-DADOS §m
 ### 3.4 Criar usuário admin
 
 **Fluxo padrão:**
+
 1. Cadastre-se normalmente via `/login` (trigger `handle_new_user` cria profile com `role='CUSTOMER'`)
 2. Promova via SQL no Dashboard:
    ```sql
@@ -212,6 +219,7 @@ Há 13 migrations em `supabase/migrations/` (ver lista em [04-BANCO-DE-DADOS §m
 3. Acesse `/painel-acesso-privado-atelie` (`/admin-login` redireciona para lá)
 
 **Atalho via Auth Admin API** (cria direto sem signup; usa a service-role key, não o PAT):
+
 ```bash
 curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
   -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
@@ -226,11 +234,11 @@ curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
 
 O upload do painel admin (`POST /api/admin-upload-url`, usado pelo wizard de produto) usa 3 buckets com nomes **fixos no código**:
 
-| Bucket | Visibilidade | Limite | Conteúdo |
-|--------|--------------|--------|----------|
-| `product_images` | Público | 10 MB | Imagens de produto (SVG/HTML bloqueados) |
-| `product_videos` | Privado | 50 MB | Vídeos de produto |
-| `product_files` | Privado | 50 MB | Arquivos entregues ao cliente (PDF/ZIP) |
+| Bucket           | Visibilidade | Limite | Conteúdo                                 |
+| ---------------- | ------------ | ------ | ---------------------------------------- |
+| `product_images` | Público      | 10 MB  | Imagens de produto (SVG/HTML bloqueados) |
+| `product_videos` | Privado      | 50 MB  | Vídeos de produto                        |
+| `product_files`  | Privado      | 50 MB  | Arquivos entregues ao cliente (PDF/ZIP)  |
 
 1. Dashboard → Storage → New bucket → crie os 3 acima (marque **Public bucket** só em `product_images`)
 2. Faça upload das mídias e arquivos pelo próprio painel admin (wizard de produto) — ou manualmente pelo Dashboard
@@ -330,10 +338,10 @@ print(urllib.request.urlopen(req).read().decode()[:200])
 
 ### Limites Resend
 
-| Plano | Limite | Custo |
-|-------|--------|-------|
-| Free | ~3.000 emails/mês (100/dia) | R$ 0 |
-| Pro | 50.000/mês | US$ 20/mês |
+| Plano | Limite                      | Custo      |
+| ----- | --------------------------- | ---------- |
+| Free  | ~3.000 emails/mês (100/dia) | R$ 0       |
+| Pro   | 50.000/mês                  | US$ 20/mês |
 
 ---
 
@@ -366,22 +374,22 @@ npm run check            # test + build (usado em CI)
 
 ### Cartões de teste
 
-| Bandeira | Número |
-|----------|--------|
-| Visa | `4235 6477 2802 5682` |
+| Bandeira   | Número                |
+| ---------- | --------------------- |
+| Visa       | `4235 6477 2802 5682` |
 | Mastercard | `5480 8328 0103 3311` |
-| Amex | `3753 651535 56885` |
+| Amex       | `3753 651535 56885`   |
 
 ### Titular do cartão controla o resultado
 
-| Titular | Resultado |
-|---------|-----------|
-| `APRO` | ✅ Aprovado |
-| `OTHE` | ❌ Recusado |
-| `CONT` | ⏳ Pendente |
-| `FUND` | ❌ Saldo insuficiente |
-| `SECU` | ❌ CVV inválido |
-| `EXPI` | ❌ Cartão vencido |
+| Titular | Resultado             |
+| ------- | --------------------- |
+| `APRO`  | ✅ Aprovado           |
+| `OTHE`  | ❌ Recusado           |
+| `CONT`  | ⏳ Pendente           |
+| `FUND`  | ❌ Saldo insuficiente |
+| `SECU`  | ❌ CVV inválido       |
+| `EXPI`  | ❌ Cartão vencido     |
 
 CPF: `12345678909` · CVV: `123` (Amex: `1234`) · Validade: qualquer data futura.
 
@@ -414,14 +422,14 @@ Sem ngrok, o polling de pagamento cobre o gap. Webhook nunca chega, mas a UX con
 
 ## 9. Scripts utilitários
 
-| Script | Uso | Variáveis necessárias |
-|--------|-----|----------------------|
-| `node scripts/check-advisor.js` | Lê Security Advisor do Supabase | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF` |
-| `node scripts/configure-auth.js` | Atualiza URLs OAuth permitidas | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF` |
-| `node scripts/db-inspect.js` | Inventário de tabelas via REST | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
-| `node scripts/check-utf8.js` | Audita encoding de textos no banco (Management API) | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF` |
-| `node scripts/fix-utf8.js` | Corrige encoding corrompido | idem |
-| `pwsh scripts/fix-dns.ps1` (admin) | Conserta DNS Windows quando `*.supabase.co` não resolve | — |
+| Script                             | Uso                                                     | Variáveis necessárias                                            |
+| ---------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
+| `node scripts/check-advisor.js`    | Lê Security Advisor do Supabase                         | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                           |
+| `node scripts/configure-auth.js`   | Atualiza URLs OAuth permitidas                          | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                           |
+| `node scripts/db-inspect.js`       | Inventário de tabelas via REST                          | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `node scripts/check-utf8.js`       | Audita encoding de textos no banco (Management API)     | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                           |
+| `node scripts/fix-utf8.js`         | Corrige encoding corrompido                             | idem                                                             |
+| `pwsh scripts/fix-dns.ps1` (admin) | Conserta DNS Windows quando `*.supabase.co` não resolve | —                                                                |
 
 ---
 

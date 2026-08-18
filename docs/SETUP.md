@@ -32,6 +32,7 @@ VITE_SUPABASE_ANON_KEY=<igual ao SUPABASE_ANON_KEY>
 ```
 
 **Como pegar**:
+
 - Dashboard → Project Settings → API Keys
 - URL: aba "Project URL" ou Project ID
 - ANON_KEY: aba "Publishable key" (formato novo) ou "anon public" (legado)
@@ -83,6 +84,7 @@ MERCADOPAGO_PUBLIC_KEY=TEST-xxxx-xxxx-xxxx
 ```
 
 **Como pegar**:
+
 - https://www.mercadopago.com.br/developers/panel/app
 - Selecione (ou crie) sua aplicação
 - Menu lateral → **Credenciais** → aba **Credenciais de teste**
@@ -134,6 +136,7 @@ SMTP_FROM="Ateliê da Escola <onboarding@resend.dev>"   # ou pedidos@seudominio.
 **Por que Resend e não Gmail?** O Gmail SMTP funciona até ~500/dia mas o `From:` precisa ser o próprio Gmail — pouco profissional. Resend tem 3.000 emails/mês grátis, `From:` próprio, e setup nativo no Supabase Dashboard.
 
 **Como pegar a API key:**
+
 1. Conta em [resend.com](https://resend.com)
 2. Onboarding gera uma key automática (`re_...`)
 3. Pra produção: [resend.com/domains](https://resend.com/domains) → adicionar SPF, DKIM, DMARC no DNS
@@ -189,10 +192,10 @@ print(urllib.request.urlopen(req).read().decode()[:200])
 
 ### Limites do Resend
 
-| Plano | Limite | Custo |
-|-------|--------|-------|
-| Free | 100 emails/dia (~3.000/mês) | R$ 0 |
-| Pro | 50.000/mês | US$ 20/mês |
+| Plano | Limite                      | Custo      |
+| ----- | --------------------------- | ---------- |
+| Free  | 100 emails/dia (~3.000/mês) | R$ 0       |
+| Pro   | 50.000/mês                  | US$ 20/mês |
 
 Pra dev/produção pequena, free é suficiente.
 
@@ -278,6 +281,7 @@ node scripts/db-inspect.js
 ### Criar usuário admin
 
 O fluxo padrão é:
+
 1. Usuário se cadastra normalmente via `/login` → trigger `handle_new_user` cria profile com `role='CUSTOMER'`
 2. Promover via SQL no dashboard:
    ```sql
@@ -304,12 +308,12 @@ curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
 
 ### Plano gratuito vs Pro
 
-| Feature | Free | Pro |
-|---------|------|-----|
-| HIBP password check | ❌ | ✅ |
-| Auto-pause após 7 dias inativo | ✅ | ❌ |
-| Backup automático | ❌ | Diário (retenção 7 dias) |
-| Storage | 1 GB | 100 GB |
+| Feature                        | Free | Pro                      |
+| ------------------------------ | ---- | ------------------------ |
+| HIBP password check            | ❌   | ✅                       |
+| Auto-pause após 7 dias inativo | ✅   | ❌                       |
+| Backup automático              | ❌   | Diário (retenção 7 dias) |
+| Storage                        | 1 GB | 100 GB                   |
 
 Sem HIBP, a proteção é via regra de senha: mín 8 chars com letra maiúscula, minúscula e número —
 configure no dashboard do projeto hospedado (Authentication → Policies). O backend valida 8+ chars
@@ -324,20 +328,20 @@ Checklist de smoke test em [12-DEPLOY-OPERACAO.md](./ProjectDocs/12-DEPLOY-OPERA
 
 ### Cartões de teste
 
-| Bandeira | Número |
-|----------|--------|
-| Visa | `4235 6477 2802 5682` |
+| Bandeira   | Número                |
+| ---------- | --------------------- |
+| Visa       | `4235 6477 2802 5682` |
 | Mastercard | `5480 8328 0103 3311` |
-| Amex | `3753 651535 56885` |
+| Amex       | `3753 651535 56885`   |
 
-| Titular | Resultado |
-|---------|-----------|
-| `APRO` | ✅ Aprovado |
-| `OTHE` | ❌ Recusado |
-| `CONT` | ⏳ Pendente |
-| `FUND` | ❌ Saldo insuficiente |
-| `SECU` | ❌ CVV inválido |
-| `EXPI` | ❌ Cartão vencido |
+| Titular | Resultado             |
+| ------- | --------------------- |
+| `APRO`  | ✅ Aprovado           |
+| `OTHE`  | ❌ Recusado           |
+| `CONT`  | ⏳ Pendente           |
+| `FUND`  | ❌ Saldo insuficiente |
+| `SECU`  | ❌ CVV inválido       |
+| `EXPI`  | ❌ Cartão vencido     |
 
 CPF: `12345678909` · CVV: `123` (Amex: `1234`) · Validade: qualquer data futura.
 
@@ -389,6 +393,7 @@ Reinicie `npm run dev:all`. O `notification_url` passado ao MP agora é a URL do
 ## Deploy (Vercel)
 
 Configurado em `vercel.json`:
+
 - Frontend: build em `dist/`, servido como estático
 - API: cada arquivo em `api/**/*.js` vira função serverless
 - Routes: `/api/*` → função; `/sitemap.xml` → `api/sitemap.xml` (sitemap dinâmico); `/api/*` inexistente → 404 JSON (`api/notfound.js`); resto → SPA fallback
@@ -398,6 +403,7 @@ Configurado em `vercel.json`:
 Dashboard do projeto → Settings → Environment Variables. Adicione **todas** as do `.env.local` (exceto VITE_ que precisam estar com prefixo certo).
 
 **Importante**:
+
 - `SUPABASE_SERVICE_ROLE_KEY` em "Production" apenas (não Preview)
 - `MERCADOPAGO_ACCESS_TOKEN` de PROD apenas em "Production"
 - `CORS_ORIGINS=https://<seu-dominio-vercel>.vercel.app` em todas

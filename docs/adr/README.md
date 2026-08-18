@@ -19,11 +19,11 @@ quem ainda não sabe onde olhar, e aponta de volta para o código.
 
 ## O que vira ADR (e o que não vira)
 
-| Vira ADR | Não vira |
-|----------|----------|
-| Decisão que amarra vários arquivos | Detalhe de implementação de um arquivo |
-| Escolha entre alternativas com trade-off real | Convenção de estilo (isso é regra no CONTRIBUTING) |
-| Algo que alguém tentaria "consertar" sem o contexto | Bug corrigido (isso é commit + teste) |
+| Vira ADR                                            | Não vira                                           |
+| --------------------------------------------------- | -------------------------------------------------- |
+| Decisão que amarra vários arquivos                  | Detalhe de implementação de um arquivo             |
+| Escolha entre alternativas com trade-off real       | Convenção de estilo (isso é regra no CONTRIBUTING) |
+| Algo que alguém tentaria "consertar" sem o contexto | Bug corrigido (isso é commit + teste)              |
 
 ## Formato
 
@@ -37,9 +37,9 @@ antigo é marcado como substituído. O histórico é o valor.
 
 ## Índice
 
-| ADR | Decisão |
-|-----|---------|
-| [0001](./0001-commonjs-no-backend-esm-no-frontend.md) | CommonJS no backend, ESM no frontend |
-| [0002](./0002-handler-unico-para-vercel-e-express.md) | Um handler serve a Vercel e o Express de dev |
-| [0003](./0003-reconciliacao-de-pagamento-em-modulo-unico.md) | Reconciliação de pagamento em módulo único |
-| [0004](./0004-envelope-de-resposta-e-codigo-de-erro.md) | Envelope de resposta e código de erro |
+| ADR                                                          | Decisão                                      |
+| ------------------------------------------------------------ | -------------------------------------------- |
+| [0001](./0001-commonjs-no-backend-esm-no-frontend.md)        | CommonJS no backend, ESM no frontend         |
+| [0002](./0002-handler-unico-para-vercel-e-express.md)        | Um handler serve a Vercel e o Express de dev |
+| [0003](./0003-reconciliacao-de-pagamento-em-modulo-unico.md) | Reconciliação de pagamento em módulo único   |
+| [0004](./0004-envelope-de-resposta-e-codigo-de-erro.md)      | Envelope de resposta e código de erro        |

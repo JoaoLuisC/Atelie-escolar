@@ -10,21 +10,21 @@ Esta pasta é a **fonte única de verdade** sobre o projeto. Toda decisão de pr
 
 ## 📚 Índice da documentação
 
-| # | Documento | Quando consultar |
-|---|-----------|------------------|
-| 01 | [Visão geral](./01-VISAO-GERAL.md) | Primeiro contato com o projeto, entender personas e capacidades |
-| 02 | [Arquitetura](./02-ARQUITETURA.md) | Mudanças estruturais, decisões de stack, organização de pastas |
-| 03 | [Setup](./03-SETUP.md) | Rodar o projeto localmente, configurar Supabase, MP, OAuth, Resend |
-| 04 | [Banco de dados](./04-BANCO-DE-DADOS.md) | Schema, tabelas, RLS, migrations |
-| 05 | [Fluxos (diagramas)](./05-FLUXOS.md) | Diagramas Mermaid de auth, checkout, admin, webhook |
-| 06 | [Fluxo de compra e venda](./06-FLUXO-COMPRA-VENDA.md) | Jornada completa do cliente + responsabilidades do vendedor |
-| 07 | [Dashboard admin](./07-DASHBOARD-ADMIN.md) | As 14 abas do painel admin, KPIs, gestão de produtos/pedidos |
-| 08 | [Segurança](./08-SEGURANCA.md) | RLS, secrets, headers, auditoria, LGPD, modelo de ameaça |
-| 09 | [API endpoints](./09-API-ENDPOINTS.md) | Referência de todos os endpoints REST (cliente + admin) |
-| 10 | [Marketing & analytics](./10-MARKETING-ANALYTICS.md) | GA4, Meta Pixel, Curva ABC, email marketing, funil, cohort |
-| 11 | [Regras de negócio](./11-REGRAS-NEGOCIO.md) | Princípios invioláveis, anti-padrões, checklist de PR |
-| 12 | [Deploy & operação](./12-DEPLOY-OPERACAO.md) | Vercel, release checklist, troubleshooting, rotação de secrets |
-| 13 | [Roadmap & pendências](./13-ROADMAP-PENDENCIAS.md) | Fases 5/6 (mídia paga + otimização), itens operacionais pendentes |
+| #   | Documento                                             | Quando consultar                                                   |
+| --- | ----------------------------------------------------- | ------------------------------------------------------------------ |
+| 01  | [Visão geral](./01-VISAO-GERAL.md)                    | Primeiro contato com o projeto, entender personas e capacidades    |
+| 02  | [Arquitetura](./02-ARQUITETURA.md)                    | Mudanças estruturais, decisões de stack, organização de pastas     |
+| 03  | [Setup](./03-SETUP.md)                                | Rodar o projeto localmente, configurar Supabase, MP, OAuth, Resend |
+| 04  | [Banco de dados](./04-BANCO-DE-DADOS.md)              | Schema, tabelas, RLS, migrations                                   |
+| 05  | [Fluxos (diagramas)](./05-FLUXOS.md)                  | Diagramas Mermaid de auth, checkout, admin, webhook                |
+| 06  | [Fluxo de compra e venda](./06-FLUXO-COMPRA-VENDA.md) | Jornada completa do cliente + responsabilidades do vendedor        |
+| 07  | [Dashboard admin](./07-DASHBOARD-ADMIN.md)            | As 14 abas do painel admin, KPIs, gestão de produtos/pedidos       |
+| 08  | [Segurança](./08-SEGURANCA.md)                        | RLS, secrets, headers, auditoria, LGPD, modelo de ameaça           |
+| 09  | [API endpoints](./09-API-ENDPOINTS.md)                | Referência de todos os endpoints REST (cliente + admin)            |
+| 10  | [Marketing & analytics](./10-MARKETING-ANALYTICS.md)  | GA4, Meta Pixel, Curva ABC, email marketing, funil, cohort         |
+| 11  | [Regras de negócio](./11-REGRAS-NEGOCIO.md)           | Princípios invioláveis, anti-padrões, checklist de PR              |
+| 12  | [Deploy & operação](./12-DEPLOY-OPERACAO.md)          | Vercel, release checklist, troubleshooting, rotação de secrets     |
+| 13  | [Roadmap & pendências](./13-ROADMAP-PENDENCIAS.md)    | Fases 5/6 (mídia paga + otimização), itens operacionais pendentes  |
 
 ---
 

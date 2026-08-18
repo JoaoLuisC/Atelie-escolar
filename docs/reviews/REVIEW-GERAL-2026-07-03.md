@@ -8,12 +8,12 @@
 
 ## Sumário executivo
 
-| Severidade | Qtde | Destaques |
-|---|---|---|
-| 🔴 Crítico | 3 | Segredos de produção vazados no git (PATs Supabase + token MP + Firebase) |
-| 🟠 Alto | 16 | Rate limiting e headers de segurança ausentes em prod · 9 vulns npm · login admin 2FA quebrado · N+1 no checkout · cron estoura timeout |
-| 🟡 Médio | ~30 | Oráculos de auth · CDN sem SWR · a11y de modais · god-components · envelope de erro inconsistente |
-| 🔵 Baixo | ~25 | Acentuação · headings · logging · classificação de deps |
+| Severidade | Qtde | Destaques                                                                                                                               |
+| ---------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 🔴 Crítico | 3    | Segredos de produção vazados no git (PATs Supabase + token MP + Firebase)                                                               |
+| 🟠 Alto    | 16   | Rate limiting e headers de segurança ausentes em prod · 9 vulns npm · login admin 2FA quebrado · N+1 no checkout · cron estoura timeout |
+| 🟡 Médio   | ~30  | Oráculos de auth · CDN sem SWR · a11y de modais · god-components · envelope de erro inconsistente                                       |
+| 🔵 Baixo   | ~25  | Acentuação · headings · logging · classificação de deps                                                                                 |
 
 **Ações imediatas (hoje):** rotacionar os segredos vazados (item C-1/C-2) — o resto do review pode esperar, isto não. Depois: `npm audit fix`, commitar o lockfile, criar gate de testes na CI.
 
@@ -24,14 +24,17 @@
 ## 🔴 CRÍTICO — rotacionar segredos agora
 
 ### C-1. PATs do Supabase commitados em `HANDOFF.md` (arquivo versionado hoje) **[verificado]**
+
 `HANDOFF.md` está trackeado no git e contém **3 Personal Access Tokens** `sbp_…` reais (44+ caracteres), inclusive num exemplo `curl -H "Authorization: Bearer sbp_…"`. Um PAT dá acesso à **Management API de toda a conta Supabase** (todos os projetos). O próprio arquivo admite "está vazado — ROTACIONAR", mas o token continua lá.
 **Ação:** revogar os 3 PATs no dashboard Supabase → remover do arquivo → `git filter-repo` para expurgar do histórico.
 
 ### C-2. Segredos de produção no histórico do git (`.env.production` / `.env.test`) **[verificado]**
+
 O commit `1eab297` adicionou `.env.production` com valores **reais de produção**: `MERCADOPAGO_ACCESS_TOKEN=APP_USR-…` (token de produção do MP — acesso a cobranças reais), `WEBHOOK_SECRET`, `DOWNLOAD_TOKEN_SECRET` e `FIREBASE_PRIVATE_KEY`. Um commit posterior os deletou, mas **seguem recuperáveis** (`git show 1eab297:.env.production`).
 **Ação:** rotacionar TODOS esses segredos (o token MP de produção é o mais urgente) → expurgar do histórico. Estado atual OK: `.gitignore` cobre `.env*` e nenhum `.env` está trackeado hoje — o problema é só o histórico.
 
 ### C-3. Migrations de segurança com timestamp duplicado bloqueiam o `db push` **[verificado]**
+
 Existem dois arquivos `supabase/migrations/20260701000000_*.sql` (`phase5_audit_immutability` e `phase5_payment_hardening`) com o **mesmo timestamp de 14 dígitos**, que a CLI do Supabase usa como PK em `schema_migrations`. A ordem de aplicação fica indefinida e o `supabase db push` pode falhar ou registrar só uma — justamente as migrations que aplicam `UNIQUE(order_id, product_id)`, `increment_coupon_usage` atômica e imutabilidade de auditoria (as correções de segurança das rodadas anteriores). Se essas migrations ainda não foram aplicadas em produção, as correções de pagamento estão **incompletas em prod**.
 **Ação:** renomear uma para `20260701000001_…` e confirmar que ambas foram aplicadas em produção.
 
@@ -41,60 +44,60 @@ Existem dois arquivos `supabase/migrations/20260701000000_*.sql` (`phase5_audit_
 
 ### Segurança & Infra
 
-**A-1. Rate limiting inexistente em produção** *(segurança + devops)*
+**A-1. Rate limiting inexistente em produção** _(segurança + devops)_
 Todos os limiters (`authLimiter`, `verifyPaymentLimiter`, etc.) vivem em `server.js`/`routes/*`, que não rodam na Vercel. Grep por rate-limit em `api/` = zero. Em produção ficam **ilimitados**: `admin-login` (brute-force de senha/TOTP), `verify-payment` (PII + tokens de download), `subscribe`/`abandoned-cart`/`validate-coupon`/`track-event` (enumeração de cupom, inflação de tabelas, disparo de e-mail em massa). Correção: limiter na borda (Vercel Middleware + Upstash/KV) por IP+rota, ou Vercel WAF.
 
-**A-2. Sem headers de segurança em produção (CSP/HSTS/X-Frame-Options)** *(devops)*
+**A-2. Sem headers de segurança em produção (CSP/HSTS/X-Frame-Options)** _(devops)_
 `vercel.json` não tem seção `headers`. O `lib/security-headers.js` (helmet + CSP, com 8 testes passando) só é usado pelo Express dev. A SPA e as funções vão para produção **sem nenhum header de segurança**. Correção: adicionar bloco `headers` no `vercel.json` reaproveitando as diretivas já testadas.
 
-**A-3. 9 vulnerabilidades npm em produção (4 HIGH)** *(devops)*
+**A-3. 9 vulnerabilidades npm em produção (4 HIGH)** _(devops)_
 `npm audit --omit=dev`: **nodemailer 8.0.5** (CRLF injection em headers, leitura arbitrária de arquivo + SSRF, TLS mal validado → fix 9.0.3), **react-router 7.14** (deserialização turbo-stream, open-redirect `//`, CSRF, DoS → fix 7.18.1), **ws** (memory disclosure/DoS). O e-commerce **envia e-mail transacional com o nodemailer vulnerável hoje**. Quase tudo resolve com `npm audit fix` (sem `--force`).
 
-**A-4. `package-lock.json` no `.gitignore` → build não-reproduzível e CI quebrado** *(devops)* **[verificado]**
+**A-4. `package-lock.json` no `.gitignore` → build não-reproduzível e CI quebrado** _(devops)_ **[verificado]**
 O lockfile não é trackeado (confirmado). A Vercel resolve ranges `^` na hora do deploy (o build de produção pode mudar sem commit), e o `lighthouse.yml` (`npm ci` + `cache:npm`) **falha em todo push** por falta de lockfile. Correção: remover a linha do `.gitignore` e commitar o lockfile.
 
-**A-5. Sem gate de testes na CI** *(devops + qualidade)*
+**A-5. Sem gate de testes na CI** _(devops + qualidade)_
 Só existem `lighthouse.yml` (quebrado pelo A-4) e `email-cron.yml`. `npm test`/`npm run check` não rodam em lugar nenhum; a Vercel roda só `vite build`. Os 110 testes (12 arquivos, todos passando) só rodam localmente. Qualquer regressão de pagamento/auth chega a `main` sem alarme. Correção: `test.yml` com `npm ci && npm run check` em PR/push, como required check.
 
-**A-6. `admin-settings` GET vaza o segredo do 2FA** *(segurança)* **[verificado]**
+**A-6. `admin-settings` GET vaza o segredo do 2FA** _(segurança)_ **[verificado]**
 `api/admin-settings.js:107-108` faz `readSetting('adminConfig')` e devolve `{ value }` **bruto**, incluindo `totpSecret` e `fallbackPin`. Qualquer sessão admin (ou um XSS no painel, ou cache/histórico do browser) exfiltra o segredo TOTP, anulando o segundo fator. Correção: no GET, retornar só flags (`has2FA`, `hasPin`) e nunca os segredos.
 
 ### Correção / Bugs
 
-**A-7. Login admin com 2FA está quebrado (TypeError garantido)** *(frontend)* **[verificado]**
+**A-7. Login admin com 2FA está quebrado (TypeError garantido)** _(frontend)_ **[verificado]**
 `src/providers/AuthProvider.jsx:84-86` chama `await loginAdmin(credentials)` mas **não retorna** o resultado e seta `setAdminAuthenticated(true)` incondicionalmente. Em `AdminLoginPage.jsx:53`, `const data = await loginAdmin(...)` recebe `undefined` → `data.requiresSecondFactor` lança TypeError. Resultado: admin com 2FA vê toast de erro e é marcado autenticado sem cookie → cascata de 401. Correção (~5 linhas): `return await loginAdmin(credentials)` e só autenticar quando `!data.requiresSecondFactor`.
 
-**A-8. `window.open` do pagamento é bloqueável, sem fallback** *(frontend)*
+**A-8. `window.open` do pagamento é bloqueável, sem fallback** _(frontend)_
 `src/pages/CheckoutPage.jsx:232` abre a URL do MP após o `await fetch`, fora da ativação de gesto (Safari/iOS bloqueia). Se bloqueado, a UI diz "finalize pela aba que abrimos" mas nenhuma aba existe e a URL nunca é mostrada — **o cliente não consegue pagar**. Correção: renderizar sempre um link/botão visível com `paymentUrl`.
 
-**A-9. Checkout trava por até 10 min sem opção de cancelar** *(frontend)*
+**A-9. Checkout trava por até 10 min sem opção de cancelar** _(frontend)_
 `CheckoutPage.jsx:106-121` só libera `processing` quando o polling aprova/rejeita ou estoura ~10 min. Fechar a aba do MP sem pagar deixa inputs/cupom/botão desabilitados sem saída além de recarregar. Correção: botão "Cancelar e tentar de novo" que zera `pendingOrderId`/`processing`.
 
 ### Performance
 
-**A-10. N+1 duplo no checkout (caminho mais crítico do negócio)** *(performance)*
+**A-10. N+1 duplo no checkout (caminho mais crítico do negócio)** _(performance)_
 `api/create-payment.js:87-126` faz um SELECT por item no loop, depois `:182-191` um INSERT por item em `order_items`. Carrinho de 10 itens ≈ 25 roundtrips sequenciais (2-4s de latência). Correção: 1 SELECT `id=in.(…)` + 1 INSERT em lote (o helper já aceita array).
 
-**A-11. `admin-dashboard` baixa 7 tabelas inteiras sem `LIMIT` e agrega em JS** *(performance)*
+**A-11. `admin-dashboard` baixa 7 tabelas inteiras sem `LIMIT` e agrega em JS** _(performance)_
 `api/admin-dashboard.js:56-90` faz dump de products, categories, profiles, orders, order_items, download_logs e settings, e agrega em JS. Além do payload crescer sem teto, o **PostgREST corta em ~1000 linhas** → acima de 1000 pedidos os números do admin ficam **silenciosamente errados**. Agravado pelo refetch a cada troca de aba (A-14). Correção: agregações em SQL (RPC/view) + paginação.
 
-**A-12. Catálogo público escaneia `orders` + `order_items` inteiros a cada MISS de CDN** *(performance)*
+**A-12. Catálogo público escaneia `orders` + `order_items` inteiros a cada MISS de CDN** _(performance)_
 `api/products.js:34-60` (e `home-sections.js:135`) baixa todas as orders aprovadas e todos os order_items só para somar `soldCount` em JS. Custo cresce com as vendas e é pago a cada 5 min (expiração do CDN). Correção: RPC com `GROUP BY product_id` ou coluna denormalizada `sold_count` atualizada no webhook.
 
-**A-13. Cron de e-mails sequencial sem `maxDuration` → estoura o timeout da Vercel** *(performance + devops)*
+**A-13. Cron de e-mails sequencial sem `maxDuration` → estoura o timeout da Vercel** _(performance + devops)_
 `api/cron-email-jobs.js` faz 5-8 queries + roundtrip SMTP (transporter novo por envio) por candidato, sequencial, com limites de 500 carrinhos + 500 pedidos por janela. `vercel.json` não define `functions.maxDuration` (default 10-15s) → o job é **cortado no meio** em qualquer volume real e a fila nunca esvazia (a idempotência evita duplicata, mas não conclui). Correção: `maxDuration` alto + processamento em batches com cursor + pré-carregar subscribers/sent_log da janela em lote.
 
 ### Testes
 
-**A-14. Superfície de auth de cliente nasceu 100% sem teste** *(testes)*
+**A-14. Superfície de auth de cliente nasceu 100% sem teste** _(testes)_
 Os 6 handlers `api/auth/customer/*` + `lib/customer-auth-handlers.js` + `lib/env-secret.js` não têm um único teste — mesmo padrão dos achados críticos TEST-01/02 (ainda abertos: `lib/admin-session.js`, `lib/customer-session.js`, `api/admin-login.js` com zero cobertura). Fluxo de dinheiro (create-payment/webhook/download) segue com 1 assert de borda cada. Correção: começar por `env-secret.test.js` (puro, trivial) e `customer-auth-handlers.test.js`.
 
 ### Qualidade
 
-**A-15. God-components e handlers monolíticos** *(qualidade)*
+**A-15. God-components e handlers monolíticos** _(qualidade)_
 `src/pages/AdminPage.jsx` (524 linhas, 18 `useState`, switch de 15 casos), `src/components/ProductWizard.jsx` (826 linhas, editores byte-idênticos duplicados 3×), `DashboardTab.jsx` (643), `AnalysisTab.jsx` (570), `cron-email-jobs.js` (374). O padrão certo já foi adotado em `lib/customer-auth-handlers.js` — falta replicar. Correção incremental: extrair hooks por domínio e sub-componentes.
 
-**A-16. Envelope de erro em 3 formatos simultâneos** *(qualidade)*
+**A-16. Envelope de erro em 3 formatos simultâneos** _(qualidade)_
 9 handlers respondem `{error}`, 33 respondem `{success:false,error}`, e o formato aninhado `{success:false,error:{message,code}}` agora é código de produção via `api/_notfound.js:8` (o achatamento em `src/utils/api.js:7-13` virou obrigatório). Correção: helper `sendError/sendSuccess` padronizando no envelope aninhado.
 
 ---
@@ -102,7 +105,8 @@ Os 6 handlers `api/auth/customer/*` + `lib/customer-auth-handlers.js` + `lib/env
 ## 🟡 MÉDIO
 
 ### Segurança
-- **Oráculo de senha no admin-login** *(verificado)* — `admin-login.js:221` responde 401 (credencial errada) vs `:235` 403 (senha certa, sem role). A diferença confirma a senha a um atacante → validador de credential-stuffing. Responder 401 genérico nos dois casos.
+
+- **Oráculo de senha no admin-login** _(verificado)_ — `admin-login.js:221` responde 401 (credencial errada) vs `:235` 403 (senha certa, sem role). A diferença confirma a senha a um atacante → validador de credential-stuffing. Responder 401 genérico nos dois casos.
 - **Enumeração de usuários** — `lib/customer-auth-handlers.js:88-90,121-122` revela "e-mail já cadastrado" (register) e distingue "não confirmado" de "senha incorreta" (login). Neutralizar as mensagens.
 - **OAuth Google sem `state`/PKCE e `redirect` não validado** — `lib/customer-auth-handlers.js:195-216` propaga `req.query.redirect` sem checar same-site (open-redirect + login-CSRF). Gerar `state` em cookie e validar; rejeitar `redirect` que não comece por `/`.
 - **`abandoned-cart` público gera e-mail para vítima arbitrária** — `api/abandoned-cart.js:33` grava qualquer `{email,items}` via service-role; o cron manda lembrete com nome de item semi-controlado. Exige rate limit + opt-in.
@@ -111,6 +115,7 @@ Os 6 handlers `api/auth/customer/*` + `lib/customer-auth-handlers.js` + `lib/env
 - **Segredos de sessão/cron/webhook não declarados no `vercel.json`** — `ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `CRON_SECRET`, `SMTP_*` ausentes do bloco `env`; se faltarem no painel, auth/webhook/cron quebram silenciosamente (fail-closed). Documentar e validar no deploy.
 
 ### Performance & Banco
+
 - **Faltam índices** — `orders (payment_status, completed_at)` (dashboards/KPIs/cohort/ABC/cron filtram por isso; só existe o single-column de baixa seletividade); `email_sent_log (email, kind, entity_id)` (dedup do cron faz seq-scan); `abandoned_carts (updated_at)`; opcional `orders (created_at desc)`.
 - **`customer-orders` usa `ilike` que não bate o índice** — `api/customer-orders.js:65` faz seq-scan de orders a cada "meus pedidos"; causa raiz: `create-payment.js:168` grava e-mail sem lowercase. Normalizar no INSERT + trocar para `eq`.
 - **Filtro `in.(…)` com milhares de UUIDs na URL** — `admin-abc-products.js:62` (até 10k ids → ~370KB de URL), `cross-sell.js:53`, `customer-orders.js:77`. Estoura o limite de URL quando o histórico crescer. Usar join/RPC no banco.
@@ -120,6 +125,7 @@ Os 6 handlers `api/auth/customer/*` + `lib/customer-auth-handlers.js` + `lib/env
 - **Webhook faz N INSERTs de token sequenciais + provisioning inline** — `api/webhook.js:33-64,137` sob timeout de 10s; margem apertada. Insert em lote + provisioning best-effort assíncrono.
 
 ### Frontend / UX / A11y
+
 - **Cupom não revalidado ao mudar o carrinho** — `CheckoutPage.jsx:248` mantém `appliedCoupon` após remover itens; desconto exibido pode divergir do cobrado. Limpar/revalidar em toda mudança de `cart`.
 - **Convidado vira "logado" na UI** — `CheckoutPage.jsx:205` cria sessão client-side fake; header mostra "Meus produtos"/"Sair" sem sessão real. Guardar e-mail de convidado em estado separado.
 - **Download navega na mesma aba; token expirado vira JSON cru** — `DownloadsPage.jsx:404`; sem tratamento de erro nem "gerar novo link". O path `/api` fixo ignora `getApiBaseUrl()` (quebra em dev). Fazer via fetch→blob com erro inline.
@@ -136,6 +142,7 @@ Os 6 handlers `api/auth/customer/*` + `lib/customer-auth-handlers.js` + `lib/env
 - **Inputs com 14px causam zoom no iOS** — todos os campos de checkout/login; usar 16px em mobile (`text-base sm:text-sm`).
 
 ### Qualidade / Arquitetura
+
 - **Guard admin é boilerplate manual em 15 handlers** — sem `withAdminGuard`; divergências reais (OPTIONS 200 vs 204, ordem 405↔sessão). Handler novo pode esquecer o guard.
 - **Validação sem rede de erro no serverless** — checagens de método fora do `try` (`products.js:8-14`) viram 500 genérico em prod vs tratado no Express. Criar `withErrorEnvelope`.
 - **3 mecanismos de acesso ao Supabase** — `lib/supabase.js` (REST), `services/supabase-auth.js` (SDK) e `supabaseAuthRequest` cru em `lib/customer-auth-handlers.js:37`; env lida em 3 lugares. Consolidar.
@@ -153,7 +160,7 @@ Os 6 handlers `api/auth/customer/*` + `lib/customer-auth-handlers.js` + `lib/env
 - **CORS admin reflete localhost em produção com credenciais** — `lib/admin-session.js:148`.
 - **Erro de negócio como HTTP 200** — `validate-coupon.js:109` responde `200 {success:false}`; usar 422.
 - **Logging sem padrão** — inglês+objeto (`products.js:96`) vs tag+message (`cron-email-jobs.js:371`).
-- **Acentuação faltando em strings visíveis** *(frontend + qualidade)* — "ja esta", "Nao foi possivel", "Sessao invalida", "Codigo invalido" em ~8 arquivos, inclusive código novo (`customer-auth-handlers.js`). Passa impressão de descuido em telas de dinheiro/senha.
+- **Acentuação faltando em strings visíveis** _(frontend + qualidade)_ — "ja esta", "Nao foi possivel", "Sessao invalida", "Codigo invalido" em ~8 arquivos, inclusive código novo (`customer-auth-handlers.js`). Passa impressão de descuido em telas de dinheiro/senha.
 - **Hierarquia de headings quebrada** — ProductDetails sem `h1`, Checkout começa em `h3`, footer salta para `h4`.
 - **`defaultProps` em function component** (removido no React 19) — `StatusStepper.jsx:54`.
 - **fetches sem cancelamento (race)** — `DownloadsPage.jsx:105-168` + `eslint-disable` decorativos (não há ESLint).

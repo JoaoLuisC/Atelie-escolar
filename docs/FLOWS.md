@@ -54,6 +54,7 @@ flowchart TD
 ```
 
 **Pré-requisitos para o reset funcionar:**
+
 - SMTP custom configurado no Supabase Auth (sem isso, usa SMTP grátis que só entrega pra members da org)
 - Em sandbox do Resend, só entrega para o e-mail dono da conta Resend
 - Em produção: domínio verificado em [resend.com/domains](https://resend.com/domains) + `smtp_admin_email` apontando pra ele
@@ -95,6 +96,7 @@ sequenceDiagram
 ```
 
 **Pontos críticos:**
+
 - O Supabase Client é **único responsável** pelo OAuth — não fazemos a request pro Google manualmente.
 - A `redirectTo` precisa estar no `uri_allow_list` do Supabase (scripts/configure-auth.js cuida disso).
 - Depois que o cookie HttpOnly do backend é criado, o frontend faz `signOut({ scope: 'local' })` — os tokens do Supabase saem do localStorage (menos superfície pra XSS). A sessão passa a viver **só** no cookie.
@@ -251,6 +253,7 @@ graph TB
 ```
 
 **Observações:**
+
 - O **Express é BFF** (Backend for Frontend): browser não fala direto com Supabase para dados (exceções: Auth e o upload de mídia do admin, feito por PUT em signed URL do Storage).
 - **Service role nunca sai do servidor** — fica em variáveis de env do backend.
 - **`utils/api.js`** centraliza fetch, timeout (15s) e parsing de erro.

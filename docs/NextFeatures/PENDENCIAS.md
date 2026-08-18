@@ -3,6 +3,7 @@
 > Tudo que **ainda falta** para colocar o projeto em produção. Itens já entregues estão no histórico de [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md). Atualize aqui sempre que fechar um item.
 
 **Como ler:**
+
 - **§1-§2 são bloqueantes operacionais** — sem eles o que foi entregue não funciona em produção
 - **§3 são decisões adiadas conscientemente** (prerender, WebP) e itens de polimento
 - **§4 são tarefas de Fase 5/6** (mídia paga + otimização contínua)
@@ -15,21 +16,21 @@
 
 Sem isso o backend tenta colunas inexistentes e quebra. **Aplicar tudo de uma vez no SQL Editor ou `npm run supabase:db:push`.** São **13 migrations** em [`supabase/migrations/`](../../supabase/migrations) (o [`supabase/schema.sql`](../../supabase/schema.sql) consolida 14 tabelas; `email_subscribers`, `email_sent_log` e `admin_audit_log` existem só nas migrations).
 
-| Migration | Conteúdo | Validação rápida |
-|---|---|---|
-| [`20260524_phase0_analytics`](../../supabase/migrations/20260524000000_phase0_analytics.sql) | `analytics_events` + `orders.attribution_data` | `select count(*) from analytics_events;` |
-| [`20260525_phase1_product_slugs`](../../supabase/migrations/20260525000000_phase1_product_slugs.sql) | `products.slug` + trigger auto-gerador | `select slug from products limit 3;` |
-| [`20260526_phase2_conversion`](../../supabase/migrations/20260526000000_phase2_conversion.sql) | `coupons` + `abandoned_carts` + `products.{faq,reviews,benefits}` + `orders.{coupon_code,discount_amount}` | `select rowsecurity from pg_tables where tablename = 'coupons';` |
-| [`20260526_phase2_log_retention`](../../supabase/migrations/20260526100000_phase2_log_retention.sql) | `purge_old_logs()` — retenção LGPD de logs | `select proname from pg_proc where proname = 'purge_old_logs';` |
-| [`20260526_phase2_security_events`](../../supabase/migrations/20260526110000_phase2_security_events.sql) | `security_events` + `purge_old_logs()` v2 | `select count(*) from security_events;` |
-| [`20260526_phase2_enable_pg_cron`](../../supabase/migrations/20260526120000_phase2_enable_pg_cron.sql) | extensão `pg_cron` + job diário `purge_old_logs_daily` | `select jobname from cron.job;` |
-| [`20260527_phase0_retention`](../../supabase/migrations/20260527000000_phase0_analytics_retention.sql) | `cleanup_old_analytics_events()` + `pg_cron` se disponível | `select proname from pg_proc where proname like 'cleanup%';` |
-| [`20260528_phase3_email`](../../supabase/migrations/20260528000000_phase3_email_marketing.sql) | `email_subscribers` + `email_sent_log` + cleanup | `select tablename from pg_tables where tablename like 'email_%';` |
-| [`20260530_phase4_admin_audit_log`](../../supabase/migrations/20260530000000_phase4_admin_audit_log.sql) | `admin_audit_log` (auditoria de escrita do painel) | `select count(*) from admin_audit_log;` |
-| [`20260701_phase5_audit_immutability`](../../supabase/migrations/20260701000000_phase5_audit_immutability.sql) | `admin_audit_log` append-only (REVOKE + triggers) | `select tgname from pg_trigger where tgname like 'admin_audit_log_no%';` |
-| [`20260701_phase5_payment_hardening`](../../supabase/migrations/20260701000001_phase5_payment_hardening.sql) | UNIQUE `download_tokens(order_id, product_id)` + `increment_coupon_usage()` | `select proname from pg_proc where proname = 'increment_coupon_usage';` |
-| [`20260702_phase6_db_rls_hardening`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql) | baseline RLS nas 17 tabelas + `handle_new_user()` + purges mensais | `select count(*) from pg_policies where schemaname = 'public';` |
-| [`20260703_perf_indexes`](../../supabase/migrations/20260703000000_perf_indexes.sql) | 5 índices de performance (painel/cron) | `select indexname from pg_indexes where tablename = 'orders';` |
+| Migration                                                                                                      | Conteúdo                                                                                                   | Validação rápida                                                         |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [`20260524_phase0_analytics`](../../supabase/migrations/20260524000000_phase0_analytics.sql)                   | `analytics_events` + `orders.attribution_data`                                                             | `select count(*) from analytics_events;`                                 |
+| [`20260525_phase1_product_slugs`](../../supabase/migrations/20260525000000_phase1_product_slugs.sql)           | `products.slug` + trigger auto-gerador                                                                     | `select slug from products limit 3;`                                     |
+| [`20260526_phase2_conversion`](../../supabase/migrations/20260526000000_phase2_conversion.sql)                 | `coupons` + `abandoned_carts` + `products.{faq,reviews,benefits}` + `orders.{coupon_code,discount_amount}` | `select rowsecurity from pg_tables where tablename = 'coupons';`         |
+| [`20260526_phase2_log_retention`](../../supabase/migrations/20260526100000_phase2_log_retention.sql)           | `purge_old_logs()` — retenção LGPD de logs                                                                 | `select proname from pg_proc where proname = 'purge_old_logs';`          |
+| [`20260526_phase2_security_events`](../../supabase/migrations/20260526110000_phase2_security_events.sql)       | `security_events` + `purge_old_logs()` v2                                                                  | `select count(*) from security_events;`                                  |
+| [`20260526_phase2_enable_pg_cron`](../../supabase/migrations/20260526120000_phase2_enable_pg_cron.sql)         | extensão `pg_cron` + job diário `purge_old_logs_daily`                                                     | `select jobname from cron.job;`                                          |
+| [`20260527_phase0_retention`](../../supabase/migrations/20260527000000_phase0_analytics_retention.sql)         | `cleanup_old_analytics_events()` + `pg_cron` se disponível                                                 | `select proname from pg_proc where proname like 'cleanup%';`             |
+| [`20260528_phase3_email`](../../supabase/migrations/20260528000000_phase3_email_marketing.sql)                 | `email_subscribers` + `email_sent_log` + cleanup                                                           | `select tablename from pg_tables where tablename like 'email_%';`        |
+| [`20260530_phase4_admin_audit_log`](../../supabase/migrations/20260530000000_phase4_admin_audit_log.sql)       | `admin_audit_log` (auditoria de escrita do painel)                                                         | `select count(*) from admin_audit_log;`                                  |
+| [`20260701_phase5_audit_immutability`](../../supabase/migrations/20260701000000_phase5_audit_immutability.sql) | `admin_audit_log` append-only (REVOKE + triggers)                                                          | `select tgname from pg_trigger where tgname like 'admin_audit_log_no%';` |
+| [`20260701_phase5_payment_hardening`](../../supabase/migrations/20260701000001_phase5_payment_hardening.sql)   | UNIQUE `download_tokens(order_id, product_id)` + `increment_coupon_usage()`                                | `select proname from pg_proc where proname = 'increment_coupon_usage';`  |
+| [`20260702_phase6_db_rls_hardening`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql)     | baseline RLS nas 17 tabelas + `handle_new_user()` + purges mensais                                         | `select count(*) from pg_policies where schemaname = 'public';`          |
+| [`20260703_perf_indexes`](../../supabase/migrations/20260703000000_perf_indexes.sql)                           | 5 índices de performance (painel/cron)                                                                     | `select indexname from pg_indexes where tablename = 'orders';`           |
 
 ---
 
@@ -39,10 +40,10 @@ Sem isso o backend tenta colunas inexistentes e quebra. **Aplicar tudo de uma ve
 
 ### 2.1 Analytics + Pixel (criar contas e plugar IDs)
 
-| O quê | Onde criar | Variável |
-|---|---|---|
-| GA4 Measurement ID | [analytics.google.com](https://analytics.google.com) → Admin → Create property | `VITE_GA4_ID=G-XXXXXXXXXX` |
-| Meta Pixel ID | [business.facebook.com/events_manager](https://business.facebook.com/events_manager) | `VITE_META_PIXEL_ID=1234567890123456` |
+| O quê              | Onde criar                                                                           | Variável                              |
+| ------------------ | ------------------------------------------------------------------------------------ | ------------------------------------- |
+| GA4 Measurement ID | [analytics.google.com](https://analytics.google.com) → Admin → Create property       | `VITE_GA4_ID=G-XXXXXXXXXX`            |
+| Meta Pixel ID      | [business.facebook.com/events_manager](https://business.facebook.com/events_manager) | `VITE_META_PIXEL_ID=1234567890123456` |
 
 Setar nos dois lugares: `.env.local` (dev) + Vercel Environment Variables (prod).
 
@@ -90,6 +91,7 @@ Customizável via env `REACTIVATION_COUPON_CODE`.
 ### 2.7 Submeter sitemap no Search Console
 
 Após primeiro deploy com `/sitemap.xml` no ar:
+
 1. [search.google.com/search-console](https://search.google.com/search-console) → adicionar domínio
 2. Verificar propriedade (TXT no DNS ou meta tag)
 3. Sitemaps → Adicionar → `sitemap.xml`
@@ -101,6 +103,7 @@ Após primeiro deploy com `/sitemap.xml` no ar:
 ### 3.1 Prerender / SSR — só se Lighthouse SEO < 95
 
 Validar pós-deploy. Se SEO ≥ 95, fica como está. Se cair abaixo:
+
 - **A** — `react-snap` (build-time, mais barato; para `/produtos/:slug` precisa enumerar slugs no build)
 - **B** — migrar Home + ProductDetails para Next.js (custo alto)
 
@@ -109,6 +112,7 @@ Validar pós-deploy. Se SEO ≥ 95, fica como está. Se cair abaixo:
 Hoje: `loading="lazy"` + `decoding="async"` + Tailwind aspect-ratio evitam CLS. ROI baixo agora (50 produtos).
 
 **Quando o CDN entrar:**
+
 1. Escolher entre Cloudflare Images (US$ 5/mês por 100k) ou Imgix (US$ 10/mês por 1k)
 2. Trocar URLs `https://<projeto>.supabase.co/storage/...` por `https://imagens.profamarciarcardoso.com.br/<path>?w=400&fm=webp`
 3. Adicionar `srcset` + `sizes` em [ProductGrid.jsx](../../src/components/ProductGrid.jsx), [HomePage.jsx](../../src/pages/HomePage.jsx), [ProductDetailsPage.jsx](../../src/pages/ProductDetailsPage.jsx)
@@ -118,6 +122,7 @@ Hoje: `loading="lazy"` + `decoding="async"` + Tailwind aspect-ratio evitam CLS. 
 ### 3.3 Lighthouse CI GitHub App (5 min, opcional)
 
 Workflow já roda. Sem token, relatórios vão para `temporary-public-storage`. Para comentários inline no PR:
+
 1. [github.com/apps/lighthouse-ci](https://github.com/apps/lighthouse-ci) → Install
 2. GitHub Settings → Secrets → Actions → `LHCI_GITHUB_APP_TOKEN`
 
@@ -144,6 +149,7 @@ Resta apenas **validar em produção**: o Supabase exige a URL no `uri_allow_lis
 Hoje o painel só aceita e-mail + senha + 2FA opcional ([api/admin-login.js](../../api/admin-login.js)). Cliente já tem Google OAuth funcionando — dá pra reusar a infra.
 
 **Para implementar:**
+
 1. Botão "Entrar com Google" em [AdminPage.jsx](../../src/pages/AdminPage.jsx) reusando `signInWithOAuth({ provider: 'google' })` de [customer-auth.js:79](../../src/services/customer-auth.js#L79)
 2. Novo callback `/auth/admin/google/callback` em [routes/auth.routes.js](../../routes/auth.routes.js) que:
    - Valida o `access_token` Google via Supabase
@@ -183,14 +189,14 @@ Reunião semanal de métricas, A/B mensal (GrowthBook self-host), auditoria SEO 
 
 Auditoria fechada em código (A1–A16). Resta o **recorrente humano** — detalhes em [PLANO_SEGURANCA.md](./PLANO_SEGURANCA.md) (histórico) e [SECURITY.md](../SECURITY.md).
 
-| Item | Cadência | Onde |
-|---|---|---|
-| 🔁 Rotação de segredos (`ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `WEBHOOK_SECRET`, `DOWNLOAD_TOKEN_SECRET`, `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `MERCADOPAGO_ACCESS_TOKEN`) | Trimestral | [SECURITY.md §"Rotação de secrets"](../SECURITY.md) |
-| 🎯 Pen-test focado | Anual | [SECURITY.md §"Pen-test focado"](../SECURITY.md) |
-| 📧 DKIM/SPF/DMARC no Resend | Único — §2.4 acima | — |
-| 🔔 `SECURITY_ALERT_WEBHOOK_URL` (Slack/Discord/Sentry) | Opcional | env var |
-| 📋 Checklist pré-produção (15 itens) | Cada release maior | [SECURITY.md §"Checklist pré-produção"](../SECURITY.md) |
-| 🛒 Vigiar R8 (carrinho localStorage — preços sempre recalculados do banco em [create-payment.js](../../api/create-payment.js)) | Quando mexer em desconto/frete no front | [PLANO_SEGURANCA.md](./PLANO_SEGURANCA.md) (histórico R1–R12) |
+| Item                                                                                                                                                                                          | Cadência                                | Onde                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------- |
+| 🔁 Rotação de segredos (`ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `WEBHOOK_SECRET`, `DOWNLOAD_TOKEN_SECRET`, `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `MERCADOPAGO_ACCESS_TOKEN`) | Trimestral                              | [SECURITY.md §"Rotação de secrets"](../SECURITY.md)           |
+| 🎯 Pen-test focado                                                                                                                                                                            | Anual                                   | [SECURITY.md §"Pen-test focado"](../SECURITY.md)              |
+| 📧 DKIM/SPF/DMARC no Resend                                                                                                                                                                   | Único — §2.4 acima                      | —                                                             |
+| 🔔 `SECURITY_ALERT_WEBHOOK_URL` (Slack/Discord/Sentry)                                                                                                                                        | Opcional                                | env var                                                       |
+| 📋 Checklist pré-produção (15 itens)                                                                                                                                                          | Cada release maior                      | [SECURITY.md §"Checklist pré-produção"](../SECURITY.md)       |
+| 🛒 Vigiar R8 (carrinho localStorage — preços sempre recalculados do banco em [create-payment.js](../../api/create-payment.js))                                                                | Quando mexer em desconto/frete no front | [PLANO_SEGURANCA.md](./PLANO_SEGURANCA.md) (histórico R1–R12) |
 
 ---
 
@@ -199,12 +205,14 @@ Auditoria fechada em código (A1–A16). Resta o **recorrente humano** — detal
 Checklist para marcar cada fase como ✅ "funcionando em produção":
 
 ### Fase 0 — Mensuração
+
 - [ ] Compra de teste com `?utm_source=teste&utm_medium=email` → `orders.attribution_data` retorna o JSON
 - [ ] Aba `/admin → Funil` renderiza sem erro
 - [ ] Após GA4 ID + 7 dias: GA4 mostra `view_item`, `add_to_cart`, `begin_checkout`, `purchase`
 - [ ] Após Pixel ID: Meta Events Manager mostra os 4 eventos
 
 ### Fase 1 — SEO
+
 - [ ] `/produtos/<slug>` retorna produto; `/produtos/<id-antigo>` faz soft-redirect
 - [ ] `view-source:` mostra `<title>`, `<meta description>`, `<script application/ld+json>` corretos
 - [ ] `/sitemap.xml` válido, `/robots.txt` com `Sitemap:`
@@ -212,17 +220,20 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 - [ ] Lighthouse Performance ≥ 90 mobile, SEO ≥ 95
 
 ### Fase 2 — UX/Conversão
+
 - [ ] Pelo menos 1 produto com FAQ + 3 depoimentos visíveis (§3.4 ✅ — editar pela aba "Conversão" do ProductWizard)
 - [ ] Carrinho drawer não navega para `/checkout`
 - [ ] Cupom de teste valida server-side (criar pela aba Cupons do admin ou via SQL — §2.6)
 - [ ] Taxa de conversão `begin_checkout → purchase` ≥ 20% acima do baseline (medir após 30d de dados)
 
 ### Fase 3 — Email
+
 - [ ] Domínio autenticado no Resend (regra D6) — §2.4
 - [ ] Cron rodando — primeiros envios em `email_sent_log`
 - [ ] Mail-tester.com aprovou ≥ 9/10
 
 ### Fase 4 — Análise
+
 - [ ] Aba `/admin → Análise` carrega em < 2s
 - [ ] Pareto + heatmap renderizam com pelo menos 30 dias de pedidos
 - [ ] Export CSV funciona
@@ -231,10 +242,10 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 
 ## §7. Documentação a atualizar (manter sincronizado)
 
-| Arquivo | O que checar |
-|---|---|
-| [README.md](../README.md) | ✅ Abas do admin atualizadas (14 abas); a lista de tabelas agora vive em [ProjectDocs/04-BANCO-DE-DADOS.md](../ProjectDocs/04-BANCO-DE-DADOS.md) (inclui `analytics_events`, `coupons`, `email_subscribers`, `admin_audit_log`, etc.) |
-| [ARCHITECTURE.md](../ARCHITECTURE.md) | ✅ Endpoints novos já listados (`/track-event`, `/admin-funnel`, `/admin-segments`, `/admin-kpis`, `/admin-cohort`, `/admin-abc-*`, `/cron-email-jobs`) |
-| [SECURITY.md](../SECURITY.md) | ✅ Rate limits novos (`/track-event` 120/min, `/validate-coupon` 20/min) + RLS de `analytics_events` já documentados |
-| [SETUP.md](../SETUP.md) | ✅ Seções "Analytics" (GA4/Pixel), "Email" (Resend domain) e "Cron" (CRON_SECRET) presentes |
-| [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md) | Atualizar status conforme as pendências aqui forem fechando |
+| Arquivo                                    | O que checar                                                                                                                                                                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [README.md](../README.md)                  | ✅ Abas do admin atualizadas (14 abas); a lista de tabelas agora vive em [ProjectDocs/04-BANCO-DE-DADOS.md](../ProjectDocs/04-BANCO-DE-DADOS.md) (inclui `analytics_events`, `coupons`, `email_subscribers`, `admin_audit_log`, etc.) |
+| [ARCHITECTURE.md](../ARCHITECTURE.md)      | ✅ Endpoints novos já listados (`/track-event`, `/admin-funnel`, `/admin-segments`, `/admin-kpis`, `/admin-cohort`, `/admin-abc-*`, `/cron-email-jobs`)                                                                               |
+| [SECURITY.md](../SECURITY.md)              | ✅ Rate limits novos (`/track-event` 120/min, `/validate-coupon` 20/min) + RLS de `analytics_events` já documentados                                                                                                                  |
+| [SETUP.md](../SETUP.md)                    | ✅ Seções "Analytics" (GA4/Pixel), "Email" (Resend domain) e "Cron" (CRON_SECRET) presentes                                                                                                                                           |
+| [PLANO_ECOMMERCE.md](./PLANO_ECOMMERCE.md) | Atualizar status conforme as pendências aqui forem fechando                                                                                                                                                                           |

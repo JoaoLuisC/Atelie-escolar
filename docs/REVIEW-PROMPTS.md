@@ -41,16 +41,16 @@
 
 Para cada achado:
 
-| Campo | Conteúdo |
-|---|---|
-| **ID** | `AREA-01`, `AREA-02`… |
-| **Severidade** | CRÍTICO / ALTO / MÉDIO / BAIXO / INFO |
-| **Confiança** | Alta / Média / Baixa |
-| **Local** | `arquivo:linha` (um ou mais) |
-| **Problema** | O que está errado, em 1–3 frases |
-| **Impacto** | O que um atacante/usuário/operador consegue fazer, ou o custo |
-| **Repro/PoC** | Passos ou trecho que demonstra (quando aplicável) |
-| **Correção** | Recomendação concreta e mínima |
+| Campo          | Conteúdo                                                      |
+| -------------- | ------------------------------------------------------------- |
+| **ID**         | `AREA-01`, `AREA-02`…                                         |
+| **Severidade** | CRÍTICO / ALTO / MÉDIO / BAIXO / INFO                         |
+| **Confiança**  | Alta / Média / Baixa                                          |
+| **Local**      | `arquivo:linha` (um ou mais)                                  |
+| **Problema**   | O que está errado, em 1–3 frases                              |
+| **Impacto**    | O que um atacante/usuário/operador consegue fazer, ou o custo |
+| **Repro/PoC**  | Passos ou trecho que demonstra (quando aplicável)             |
+| **Correção**   | Recomendação concreta e mínima                                |
 
 Feche com: **(a)** tabela-resumo ordenada por severidade; **(b)** os **3 itens mais
 urgentes**; **(c)** o que ficou **inconclusivo** e por quê.
@@ -641,19 +641,19 @@ Formato de saída padrão. Entregue um "checklist de prontidão para produção"
 
 ## Cobertura — o que cada área cobre
 
-| Camada do projeto | Áreas que a revisam |
-|---|---|
-| `api/` pagamento/auth | 1, 2, 7 |
-| `api/` demais handlers | 4, 7 |
-| `lib/` sessões/segurança | 2, 7 |
-| `lib/` pagamento/storage/email | 1, 4 |
-| `supabase/migrations` + RLS | 3, 6 |
-| `src/` (front + admin) | 5, 6, 8 |
-| `routes/`, `middleware/`, `server.js` | 4, 7, 10 |
-| Privacidade/LGPD transversal | 6 |
-| Segredos/config/deploy | 7, 10 |
-| Testes/CI | 9, 10 |
-| Arquitetura/dívida técnica | 8 |
+| Camada do projeto                     | Áreas que a revisam |
+| ------------------------------------- | ------------------- |
+| `api/` pagamento/auth                 | 1, 2, 7             |
+| `api/` demais handlers                | 4, 7                |
+| `lib/` sessões/segurança              | 2, 7                |
+| `lib/` pagamento/storage/email        | 1, 4                |
+| `supabase/migrations` + RLS           | 3, 6                |
+| `src/` (front + admin)                | 5, 6, 8             |
+| `routes/`, `middleware/`, `server.js` | 4, 7, 10            |
+| Privacidade/LGPD transversal          | 6                   |
+| Segredos/config/deploy                | 7, 10               |
+| Testes/CI                             | 9, 10               |
+| Arquitetura/dívida técnica            | 8                   |
 
 > Sobreposição entre áreas é intencional: cada uma olha o mesmo código sob uma lente
 > diferente. Ao consolidar, deduplique achados que aparecerem em mais de uma área.

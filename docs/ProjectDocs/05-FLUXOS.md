@@ -40,6 +40,7 @@ flowchart TD
 ```
 
 **Pontos:**
+
 - A política completa de senha (8+ chars, maiúscula, minúscula, número) é validada **no client**; o backend revalida o mínimo de 8 chars e mapeia erros de senha fraca do Supabase (defense in depth).
 - O cookie HttpOnly do nosso backend é **separado** da sessão do Supabase Client.
 - "verificationRequired" depende do toggle "Confirm email" no Supabase Auth.
@@ -78,6 +79,7 @@ sequenceDiagram
 ```
 
 **Pontos críticos:**
+
 - O **Supabase Client é o único responsável** pelo OAuth — não fazemos a request pro Google manualmente.
 - O `redirectTo` precisa estar no `uri_allow_list` do Supabase (`scripts/configure-auth.js` cuida disso).
 - O cookie HttpOnly do nosso backend é **separado** da sessão do Supabase Client. Após o callback, os tokens do Supabase são **removidos do localStorage** (`signOut({scope:'local'})`) — a sessão passa a viver só no cookie.
@@ -102,6 +104,7 @@ flowchart TD
 ```
 
 **Pré-requisitos para o reset funcionar:**
+
 - SMTP custom configurado no Supabase Auth (sem isso, usa SMTP grátis que só entrega pra members da org).
 - Em sandbox do Resend, só entrega para o e-mail dono da conta Resend.
 - Em produção: domínio verificado em [resend.com/domains](https://resend.com/domains) + `smtp_admin_email` apontando pra ele.
@@ -130,6 +133,7 @@ flowchart TD
 ```
 
 **Notas:**
+
 - Rate-limit em `/admin-login`: **5 tentativas falhas / 10 min** (`skipSuccessfulRequests: true`) — aplicado pelo Express em dev; na Vercel serverless não há store compartilhado (pendência API-03).
 - `totpSecret` e `fallbackPin` ficam em `settings.adminConfig` (RLS service-only); as comparações de código/PIN são timing-safe (`safeCompare`).
 - O mesmo campo `factorCode` serve para TOTP **ou** PIN de fallback — vale se bater com qualquer um dos métodos habilitados.
@@ -267,11 +271,13 @@ flowchart TD
 ```
 
 **Regras (ver [11-REGRAS-NEGOCIO §D](./11-REGRAS-NEGOCIO.md)):**
+
 - D2: link de descadastro 1-clique em **todo** e-mail.
 - D7: não enviar para inativos > 180 dias.
 - D8: cupom de reativação só para a janela 90-180d (evitar dar desconto a quem ia comprar).
 
 **Notas:**
+
 - O mesmo cron horário também processa a sequência pós-compra **D+3 / D+15 / D+45** (avaliação, sugestões complementares, novidades da categoria), tudo idempotente via `email_sent_log`.
 - Janelas configuráveis por env: `ABANDONED_CART_FIRST_HOURS` (1), `ABANDONED_CART_SECOND_HOURS` (24), `REACTIVATION_DAYS_MIN/MAX` (90/180).
 - A coluna `recovered_at` é respeitada pelo cron (cart recuperado não recebe lembrete), mas **nada a marca hoje** no fluxo de compra.
@@ -347,6 +353,7 @@ graph TB
 ```
 
 **Observações:**
+
 - O **Express é BFF** (Backend for Frontend): browser não fala direto com Supabase para dados (só Auth).
 - **Service role nunca sai do servidor** — fica em variáveis de env do backend.
 - **`utils/api.js`** centraliza fetch, timeout (15s) e parsing de erro.

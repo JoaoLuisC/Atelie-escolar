@@ -1,6 +1,7 @@
 # Spring Boot BFF para Auth do Cliente (Supabase)
 
 Este material traz blocos completos para implementar o fluxo BFF no Spring Boot, espelhando o BFF Express real do projeto (`lib/customer-auth-handlers.js` + `lib/customer-session.js`, montados por `api/auth/customer/**/*.js` na Vercel e por `routes/auth.routes.js` em dev):
+
 - login/cadastro via backend (`/api/auth/customer/login|register`)
 - cookie `customer_session` `HttpOnly`, `SameSite=Strict` (`Secure` fora de dev/test), assinado com HMAC-SHA256, TTL 8h
 - OAuth Google (`google/start` + `google/callback`)

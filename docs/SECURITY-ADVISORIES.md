@@ -11,12 +11,12 @@ alcançável neste código** — e isso o `npm audit` não responde.
 
 ## Estado atual
 
-| | antes | depois |
-|---|---:|---:|
-| Total (`npm audit`) | 21 | **2** |
-| Crítica | 1 | **0** |
-| Alta | 10 | **0** |
-| Runtime (`npm audit --omit=dev`) | 2 | **2** |
+|                                  | antes | depois |
+| -------------------------------- | ----: | -----: |
+| Total (`npm audit`)              |    21 |  **2** |
+| Crítica                          |     1 |  **0** |
+| Alta                             |    10 |  **0** |
+| Runtime (`npm audit --omit=dev`) |     2 |  **2** |
 
 As 2 restantes são a mesma advisory, contada duas vezes (o pacote e quem depende dele), e
 **não são alcançáveis** — análise abaixo.
@@ -31,13 +31,13 @@ via `buildCommand` em `vercel.json` — o CLI nunca roda.
 
 O que ele arrastava:
 
-| Pacote | Severidade | Via |
-|--------|-----------|-----|
-| `tar` | **crítica** | `@mapbox/node-pre-gyp` |
-| `undici` | alta (17 advisories) | `@vercel/node` |
-| `path-to-regexp`, `semver` | alta | `@vercel/routing-utils` |
-| `esbuild` | moderada | `@vercel/node` |
-| `ajv`, `@tootallnate/once`, `debug` | moderada / baixa | transitivas |
+| Pacote                              | Severidade           | Via                     |
+| ----------------------------------- | -------------------- | ----------------------- |
+| `tar`                               | **crítica**          | `@mapbox/node-pre-gyp`  |
+| `undici`                            | alta (17 advisories) | `@vercel/node`          |
+| `path-to-regexp`, `semver`          | alta                 | `@vercel/routing-utils` |
+| `esbuild`                           | moderada             | `@vercel/node`          |
+| `ajv`, `@tootallnate/once`, `debug` | moderada / baixa     | transitivas             |
 
 Vale registrar o `esbuild`: a advisory dele ("qualquer site pode mandar requisição para o dev
 server") pareceria relevante para quem roda `npm run dev`. Não era — `npm ls esbuild` mostrava
@@ -51,7 +51,7 @@ pacote fixado na árvore.
 ## Aceito: `uuid <11.1.1` sob `mercadopago` — não alcançável
 
 **Advisory:** [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq) —
-*Missing buffer bounds check in v3/v5/v6 when `buf` is provided*. Severidade moderada.
+_Missing buffer bounds check in v3/v5/v6 when `buf` is provided_. Severidade moderada.
 
 **Por que não se aplica aqui.** A falha está nas versões **v3, v5 e v6** do gerador, e só
 quando o chamador passa um buffer de destino (`buf`). O SDK do Mercado Pago usa **apenas

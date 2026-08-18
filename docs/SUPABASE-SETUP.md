@@ -5,11 +5,11 @@
 ## Setup com Supabase CLI (recomendado)
 
 1. Login no CLI:
-	- `npm run supabase:login`
+   - `npm run supabase:login`
 2. Inicializacao do projeto (ja feita neste repositorio):
-	- `npm run supabase:init`
+   - `npm run supabase:init`
 3. Vincular o repositorio ao projeto remoto:
-	- `npm run supabase:link -- --project-ref SEU_PROJECT_REF`
+   - `npm run supabase:link -- --project-ref SEU_PROJECT_REF`
 
 Depois disso, use sempre migracoes versionadas em Git (ha 13 migrations em `supabase/migrations/`).
 

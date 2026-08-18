@@ -16,11 +16,11 @@
 
 ## Modelo de ameaça
 
-| Ator | Acesso esperado | Como bloqueamos |
-|------|-----------------|-----------------|
-| Visitante anônimo | Catálogo público, criar pedido | RLS public read em categories/products active=true |
-| Cliente logado | Próprios pedidos, downloads dos próprios produtos | RLS por `auth.uid()` em orders, user_products |
-| Admin | Tudo via painel /admin | Cookie admin_session + service_role no backend |
+| Ator                  | Acesso esperado                                           | Como bloqueamos                                                                                                                                                                                                                                                  |
+| --------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Visitante anônimo     | Catálogo público, criar pedido                            | RLS public read em categories/products active=true                                                                                                                                                                                                               |
+| Cliente logado        | Próprios pedidos, downloads dos próprios produtos         | RLS por `auth.uid()` em orders, user_products                                                                                                                                                                                                                    |
+| Admin                 | Tudo via painel /admin                                    | Cookie admin_session + service_role no backend                                                                                                                                                                                                                   |
 | Atacante com anon key | Catálogo público, e **só as colunas concedidas** a `anon` | RLS bloqueia a LINHA; sem policies = sem acesso. **RLS não filtra COLUNA** — a restrição de coluna vem de `grant select (…)`, aplicada em `products` pela migration `20260812000000_security_hardening_wave1.sql` para tirar `download_url` do alcance de `anon` |
 
 > A anon key é **pública por construção** (vai no bundle JS — `vercel.json` injeta
@@ -32,8 +32,10 @@
 ## Camadas de defesa
 
 ### 1. Network / Headers
+
 - `helmet()` (dev/Express, via [lib/security-headers.js](../lib/security-headers.js)) — CSP estrita explícita (script-src whitelist GA4/Meta/MP), HSTS, X-Frame-Options DENY, X-Content-Type-Options. Em produção (Vercel) os headers equivalentes vêm da rota `/(.*)` do [vercel.json](../vercel.json): HSTS, nosniff, `X-Frame-Options: SAMEORIGIN`, Permissions-Policy e CSP com `frame-ancestors 'none'`.
 - `cors()` — allowlist explícita em prod (`CORS_ORIGINS`); permissivo em dev (apenas `localhost:*`)
+
 #### ⚠ Rate limiting — pendência API-03, **ainda aberta em produção**
 
 **Nenhum dos limites `express-rate-limit` listados abaixo está ativo no ambiente implantado.**
@@ -66,16 +68,16 @@ Todo preset de `RATE_LIMITS` tem chamador — não há configuração morta prom
 não existe, e é assim que precisa continuar: um preset sem `enforceRateLimit` no handler lê como
 endpoint protegido e não é.
 
-| Endpoint | Limite | Chave |
-|---|---|---|
-| `/api/admin-login` | 5 / 10 min (senha) + 5 / 10 min (2º fator, balde próprio) | IP · IP+e-mail no 2º fator |
-| `/api/auth/customer/login` | 5 / 10 min **por conta** + 20 contas distintas / 10 min por IP | IP+e-mail · IP |
-| `/api/verify-payment` | 600 / 10 min **por pedido** + 40 pedidos distintos / 10 min por IP | IP+`order_code` · IP |
-| `/api/create-payment` | 20 / min | IP |
-| `/api/validate-coupon` · `/api/unsubscribe` | 20 / min | IP |
-| `/api/abandoned-cart` | 30 / min | IP |
-| `/api/track-event` | 120 / min | IP |
-| `/api/subscribe` · `/api/me-delete-account` | 5 / min | IP |
+| Endpoint                                    | Limite                                                             | Chave                      |
+| ------------------------------------------- | ------------------------------------------------------------------ | -------------------------- |
+| `/api/admin-login`                          | 5 / 10 min (senha) + 5 / 10 min (2º fator, balde próprio)          | IP · IP+e-mail no 2º fator |
+| `/api/auth/customer/login`                  | 5 / 10 min **por conta** + 20 contas distintas / 10 min por IP     | IP+e-mail · IP             |
+| `/api/verify-payment`                       | 600 / 10 min **por pedido** + 40 pedidos distintos / 10 min por IP | IP+`order_code` · IP       |
+| `/api/create-payment`                       | 20 / min                                                           | IP                         |
+| `/api/validate-coupon` · `/api/unsubscribe` | 20 / min                                                           | IP                         |
+| `/api/abandoned-cart`                       | 30 / min                                                           | IP                         |
+| `/api/track-event`                          | 120 / min                                                          | IP                         |
+| `/api/subscribe` · `/api/me-delete-account` | 5 / min                                                            | IP                         |
 
 Os dois casos de **dois baldes** (login de cliente e verify-payment) existem porque um teto por
 IP puro erra nos dois sentidos com o público desta loja: professoras atrás do mesmo CGNAT/escola
@@ -93,9 +95,11 @@ Só no Express de desenvolvimento (store em memória, nunca implantado): o limit
 > A mesma divergência de runtime vale para os schemas Zod em `validation/`: eles são
 > aplicados por `middleware/validate.middleware.js`, usado só pelas rotas Express. Os
 > handlers de `api/` validam por conta própria — ao endurecer validação, mexa nos dois lados.
+
 - HTTPS obrigatório em produção: o boot em [server.js](../server.js) falha se `APP_URL` não começar com `https://` quando `APP_ENV=production`. Cookies `Secure` dependem disso.
 
 ### 2. Autenticação
+
 - **Cookies HttpOnly** — `customer_session` e `admin_session`. JavaScript não acessa.
 - **SameSite=Strict** em ambos os cookies (CSRF mitigation).
 - **Anti-CSRF em profundidade** — além do SameSite, métodos de escrita com sessão admin e os logouts exigem request same-origin (`isSameOriginRequest` checa `Origin`/`Referer` contra allowlist; sem nenhum dos dois → bloqueia, fail-closed).
@@ -109,25 +113,25 @@ Só no Express de desenvolvimento (store em memória, nunca implantado): o limit
 
 17 tabelas, todas com RLS. Resumo:
 
-| Tabela | Quem lê | Quem escreve |
-|--------|---------|--------------|
-| categories | anon+auth (active=true) | service_role |
-| products | anon+auth (active=true) | service_role |
-| orders | auth (próprios) | service_role |
-| order_items | auth (via parent order) | service_role |
-| profiles | auth (próprio) | auth (só `display_name` do próprio — trigger guard, ver §4b) + service_role |
-| user_products | auth (próprios) | service_role |
-| download_tokens | — | service_role |
-| download_logs | — | service_role |
-| security_events | — | service_role |
-| settings | — | service_role |
-| page_views | — | service_role (INSERT anônimo removido — RLS-04, forjava IP/UA) |
-| analytics_events | — | service_role (INSERT anônimo removido — W1-04, forjava `created_at`/`session_id`/`source` e `properties` sem teto; o front posta em `/api/track-event`, que valida por `lib/analytics-events.js`) |
-| coupons | — | service_role (validação via `/validate-coupon`) |
-| abandoned_carts | — | service_role (escrita pública removida — RLS-02; só via `/api/abandoned-cart`) |
-| email_subscribers | — | service_role |
-| email_sent_log | — | service_role |
-| admin_audit_log | — | service_role só INSERT (append-only: UPDATE/DELETE revogados até para service_role — regra I1) |
+| Tabela            | Quem lê                 | Quem escreve                                                                                                                                                                                      |
+| ----------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| categories        | anon+auth (active=true) | service_role                                                                                                                                                                                      |
+| products          | anon+auth (active=true) | service_role                                                                                                                                                                                      |
+| orders            | auth (próprios)         | service_role                                                                                                                                                                                      |
+| order_items       | auth (via parent order) | service_role                                                                                                                                                                                      |
+| profiles          | auth (próprio)          | auth (só `display_name` do próprio — trigger guard, ver §4b) + service_role                                                                                                                       |
+| user_products     | auth (próprios)         | service_role                                                                                                                                                                                      |
+| download_tokens   | —                       | service_role                                                                                                                                                                                      |
+| download_logs     | —                       | service_role                                                                                                                                                                                      |
+| security_events   | —                       | service_role                                                                                                                                                                                      |
+| settings          | —                       | service_role                                                                                                                                                                                      |
+| page_views        | —                       | service_role (INSERT anônimo removido — RLS-04, forjava IP/UA)                                                                                                                                    |
+| analytics_events  | —                       | service_role (INSERT anônimo removido — W1-04, forjava `created_at`/`session_id`/`source` e `properties` sem teto; o front posta em `/api/track-event`, que valida por `lib/analytics-events.js`) |
+| coupons           | —                       | service_role (validação via `/validate-coupon`)                                                                                                                                                   |
+| abandoned_carts   | —                       | service_role (escrita pública removida — RLS-02; só via `/api/abandoned-cart`)                                                                                                                    |
+| email_subscribers | —                       | service_role                                                                                                                                                                                      |
+| email_sent_log    | —                       | service_role                                                                                                                                                                                      |
+| admin_audit_log   | —                       | service_role só INSERT (append-only: UPDATE/DELETE revogados até para service_role — regra I1)                                                                                                    |
 
 **Princípio**: service role bypassa RLS, então o **backend pode tudo**. Browser usando anon key fica restrito ao que está nas policies.
 
@@ -187,20 +191,20 @@ where instance_id is null;
 
 ### 5. Dados sensíveis nunca expostos
 
-| Dado | Onde está | Cliente acessa? |
-|------|-----------|-----------------|
-| `SUPABASE_SERVICE_ROLE_KEY` | `.env` backend | ❌ |
-| `MERCADOPAGO_ACCESS_TOKEN` | `.env` backend | ❌ |
-| `WEBHOOK_SECRET` | `.env` backend | ❌ |
-| `ADMIN_SESSION_SECRET` | `.env` backend | ❌ |
-| `CUSTOMER_SESSION_SECRET` | `.env` backend | ❌ |
-| `DOWNLOAD_TOKEN_SECRET` | `.env` backend | ❌ |
-| `CRON_SECRET` | `.env` backend + GitHub Secrets | ❌ |
-| `SMTP_PASS` (API key do Resend) | `.env` backend | ❌ |
-| `adminConfig.totpSecret` | `settings` table | ❌ (RLS service-only) |
-| `adminConfig.fallbackPin` | `settings` table | ❌ (RLS service-only) |
-| `VITE_SUPABASE_ANON_KEY` | `.env` frontend | ✅ (por design, pública) |
-| `VITE_SUPABASE_URL` | `.env` frontend | ✅ (por design, pública) |
+| Dado                            | Onde está                       | Cliente acessa?          |
+| ------------------------------- | ------------------------------- | ------------------------ |
+| `SUPABASE_SERVICE_ROLE_KEY`     | `.env` backend                  | ❌                       |
+| `MERCADOPAGO_ACCESS_TOKEN`      | `.env` backend                  | ❌                       |
+| `WEBHOOK_SECRET`                | `.env` backend                  | ❌                       |
+| `ADMIN_SESSION_SECRET`          | `.env` backend                  | ❌                       |
+| `CUSTOMER_SESSION_SECRET`       | `.env` backend                  | ❌                       |
+| `DOWNLOAD_TOKEN_SECRET`         | `.env` backend                  | ❌                       |
+| `CRON_SECRET`                   | `.env` backend + GitHub Secrets | ❌                       |
+| `SMTP_PASS` (API key do Resend) | `.env` backend                  | ❌                       |
+| `adminConfig.totpSecret`        | `settings` table                | ❌ (RLS service-only)    |
+| `adminConfig.fallbackPin`       | `settings` table                | ❌ (RLS service-only)    |
+| `VITE_SUPABASE_ANON_KEY`        | `.env` frontend                 | ✅ (por design, pública) |
+| `VITE_SUPABASE_URL`             | `.env` frontend                 | ✅ (por design, pública) |
 
 ### 6. Webhook do Mercado Pago
 
@@ -208,10 +212,7 @@ Toda requisição em `/api/webhook` é validada via HMAC:
 
 ```js
 const manifest = `id:${paymentId};request-id:${xRequestId};ts:${timestamp};`;
-const expectedHash = crypto
-  .createHmac('sha256', WEBHOOK_SECRET)
-  .update(manifest)
-  .digest('hex');
+const expectedHash = crypto.createHmac('sha256', WEBHOOK_SECRET).update(manifest).digest('hex');
 
 if (!timingSafeEqual(hash, expectedHash)) return 401;
 ```
@@ -237,6 +238,7 @@ Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Res
 **b) E-mails transacionais e de marketing do app** (confirmação de compra, double opt-in, carrinho abandonado, pós-compra, reativação) — enviados via [lib/email-sender.js](../lib/email-sender.js) (nodemailer com credenciais `SMTP_HOST/PORT/USER/PASS/FROM`), com idempotência pela tabela `email_sent_log`. Em [api/send-confirmation-email.js](../api/send-confirmation-email.js) o destinatário é **sempre** o e-mail gravado no pedido (o do body é ignorado — conhecer um `order_code` não permite exfiltrar dados para outro e-mail).
 
 **Modo sandbox vs domínio verificado:**
+
 - Sem verificar domínio no Resend ([resend.com/domains](https://resend.com/domains)): só entrega para o e-mail da conta Resend (uso dev).
 - Com domínio verificado (SPF + DKIM + DMARC nos DNS): entrega para qualquer destinatário; usar `pedidos@seudominio.com.br` como `from`.
 
@@ -264,14 +266,14 @@ Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Res
 
 A função `public.purge_old_logs()` foi criada na migration [`20260526100000_phase2_log_retention.sql`](../supabase/migrations/20260526100000_phase2_log_retention.sql) e sua versão final está na migration phase6 ([`20260702000000_phase6_db_rls_hardening.sql`](../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql)). Retenções em vigor:
 
-| Tabela | Retenção | Função / job (`pg_cron`) |
-|---|---|---|
-| `download_logs` | 12 meses | `purge_old_logs()` — diário 03:00 UTC |
-| `security_events` | 6 meses | `purge_old_logs()` — diário 03:00 UTC |
-| `page_views` | 6 meses | `purge_old_logs()` — diário 03:00 UTC |
-| `admin_audit_log` | 18 meses | `purge_old_logs()` — diário 03:00 UTC |
-| `analytics_events` | 180 dias (regra D7) | `cleanup_old_analytics_events()` — mensal, dia 1 às 03:00 UTC |
-| `email_sent_log` | 90 dias | `cleanup_old_email_logs()` — mensal, dia 1 às 03:15 UTC |
+| Tabela              | Retenção                                            | Função / job (`pg_cron`)                                       |
+| ------------------- | --------------------------------------------------- | -------------------------------------------------------------- |
+| `download_logs`     | 12 meses                                            | `purge_old_logs()` — diário 03:00 UTC                          |
+| `security_events`   | 6 meses                                             | `purge_old_logs()` — diário 03:00 UTC                          |
+| `page_views`        | 6 meses                                             | `purge_old_logs()` — diário 03:00 UTC                          |
+| `admin_audit_log`   | 18 meses                                            | `purge_old_logs()` — diário 03:00 UTC                          |
+| `analytics_events`  | 180 dias (regra D7)                                 | `cleanup_old_analytics_events()` — mensal, dia 1 às 03:00 UTC  |
+| `email_sent_log`    | 90 dias                                             | `cleanup_old_email_logs()` — mensal, dia 1 às 03:15 UTC        |
 | `email_subscribers` | não confirmados > 30 dias; descadastrados > 90 dias | `purge_stale_email_subscribers()` — mensal, dia 1 às 03:30 UTC |
 
 A extensão `pg_cron` é habilitada pela migration [`20260526120000_phase2_enable_pg_cron.sql`](../supabase/migrations/20260526120000_phase2_enable_pg_cron.sql). Se não estiver disponível, as migrations caem num `notice` e o purge precisa ser rodado manualmente (`select public.purge_old_logs();`).
@@ -286,13 +288,13 @@ Eventos passam por [lib/security-logger.js](../lib/security-logger.js) que escre
 
 Eventos emitidos hoje:
 
-| `event_name` | Origem | Severidade | Quando dispara |
-|---|---|---|---|
-| `webhook_invalid_signature` | [api/webhook.js](../api/webhook.js) | warn | Assinatura HMAC do MP inválida ou ausente — em **qualquer** ambiente (o antigo bypass de `APP_ENV=test` foi removido) |
-| `admin_login_failed` | [api/admin-login.js](../api/admin-login.js) | warn | Senha errada **ou** conta sem role `admin`/`master` |
-| `verify_payment_email_mismatch` | [api/verify-payment.js](../api/verify-payment.js) | warn | Order existe mas email passado não bate (enumeração) |
-| `account_self_deleted` | [api/me-delete-account.js](../api/me-delete-account.js) | info | Exclusão de conta LGPD concluída (sem PII; só contagem de pedidos anonimizados) |
-| `admin_audit_write_failed` | [lib/admin-audit.js](../lib/admin-audit.js) | error | Insert no `admin_audit_log` falhou — auditoria não pode falhar em silêncio |
+| `event_name`                    | Origem                                                  | Severidade | Quando dispara                                                                                                        |
+| ------------------------------- | ------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| `webhook_invalid_signature`     | [api/webhook.js](../api/webhook.js)                     | warn       | Assinatura HMAC do MP inválida ou ausente — em **qualquer** ambiente (o antigo bypass de `APP_ENV=test` foi removido) |
+| `admin_login_failed`            | [api/admin-login.js](../api/admin-login.js)             | warn       | Senha errada **ou** conta sem role `admin`/`master`                                                                   |
+| `verify_payment_email_mismatch` | [api/verify-payment.js](../api/verify-payment.js)       | warn       | Order existe mas email passado não bate (enumeração)                                                                  |
+| `account_self_deleted`          | [api/me-delete-account.js](../api/me-delete-account.js) | info       | Exclusão de conta LGPD concluída (sem PII; só contagem de pedidos anonimizados)                                       |
+| `admin_audit_write_failed`      | [lib/admin-audit.js](../lib/admin-audit.js)             | error      | Insert no `admin_audit_log` falhou — auditoria não pode falhar em silêncio                                            |
 
 Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 16)` para correlação cross-event sem violar LGPD. O mesmo vale para a chave do rate limit: o valor do escopo (e-mail, `order_code`) entra como hash, nunca em claro, porque `rate_limit_hit` sobrevive 24h à requisição. Rate-limits relacionados (ver a tabela de cobertura na camada 1):
 
@@ -320,15 +322,15 @@ Deve retornar **0 CRITICAL**. Os INFO "RLS Enabled No Policy" em `settings`, `do
 
 Secrets a rotacionar (todos no `.env.local` + Vercel):
 
-| Secret | Impacto da rotação | Ação extra |
-|---|---|---|
-| `ADMIN_SESSION_SECRET` | Logout forçado de admins | Avisar a equipe |
-| `CUSTOMER_SESSION_SECRET` | Logout forçado de clientes | Sem ação |
-| `DOWNLOAD_TOKEN_SECRET` | Nenhum (tokens são opacos) | — |
-| `WEBHOOK_SECRET` | Precisa sincronizar com painel Mercado Pago | Atualizar no painel MP **antes** do redeploy |
-| `CRON_SECRET` | Cron de e-mails para de autenticar se desincronizar | Atualizar GitHub Secrets **junto** com a Vercel |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role muda — rotacionar via dashboard Supabase | Atualizar Vercel imediatamente |
-| `MERCADOPAGO_ACCESS_TOKEN` | Pagamentos param se desincronizar | Gerar novo no painel MP **antes** de atualizar prod |
+| Secret                      | Impacto da rotação                                    | Ação extra                                          |
+| --------------------------- | ----------------------------------------------------- | --------------------------------------------------- |
+| `ADMIN_SESSION_SECRET`      | Logout forçado de admins                              | Avisar a equipe                                     |
+| `CUSTOMER_SESSION_SECRET`   | Logout forçado de clientes                            | Sem ação                                            |
+| `DOWNLOAD_TOKEN_SECRET`     | Nenhum (tokens são opacos)                            | —                                                   |
+| `WEBHOOK_SECRET`            | Precisa sincronizar com painel Mercado Pago           | Atualizar no painel MP **antes** do redeploy        |
+| `CRON_SECRET`               | Cron de e-mails para de autenticar se desincronizar   | Atualizar GitHub Secrets **junto** com a Vercel     |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role muda — rotacionar via dashboard Supabase | Atualizar Vercel imediatamente                      |
+| `MERCADOPAGO_ACCESS_TOKEN`  | Pagamentos param se desincronizar                     | Gerar novo no painel MP **antes** de atualizar prod |
 
 Passo a passo:
 
@@ -345,6 +347,7 @@ Em caso de incidente (segredo vazado): rotacione tudo na hora, mesmo fora do tri
 Próxima janela: **prévia a cada release maior** (mínimo anual).
 
 Escopo mínimo recomendado:
+
 - Enumeração de `order_code` em `/verify-payment` (com e sem email).
 - IDOR em `/api/admin-*` (cookie de cliente tentando acessar endpoints de admin).
 - CSRF em endpoints POST que dependem só de cookie (`/auth/customer/login`, `/admin-login`).

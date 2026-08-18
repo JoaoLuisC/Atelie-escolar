@@ -3,6 +3,7 @@
 > O que ainda falta para colocar tudo em produção + Fases 5 e 6 (não iniciadas). Itens entregues e fechados estão no histórico ao final.
 >
 > **Como ler:**
+>
 > - **§1-§2 são bloqueantes operacionais** — sem eles, o que está em código não funciona em prod
 > - **§3 são decisões adiadas conscientemente** + itens de polimento
 > - **§4 são Fases 5 e 6** (não iniciadas, exigem investimento)
@@ -16,18 +17,18 @@
 
 Sem isso o backend tenta colunas inexistentes e quebra. **Aplicar tudo de uma vez** no SQL Editor ou `npm run supabase:db:push`.
 
-| Migration | Conteúdo | Validação rápida |
-|---|---|---|
-| [`20260524_phase0_analytics`](../../supabase/migrations/20260524000000_phase0_analytics.sql) | `analytics_events` + `orders.attribution_data` | `select count(*) from analytics_events;` |
-| [`20260525_phase1_product_slugs`](../../supabase/migrations/20260525000000_phase1_product_slugs.sql) | `products.slug` + trigger auto-gerador | `select slug from products limit 3;` |
-| [`20260526_phase2_conversion`](../../supabase/migrations/20260526000000_phase2_conversion.sql) | `coupons` + `abandoned_carts` + `products.{faq,reviews,benefits}` + `orders.{coupon_code,discount_amount}` | `select relrowsecurity from pg_class where relname = 'coupons';` |
-| [`20260527_phase0_retention`](../../supabase/migrations/20260527000000_phase0_analytics_retention.sql) | `cleanup_old_analytics_events()` + `pg_cron` se disponível | `select proname from pg_proc where proname like 'cleanup%';` |
-| [`20260528_phase3_email`](../../supabase/migrations/20260528000000_phase3_email_marketing.sql) | `email_subscribers` + `email_sent_log` + cleanup | `select tablename from pg_tables where tablename like 'email_%';` |
-| [`20260530_phase4_admin_audit_log`](../../supabase/migrations/20260530000000_phase4_admin_audit_log.sql) | `admin_audit_log` (auditoria de escrita do painel admin) | `select count(*) from admin_audit_log;` |
-| [`20260701_phase5_audit_immutability`](../../supabase/migrations/20260701000000_phase5_audit_immutability.sql) | `admin_audit_log` append-only (revoke update/delete + triggers) | `select tgname from pg_trigger where tgname like 'admin_audit_log_no%';` |
-| [`20260701_phase5_payment_hardening`](../../supabase/migrations/20260701000001_phase5_payment_hardening.sql) | UNIQUE `(order_id, product_id)` em `download_tokens` + `increment_coupon_usage()` atômico | `select proname from pg_proc where proname = 'increment_coupon_usage';` |
-| [`20260702_phase6_db_rls_hardening`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql) | Baseline RLS nas 17 tabelas + guard de `profiles` + `handle_new_user()` versionado + purges agendados | `select count(*) from pg_policies where schemaname = 'public';` |
-| [`20260703_perf_indexes`](../../supabase/migrations/20260703000000_perf_indexes.sql) | 5 índices de performance (`orders`, `email_sent_log`, `abandoned_carts`) | `select indexname from pg_indexes where indexname = 'orders_payment_status_completed_at_idx';` |
+| Migration                                                                                                      | Conteúdo                                                                                                   | Validação rápida                                                                               |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [`20260524_phase0_analytics`](../../supabase/migrations/20260524000000_phase0_analytics.sql)                   | `analytics_events` + `orders.attribution_data`                                                             | `select count(*) from analytics_events;`                                                       |
+| [`20260525_phase1_product_slugs`](../../supabase/migrations/20260525000000_phase1_product_slugs.sql)           | `products.slug` + trigger auto-gerador                                                                     | `select slug from products limit 3;`                                                           |
+| [`20260526_phase2_conversion`](../../supabase/migrations/20260526000000_phase2_conversion.sql)                 | `coupons` + `abandoned_carts` + `products.{faq,reviews,benefits}` + `orders.{coupon_code,discount_amount}` | `select relrowsecurity from pg_class where relname = 'coupons';`                               |
+| [`20260527_phase0_retention`](../../supabase/migrations/20260527000000_phase0_analytics_retention.sql)         | `cleanup_old_analytics_events()` + `pg_cron` se disponível                                                 | `select proname from pg_proc where proname like 'cleanup%';`                                   |
+| [`20260528_phase3_email`](../../supabase/migrations/20260528000000_phase3_email_marketing.sql)                 | `email_subscribers` + `email_sent_log` + cleanup                                                           | `select tablename from pg_tables where tablename like 'email_%';`                              |
+| [`20260530_phase4_admin_audit_log`](../../supabase/migrations/20260530000000_phase4_admin_audit_log.sql)       | `admin_audit_log` (auditoria de escrita do painel admin)                                                   | `select count(*) from admin_audit_log;`                                                        |
+| [`20260701_phase5_audit_immutability`](../../supabase/migrations/20260701000000_phase5_audit_immutability.sql) | `admin_audit_log` append-only (revoke update/delete + triggers)                                            | `select tgname from pg_trigger where tgname like 'admin_audit_log_no%';`                       |
+| [`20260701_phase5_payment_hardening`](../../supabase/migrations/20260701000001_phase5_payment_hardening.sql)   | UNIQUE `(order_id, product_id)` em `download_tokens` + `increment_coupon_usage()` atômico                  | `select proname from pg_proc where proname = 'increment_coupon_usage';`                        |
+| [`20260702_phase6_db_rls_hardening`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql)     | Baseline RLS nas 17 tabelas + guard de `profiles` + `handle_new_user()` versionado + purges agendados      | `select count(*) from pg_policies where schemaname = 'public';`                                |
+| [`20260703_perf_indexes`](../../supabase/migrations/20260703000000_perf_indexes.sql)                           | 5 índices de performance (`orders`, `email_sent_log`, `abandoned_carts`)                                   | `select indexname from pg_indexes where indexname = 'orders_payment_status_completed_at_idx';` |
 
 Plus 3 do Phase 2 já incluídas: `phase2_log_retention`, `phase2_security_events`, `phase2_enable_pg_cron` — total: **13 migrations** em `supabase/migrations/`.
 
@@ -37,10 +38,10 @@ Plus 3 do Phase 2 já incluídas: `phase2_log_retention`, `phase2_security_event
 
 ### 2.1 Analytics + Pixel (criar contas e plugar IDs)
 
-| O quê | Onde criar | Variável |
-|---|---|---|
-| GA4 Measurement ID | [analytics.google.com](https://analytics.google.com) → Admin → Create property | `VITE_GA4_ID=G-XXXXXXXXXX` |
-| Meta Pixel ID | [business.facebook.com/events_manager](https://business.facebook.com/events_manager) | `VITE_META_PIXEL_ID=1234567890123456` |
+| O quê              | Onde criar                                                                           | Variável                              |
+| ------------------ | ------------------------------------------------------------------------------------ | ------------------------------------- |
+| GA4 Measurement ID | [analytics.google.com](https://analytics.google.com) → Admin → Create property       | `VITE_GA4_ID=G-XXXXXXXXXX`            |
+| Meta Pixel ID      | [business.facebook.com/events_manager](https://business.facebook.com/events_manager) | `VITE_META_PIXEL_ID=1234567890123456` |
 
 Setar nos dois lugares: `.env.local` (dev) + Vercel Environment Variables (prod, Production env).
 
@@ -88,6 +89,7 @@ Customizável via env `REACTIVATION_COUPON_CODE`.
 ### 2.7 Submeter sitemap no Search Console
 
 Após primeiro deploy com `/sitemap.xml` no ar:
+
 1. [search.google.com/search-console](https://search.google.com/search-console) → adicionar domínio
 2. Verificar propriedade (TXT no DNS ou meta tag)
 3. Sitemaps → Adicionar → `sitemap.xml`
@@ -99,6 +101,7 @@ Após primeiro deploy com `/sitemap.xml` no ar:
 ### 3.1 Prerender / SSR — só se Lighthouse SEO < 95
 
 Validar pós-deploy. Se SEO ≥ 95, fica como está. Se cair abaixo:
+
 - **A** — `react-snap` (build-time, mais barato; para `/produtos/:slug` precisa enumerar slugs no build)
 - **B** — migrar Home + ProductDetails para Next.js (custo alto)
 
@@ -107,6 +110,7 @@ Validar pós-deploy. Se SEO ≥ 95, fica como está. Se cair abaixo:
 Hoje: `loading="lazy"` + `decoding="async"` + Tailwind `aspect-ratio` evitam CLS. ROI baixo agora (~50 produtos).
 
 **Quando o CDN entrar:**
+
 1. Escolher entre Cloudflare Images (US$ 5/mês por 100k) ou Imgix (US$ 10/mês por 1k)
 2. Trocar URLs `https://<projeto>.supabase.co/storage/...` por `https://imagens.profamarciarcardoso.com.br/<path>?w=400&fm=webp`
 3. Adicionar `srcset` + `sizes` em `ProductGrid.jsx`, `HomePage.jsx`, `ProductDetailsPage.jsx`
@@ -116,6 +120,7 @@ Hoje: `loading="lazy"` + `decoding="async"` + Tailwind `aspect-ratio` evitam CLS
 ### 3.3 Lighthouse CI GitHub App (5 min, opcional)
 
 Workflow já roda. Sem token, relatórios vão para `temporary-public-storage`. Para comentários inline no PR:
+
 1. [github.com/apps/lighthouse-ci](https://github.com/apps/lighthouse-ci) → Install
 2. GitHub Settings → Secrets → Actions → `LHCI_GITHUB_APP_TOKEN`
 
@@ -142,6 +147,7 @@ Resta apenas **validar em produção**: o Supabase exige a URL no `uri_allow_lis
 Hoje o painel só aceita e-mail + senha + 2FA opcional (`api/admin-login.js`). Cliente já tem Google OAuth funcionando — dá pra reusar a infra.
 
 **Para implementar:**
+
 1. Botão "Entrar com Google" em `AdminLoginPage.jsx` reusando `signInWithOAuth({ provider: 'google' })` de `src/services/customer-auth.js`
 2. Novo callback `/api/auth/admin/google/callback` (função em `api/`, espelhada em dev via `routes/api-compat.routes.js`) que:
    - Valida o `access_token` Google via Supabase
@@ -160,6 +166,7 @@ Hoje o painel só aceita e-mail + senha + 2FA opcional (`api/admin-login.js`). C
 > e client em `src/services/customer-auth.js`. Mantido abaixo como registro histórico.
 
 Hoje a exclusão de conta é feita via admin (regra H7). Implementar endpoint público:
+
 - `/api/me/delete-account` (auth required) que:
   1. Anonimiza `orders.customer_email` (substitui por hash)
   2. Deleta `profiles` (mantém `orders.customer_id` NULL para histórico)
@@ -190,11 +197,13 @@ Dois cards `PendingDataCard` em `DashboardTab.jsx` aguardam instrumentação de 
 ### Fase 5 — Mídia paga 💵 ~R$ 5.000/mês mínimo
 
 Só atacar quando o **gatilho** disparar:
+
 - 30+ dias de funil rastreado
 - 50+ pedidos para Curva ABC
 - ROAS orgânico ≥ 3x
 
 Tarefas detalhadas em [10-MARKETING-ANALYTICS §10](./10-MARKETING-ANALYTICS.md). Resumo:
+
 - Curva ABC mostra nichos prioritários
 - Google Ads: 3 campanhas (genérica + categoria + institucional)
 - Meta Ads: funis separados (frio + morno + quente)
@@ -215,14 +224,14 @@ Stack gratuito: Microsoft Clarity (heatmap) + GrowthBook self-hosted (A/B). Hotj
 
 Auditoria fechada em código (A1–A16, ver histórico). Resta o **recorrente humano**:
 
-| Item | Cadência | Onde |
-|---|---|---|
-| 🔁 Rotação de segredos (`ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `WEBHOOK_SECRET`, `DOWNLOAD_TOKEN_SECRET`, `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `MERCADOPAGO_ACCESS_TOKEN`) | Trimestral | [08-SEGURANCA §11.2](./08-SEGURANCA.md) |
-| 🎯 Pen-test focado | Anual | [08-SEGURANCA §11.3](./08-SEGURANCA.md) |
-| 📧 DKIM/SPF/DMARC no Resend | Único — §2.4 acima | — |
-| 🔔 `SECURITY_ALERT_WEBHOOK_URL` (Slack/Discord/Sentry) | Opcional | env var |
-| 📋 Checklist pré-produção (17 itens) | Cada release maior | [08-SEGURANCA §12](./08-SEGURANCA.md) |
-| 🛒 Vigiar R8 (carrinho localStorage) | Quando mexer em desconto/frete no front | — |
+| Item                                                                                                                                                                                          | Cadência                                | Onde                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------- |
+| 🔁 Rotação de segredos (`ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `WEBHOOK_SECRET`, `DOWNLOAD_TOKEN_SECRET`, `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `MERCADOPAGO_ACCESS_TOKEN`) | Trimestral                              | [08-SEGURANCA §11.2](./08-SEGURANCA.md) |
+| 🎯 Pen-test focado                                                                                                                                                                            | Anual                                   | [08-SEGURANCA §11.3](./08-SEGURANCA.md) |
+| 📧 DKIM/SPF/DMARC no Resend                                                                                                                                                                   | Único — §2.4 acima                      | —                                       |
+| 🔔 `SECURITY_ALERT_WEBHOOK_URL` (Slack/Discord/Sentry)                                                                                                                                        | Opcional                                | env var                                 |
+| 📋 Checklist pré-produção (17 itens)                                                                                                                                                          | Cada release maior                      | [08-SEGURANCA §12](./08-SEGURANCA.md)   |
+| 🛒 Vigiar R8 (carrinho localStorage)                                                                                                                                                          | Quando mexer em desconto/frete no front | —                                       |
 
 ---
 
@@ -231,12 +240,14 @@ Auditoria fechada em código (A1–A16, ver histórico). Resta o **recorrente hu
 Checklist para marcar cada fase como ✅ "funcionando em produção":
 
 ### Fase 0 — Mensuração
+
 - [ ] Compra de teste com `?utm_source=teste&utm_medium=email` → `orders.attribution_data` retorna o JSON
 - [ ] Aba `/admin → Funil` renderiza sem erro
 - [ ] Após GA4 ID + 7 dias: GA4 mostra `view_item`, `add_to_cart`, `begin_checkout`, `purchase`
 - [ ] Após Pixel ID: Meta Events Manager mostra os 4 eventos
 
 ### Fase 1 — SEO
+
 - [ ] `/produtos/<slug>` retorna produto; `/produtos/<id-antigo>` faz soft-redirect
 - [ ] `view-source:` mostra `<title>`, `<meta description>`, `<script application/ld+json>` corretos
 - [ ] `/sitemap.xml` válido, `/robots.txt` com `Sitemap:`
@@ -244,17 +255,20 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 - [ ] Lighthouse Performance ≥ 90 mobile, SEO ≥ 95
 
 ### Fase 2 — UX/Conversão
+
 - [ ] Pelo menos 1 produto com FAQ + 3 depoimentos visíveis (§3.4 entregue — criar pela aba "Conversão" do `ProductWizard`)
 - [ ] Carrinho drawer não navega para `/checkout`
 - [ ] Cupom de teste valida server-side (criar via SQL primeiro)
 - [ ] Taxa de conversão `begin_checkout → purchase` ≥ 20% acima do baseline (medir após 30d de dados)
 
 ### Fase 3 — Email
+
 - [ ] Domínio autenticado no Resend (regra D6) — §2.4
 - [ ] Cron rodando — primeiros envios em `email_sent_log`
 - [ ] Mail-tester.com aprovou ≥ 9/10
 
 ### Fase 4 — Análise
+
 - [ ] Aba `/admin → Análise` carrega em < 2s
 - [ ] Pareto + heatmap renderizam com pelo menos 30 dias de pedidos
 - [ ] Export CSV funciona
@@ -263,22 +277,22 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 
 ## §7. Histórico do que foi entregue
 
-| Data | Marco |
-|---|---|
+| Data       | Marco                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 2026-05-24 | **Auditoria de segurança fechada (A1–A16).** Histórico do git auditado, webhook exige assinatura, segredos validados no boot, fallbacks inseguros removidos, CORS wildcard tirado, `serviceRoleHelpers` força opt-in pra service-role, `order_code` com 128 bits + email obrigatório em `/verify-payment`, `Referrer-Policy: no-referrer` no download, `/privacidade` + `/termos` publicadas, `.env.example` migrado de Gmail para Resend, `purge_old_logs()` com `pg_cron`, CSP estrita, Zod do produto bloqueia `javascript:`/`data:`, rate-limit dedicado em `/verify-payment`, log estruturado em `security_events`. |
-| 2026-05-24 | **Fase 0 entregue** — GA4 + Meta Pixel + UTM + `analytics_events` + funil admin + Lighthouse CI + banner LGPD |
-| 2026-05-24 | **Fase 1 entregue** — slugs + meta tags + JSON-LD + sitemap + robots + fontes trim |
-| 2026-05-24 | **Fase 2 entregue** — refactor ProductsPage + selos de confiança (checkout + SocialProofStrip) + Skeleton + página produto convertendo + CartDrawer + cupons |
-| 2026-05-24 | **Fase 3 entregue** — double opt-in + 8 templates + sequência D+0/3/15/45 + abandoned cart + reactivation 90d + cron + aba Segmentos |
-| 2026-05-24 | **Fase 4 entregue** — Curva ABC produtos + clientes + coorte mensal + KPIs (LTV, recompra, LTV/CAC) + aba Análise com Pareto + heatmap + export CSV |
-| 2026-05-24 | **Decisão registrada:** stack 100% gratuito até Fase 4; Fase 5 (mídia paga) só quando dados justificarem |
-| 2026-05-24 | **Documentação consolidada** em `docs/ProjectDocs/` — 13 documentos numerados como fonte única |
-| 2026-05-30 | **§3.4 fechada — Wizards admin** — aba "Conversão" no `ProductWizard` (FAQ/depoimentos/benefícios) + CRUD de cupons no painel (`CouponsTab`/`CouponWizard`/`api/admin-coupons.js`). Produtos e cupons deixam de depender de SQL bruto. |
-| 2026-05-30 | **§3.2 e §3.6 fechadas — Acessibilidade + guard rail** — toques ≥ 44px (hambúrguer, menu mobile, CTAs dos cards), hierarquia reduzida no menu mobile, line-clamp confirmado e bloqueio de upload de imagem > 500kB. |
-| 2026-05-30 | **Reconciliação de documentação** — features já no código mas ausentes do histórico mapeadas: CRUD de Categorias, Vitrine configurável, abas Faturamento/Desempenho/Comparativo/Segurança (2FA pela UI), Cross-sell, upload assinado, cleanup manual de analytics. §3.5 (Google OAuth do cliente) reclassificada de "wirado" para "código completo, falta validar em prod". |
-| 2026-07-01 | **Hardening Fase 5** — `admin_audit_log` append-only (revoke + triggers anti update/delete), dedup + UNIQUE `(order_id, product_id)` em `download_tokens` (webhooks MP reentregues) e `increment_coupon_usage()` atômico respeitando `max_uses`. |
-| 2026-07-02 | **Hardening de RLS (Fase 6)** — baseline versionado em migration: RLS habilitado nas 17 tabelas, trigger guard de `profiles` (anti-escalonamento), remoção de escrita pública em `abandoned_carts`/`page_views`, `handle_new_user()` versionado, `purge_old_logs()` v3 + `purge_stale_email_subscribers()` agendados via `pg_cron`. |
-| 2026-07-03 | **Índices de performance** — 5 índices para as consultas quentes do painel/cron (`orders`, `email_sent_log`, `abandoned_carts`) em `20260703000000_perf_indexes.sql`. |
+| 2026-05-24 | **Fase 0 entregue** — GA4 + Meta Pixel + UTM + `analytics_events` + funil admin + Lighthouse CI + banner LGPD                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 2026-05-24 | **Fase 1 entregue** — slugs + meta tags + JSON-LD + sitemap + robots + fontes trim                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 2026-05-24 | **Fase 2 entregue** — refactor ProductsPage + selos de confiança (checkout + SocialProofStrip) + Skeleton + página produto convertendo + CartDrawer + cupons                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 2026-05-24 | **Fase 3 entregue** — double opt-in + 8 templates + sequência D+0/3/15/45 + abandoned cart + reactivation 90d + cron + aba Segmentos                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-05-24 | **Fase 4 entregue** — Curva ABC produtos + clientes + coorte mensal + KPIs (LTV, recompra, LTV/CAC) + aba Análise com Pareto + heatmap + export CSV                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 2026-05-24 | **Decisão registrada:** stack 100% gratuito até Fase 4; Fase 5 (mídia paga) só quando dados justificarem                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 2026-05-24 | **Documentação consolidada** em `docs/ProjectDocs/` — 13 documentos numerados como fonte única                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 2026-05-30 | **§3.4 fechada — Wizards admin** — aba "Conversão" no `ProductWizard` (FAQ/depoimentos/benefícios) + CRUD de cupons no painel (`CouponsTab`/`CouponWizard`/`api/admin-coupons.js`). Produtos e cupons deixam de depender de SQL bruto.                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-05-30 | **§3.2 e §3.6 fechadas — Acessibilidade + guard rail** — toques ≥ 44px (hambúrguer, menu mobile, CTAs dos cards), hierarquia reduzida no menu mobile, line-clamp confirmado e bloqueio de upload de imagem > 500kB.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 2026-05-30 | **Reconciliação de documentação** — features já no código mas ausentes do histórico mapeadas: CRUD de Categorias, Vitrine configurável, abas Faturamento/Desempenho/Comparativo/Segurança (2FA pela UI), Cross-sell, upload assinado, cleanup manual de analytics. §3.5 (Google OAuth do cliente) reclassificada de "wirado" para "código completo, falta validar em prod".                                                                                                                                                                                                                                              |
+| 2026-07-01 | **Hardening Fase 5** — `admin_audit_log` append-only (revoke + triggers anti update/delete), dedup + UNIQUE `(order_id, product_id)` em `download_tokens` (webhooks MP reentregues) e `increment_coupon_usage()` atômico respeitando `max_uses`.                                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-07-02 | **Hardening de RLS (Fase 6)** — baseline versionado em migration: RLS habilitado nas 17 tabelas, trigger guard de `profiles` (anti-escalonamento), remoção de escrita pública em `abandoned_carts`/`page_views`, `handle_new_user()` versionado, `purge_old_logs()` v3 + `purge_stale_email_subscribers()` agendados via `pg_cron`.                                                                                                                                                                                                                                                                                      |
+| 2026-07-03 | **Índices de performance** — 5 índices para as consultas quentes do painel/cron (`orders`, `email_sent_log`, `abandoned_carts`) em `20260703000000_perf_indexes.sql`.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
 

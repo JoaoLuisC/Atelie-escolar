@@ -7,13 +7,13 @@
 Os 44 handlers de `api/` foram escritos em momentos diferentes e cada um inventou o próprio
 contrato de erro. A medição de 2026-08-13 encontrou **três formatos vivos ao mesmo tempo**:
 
-| Formato | Ocorrências |
-|---------|-------------|
-| `{ success: false, error: 'texto' }` | 32 handlers |
-| `{ error: 'texto' }` | 9 handlers |
+| Formato                                        | Ocorrências                      |
+| ---------------------------------------------- | -------------------------------- |
+| `{ success: false, error: 'texto' }`           | 32 handlers                      |
+| `{ error: 'texto' }`                           | 9 handlers                       |
 | `{ success: false, error: { message, code } }` | `middleware/error.middleware.js` |
 
-O custo não ficou no backend. `src/utils/api.js` carregava um *shim* em `parseJson` que
+O custo não ficou no backend. `src/utils/api.js` carregava um _shim_ em `parseJson` que
 detectava `error` como objeto e o achatava para string, existindo **apenas** para o cliente
 sobreviver aos dois formatos.
 
@@ -28,10 +28,10 @@ Toda resposta JSON passa por `lib/http.js`:
 
 ```js
 // sucesso — payload plano ao lado do flag
-ok(res, { products, total })      // { success: true, products, total }
+ok(res, { products, total }); // { success: true, products, total }
 
 // erro — objeto, SEMPRE com code
-fail(res, { status: 422, code: ERROR_CODES.COUPON_EXPIRED, message: 'Este cupom expirou.' })
+fail(res, { status: 422, code: ERROR_CODES.COUPON_EXPIRED, message: 'Este cupom expirou.' });
 // { success: false, error: { code: 'COUPON_EXPIRED', message: 'Este cupom expirou.' } }
 ```
 

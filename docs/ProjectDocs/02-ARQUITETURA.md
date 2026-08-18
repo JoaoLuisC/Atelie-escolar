@@ -284,46 +284,55 @@ Express :3000
 ## Decisões arquiteturais (ADRs informais)
 
 ### D1. SPA + BFF Express ao invés de Next.js
+
 **Contexto.** Time de 1 dev, projeto pequeno, hosting gratuito Vercel.
 **Decisão.** React SPA + Express BFF, sem SSR.
 **Trade-off.** Perdemos prerender automático → SEO depende de Lighthouse + sitemap + meta dinâmico via Helmet (já no verde). Se SEO cair abaixo de 95 em produção, avaliar `react-snap` (build-time prerender). Migrar para Next.js só se ROI justificar.
 
 ### D2. Cookies HttpOnly assinados ao invés de localStorage com JWT
+
 **Contexto.** Auth de admin e cliente expostos a XSS se token estiver acessível ao JS.
 **Decisão.** Sessões via cookie HttpOnly + HMAC-SHA256. JS não acessa.
 **Trade-off.** Precisamos manter `ADMIN_SESSION_SECRET` e `CUSTOMER_SESSION_SECRET` no servidor + rotação trimestral. CSRF mitigado por SameSite=Strict.
 
 ### D3. Polling como fallback de webhook
+
 **Contexto.** Em dev sem ngrok, webhook do MP não chega; em prod, pode falhar/atrasar.
 **Decisão.** Frontend faz polling em `/api/verify-payment` a cada 4s (CheckoutPage) e 10s (DownloadsPage).
 **Trade-off.** Mais requests, mas garante UX confiável. Rate-limit (60/min por IP) controla abuso.
 
 ### D4. localStorage para carrinho
+
 **Contexto.** Carrinho não precisa estar no banco para visitante anônimo.
 **Decisão.** Items em `localStorage`; preço e disponibilidade re-validados no checkout (server-side).
 **Trade-off.** Atacante pode forjar preço no client; backend sempre revalida com `products.price` antes de criar preferência MP.
 
 ### D5. Vitrine configurável em `settings` ao invés de coluna em `products`
+
 **Contexto.** Quais produtos aparecem em destaque, mais vendidos, novidades.
 **Decisão.** Tabela `settings` (key-value JSON) guarda a configuração da vitrine. Aba **Vitrine** edita.
 **Trade-off.** Setup inicial mais complexo, mas dona da loja edita sem dev intermediar.
 
 ### D6. Cron via GitHub Actions ao invés de pg_cron
+
 **Contexto.** Supabase Free não garante `pg_cron`. Disparo de emails (abandoned cart, reativação) precisa ser confiável.
 **Decisão.** Workflow `email-cron.yml` chama `/api/cron-email-jobs` com `CRON_SECRET`.
 **Trade-off.** Dependência do GitHub (free 2.000 min/mês). `pg_cron` é usado apenas para purges de retenção de dados antigos (logs, eventos de analytics, subscribers não confirmados), que não bloqueiam se falharem.
 
 ### D7. Schema único `public` no Postgres
+
 **Contexto.** Multi-schema (auth, public, storage) complicaria policies.
 **Decisão.** Tudo do app vive em `public.*`. Apenas Auth/Storage usam `auth.*`/`storage.*`.
 **Trade-off.** Necessário `revoke execute` em SECURITY DEFINER functions + grants de coluna explícitos em `profiles` (ver [08-SEGURANCA §4b](./08-SEGURANCA.md)).
 
 ### D8. Tailwind ao invés de styled-components
+
 **Contexto.** Time pequeno, branding consistente, mobile-first.
 **Decisão.** Tailwind com `brand-*` customizado em `tailwind.config.js`.
 **Trade-off.** Markup carregado de classes, mas zero CSS-in-JS overhead e tree-shake nativo.
 
 ### D9. Vitest ao invés de Jest
+
 **Contexto.** Build é Vite; queremos mesmo ESM e velocidade.
 **Decisão.** Vitest + Testing Library.
 **Trade-off.** Algumas libs com setup só Jest precisam de adaptação; ganhamos hot-reload de testes e config unificada.
@@ -332,21 +341,22 @@ Express :3000
 
 ## Dependências externas
 
-| Dependência | Onde aparece | Como falha graciosamente |
-|---|---|---|
-| Supabase | Tudo: DB, Auth, Storage | App fica 500. Sem fallback (single point of failure por design) |
-| Mercado Pago | Checkout + webhook | Checkout falha visivelmente; webhook gera 4xx/5xx logado, polling cobre |
-| Resend (SMTP) | Reset senha + e-mails app | Reset falha silencioso para o usuário; logs do server mostram erro |
-| GA4 | Eventos do funil | Disparo bloqueado se sem consent. Sem GA4 ID, `gtag` não inicializa |
-| Meta Pixel | Eventos do funil | Idem GA4 |
-| Vercel | Hosting + serverless | App offline; deploy alternativo em outro provedor possível (vercel.json é principal blocker) |
-| GitHub Actions | Cron de email | Cron não roda; pode ser invocado manualmente via `gh workflow run` |
+| Dependência    | Onde aparece              | Como falha graciosamente                                                                     |
+| -------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
+| Supabase       | Tudo: DB, Auth, Storage   | App fica 500. Sem fallback (single point of failure por design)                              |
+| Mercado Pago   | Checkout + webhook        | Checkout falha visivelmente; webhook gera 4xx/5xx logado, polling cobre                      |
+| Resend (SMTP)  | Reset senha + e-mails app | Reset falha silencioso para o usuário; logs do server mostram erro                           |
+| GA4            | Eventos do funil          | Disparo bloqueado se sem consent. Sem GA4 ID, `gtag` não inicializa                          |
+| Meta Pixel     | Eventos do funil          | Idem GA4                                                                                     |
+| Vercel         | Hosting + serverless      | App offline; deploy alternativo em outro provedor possível (vercel.json é principal blocker) |
+| GitHub Actions | Cron de email             | Cron não roda; pode ser invocado manualmente via `gh workflow run`                           |
 
 ---
 
 ## Configurações importantes
 
 ### `server.js` (Express bootstrap)
+
 1. Carrega `.env.{ENV}.local` → `.env.local` → `.env.{ENV}` → `.env` (cascata; `ENV` = `APP_ENV || NODE_ENV`)
 2. Em prod: valida que `APP_URL` começa com `https://` e que segredos estão setados
 3. `app.set('trust proxy', 1)` para Vercel
@@ -355,17 +365,20 @@ Express :3000
 6. Handler de erro global + 404 JSON
 
 ### `vite.config.js`
+
 - Port 5173 com `strictPort: true` (não muda de porta se ocupada)
 - `manualChunks` (via `rolldownOptions`, Vite 8) para split de chunks: `router` (react-router), `supabase`, `forms` (react-hook-form), `react` (react + react-dom), `vendor` (resto)
 - Test config: jsdom, setupFiles, globals
 
 ### `vercel.json`
+
 - Build estático em `dist/` (frontend)
 - Cada `api/**/*.js` vira função serverless (o caminho do arquivo é a rota; ex.: `api/auth/customer/login.js` → `/api/auth/customer/login`)
 - Rotas em ordem: headers de segurança em todas as respostas (HSTS, CSP, X-Frame-Options etc., com `continue`); `/api/*` → `/api/$1`; `/sitemap.xml` → `/api/sitemap.xml`; filesystem (estáticos); `/api/*` sem função → `/api/notfound` (404 JSON); `/*` → `/index.html` (SPA fallback)
 - Os `dest` são **caminhos de rota, sem `.js`** — sob zero-config a Vercel publica `api/x.js` na rota `/api/x`. E o handler do 404 **não pode** voltar a se chamar `_notfound.js`: arquivos de `api/` prefixados com `_` não viram função, o `dest` não resolveria e todo `/api/*` inexistente cairia no SPA fallback, respondendo HTML com status 200
 
 ### `tailwind.config.js`
+
 - Brand: `purple` (#9B5DE5) com escalas 50-900; accents `sky`, `pink`, `yellow`
 - Fonts: Raleway (display), Poppins (heading), Roboto (sans)
 - Shadows brand + animations marquee/float
@@ -376,10 +389,10 @@ Express :3000
 
 Itens descartados conscientemente hoje, com gatilho de reabertura:
 
-| Item | Gatilho para reabrir |
-|---|---|
-| Next.js / SSR | Lighthouse SEO < 95 em produção, ou TTFB ruim em conexão 3G |
-| pg_cron oficial (Supabase Pro) | Volume de e-mails ultrapassa GitHub Actions free; ou job precisa rodar de minuto a minuto |
-| CDN de imagens (Cloudflare Images / Imgix) | Catálogo > 200 produtos OU bandwidth Vercel ultrapassa 100GB/mês |
-| Sentry / observabilidade paga | ErrorBoundary mostra > 100 erros/dia |
-| Microsserviços | Quando team crescer > 5 devs e bloqueios mútuos surgirem |
+| Item                                       | Gatilho para reabrir                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Next.js / SSR                              | Lighthouse SEO < 95 em produção, ou TTFB ruim em conexão 3G                               |
+| pg_cron oficial (Supabase Pro)             | Volume de e-mails ultrapassa GitHub Actions free; ou job precisa rodar de minuto a minuto |
+| CDN de imagens (Cloudflare Images / Imgix) | Catálogo > 200 produtos OU bandwidth Vercel ultrapassa 100GB/mês                          |
+| Sentry / observabilidade paga              | ErrorBoundary mostra > 100 erros/dia                                                      |
+| Microsserviços                             | Quando team crescer > 5 devs e bloqueios mútuos surgirem                                  |

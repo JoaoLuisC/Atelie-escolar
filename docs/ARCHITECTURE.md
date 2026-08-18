@@ -28,18 +28,18 @@ Mercado Pago para pagamento; Resend (SMTP) para e-mail. Deploy na Vercel
 
 ## Estrutura de pastas
 
-| Pasta | Responsabilidade |
-|---|---|
-| `src/` | App React (páginas, componentes, providers, services, hooks) |
-| `src/components/admin/` | Painel administrativo (tabs, ui, utils) |
-| `api/` | Handlers HTTP (1 arquivo por endpoint) — rodam na Vercel e no Express |
-| `lib/` | Lógica de backend reutilizável (Supabase, sessões, e-mail, segurança, audit) |
-| `routes/` | Roteamento Express (`api-compat.routes.js` monta os handlers de `api/*.js`; `auth.routes.js` monta `/auth/customer/*`) |
-| `middleware/` | Tratamento de erro do Express (`notFoundHandler`/`errorHandler`) — só roda em dev |
-| `services/` | Clients Supabase server-side |
-| `utils/` | `AppError` (erro HTTP usado pelo `errorHandler`) |
-| `supabase/` | `schema.sql` canônico + `migrations/` |
-| `scripts/` | Utilitários de operação (diagnóstico Supabase, Management API, DNS) |
+| Pasta                   | Responsabilidade                                                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `src/`                  | App React (páginas, componentes, providers, services, hooks)                                                           |
+| `src/components/admin/` | Painel administrativo (tabs, ui, utils)                                                                                |
+| `api/`                  | Handlers HTTP (1 arquivo por endpoint) — rodam na Vercel e no Express                                                  |
+| `lib/`                  | Lógica de backend reutilizável (Supabase, sessões, e-mail, segurança, audit)                                           |
+| `routes/`               | Roteamento Express (`api-compat.routes.js` monta os handlers de `api/*.js`; `auth.routes.js` monta `/auth/customer/*`) |
+| `middleware/`           | Tratamento de erro do Express (`notFoundHandler`/`errorHandler`) — só roda em dev                                      |
+| `services/`             | Clients Supabase server-side                                                                                           |
+| `utils/`                | `AppError` (erro HTTP usado pelo `errorHandler`)                                                                       |
+| `supabase/`             | `schema.sql` canônico + `migrations/`                                                                                  |
+| `scripts/`              | Utilitários de operação (diagnóstico Supabase, Management API, DNS)                                                    |
 
 > **Não existe um BFF Express separado.** Todo endpoint servido pelo `server.js`
 > é o mesmo módulo de `api/*.js` que a Vercel publica como função — o Express só

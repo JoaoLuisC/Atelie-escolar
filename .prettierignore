@@ -1,0 +1,19 @@
+# Artefatos gerados — o Prettier não decide o estilo de quem não escrevemos.
+node_modules/
+dist/
+build/
+coverage/
+.vercel/
+
+# Servido como está e pode conter snippet de terceiro (mesma exclusão do
+# eslint.config.js).
+public/
+
+# Gerado pelo npm: o Prettier e o npm discordam da formatação, então incluí-lo
+# no gate produziria CI vermelho a cada `npm install`.
+package-lock.json
+
+# Árvore do TCC: texto acadêmico e artefato de build próprio, com seu próprio
+# package-lock. Não é código-fonte deste produto e já está fora do eslint pelo
+# mesmo motivo. Reformatar prosa aqui só produziria churn.
+tcc-build/

@@ -61,6 +61,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Visão de relance do estado do negócio.
 
 **Mostra.**
+
 - KPIs principais (hero cards): faturamento do mês (com delta vs mês anterior + sparkline de 14 dias), ticket médio do mês, pedidos aprovados (+ pendentes), clientes recorrentes
 - Mini stats: receita total, produtos ativos, pedidos pendentes, clientes cadastrados
 - KPIs avançados (Fase 4): LTV médio 12m, taxa de recompra, ticket médio 12m, LTV/CAC (mostra "Fase 5" enquanto CAC não existir — o endpoint retorna `cac: null`)
@@ -82,10 +83,12 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** CRUD de produtos.
 
 **Mostra.**
+
 - Lista completa de produtos com: nome, badge "Destaque" (featured), categoria, preço, status (ativo/inativo)
 - Filtros: busca por nome, categoria, ativo/inativo
 
 **Ações.**
+
 - **Novo produto** → abre `ProductWizard` (4 steps: Básico → Mídia → Preço & Variações → Conversão; o step Conversão edita `benefits`, `faq` e `reviews`)
 - **Editar** → mesmo wizard pré-preenchido
 - **Pausar/Ativar** (soft toggle via `PATCH /api/admin-products`)
@@ -101,6 +104,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Ver quais produtos vendem e são baixados de fato.
 
 **Mostra.**
+
 - Tabela por produto, ordenada por unidades vendidas: vendas, receita, downloads e taxa de download (downloads/vendas)
 
 **Fonte.** Derivado client-side (`deriveProductPerformance`) de pedidos aprovados + download logs do payload de `GET /api/admin-dashboard`.
@@ -112,9 +116,11 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** CRUD de categorias.
 
 **Mostra.**
+
 - Cards com: cor, nome, badge destaque (featured), status (ativa/inativa)
 
 **Ações.**
+
 - **Nova categoria** → `CategoryWizard` (nome, cor, featured, ativa; o slug é gerado automaticamente pelo endpoint a partir do nome — `normalizeSlug` em `api/admin-categories.js`; o trigger de slug no banco existe só para `products`)
 - **Editar**
 - **Excluir** (com `confirm`; produtos vinculados ficam com `category_id = null` — a FK é `on delete set null`)
@@ -128,10 +134,12 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Acompanhar pedidos.
 
 **Mostra.**
+
 - Tabela com: order_code, cliente (email/nome), status de pagamento (chip colorido), data, total
 - Filtro por status: aprovado, pendente, recusado, cancelado, falhou
 
 **Ações.**
+
 - **Ver detalhes** → modal `OrderDetailModal.jsx` com cliente, e-mail, status, total, data e itens do pedido
 
 **Fonte.** `GET /api/admin-orders?status=`. A API também expõe `PUT` (atualizar status/payment_status/cliente/total, seta `completed_at` ao aprovar) e `DELETE` (exclusão física) — ambos auditados —, mas a UI atual não tem botões para essas ações.
@@ -145,9 +153,11 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** CRUD de cupons de desconto validados no checkout (sem SQL).
 
 **Mostra.**
+
 - Cards por cupom: código, desconto (`% OFF` ou valor fixo), status ativo/inativo, validade (`valid_until`), usos (`used_count`/`max_uses`), pedido mínimo (`min_order_amount`)
 
 **Ações.**
+
 - **Novo cupom** / **Editar** → `CouponWizard`
 - **Excluir** (com `confirm`)
 
@@ -160,6 +170,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Visão de receita bruta.
 
 **Mostra.**
+
 - Bruto acumulado, quantidade de pedidos aprovados, ticket médio
 - Gráfico de barras do faturamento dos últimos 6 meses (apenas pedidos aprovados)
 
@@ -172,6 +183,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Comparação mês atual vs mês anterior.
 
 **Mostra.**
+
 - Card por mês: vendas (qtd), receita, ticket médio
 - Badge de variação % (verde subindo, vermelho caindo, cinza estável)
 
@@ -184,6 +196,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Visualizar o funil de conversão completo.
 
 **Mostra.**
+
 - Etapas (sessões únicas por evento): `view_catalog` → `view_item` → `add_to_cart` → `begin_checkout` → `purchase`, cada uma com contagem absoluta + taxa de conversão vs etapa anterior
 - Totais do período: sessões únicas, eventos registrados, compras aprovadas, receita
 - Tabela de atribuição por UTM source (pedidos, receita, share; `direct` = sem UTM)
@@ -200,6 +213,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Mostra.**
 
 #### Curva ABC de produtos
+
 - Pareto: produtos ordenados por receita
 - Classe A: acumula os primeiros 80% da receita
 - Classe B: até 95% acumulado
@@ -208,16 +222,19 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 - Filtros: período (mês/trimestre/ano) + categoria
 
 #### Curva ABC de clientes
+
 - Mesma classificação A/B/C por receita, sobreposta à relação: **VIP**, **Recorrente**, **Eventual**
 - Por cliente: e-mail mascarado (LGPD), qtd de pedidos, ticket médio, receita, % do total
 - Filtro: período (mês/trimestre/ano)
 
 #### Coorte mensal de retenção
+
 - Heatmap 12 meses: linhas = mês da 1ª compra, colunas = M+0…M+11
 - Células mostram % do coorte que voltou a comprar (verde ≥ 50%)
 - Detecta vazamento de retenção e sazonalidade do ano letivo
 
 **Ações.**
+
 - Botões "Como ler" abrem modal explicativo por quadro (como calcula / o que observar / como agir)
 - Export CSV de cada quadro (regra I4): curva ABC de produtos, de clientes e coorte
 
@@ -232,6 +249,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Ver a base de e-mail segmentada para campanhas direcionadas.
 
 **Mostra.**
+
 - Totais de `email_subscribers`: inscritos totais, confirmados, aguardando opt-in, cancelados
 - Contagem de assinantes por tag:
   - `cliente_ativo` (compra ≤ 90 dias)
@@ -251,10 +269,12 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Listar clientes cadastrados e gerenciar papéis.
 
 **Mostra.**
+
 - Lista de `profiles` com: nome, e-mail, papel (badge), qtd de compras e total gasto (agregados de `orders` aprovados por e-mail)
 - Busca por nome ou e-mail
 
 **Ações.**
+
 - **Trocar papel** (select Admin / Suporte / Cliente → `PUT /api/admin-users`)
 - **Revogar acesso** (modal de confirmação → `DELETE /api/admin-users`; remove a linha de `profiles`)
 
@@ -269,10 +289,12 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Configurar o que aparece na home.
 
 **Mostra.**
+
 - Lista ordenada das seções da home, de três tipos: **Categoria** (vinculada a uma categoria), **Mais vendidos** e **Novidades** (especiais, no máximo uma de cada)
 - Por seção: título exibido, limite de produtos (4–20) e, no tipo categoria, a categoria vinculada
 
 **Ações.**
+
 - **Adicionar seção** (categoria via select, ou especial via botão)
 - **Remover seção**
 - **Reordenar** via botões subir/descer
@@ -288,12 +310,14 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Para que serve.** Configurar o segundo fator do login admin.
 
 **Mostra.**
+
 - Checkbox "Exigir 2FA no login admin" (`twoFactorEnabled`)
 - Campo TOTP secret (Base32, colado manualmente de um app autenticador — Google Authenticator, 1Password, Authy; não há geração de QR code)
 - Campo PIN de recuperação (numérico, 6+ dígitos, uso emergencial)
 - Card de boas práticas
 
 **Comportamento seguro.**
+
 - O `GET /api/admin-settings?key=adminConfig` **redige os segredos**: devolve apenas as flags `has2FA`/`hasPin`
 - Campos deixados em branco no save preservam o segredo já guardado (merge "pegajoso" no backend); digitar um valor novo o substitui
 - Após salvar, a aba re-busca a config para refletir as flags sem manter segredos no estado do cliente
@@ -306,37 +330,43 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 ## UI compartilhada (`src/components/admin/ui/`)
 
-| Componente | Uso |
-|---|---|
-| `StatCard.jsx` | Card com número grande + label + ícone (usado no Faturamento) |
-| `BarList.jsx` | Lista com gráfico de barras horizontais (ex: faturamento mensal) |
+| Componente       | Uso                                                                 |
+| ---------------- | ------------------------------------------------------------------- |
+| `StatCard.jsx`   | Card com número grande + label + ícone (usado no Faturamento)       |
+| `BarList.jsx`    | Lista com gráfico de barras horizontais (ex: faturamento mensal)    |
 | `StatusChip.jsx` | Badge colorido para status (`pending`, `approved`, `rejected`, etc) |
-| `Card.jsx` | Container genérico com título, subtítulo e slot de ação |
-| `Button.jsx` | Botão estilizado (primary, secondary, ghost, danger) |
-| `EmptyState.jsx` | Mensagem quando não há dados ("Nenhum pedido encontrado") |
+| `Card.jsx`       | Container genérico com título, subtítulo e slot de ação             |
+| `Button.jsx`     | Botão estilizado (primary, secondary, ghost, danger)                |
+| `EmptyState.jsx` | Mensagem quando não há dados ("Nenhum pedido encontrado")           |
 
 ---
 
 ## Padrões importantes
 
 ### Cache
+
 Endpoints das abas Análise, Funil e KPIs têm **cache server-side de 1h** (regra F5); Segmentos, 30 min. Refresh forçado via query `?nocache=1`.
 
 ### Export CSV
+
 A aba Análise tem botões "CSV" nos três quadros (regra I4), usando `src/utils/csv-export.js`. As demais abas ainda não exportam.
 
 ### Loading e empty states
+
 Todo componente que carrega dados deve mostrar:
+
 - Indicador durante loading
 - EmptyState se vazio
 - Mensagem de erro humana (regra B6)
 
 ### 2FA
+
 - Configuração única no setting `adminConfig` (vale para o login admin como um todo; a sessão registra o e-mail individual do admin para o audit log)
 - Recomendado em produção (regra I2)
 - Gerencia via aba **Segurança**
 
 ### Expiração de sessão
+
 - Respostas 401 das APIs admin (`isSessionError`) derrubam `adminAuthenticated` e mostram toast "Sessão admin expirada"
 - Em DEV com `VITE_ALLOW_ADMIN_BYPASS === 'true'` o painel abre sem login (banner amarelo avisa; as APIs continuam exigindo sessão — flag inerte em produção)
 
