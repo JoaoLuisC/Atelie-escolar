@@ -164,9 +164,14 @@ module.exports = async function customerOrdersHandler(req, res) {
     const session = getCustomerSessionFromRequest(req);
     const uid = String(session?.uid || '').trim();
     if (!uid) {
+      // CUSTOMER_SESSION_INVALID e não UNAUTHORIZED genérico: o espelho de
+      // `src/constants/error-codes.js` traz o código específico justamente para
+      // o cliente distinguir "sua sessão caiu, faça login" de "você não tem
+      // permissão". Enquanto nenhum handler o emitia, era um ramo morto dos
+      // dois lados (regra A2).
       return fail(res, {
         status: 401,
-        code: ERROR_CODES.UNAUTHORIZED,
+        code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
         message: 'Autenticação necessária.',
       });
     }

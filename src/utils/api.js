@@ -40,6 +40,31 @@ export async function parseJson(response) {
   }
 }
 
+/**
+ * Constrói um `Error` que PRESERVA o `code` do envelope (regra A2).
+ *
+ * ── POR QUE ISTO PRECISOU EXISTIR (item P0.1) ───────────────────────
+ * `parseJson` já expunha o `code` em `errorCode`, mas cada serviço fazia
+ * `throw new Error(data.error)` e o descartava ali mesmo. A cadeia do
+ * re-login do admin tinha DUAS rupturas: o backend não emitia o código E o
+ * serviço jogava fora o que chegasse. Consertar só a primeira deixaria o
+ * bug de pé com o envelope parecendo correto — que é a pior combinação.
+ *
+ * Mora aqui, e não em cada serviço, porque é sobre o ENVELOPE, que é o
+ * assunto deste módulo. Duas cópias deste helper em `src/services/` seriam
+ * a divergência que a regra C2 existe para evitar.
+ *
+ * @param {object} data              corpo já normalizado por `parseJson`
+ * @param {string} fallbackMessage   texto quando a resposta não traz um
+ * @param {object} [options]
+ * @param {string|null} [options.defaultCode]  código quando a resposta não traz um
+ */
+export function apiError(data, fallbackMessage, { defaultCode = null } = {}) {
+  const error = new Error(data?.error || fallbackMessage);
+  error.code = data?.errorCode || defaultCode;
+  return error;
+}
+
 const DEFAULT_TIMEOUT_MS = 15000;
 
 function buildApiUrl(path) {

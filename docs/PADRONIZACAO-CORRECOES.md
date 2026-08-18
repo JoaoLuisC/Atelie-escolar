@@ -665,7 +665,7 @@ descrever o repositório que existe.
 
 | Item                                    | Regra    | Prioridade | Estado     |
 | --------------------------------------- | -------- | ---------- | ---------- |
-| `P0.1` re-login do admin                | A2       | **bug**    | ⬜ aberto  |
+| `P0.1` re-login do admin                | A2       | **bug**    | ✅ fechado |
 | `P0.2` gate de cobertura no CI          | D2       | P0         | ✅ fechado |
 | `P0.3` suíte instável                   | D2       | P0         | ✅ fechado |
 | `P0.4` espelho de rotas                 | ADR 0002 | P0         | ⬜ aberto  |

@@ -1,4 +1,5 @@
-import { apiRequest } from '../utils/api';
+import { apiRequest, apiError } from '../utils/api';
+import { ERROR_CODES } from '../constants/error-codes';
 
 async function request(path, options = {}) {
   const { response, data } = await apiRequest(path, {
@@ -7,11 +8,13 @@ async function request(path, options = {}) {
   });
 
   if (response.status === 401) {
-    throw new Error('Sessão admin expirada. Faça login novamente.');
+    throw apiError(data, 'Sessão admin expirada. Faça login novamente.', {
+      defaultCode: ERROR_CODES.ADMIN_SESSION_INVALID,
+    });
   }
 
   if (!response.ok || data.success === false) {
-    throw new Error(data.error || 'Falha na operação admin.');
+    throw apiError(data, 'Falha na operação admin.');
   }
 
   return data;

@@ -436,7 +436,7 @@ module.exports = async function meDeleteAccountHandler(req, res) {
       if (!sessionUser || !sessionUser.uid || sessionUser.uid !== verified.uid) {
         return fail(res, {
           status: 401,
-          code: ERROR_CODES.UNAUTHORIZED,
+          code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
           message: 'Faça login na conta que deseja excluir para confirmar a exclusão.',
         });
       }
@@ -451,7 +451,7 @@ module.exports = async function meDeleteAccountHandler(req, res) {
     if (!user || !user.uid || !user.email) {
       return fail(res, {
         status: 401,
-        code: ERROR_CODES.UNAUTHORIZED,
+        code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
         message: 'Faça login para excluir sua conta.',
       });
     }

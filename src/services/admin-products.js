@@ -1,4 +1,5 @@
-import { apiRequest } from '../utils/api';
+import { apiRequest, apiError } from '../utils/api';
+import { ERROR_CODES } from '../constants/error-codes';
 
 export async function fetchAdminProducts() {
   const { response, data } = await apiRequest('/admin/products', {
@@ -6,11 +7,13 @@ export async function fetchAdminProducts() {
   });
 
   if (response.status === 401) {
-    throw new Error('Sessão admin expirada. Faça login novamente.');
+    throw apiError(data, 'Sessão admin expirada. Faça login novamente.', {
+      defaultCode: ERROR_CODES.ADMIN_SESSION_INVALID,
+    });
   }
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Falha ao carregar produtos do admin.');
+    throw apiError(data, 'Falha ao carregar produtos do admin.');
   }
 
   return data.products || [];
@@ -25,7 +28,7 @@ export async function createAdminProduct(payload) {
   });
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Falha ao criar produto.');
+    throw apiError(data, 'Falha ao criar produto.');
   }
 
   return data;
@@ -40,7 +43,7 @@ export async function updateAdminProduct(payload) {
   });
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Falha ao atualizar produto.');
+    throw apiError(data, 'Falha ao atualizar produto.');
   }
 
   return data;
@@ -53,7 +56,7 @@ export async function deleteAdminProduct(id) {
   });
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Falha ao remover produto.');
+    throw apiError(data, 'Falha ao remover produto.');
   }
 
   return data;
