@@ -678,7 +678,7 @@ descrever o repositório que existe.
 | `P2.1` adotar `guardMethod`             | A3       | P2         | ⬜ aberto  |
 | `P2.2` `validation/` nos handlers admin | B1       | P2         | ⬜ aberto  |
 | `P2.3` unificar rate limit              | E1       | P2         | ⬜ aberto  |
-| `P3.1` rate limit nos 5 públicos        | E1       | **P0**     | ⬜ aberto  |
+| `P3.1` rate limit nos 5 públicos        | E1       | **P0**     | ✅ fechado |
 | `P3.2` decidir CORS                     | A3       | P2         | ⬜ aberto  |
 | `P3.3` comentário do CI                 | D5       | P2         | ✅ fechado |
 | `P3.4` markdown fora do gate            | D1       | P2         | ✅ fechado |

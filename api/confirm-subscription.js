@@ -1,5 +1,6 @@
 const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
+const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 
 const log = createLogger('confirm-subscription');
 const {
@@ -21,6 +22,12 @@ const {
 module.exports = async function confirmSubscriptionHandler(req, res) {
   if (req.method === 'OPTIONS') return preflight(res);
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET', 'OPTIONS']);
+
+  // Rate limit DEPOIS do 405 (requisição rejeitada por método não faz trabalho
+  // nenhum, então cobrá-la custaria uma escrita no Postgres sem proteger nada)
+  // e ANTES de qualquer trabalho caro — a ordem que a regra A3 fixa.
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.confirmSubscription);
+  if (gate.blocked) return;
 
   try {
     if (!getSupabaseConfig()) {

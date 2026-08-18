@@ -6,6 +6,7 @@ const { sendEmail } = require('../lib/email-sender');
 const { orderConfirmation } = require('../lib/email-templates');
 const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
+const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 
 const log = createLogger('send-confirmation-email');
 
@@ -23,6 +24,12 @@ const log = createLogger('send-confirmation-email');
 module.exports = async function sendConfirmationEmailHandler(req, res) {
   if (req.method === 'OPTIONS') return preflight(res);
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST', 'OPTIONS']);
+
+  // Rate limit DEPOIS do 405 (requisição rejeitada por método não faz trabalho
+  // nenhum, então cobrá-la custaria uma escrita no Postgres sem proteger nada)
+  // e ANTES de qualquer trabalho caro — a ordem que a regra A3 fixa.
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.sendConfirmationEmail);
+  if (gate.blocked) return;
 
   try {
     const { orderId, customerName, customerEmail, isNewAccount } = req.body || {};
