@@ -12,16 +12,51 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rolldownOptions: {
       output: {
+        // ─────────────────────────────────────────────────────────
+        // CONFIGURAÇÃO DE CHUNK SE VALIDA CONTRA O ARTEFATO, NUNCA CONTRA A
+        // INTENÇÃO (§1.2 do doc de otimização).
+        //
+        // A versão anterior classificava CERTO — instrumentada durante um
+        // build real, ela devolvia `forms` para react-hook-form e `react`
+        // para o jsx-runtime. Mesmo assim o `forms-*.js` emitido continha as
+        // DUAS coisas, e como todo mundo precisa do jsx-runtime, os 17
+        // chunks importavam o `forms` e levavam o react-hook-form de carona —
+        // uma biblioteca usada em UM arquivo (CheckoutPage.jsx). O rolldown
+        // reagrupa por cima da dica, e ninguém vai olhar o `dist`.
+        //
+        // Daí a regra: os dois `grep` abaixo são o teste. Rodar depois de
+        // toda atualização do Vite/rolldown.
+        //
+        //   npm run build
+        //   grep -l "shouldUnregister"   dist/assets/*.js   # só CheckoutPage-*.js
+        //   grep -l "react.transitional" dist/assets/*.js   # só react-*.js
+        // ─────────────────────────────────────────────────────────
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('react-router')) return 'router';
-            if (id.includes('@supabase')) return 'supabase';
-            if (id.includes('react-hook-form')) return 'forms';
-            if (id.includes('react-dom') || id.includes('react/jsx') || id.includes('/react/'))
-              return 'react';
-            return 'vendor';
-          }
-          return undefined;
+          if (!id.includes('node_modules')) return undefined;
+
+          // O id chega com barras normais e com o prefixo `node_modules/`
+          // mesmo no Windows (medido, não suposto). Casar por FRONTEIRA DE
+          // PACOTE evita que `react-hook-form` e `react-helmet-async` caiam
+          // no bucket do React por substring, que é o que
+          // `id.includes('/react/')` fazia por acidente.
+          const pkg = id.split('node_modules/').pop();
+
+          // react + react-dom + scheduler juntos: o scheduler é dependência
+          // dura do react-dom e caía no `vendor`, espalhando o runtime do
+          // React por três arquivos do caminho crítico.
+          if (/^(react|react-dom|scheduler)\//.test(pkg)) return 'react';
+          if (pkg.startsWith('react-router')) return 'router';
+          if (pkg.startsWith('@supabase/')) return 'supabase';
+
+          // ⚠️ MEDIDO, e diferente do que o §1.2 previa: só TIRAR o bucket
+          // `forms` não bastava. Com o `return 'vendor'` genérico do fim, o
+          // react-hook-form caía no `vendor` — que também está no caminho
+          // crítico —, e os 9,4 KB gz só trocavam de chunk compartilhado.
+          // `undefined` é o que devolve a decisão ao rolldown, que então o
+          // co-loca com o único importador real (CheckoutPage.jsx:3).
+          if (pkg.startsWith('react-hook-form/')) return undefined;
+
+          return 'vendor';
         },
       },
     },

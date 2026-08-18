@@ -48,8 +48,8 @@ mediu depois de escrever**, e **abstrações que foram criadas mas não adotadas
 
 | #   | Item                                                                            | Tipo       | Severidade | Esforço                  | Status       |
 | --- | ------------------------------------------------------------------------------- | ---------- | ---------- | ------------------------ | ------------ |
-| 1.1 | SDK do Supabase (48 KB gz) baixado por toda visita; só 4 funções usam           | Bundle     | `ALTO`     | ~30 linhas em 4 arquivos | 🔧           |
-| 1.2 | `manualChunks` não produz o split que o comentário descreve                     | Bundle     | `ALTO`     | reescrever 1 função      | 🔧           |
+| 1.1 | SDK do Supabase (48 KB gz) baixado por toda visita; só 4 funções usam           | Bundle     | `ALTO`     | ~30 linhas em 4 arquivos | ✅           |
+| 1.2 | `manualChunks` não produz o split que o comentário descreve                     | Bundle     | `ALTO`     | reescrever 1 função      | ✅           |
 | 1.3 | `AdminPage` = 147 KB num chunk só (14 abas + 2 wizards)                         | Bundle     | `MÉDIO`    | 14 linhas                | 🔧           |
 | 1.4 | bootstrap-icons via CDN: fonte inteira + CSS render-blocking de terceiro        | Bundle     | `MÉDIO`    | self-host + subset       | 🔧           |
 | 2.1 | `/admin/dashboard` varre 7 tabelas sem `limit`; truncamento silencioso          | Backend    | `ALTO`     | agregar no servidor      | 🔧           |

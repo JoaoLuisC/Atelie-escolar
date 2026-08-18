@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '../hooks/useToast';
 import { getSupabaseBrowserClient } from '../services/supabase-browser';
@@ -39,17 +39,39 @@ export function ResetPasswordPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { pushToast } = useToast();
-  const supabase = getSupabaseBrowserClient();
   const redirectTo = getSafeRedirect(location.search);
+
+  // ── Por que `useRef` e não `useState` (§1.1) ──────────────────────
+  // O cliente do Supabase agora é resolvido por `import()` dinâmico, então
+  // ele NÃO existe no primeiro render. Guardá-lo em estado provocaria um
+  // render extra e, pior, abriria uma janela em que `supabase` é `null` por
+  // estar CARREGANDO e não por estar mal configurado — e é exatamente nessa
+  // janela que o toast de "Configuração ausente" dispararia um falso
+  // negativo. O cliente só é usado dentro de efeito e de handler, que é o
+  // caso de uso do `useRef`: valor mutável que não pinta tela.
+  const supabaseRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // A promessa é memoizada dentro de `getSupabaseBrowserClient`, então
+  // chamar de novo no submit não baixa o chunk duas vezes nem cria um
+  // segundo cliente com PKCE state separado.
+  const resolveSupabase = useCallback(async () => {
+    if (supabaseRef.current) return supabaseRef.current;
+    const client = await getSupabaseBrowserClient();
+    supabaseRef.current = client;
+    return client;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrapRecoverySession() {
+      const supabase = await resolveSupabase();
+      if (cancelled) return;
+
       if (!supabase) {
         pushToast('Configuração do Supabase ausente no frontend.', 'error');
         setLoading(false);
@@ -83,7 +105,7 @@ export function ResetPasswordPage() {
     return () => {
       cancelled = true;
     };
-  }, [pushToast, supabase]);
+  }, [pushToast, resolveSupabase]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -103,6 +125,7 @@ export function ResetPasswordPage() {
       return;
     }
 
+    const supabase = await resolveSupabase();
     if (!supabase) {
       pushToast('Configuração do Supabase ausente no frontend.', 'error');
       return;

@@ -130,7 +130,7 @@ function useCustomerAuthHandlers({
       return;
     }
 
-    const supabase = getSupabaseBrowserClient();
+    const supabase = await getSupabaseBrowserClient();
     if (!supabase) {
       pushToast('Configuração do Supabase ausente no frontend.', 'error');
       return;

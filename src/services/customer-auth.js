@@ -73,7 +73,7 @@ export async function registerCustomerWithEmail(name, email, password) {
  * o usuário volta para `/login?oauth=google&code=...`.
  */
 export async function loginCustomerWithGoogle(postLoginRedirect = '/checkout') {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = await getSupabaseBrowserClient();
   if (!supabase) {
     throw new Error('Configuração do Supabase ausente no frontend.');
   }
@@ -106,7 +106,7 @@ export async function consumeCustomerSessionFromAuthCallback() {
 
   if (!hasOAuthMarker) return null;
 
-  const supabase = getSupabaseBrowserClient();
+  const supabase = await getSupabaseBrowserClient();
   if (!supabase) return null;
 
   // O cliente já detecta automaticamente (detectSessionInUrl: true).
@@ -203,7 +203,7 @@ export async function confirmAccountDeletion(token) {
 
 export async function logoutCustomerSession() {
   // Limpa sessão do Supabase no browser (PKCE state, localStorage)
-  const supabase = getSupabaseBrowserClient();
+  const supabase = await getSupabaseBrowserClient();
   if (supabase) {
     await supabase.auth.signOut().catch(() => {});
   }
