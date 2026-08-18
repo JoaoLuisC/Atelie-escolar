@@ -4,6 +4,7 @@ const {
   serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable },
 } = require('../lib/supabase');
 const { sendEmail } = require('../lib/email-sender');
+const { forEachWithConcurrency } = require('../lib/concurrency');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
@@ -50,6 +51,13 @@ const REACTIVATION_MAX = Number(process.env.REACTIVATION_DAYS_MAX || 180);
 // em hora e cada envio é idempotente (email_sent_log), então execuções sucessivas
 // drenam a fila sem risco de reenvio — mantendo o job dentro do timeout da função.
 const MAX_PER_RUN = 100;
+
+// Envios simultâneos por laço (§2.2). Casado com o `maxConnections: 3` do pool
+// de `lib/email-sender.js`: uma folga pequena acima do número de conexões
+// mantém o pool ocupado sem enfileirar mensagem demais dentro do processo.
+// NÃO subir sem confirmar o limite de conexões simultâneas do provedor —
+// estourá-lo troca "lento" por "bloqueado".
+const EMAIL_CONCURRENCY = Number(process.env.EMAIL_SEND_CONCURRENCY) || 5;
 
 function isAuthorized(req) {
   const expected = String(process.env.CRON_SECRET || '').trim();
@@ -369,10 +377,10 @@ async function processAbandonedCarts() {
     limit: MAX_PER_RUN,
   });
 
-  for (const cart of firstCandidates) {
+  await forEachWithConcurrency(firstCandidates, EMAIL_CONCURRENCY, async (cart) => {
     if (cart.recovered_at || cart.reminder_sent_at) {
       results.skipped += 1;
-      continue;
+      return;
     }
     // Descartes baratos ANTES do portão: um carrinho sem itens não gera e-mail
     // nenhum, então não vale gastar consulta de pedido — nem criar registro de
@@ -380,7 +388,7 @@ async function processAbandonedCarts() {
     const items = Array.isArray(cart.items) ? cart.items : [];
     if (items.length === 0) {
       results.skipped += 1;
-      continue;
+      return;
     }
 
     // O e-mail deste carrinho veio de uma escrita PÚBLICA (/api/abandoned-cart),
@@ -389,7 +397,7 @@ async function processAbandonedCarts() {
     const consent = await loadAbandonedCartRecipient(cart.email);
     if (!consent.allowed) {
       tallyBlock(results.blocked, consent.reason);
-      continue;
+      return;
     }
 
     const unsubToken = consent.token;
@@ -412,7 +420,7 @@ async function processAbandonedCarts() {
         },
       );
     }
-  }
+  });
 
   // Segundo lembrete: 24h+ e o primeiro já foi
   const secondWindowStart = new Date(
@@ -431,20 +439,20 @@ async function processAbandonedCarts() {
     limit: MAX_PER_RUN,
   });
 
-  for (const cart of secondCandidates) {
+  await forEachWithConcurrency(secondCandidates, EMAIL_CONCURRENCY, async (cart) => {
     if (cart.recovered_at) {
       results.skipped += 1;
-      continue;
+      return;
     }
     const items = Array.isArray(cart.items) ? cart.items : [];
     if (items.length === 0) {
       results.skipped += 1;
-      continue;
+      return;
     }
     const consent = await loadAbandonedCartRecipient(cart.email);
     if (!consent.allowed) {
       tallyBlock(results.blocked, consent.reason);
-      continue;
+      return;
     }
 
     const unsubToken = consent.token;
@@ -458,7 +466,7 @@ async function processAbandonedCarts() {
       unsubscribeToken: unsubToken,
     });
     if (result.sent) results.secondReminder += 1;
-  }
+  });
 
   return results;
 }
@@ -538,7 +546,7 @@ async function processPostPurchaseStep({ daysAgo, kind, templateFn, lookbackHour
 
   let sent = 0;
   const blocked = newBlockTally();
-  for (const order of orders) {
+  await forEachWithConcurrency(orders, EMAIL_CONCURRENCY, async (order) => {
     // BASE CONTRATUAL, e ela já está provada aqui: a query acima filtra
     // `payment_status = 'approved'`, então todo `order` deste laço É um pedido
     // pago daquele endereço. Não há segunda consulta a `orders` — o portão só
@@ -548,7 +556,7 @@ async function processPostPurchaseStep({ daysAgo, kind, templateFn, lookbackHour
     const consent = await loadContractRecipient(order.customer_email);
     if (!consent.allowed) {
       tallyBlock(blocked, consent.reason);
-      continue;
+      return;
     }
 
     const items = await loadOrderItems(order.id);
@@ -566,7 +574,7 @@ async function processPostPurchaseStep({ daysAgo, kind, templateFn, lookbackHour
         newProducts: suggestions,
       });
     } else {
-      continue;
+      return;
     }
 
     const unsubToken = consent.token;
@@ -579,7 +587,7 @@ async function processPostPurchaseStep({ daysAgo, kind, templateFn, lookbackHour
       unsubscribeToken: unsubToken,
     });
     if (result.sent) sent += 1;
-  }
+  });
   return { sent, blocked };
 }
 
@@ -611,18 +619,23 @@ async function processReactivation() {
   const couponCode = String(process.env.REACTIVATION_COUPON_CODE || 'VOLTEI15');
   const discountPct = Number(process.env.REACTIVATION_COUPON_PCT || 15);
   let sent = 0;
-  let processed = 0;
   const blocked = newBlockTally();
 
-  for (const [email, lastOrder] of lastByEmail) {
-    const days = Math.floor(
-      (Date.now() - new Date(lastOrder.completed_at).getTime()) / (24 * 60 * 60 * 1000),
-    );
-    if (days < REACTIVATION_MIN || days >= REACTIVATION_MAX) continue;
-    // Teto de trabalho por execução: como o entityId é o bucket mensal, quem
-    // ficar de fora é reprocessado na próxima hora dentro do mesmo mês (idempotente).
-    if (processed >= MAX_PER_RUN) break;
-    processed += 1;
+  // O `break` por `processed >= MAX_PER_RUN` que existia aqui era construção de
+  // laço sequencial: sob concorrência ele cortaria um número imprevisível.
+  // O teto passa a ser aplicado ANTES do lote, por recorte da lista — mesmo
+  // efeito e determinístico. Como o entityId é o bucket mensal, quem ficar de
+  // fora é reprocessado na próxima hora dentro do mesmo mês (idempotente).
+  const elegiveis = [...lastByEmail]
+    .filter(([, lastOrder]) => {
+      const days = Math.floor(
+        (Date.now() - new Date(lastOrder.completed_at).getTime()) / (24 * 60 * 60 * 1000),
+      );
+      return days >= REACTIVATION_MIN && days < REACTIVATION_MAX;
+    })
+    .slice(0, MAX_PER_RUN);
+
+  await forEachWithConcurrency(elegiveis, EMAIL_CONCURRENCY, async ([email, lastOrder]) => {
     // Também base contratual: `lastByEmail` é construído SÓ com pedidos
     // `payment_status = 'approved'`, então todo endereço deste laço comprou.
     // Reativação de quem se inscreveu na newsletter e nunca comprou é outra
@@ -631,7 +644,7 @@ async function processReactivation() {
     const consent = await loadContractRecipient(email);
     if (!consent.allowed) {
       tallyBlock(blocked, consent.reason);
-      continue;
+      return;
     }
 
     const { subject, html } = reactivation90({
@@ -650,7 +663,7 @@ async function processReactivation() {
       unsubscribeToken: unsubToken,
     });
     if (result.sent) sent += 1;
-  }
+  });
   return { sent, blocked };
 }
 

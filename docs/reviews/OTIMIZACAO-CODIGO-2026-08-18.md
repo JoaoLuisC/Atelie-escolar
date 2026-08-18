@@ -53,7 +53,7 @@ mediu depois de escrever**, e **abstrações que foram criadas mas não adotadas
 | 1.3 | `AdminPage` = 147 KB num chunk só (14 abas + 2 wizards)                         | Bundle     | `MÉDIO`    | 14 linhas                | 🔧      |
 | 1.4 | bootstrap-icons via CDN: fonte inteira + CSS render-blocking de terceiro        | Bundle     | `MÉDIO`    | self-host + subset       | 🔧      |
 | 2.1 | `/admin/dashboard` varre 7 tabelas sem `limit`; truncamento silencioso          | Backend    | `ALTO`     | agregar no servidor      | 🔧      |
-| 2.2 | 1 conexão SMTP nova por e-mail, em série, sob `maxDuration: 60`                 | Backend    | `ALTO`     | ~10 linhas               | 🔧      |
+| 2.2 | 1 conexão SMTP nova por e-mail, em série, sob `maxDuration: 60`                 | Backend    | `ALTO`     | ~10 linhas               | ✅      |
 | 2.3 | Dois loops sequenciais que deveriam ser lote (tokens, busca de usuário)         | Backend    | `MÉDIO`    | ~20 linhas               | 🔧      |
 | 3.1 | 5 handlers CRUD admin byte-a-byte idênticos (~275 linhas)                       | Duplicação | `MÉDIO`    | 1 factory                | ✅      |
 | 3.2 | 27 respostas ainda no envelope legado, driblando o `fail()` (regra A1)          | Contrato   | `MÉDIO`    | sai junto com 3.1        | ✅      |
