@@ -62,7 +62,14 @@ function listHandlers(dir = API_DIR, prefix = '') {
 const handlers = listHandlers();
 
 function temGuarda({ source }) {
-  return source.includes('enforceRateLimit') || source.includes('ensureAdminSession');
+  return (
+    source.includes('enforceRateLimit') ||
+    source.includes('ensureAdminSession') ||
+    // Handler montado pela factory: a sessão admin é imposta LÁ DENTRO, e o
+    // teste abaixo ('a factory impõe a sessão admin') é o que impede esta
+    // linha de virar um buraco por indireção.
+    source.includes('createAdminResourceHandler')
+  );
 }
 
 describe('regra E1 · cobertura de rate limit em api/ (P3.1)', () => {
@@ -86,6 +93,18 @@ describe('regra E1 · cobertura de rate limit em api/ (P3.1)', () => {
     // documentação errada — o mesmo defeito que a regra D4 descreve.
     const redundantes = handlers.filter((h) => h.id in DISPENSADOS && temGuarda(h));
     expect(redundantes.map((h) => h.id)).toEqual([]);
+  });
+
+  it('a factory de recursos admin impõe a sessão admin', () => {
+    // `createAdminResourceHandler` conta como guarda na varredura acima. Se um
+    // dia ela parar de chamar `ensureAdminSession`, cinco endpoints
+    // administrativos ficariam abertos e a varredura não veria — porque estaria
+    // olhando para o nome da factory, não para o que ela faz.
+    const factory = readFileSync(
+      path.resolve(HERE, '..', '..', 'lib', 'admin-resource-handler.js'),
+      'utf8',
+    );
+    expect(factory).toContain('ensureAdminSession(req, res)');
   });
 
   it('os cinco do item P3.1 estão cobertos', () => {

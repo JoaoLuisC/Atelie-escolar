@@ -1,25 +1,25 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
-const { logAdminAction } = require('../../lib/admin-audit');
-const { ERROR_CODES, fail, methodNotAllowed, preflight } = require('../../lib/http');
-const { createLogger } = require('../../lib/logger');
-
-const log = createLogger('admin-products');
+const { createAdminResourceHandler } = require('../../lib/admin-resource-handler');
+const { ERROR_CODES } = require('../../lib/http');
 const {
-  getSupabaseConfig,
   serviceRoleHelpers: { deleteFromTable, getTableRow, insertIntoTable, listTableRows, updateTable },
 } = require('../../lib/supabase');
+const { parse } = require('../../validation');
+const {
+  normalizeSlug,
+  productCreateSchema,
+  productPatchSchema,
+  uuidId,
+} = require('../../validation/admin.schemas');
 
-function normalizeSlug(value) {
-  return (
-    String(value || '')
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replaceAll(/[\u0300-\u036f]/g, '')
-      .replaceAll(/[^a-z0-9]+/g, '-')
-      .replaceAll(/^-+|-+$/g, '') || 'sem-categoria'
-  );
+/** Erro de validação no formato que a factory despacha por `fail()`. */
+function invalid(message) {
+  return { error: { status: 400, code: ERROR_CODES.VALIDATION_FAILED, message } };
 }
+
+// `normalizeSlug` vem de validation/admin.schemas.js: a cópia byte-a-byte que
+// morava aqui e em api/admin/categories.js era duas verdades sobre a mesma
+// regra (F2), e slug divergente entre criar produto e criar categoria produz
+// categoria duplicada no menu da loja.
 
 function resolveArray(input, fallback) {
   if (Array.isArray(input)) return input;
@@ -192,21 +192,19 @@ async function listProducts() {
 }
 
 async function createProduct(body) {
-  if (!body.name || Number(body.price) <= 0) {
-    return { status: 400, body: { error: 'name e price válidos são obrigatórios' } };
-  }
+  const parsed = parse(productCreateSchema, body);
+  if (!parsed.ok) return invalid(parsed.message);
 
   const categoryId = await resolveCategoryId(body.categoryId ?? body.category);
   const payload = toProductPayload({ ...body, category_id: categoryId });
   const [created] = await insertIntoTable('products', payload);
-  return { status: 201, body: { success: true, id: String(created.id) } };
+  return { status: 201, body: { id: String(created.id) } };
 }
 
 async function updateProduct(body) {
-  const id = String(body.id || '').trim();
-  if (!id) {
-    return { status: 400, body: { error: 'id é obrigatório' } };
-  }
+  const parsedId = parse(uuidId, body.id);
+  if (!parsedId.ok) return invalid('id é obrigatório');
+  const id = parsedId.data;
 
   const existing = await getTableRow('products', {
     select:
@@ -215,7 +213,13 @@ async function updateProduct(body) {
   });
 
   if (!existing) {
-    return { status: 404, body: { error: 'Produto não encontrado' } };
+    return {
+      error: {
+        status: 404,
+        code: ERROR_CODES.PRODUCT_NOT_FOUND,
+        message: 'Produto não encontrado',
+      },
+    };
   }
 
   const hasCategoryInput = body.category !== undefined || body.categoryId !== undefined;
@@ -224,93 +228,45 @@ async function updateProduct(body) {
     : existing.category_id;
   const payload = toProductPayload({ ...body, category_id: categoryId }, existing);
   await updateTable('products', { id: `eq.${id}` }, payload);
-  return { status: 200, body: { success: true } };
+  return { status: 200, body: {} };
 }
 
 async function patchProduct(body) {
-  const id = String(body.id || '').trim();
-  if (!id) {
-    return { status: 400, body: { error: 'id é obrigatório' } };
+  // O schema exige `id` bem formado E ao menos um de `active`/`featured` —
+  // a mesma regra de antes, agora declarada em vez de derivada de
+  // `Object.keys(payload).length === 1`.
+  const parsed = parse(productPatchSchema, body);
+  if (!parsed.ok) {
+    return invalid(parsed.message);
   }
 
+  const { id, active, featured } = parsed.data;
   const payload = { updated_at: new Date().toISOString() };
-  if (typeof body.active === 'boolean') payload.active = body.active;
-  if (typeof body.featured === 'boolean') payload.featured = body.featured;
-
-  if (Object.keys(payload).length === 1) {
-    return { status: 400, body: { error: 'Nenhum campo suportado para atualização parcial.' } };
-  }
+  if (active !== undefined) payload.active = active;
+  if (featured !== undefined) payload.featured = featured;
 
   await updateTable('products', { id: `eq.${id}` }, payload);
-  return { status: 200, body: { success: true } };
+  return { status: 200, body: {} };
 }
 
-async function deleteProduct(id) {
-  if (!id) {
-    return { status: 400, body: { error: 'id é obrigatório' } };
-  }
+async function deleteProduct(rawId) {
+  const parsed = parse(uuidId, rawId);
+  if (!parsed.ok) return invalid('id é obrigatório');
 
-  await deleteFromTable('products', { id: `eq.${id}` });
-  return { status: 200, body: { success: true } };
+  await deleteFromTable('products', { id: `eq.${parsed.data}` });
+  return { status: 200, body: {} };
 }
 
-module.exports = async function adminProductsHandler(req, res) {
-  setAdminCorsHeaders(req, res);
-
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (!ensureAdminSession(req, res)) {
-    return;
-  }
-
-  try {
-    if (!getSupabaseConfig()) {
-      return fail(res, {
-        status: 500,
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: 'Supabase não configurado',
-      });
-    }
-
-    const handlers = {
-      GET: async () => ({ status: 200, body: { success: true, products: await listProducts() } }),
-      POST: async () => createProduct(req.body || {}),
-      PUT: async () => updateProduct(req.body || {}),
-      PATCH: async () => patchProduct(req.body || {}),
-      DELETE: async () => deleteProduct(String(req.query?.id || req.body?.id || '').trim()),
-    };
-
-    const handler = handlers[req.method];
-    if (!handler) {
-      return methodNotAllowed(res, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
-    }
-
-    const result = await handler();
-
-    // Auditoria de escrita (regra I1) — best-effort.
-    if (result.status >= 200 && result.status < 300 && req.method !== 'GET') {
-      const actionByMethod = { POST: 'create', PUT: 'update', PATCH: 'patch', DELETE: 'delete' };
-      await logAdminAction({
-        req,
-        action: actionByMethod[req.method] || String(req.method).toLowerCase(),
-        targetType: 'product',
-        targetId:
-          req.method === 'DELETE'
-            ? String(req.query?.id || req.body?.id || '').trim()
-            : (req.body?.id ?? result.body?.id ?? null),
-        after: req.method === 'DELETE' ? null : req.body || null,
-      });
-    }
-
-    return res.status(result.status).json(result.body);
-  } catch (error) {
-    log.error('handler_failed', { reason: error?.message || String(error) });
-    return fail(res, {
-      status: 500,
-      code: ERROR_CODES.INTERNAL_ERROR,
-      message: 'Erro ao processar produtos do admin',
-    });
-  }
-};
+module.exports = createAdminResourceHandler({
+  targetType: 'product',
+  errorMessage: 'Erro ao processar produtos do admin',
+  loggerName: 'admin-products',
+  handlerName: 'adminProductsHandler',
+  operations: {
+    GET: async () => ({ status: 200, body: { products: await listProducts() } }),
+    POST: (req) => createProduct(req.body || {}),
+    PUT: (req) => updateProduct(req.body || {}),
+    PATCH: (req) => patchProduct(req.body || {}),
+    DELETE: (req) => deleteProduct(String(req.query?.id || req.body?.id || '').trim()),
+  },
+});

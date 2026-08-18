@@ -1,14 +1,3 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
-const { logAdminAction } = require('../../lib/admin-audit');
-const { ERROR_CODES, fail, methodNotAllowed, preflight } = require('../../lib/http');
-const { createLogger } = require('../../lib/logger');
-
-const log = createLogger('admin-coupons');
-const {
-  getSupabaseConfig,
-  serviceRoleHelpers: { deleteFromTable, getTableRow, insertIntoTable, listTableRows, updateTable },
-} = require('../../lib/supabase');
-
 // ════════════════════════════════════════════════════════════════════
 // CRUD de cupons pelo painel admin. Antes (pendência §3.4) os cupons só
 // existiam via SQL bruto. A validação no checkout continua em
@@ -17,78 +6,70 @@ const {
 // não editável pela UI — defaults para {} (vale para tudo).
 // ════════════════════════════════════════════════════════════════════
 
-function normalizeCode(value) {
-  return String(value || '')
-    .trim()
-    .toUpperCase()
-    .replaceAll(/\s+/g, '')
-    .slice(0, 64);
+const { createAdminResourceHandler } = require('../../lib/admin-resource-handler');
+const {
+  serviceRoleHelpers: { deleteFromTable, getTableRow, insertIntoTable, listTableRows, updateTable },
+} = require('../../lib/supabase');
+const { ERROR_CODES } = require('../../lib/http');
+const { parse } = require('../../validation');
+const { bigintId, couponCreateSchema } = require('../../validation/admin.schemas');
+
+const SELECT_FIELDS =
+  'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,used_count,min_order_amount,applies_to,active,created_at';
+
+const EDITABLE_FIELDS =
+  'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,min_order_amount,applies_to,active';
+
+/** Erro de validação no formato que a factory despacha por `fail()`. */
+function invalid(message) {
+  return { error: { status: 400, code: ERROR_CODES.VALIDATION_FAILED, message } };
 }
 
-function parseOptionalNumber(value) {
-  if (value == null || value === '') return null;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
+function codeConflict() {
+  return {
+    error: {
+      status: 409,
+      code: ERROR_CODES.CONFLICT,
+      message: 'Já existe um cupom com esse código.',
+    },
+  };
 }
 
-function parseOptionalDate(value) {
-  if (value == null) return null;
-  const raw = String(value).trim();
-  if (!raw) return null;
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error('Data de validade inválida.');
-  }
-  return date.toISOString();
-}
-
-function toCouponPayload(body = {}, existing = {}) {
-  const code = normalizeCode(body.code ?? existing.code);
-  if (!code) {
-    throw new Error('Código do cupom é obrigatório.');
-  }
-  if (code.length < 3) {
-    throw new Error('Código deve ter ao menos 3 caracteres.');
-  }
-  if (!/^[A-Z0-9._-]+$/.test(code)) {
-    throw new Error('Código só pode ter letras, números, ponto, hífen e underscore.');
-  }
-
-  const discountType = String(body.discountType ?? existing.discount_type ?? 'percent').trim();
-  if (!['percent', 'fixed'].includes(discountType)) {
-    throw new Error('Tipo de desconto deve ser percentual ou valor fixo.');
-  }
-
-  const discountValue = Number(body.discountValue ?? existing.discount_value ?? 0);
-  if (!Number.isFinite(discountValue) || discountValue <= 0) {
-    throw new Error('Valor do desconto deve ser maior que zero.');
-  }
-  if (discountType === 'percent' && discountValue > 100) {
-    throw new Error('Desconto percentual não pode passar de 100%.');
-  }
-
-  const maxUses = Object.hasOwn(body, 'maxUses')
-    ? parseOptionalNumber(body.maxUses)
-    : (existing.max_uses ?? null);
-  const minOrderAmount = Object.hasOwn(body, 'minOrderAmount')
-    ? parseOptionalNumber(body.minOrderAmount)
-    : (existing.min_order_amount ?? null);
-  const validUntil = Object.hasOwn(body, 'validUntil')
-    ? parseOptionalDate(body.validUntil)
-    : (existing.valid_until ?? null);
-  const validFrom = Object.hasOwn(body, 'validFrom')
-    ? parseOptionalDate(body.validFrom)
-    : (existing.valid_from ?? null);
+/**
+ * Funde o corpo recebido com a linha existente ANTES de validar.
+ *
+ * A ordem importa e é a mesma de antes: num PUT parcial, o que não veio no
+ * corpo é herdado do cupom gravado, e só então o conjunto inteiro passa pelo
+ * schema. Validar o corpo isolado rejeitaria uma edição só de `active` por
+ * "código obrigatório".
+ */
+function mergeCouponInput(body = {}, existing = {}) {
+  const pick = (key, fromBody, fromExisting) =>
+    Object.hasOwn(body, key) ? fromBody : fromExisting;
 
   return {
-    code,
-    discount_type: discountType,
-    discount_value: discountValue,
-    valid_from: validFrom,
-    valid_until: validUntil,
-    max_uses: maxUses != null ? Math.max(0, Math.floor(maxUses)) : null,
-    min_order_amount: minOrderAmount != null ? Math.max(0, minOrderAmount) : null,
+    code: body.code ?? existing.code,
+    discountType: body.discountType ?? existing.discount_type ?? 'percent',
+    discountValue: body.discountValue ?? existing.discount_value ?? 0,
+    validFrom: pick('validFrom', body.validFrom, existing.valid_from ?? null),
+    validUntil: pick('validUntil', body.validUntil, existing.valid_until ?? null),
+    maxUses: pick('maxUses', body.maxUses, existing.max_uses ?? null),
+    minOrderAmount: pick('minOrderAmount', body.minOrderAmount, existing.min_order_amount ?? null),
     active: Object.hasOwn(body, 'active') ? Boolean(body.active) : existing.active !== false,
+  };
+}
+
+/** Linha a persistir, a partir do payload já validado pelo schema. */
+function toCouponRow(data, existing = {}) {
+  return {
+    code: data.code,
+    discount_type: data.discountType || 'percent',
+    discount_value: data.discountValue,
+    valid_from: data.validFrom ?? null,
+    valid_until: data.validUntil ?? null,
+    max_uses: data.maxUses != null ? Math.max(0, Math.floor(data.maxUses)) : null,
+    min_order_amount: data.minOrderAmount != null ? Math.max(0, data.minOrderAmount) : null,
+    active: data.active !== false,
     applies_to: existing.applies_to ?? {},
   };
 }
@@ -110,9 +91,6 @@ function toCouponView(row) {
   };
 }
 
-const SELECT_FIELDS =
-  'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,used_count,min_order_amount,applies_to,active,created_at';
-
 async function listCoupons() {
   const rows = await listTableRows('coupons', {
     select: SELECT_FIELDS,
@@ -123,128 +101,72 @@ async function listCoupons() {
 }
 
 async function createCoupon(body) {
-  let payload;
-  try {
-    payload = toCouponPayload(body);
-  } catch (err) {
-    return { status: 400, body: { success: false, error: err.message } };
-  }
+  const parsed = parse(couponCreateSchema, mergeCouponInput(body));
+  if (!parsed.ok) return invalid(parsed.message);
+
+  const payload = toCouponRow(parsed.data);
 
   const existing = await getTableRow('coupons', {
     select: 'id',
     filters: [{ column: 'code', value: payload.code }],
   });
-  if (existing) {
-    return { status: 409, body: { success: false, error: 'Já existe um cupom com esse código.' } };
-  }
+  if (existing) return codeConflict();
 
   const [created] = await insertIntoTable('coupons', payload);
-  return { status: 201, body: { success: true, id: String(created.id) } };
+  return { status: 201, body: { id: String(created.id) } };
 }
 
-async function updateCoupon(body) {
-  const id = String(body.id || '').trim();
-  if (!id) {
-    return { status: 400, body: { success: false, error: 'id é obrigatório.' } };
-  }
+async function updateCoupon(body = {}) {
+  // `coupons.id` é bigint identity, e não uuid como os outros quatro recursos
+  // (supabase/schema.sql:208). Ver a nota em validation/admin.schemas.js.
+  const parsedId = parse(bigintId, body.id);
+  if (!parsedId.ok) return invalid('id é obrigatório.');
 
+  const id = parsedId.data;
   const existing = await getTableRow('coupons', {
-    select:
-      'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,min_order_amount,applies_to,active',
+    select: EDITABLE_FIELDS,
     filters: [{ column: 'id', value: id }],
   });
   if (!existing) {
-    return { status: 404, body: { success: false, error: 'Cupom não encontrado.' } };
+    return {
+      error: { status: 404, code: ERROR_CODES.NOT_FOUND, message: 'Cupom não encontrado.' },
+    };
   }
 
-  let payload;
-  try {
-    payload = toCouponPayload(body, existing);
-  } catch (err) {
-    return { status: 400, body: { success: false, error: err.message } };
-  }
+  const parsed = parse(couponCreateSchema, mergeCouponInput(body, existing));
+  if (!parsed.ok) return invalid(parsed.message);
+
+  const payload = toCouponRow(parsed.data, existing);
 
   if (payload.code !== existing.code) {
     const clash = await getTableRow('coupons', {
       select: 'id',
       filters: [{ column: 'code', value: payload.code }],
     });
-    if (clash && String(clash.id) !== id) {
-      return {
-        status: 409,
-        body: { success: false, error: 'Já existe um cupom com esse código.' },
-      };
-    }
+    if (clash && String(clash.id) !== id) return codeConflict();
   }
 
   await updateTable('coupons', { id: `eq.${id}` }, payload);
-  return { status: 200, body: { success: true } };
+  return { status: 200, body: {} };
 }
 
-async function deleteCoupon(id) {
-  if (!id) {
-    return { status: 400, body: { success: false, error: 'id é obrigatório.' } };
-  }
-  await deleteFromTable('coupons', { id: `eq.${id}` });
-  return { status: 200, body: { success: true } };
+async function deleteCoupon(rawId) {
+  const parsed = parse(bigintId, rawId);
+  if (!parsed.ok) return invalid('id é obrigatório.');
+
+  await deleteFromTable('coupons', { id: `eq.${parsed.data}` });
+  return { status: 200, body: {} };
 }
 
-module.exports = async function adminCouponsHandler(req, res) {
-  setAdminCorsHeaders(req, res);
-
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (!ensureAdminSession(req, res)) {
-    return;
-  }
-
-  try {
-    if (!getSupabaseConfig()) {
-      return fail(res, {
-        status: 500,
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: 'Supabase não configurado.',
-      });
-    }
-
-    const handlers = {
-      GET: async () => ({ status: 200, body: { success: true, coupons: await listCoupons() } }),
-      POST: async () => createCoupon(req.body || {}),
-      PUT: async () => updateCoupon(req.body || {}),
-      DELETE: async () => deleteCoupon(String(req.query?.id || req.body?.id || '').trim()),
-    };
-
-    const handler = handlers[req.method];
-    if (!handler) {
-      return methodNotAllowed(res, ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']);
-    }
-
-    const result = await handler();
-
-    // Auditoria de escrita (regra I1) — best-effort.
-    if (result.status >= 200 && result.status < 300 && req.method !== 'GET') {
-      const actionByMethod = { POST: 'create', PUT: 'update', PATCH: 'patch', DELETE: 'delete' };
-      await logAdminAction({
-        req,
-        action: actionByMethod[req.method] || String(req.method).toLowerCase(),
-        targetType: 'coupon',
-        targetId:
-          req.method === 'DELETE'
-            ? String(req.query?.id || req.body?.id || '').trim()
-            : (req.body?.id ?? result.body?.id ?? null),
-        after: req.method === 'DELETE' ? null : req.body || null,
-      });
-    }
-
-    return res.status(result.status).json(result.body);
-  } catch (error) {
-    log.error('handler_failed', { reason: error?.message || String(error) });
-    return fail(res, {
-      status: 500,
-      code: ERROR_CODES.INTERNAL_ERROR,
-      message: 'Erro ao processar cupons do admin.',
-    });
-  }
-};
+module.exports = createAdminResourceHandler({
+  targetType: 'coupon',
+  errorMessage: 'Erro ao processar cupons do admin.',
+  loggerName: 'admin-coupons',
+  handlerName: 'adminCouponsHandler',
+  operations: {
+    GET: async () => ({ status: 200, body: { coupons: await listCoupons() } }),
+    POST: (req) => createCoupon(req.body || {}),
+    PUT: (req) => updateCoupon(req.body || {}),
+    DELETE: (req) => deleteCoupon(String(req.query?.id || req.body?.id || '').trim()),
+  },
+});

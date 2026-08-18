@@ -1,51 +1,38 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
-const { logAdminAction } = require('../../lib/admin-audit');
-const { ERROR_CODES, fail, methodNotAllowed, preflight } = require('../../lib/http');
-const { createLogger } = require('../../lib/logger');
-
-const log = createLogger('admin-categories');
+const { createAdminResourceHandler } = require('../../lib/admin-resource-handler');
+const { ERROR_CODES } = require('../../lib/http');
 const {
-  getSupabaseConfig,
   serviceRoleHelpers: { deleteFromTable, getTableRow, insertIntoTable, listTableRows, updateTable },
 } = require('../../lib/supabase');
+const { parse } = require('../../validation');
+const {
+  categoryCreateSchema,
+  categoryUpdateSchema,
+  normalizeSlug,
+  uuidId,
+} = require('../../validation/admin.schemas');
 
-function normalizeSlug(value) {
-  return (
-    String(value || '')
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replaceAll(/[\u0300-\u036f]/g, '')
-      .replaceAll(/[^a-z0-9]+/g, '-')
-      .replaceAll(/^-+|-+$/g, '') || 'sem-categoria'
-  );
+const SELECT_FIELDS = 'id,name,slug,color,active,featured,badge_label,sort_order,created_at';
+
+/** Erro de validação no formato que a factory despacha por `fail()`. */
+function invalid(message) {
+  return { error: { status: 400, code: ERROR_CODES.VALIDATION_FAILED, message } };
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function toCategoryPayload(body = {}, existing = {}) {
-  const name = String(body.name || existing.name || '').trim();
-  if (!name) {
-    throw new Error('Nome da categoria é obrigatório.');
-  }
-  if (UUID_PATTERN.test(name)) {
-    throw new Error('Nome inválido: não cole IDs no campo nome.');
-  }
-  if (name.length < 2 || name.length > 60) {
-    throw new Error('Nome deve ter entre 2 e 60 caracteres.');
-  }
-  const color = String(body.color || existing.color || '#9B5DE5').trim();
-  const hasActive = Object.hasOwn(body, 'active');
-  const hasFeatured = Object.hasOwn(body, 'featured');
-  const existingIsActive = existing.active !== false;
-  const existingIsFeatured = existing.featured === true;
+/**
+ * Monta a linha a persistir a partir do payload já validado.
+ *
+ * O schema garante o formato; aqui só se decide o que é herdado da linha
+ * existente num PUT parcial — que é regra de negócio, não validação.
+ */
+function toCategoryRow(data, existing = {}) {
+  const name = data.name ?? existing.name ?? '';
 
   return {
     name,
     slug: normalizeSlug(name),
-    color,
-    active: hasActive ? Boolean(body.active) : existingIsActive,
-    featured: hasFeatured ? Boolean(body.featured) : existingIsFeatured,
+    color: data.color ?? existing.color ?? '#9B5DE5',
+    active: data.active ?? existing.active !== false,
+    featured: data.featured ?? existing.featured === true,
     badge_label: String(existing.badge_label ?? '').trim(),
     sort_order: Number.isFinite(Number(existing.sort_order)) ? Number(existing.sort_order) : 0,
   };
@@ -53,7 +40,7 @@ function toCategoryPayload(body = {}, existing = {}) {
 
 async function listCategories() {
   const rows = await listTableRows('categories', {
-    select: 'id,name,slug,color,active,featured,badge_label,sort_order,created_at',
+    select: SELECT_FIELDS,
     orderBy: 'name',
     ascending: true,
   });
@@ -72,120 +59,73 @@ async function listCategories() {
 }
 
 async function createCategory(body) {
-  let payload;
-  try {
-    payload = toCategoryPayload(body);
-  } catch (err) {
-    return { status: 400, body: { success: false, error: err.message } };
-  }
+  const parsed = parse(categoryCreateSchema, body);
+  if (!parsed.ok) return invalid(parsed.message);
+
+  const payload = toCategoryRow(parsed.data);
 
   const existing = await getTableRow('categories', {
-    select: 'id,name,slug,color,active,featured,badge_label,sort_order',
+    select: 'id',
     filters: [{ column: 'slug', value: payload.slug }],
   });
 
   if (existing) {
-    return { status: 409, body: { success: false, error: 'Categoria já existe.' } };
+    return { error: { status: 409, code: ERROR_CODES.CONFLICT, message: 'Categoria já existe.' } };
   }
 
   const [created] = await insertIntoTable('categories', payload);
-  return { status: 201, body: { success: true, id: String(created.id) } };
+  return { status: 201, body: { id: String(created.id) } };
 }
 
 async function updateCategory(body) {
-  const id = String(body.id || '').trim();
-  if (!id) {
-    return { status: 400, body: { success: false, error: 'id é obrigatório.' } };
-  }
+  const parsed = parse(categoryUpdateSchema, body);
+  if (!parsed.ok) return invalid(parsed.message);
+
+  const { id } = parsed.data;
 
   const existing = await getTableRow('categories', {
-    select: 'id,name,slug,color,active,featured,badge_label,sort_order',
+    select: SELECT_FIELDS,
     filters: [{ column: 'id', value: id }],
   });
 
   if (!existing) {
-    return { status: 404, body: { success: false, error: 'Categoria não encontrada.' } };
-  }
-
-  let payload;
-  try {
-    payload = toCategoryPayload(body, existing);
-  } catch (err) {
-    return { status: 400, body: { success: false, error: err.message } };
-  }
-
-  await updateTable('categories', { id: `eq.${id}` }, payload);
-  return { status: 200, body: { success: true } };
-}
-
-async function deleteCategory(id) {
-  if (!id) {
-    return { status: 400, body: { success: false, error: 'id é obrigatório.' } };
-  }
-
-  await deleteFromTable('categories', { id: `eq.${id}` });
-  return { status: 200, body: { success: true } };
-}
-
-module.exports = async function adminCategoriesHandler(req, res) {
-  setAdminCorsHeaders(req, res);
-
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (!ensureAdminSession(req, res)) {
-    return;
-  }
-
-  try {
-    if (!getSupabaseConfig()) {
-      return fail(res, {
-        status: 500,
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: 'Supabase não configurado.',
-      });
-    }
-
-    const handlers = {
-      GET: async () => ({
-        status: 200,
-        body: { success: true, categories: await listCategories() },
-      }),
-      POST: async () => createCategory(req.body || {}),
-      PUT: async () => updateCategory(req.body || {}),
-      DELETE: async () => deleteCategory(String(req.query?.id || req.body?.id || '').trim()),
+    return {
+      error: {
+        status: 404,
+        code: ERROR_CODES.NOT_FOUND,
+        message: 'Categoria não encontrada.',
+      },
     };
-
-    const handler = handlers[req.method];
-    if (!handler) {
-      return methodNotAllowed(res, ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']);
-    }
-
-    const result = await handler();
-
-    // Auditoria de escrita (regra I1) — best-effort.
-    if (result.status >= 200 && result.status < 300 && req.method !== 'GET') {
-      const actionByMethod = { POST: 'create', PUT: 'update', PATCH: 'patch', DELETE: 'delete' };
-      await logAdminAction({
-        req,
-        action: actionByMethod[req.method] || String(req.method).toLowerCase(),
-        targetType: 'category',
-        targetId:
-          req.method === 'DELETE'
-            ? String(req.query?.id || req.body?.id || '').trim()
-            : (req.body?.id ?? result.body?.id ?? null),
-        after: req.method === 'DELETE' ? null : req.body || null,
-      });
-    }
-
-    return res.status(result.status).json(result.body);
-  } catch (error) {
-    log.error('handler_failed', { reason: error?.message || String(error) });
-    return fail(res, {
-      status: 500,
-      code: ERROR_CODES.INTERNAL_ERROR,
-      message: 'Erro ao processar categorias do admin.',
-    });
   }
-};
+
+  // O nome é obrigatório no PUT do mesmo jeito que era antes: o schema o
+  // aceita ausente para permitir edição parcial de cor/flags, e é a linha
+  // existente que preenche a lacuna.
+  if (!parsed.data.name && !existing.name) {
+    return invalid('Nome da categoria é obrigatório.');
+  }
+
+  await updateTable('categories', { id: `eq.${id}` }, toCategoryRow(parsed.data, existing));
+  return { status: 200, body: {} };
+}
+
+async function deleteCategory(rawId) {
+  const parsed = parse(uuidId, rawId);
+  if (!parsed.ok) return invalid('id é obrigatório.');
+
+  await deleteFromTable('categories', { id: `eq.${parsed.data}` });
+  return { status: 200, body: {} };
+}
+
+module.exports = createAdminResourceHandler({
+  targetType: 'category',
+  errorMessage: 'Erro ao processar categorias do admin.',
+  loggerName: 'admin-categories',
+  handlerName: 'adminCategoriesHandler',
+  operations: {
+    GET: async () => ({ status: 200, body: { categories: await listCategories() } }),
+    POST: (req) => createCategory(req.body || {}),
+    PUT: (req) => updateCategory(req.body || {}),
+    DELETE: (req) => deleteCategory(String(req.query?.id || req.body?.id || '').trim()),
+  },
+});

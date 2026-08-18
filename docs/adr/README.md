@@ -43,3 +43,4 @@ antigo é marcado como substituído. O histórico é o valor.
 | [0002](./0002-handler-unico-para-vercel-e-express.md)        | Um handler serve a Vercel e o Express de dev |
 | [0003](./0003-reconciliacao-de-pagamento-em-modulo-unico.md) | Reconciliação de pagamento em módulo único   |
 | [0004](./0004-envelope-de-resposta-e-codigo-de-erro.md)      | Envelope de resposta e código de erro        |
+| [0005](./0005-factory-para-recursos-crud-do-admin.md)        | Factory para os recursos CRUD do admin       |
