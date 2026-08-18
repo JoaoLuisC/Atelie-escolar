@@ -12,10 +12,24 @@ const { sendEmail, getAppUrl } = require('../lib/email-sender');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const { resolveSecret, isLocalDevOrTest } = require('../lib/env-secret');
-const { ERROR_CODES, fail, methodNotAllowed, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('me-delete-account');
+
+/**
+ * Despacha o resultado interno pela porta única do envelope (regra A1).
+ *
+ * As funções abaixo devolvem `{ status, body }` no sucesso e
+ * `{ error: { status, code, message } }` na falha — nunca escrevem em `res`.
+ * Antes elas montavam o corpo à mão e o handler fazia
+ * `res.status(result.status).json(result.body)`, driblando o `fail()`: eram
+ * cinco dos sites do item P1.3, todos no fluxo de exclusão de conta, que é
+ * irreversível.
+ */
+function respond(res, result) {
+  return result?.error ? fail(res, result.error) : ok(res, result.body, { status: result.status });
+}
 
 // ════════════════════════════════════════════════════════════════════
 // LGPD — direito ao esquecimento self-service (pendência §3.8).
@@ -137,7 +151,6 @@ async function requestDeletion(user) {
   });
 
   const body = {
-    success: true,
     message: 'Enviamos um e-mail para confirmar a exclusão da sua conta. O link vale 1 hora.',
   };
   // Afford de dev/testes (sem SMTP, o e-mail não é enviado de verdade).
@@ -218,7 +231,13 @@ async function executeDeletion({ uid, email, req, res }) {
 
   const admin = getAdminClient();
   if (!admin) {
-    return { status: 500, body: { success: false, error: 'Configuração do Supabase ausente.' } };
+    return {
+      error: {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Configuração do Supabase ausente.',
+      },
+    };
   }
 
   // ORDEM CRÍTICA: identificar e anonimizar os pedidos ANTES de apagar a
@@ -236,8 +255,11 @@ async function executeDeletion({ uid, email, req, res }) {
   } catch (err) {
     log.error('falha_ao_resolver_identidade', { reason: err.message });
     return {
-      status: 500,
-      body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' },
+      error: {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Não foi possível excluir a conta. Tente novamente.',
+      },
     };
   }
 
@@ -246,16 +268,16 @@ async function executeDeletion({ uid, email, req, res }) {
     clearCustomerSessionCookie(res);
     return {
       status: 200,
-      body: { success: true, message: 'Sua conta foi excluída. Sentiremos sua falta.' },
+      body: { message: 'Sua conta foi excluída. Sentiremos sua falta.' },
     };
   }
 
   if (!identity) {
     return {
-      status: 409,
-      body: {
-        success: false,
-        error:
+      error: {
+        status: 409,
+        code: ERROR_CODES.CONFLICT,
+        message:
           'Confirme seu e-mail antes de excluir a conta. Se o problema persistir, fale com o suporte.',
       },
     };
@@ -268,8 +290,11 @@ async function executeDeletion({ uid, email, req, res }) {
   // o desvio invalida a autorização: exigimos uma solicitação nova.
   if (tokenEmail && tokenEmail !== normalizedEmail) {
     return {
-      status: 400,
-      body: { success: false, error: 'Link inválido ou expirado. Solicite a exclusão novamente.' },
+      error: {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: 'Link inválido ou expirado. Solicite a exclusão novamente.',
+      },
     };
   }
 
@@ -287,8 +312,11 @@ async function executeDeletion({ uid, email, req, res }) {
   } catch (err) {
     log.error('falha_ao_resolver_pedidos_do_titular', { reason: err.message });
     return {
-      status: 500,
-      body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' },
+      error: {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Não foi possível excluir a conta. Tente novamente.',
+      },
     };
   }
 
@@ -321,10 +349,10 @@ async function executeDeletion({ uid, email, req, res }) {
         properties: { ordersPending: ordersAffected },
       });
       return {
-        status: 500,
-        body: {
-          success: false,
-          error:
+        error: {
+          status: 500,
+          code: ERROR_CODES.INTERNAL_ERROR,
+          message:
             'Não foi possível concluir a exclusão dos seus dados. Nada foi apagado — tente novamente.',
         },
       };
@@ -346,8 +374,11 @@ async function executeDeletion({ uid, email, req, res }) {
   if (deleteUserError && !/not\s*found/i.test(String(deleteUserError.message || ''))) {
     log.error('delete_user_falhou', { reason: deleteUserError.message });
     return {
-      status: 500,
-      body: { success: false, error: 'Não foi possível excluir a conta. Tente novamente.' },
+      error: {
+        status: 500,
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Não foi possível excluir a conta. Tente novamente.',
+      },
     };
   }
 
@@ -384,17 +415,12 @@ async function executeDeletion({ uid, email, req, res }) {
 
   return {
     status: 200,
-    body: { success: true, message: 'Sua conta foi excluída. Sentiremos sua falta.' },
+    body: { message: 'Sua conta foi excluída. Sentiremos sua falta.' },
   };
 }
 
 module.exports = async function meDeleteAccountHandler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-  if (req.method !== 'POST') {
-    return methodNotAllowed(res, ['POST', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['POST'])) return;
 
   // RATE_LIMITS.meDeleteAccount existia mas nunca era chamado — o preset
   // prometia paridade com o meDeleteAccountLimiter de 5/min do Express de dev e
@@ -441,7 +467,7 @@ module.exports = async function meDeleteAccountHandler(req, res) {
         });
       }
       const result = await executeDeletion({ uid: verified.uid, email: verified.email, req, res });
-      return res.status(result.status).json(result.body);
+      return respond(res, result);
     }
 
     // Passo 1: requisição (precisa de sessão de cliente). O uid é exigido
@@ -456,7 +482,7 @@ module.exports = async function meDeleteAccountHandler(req, res) {
       });
     }
     const result = await requestDeletion(user);
-    return res.status(result.status).json(result.body);
+    return respond(res, result);
   } catch (error) {
     log.error('handler_failed', { reason: error.message });
     return fail(res, {

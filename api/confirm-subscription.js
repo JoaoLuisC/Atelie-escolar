@@ -1,4 +1,4 @@
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 
@@ -20,8 +20,7 @@ const {
  * fluxo simples: nada de redirect 302 que confunde tracking.
  */
 module.exports = async function confirmSubscriptionHandler(req, res) {
-  if (req.method === 'OPTIONS') return preflight(res);
-  if (req.method !== 'GET') return methodNotAllowed(res, ['GET', 'OPTIONS']);
+  if (guardMethod(req, res, ['GET'])) return;
 
   // Rate limit DEPOIS do 405 (requisição rejeitada por método não faz trabalho
   // nenhum, então cobrá-la custaria uma escrita no Postgres sem proteger nada)

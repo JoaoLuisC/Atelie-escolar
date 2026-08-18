@@ -5,11 +5,10 @@ const log = createLogger('admin-cohort');
 const {
   ERROR_CODES,
   fail,
-  methodNotAllowed,
+  guardMethod,
   ok,
-  preflight,
-  setCachePolicy,
   setAdminCorsHeaders,
+  setCachePolicy,
 } = require('../../lib/http');
 const {
   getSupabaseConfig,
@@ -53,8 +52,7 @@ function monthsBetween(start, end) {
 
 module.exports = async function adminCohortHandler(req, res) {
   setAdminCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return preflight(res);
-  if (req.method !== 'GET') return methodNotAllowed(res, ['GET', 'OPTIONS']);
+  if (guardMethod(req, res, ['GET'])) return;
   if (!ensureAdminSession(req, res)) return;
 
   try {

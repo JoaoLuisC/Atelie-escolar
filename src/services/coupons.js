@@ -1,4 +1,4 @@
-import { apiRequest } from '../utils/api';
+import { apiRequest, errorMessageOf } from '../utils/api';
 
 /**
  * Prévia de desconto para o carrinho (regra C2 — componente não fala com a API).
@@ -32,11 +32,11 @@ export async function validateCoupon(code, cart = []) {
   if (!data.success) {
     return {
       ok: false,
-      message: data.error || 'Cupom inválido.',
-      // `errorCode` vem do envelope da regra A1/A2 (COUPON_EXPIRED,
+      message: errorMessageOf(data) || 'Cupom inválido.',
+      // O `code` vem do envelope da regra A1/A2 (COUPON_EXPIRED,
       // COUPON_MINIMUM_NOT_MET…). É por ele que a tela deve ramificar quando
       // precisar de tratamento diferente por motivo — nunca pelo texto.
-      code: data.errorCode || null,
+      code: data.error?.code || null,
     };
   }
 

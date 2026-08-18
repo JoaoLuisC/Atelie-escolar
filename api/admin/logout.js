@@ -1,23 +1,10 @@
 const { clearSessionCookie, isSameOriginRequest } = require('../../lib/admin-session');
-const {
-  ERROR_CODES,
-  fail,
-  methodNotAllowed,
-  ok,
-  preflight,
-  setAdminCorsHeaders,
-} = require('../../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
 
 module.exports = async function adminLogoutHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'POST') {
-    return methodNotAllowed(res, ['POST', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['POST'])) return;
 
   // Defesa anti-CSRF: impede logout forçado por página maliciosa cross-site.
   if (!isSameOriginRequest(req)) {

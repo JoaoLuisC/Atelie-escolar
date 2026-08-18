@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
-import { apiRequest } from '../utils/api';
+import { apiRequest, errorMessageOf } from '../utils/api';
 import { ROUTES } from '../constants/routes';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -45,7 +45,10 @@ export function ConfirmSubscriptionPage() {
           `/confirm-subscription?token=${encodeURIComponent(token)}`,
         );
         if (!data.success) {
-          setStatus({ state: 'error', message: data.error || 'Token inválido ou expirado.' });
+          setStatus({
+            state: 'error',
+            message: errorMessageOf(data) || 'Token inválido ou expirado.',
+          });
           return;
         }
         setStatus({
@@ -115,7 +118,7 @@ export function UnsubscribePage() {
         const { data } = await apiRequest(`/unsubscribe?token=${encodeURIComponent(token)}`);
         setStatus({
           state: data.success ? 'success' : 'error',
-          message: data.message || data.error || 'Algo deu errado.',
+          message: data.message || errorMessageOf(data) || 'Algo deu errado.',
         });
       } catch (err) {
         setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });
@@ -138,9 +141,14 @@ export function UnsubscribePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
+      // `confirmationRequired` é o estado "enviamos um e-mail de confirmação e
+      // NADA foi removido ainda". Antes ele chegava como `success: false`, o
+      // que pintava a tela de erro para uma operação que deu certo — e obrigava
+      // o backend a mentir no envelope da regra A1. Aqui ele é o que é: um
+      // estado de domínio, num corpo de sucesso.
       setStatus({
-        state: data.success ? 'success' : 'error',
-        message: data.message || data.error || 'Algo deu errado.',
+        state: data.confirmationRequired ? 'pending' : data.success ? 'success' : 'error',
+        message: data.message || errorMessageOf(data) || 'Algo deu errado.',
       });
     } catch (err) {
       setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });

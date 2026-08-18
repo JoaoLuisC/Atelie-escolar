@@ -1,4 +1,4 @@
-import { apiRequest } from '../utils/api';
+import { apiError, apiRequest } from '../utils/api';
 import { buildOAuthRedirectUrl, getSupabaseBrowserClient } from './supabase-browser';
 
 const INVALID_CREDENTIALS_MESSAGE = 'Credenciais inválidas.';
@@ -20,7 +20,7 @@ function normalizeUser(user = {}) {
 
 function ensureAuthSuccess(response, data, fallbackMessage = INVALID_CREDENTIALS_MESSAGE) {
   if (!response.ok || data?.success !== true) {
-    throw new Error(data?.error || fallbackMessage);
+    throw apiError(data, fallbackMessage);
   }
 }
 
@@ -50,7 +50,7 @@ export async function registerCustomerWithEmail(name, email, password) {
     body: JSON.stringify({ name, email, password }),
   });
 
-  ensureAuthSuccess(response, data, data?.error || 'Não foi possível criar a conta.');
+  ensureAuthSuccess(response, data, 'Não foi possível criar a conta.');
 
   if (data.verificationRequired) {
     return {
@@ -176,7 +176,7 @@ export async function requestAccountDeletion() {
   });
 
   if (!response.ok || data?.success !== true) {
-    throw new Error(data?.error || 'Não foi possível solicitar a exclusão da conta.');
+    throw apiError(data, 'Não foi possível solicitar a exclusão da conta.');
   }
 
   return data;
@@ -195,7 +195,7 @@ export async function confirmAccountDeletion(token) {
   });
 
   if (!response.ok || data?.success !== true) {
-    throw new Error(data?.error || 'Não foi possível concluir a exclusão da conta.');
+    throw apiError(data, 'Não foi possível concluir a exclusão da conta.');
   }
 
   return data;

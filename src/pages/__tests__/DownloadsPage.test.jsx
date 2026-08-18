@@ -32,9 +32,17 @@ describe('DownloadsPage', () => {
   });
 
   it('mostra estado de erro quando pedido retorna falha de token invalido', async () => {
+    // Envelope da regra A1. A fixture usava `{ error: 'texto' }`, o formato
+    // que o CONTRIBUTING dá por extinto — e ela só passava porque o shim de
+    // achatamento de `parseJson` ainda existia. Com o shim removido (marco do
+    // fim da migração A1), a fixture precisa ser o que o backend realmente
+    // emite: `fail()` de lib/http.js.
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
-      json: async () => ({ error: 'Token invalido' }),
+      json: async () => ({
+        success: false,
+        error: { code: 'DOWNLOAD_TOKEN_INVALID', message: 'Token invalido' },
+      }),
     });
 
     render(

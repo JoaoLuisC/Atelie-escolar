@@ -3,14 +3,7 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
 } = require('../../lib/supabase');
-const {
-  ERROR_CODES,
-  fail,
-  methodNotAllowed,
-  ok,
-  preflight,
-  setAdminCorsHeaders,
-} = require('../../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-dashboard');
@@ -226,13 +219,7 @@ async function loadDashboard() {
 module.exports = async function adminDashboardHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'GET') {
-    return methodNotAllowed(res, ['GET', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['GET'])) return;
 
   if (!ensureAdminSession(req, res)) {
     return;

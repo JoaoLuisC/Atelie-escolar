@@ -4,7 +4,7 @@ const {
 } = require('../lib/supabase');
 const { loadSoldCountByProduct } = require('../lib/sales-counts');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('home-sections');
@@ -113,13 +113,7 @@ function normalizeSections(rawSetting, categories) {
 }
 
 module.exports = async function homeSectionsHandler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'GET') {
-    return methodNotAllowed(res, ['GET', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['GET'])) return;
 
   // Regra E1 — ver RATE_LIMITS.catalog.
   const gate = await enforceRateLimit(req, res, RATE_LIMITS.catalog);

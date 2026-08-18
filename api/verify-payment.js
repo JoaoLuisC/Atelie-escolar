@@ -30,7 +30,7 @@ const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const { checkPaymentIntegrity } = require('../lib/payment-integrity');
 const { parseOrFail } = require('../validation');
 const { verifyPaymentSchema } = require('../validation/payment.schemas');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('verify-payment');
@@ -330,16 +330,10 @@ function readVerifyPayload(req) {
 }
 
 module.exports = async function verifyPaymentHandler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
   // GET mantido por compatibilidade: há polling em produção e possivelmente
   // links antigos apontando para a forma com query string. DEPRECIADO — ver
   // readVerifyPayload(). Novos clientes devem usar POST com { orderId, email }.
-  if (req.method !== 'GET' && req.method !== 'POST') {
-    return methodNotAllowed(res, ['GET', 'POST', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['GET', 'POST'])) return;
 
   try {
     // P1-3: o limiter de 60/min por IP só existia no Express de dev

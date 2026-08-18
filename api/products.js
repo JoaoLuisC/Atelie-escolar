@@ -4,7 +4,7 @@ const {
 } = require('../lib/supabase');
 const { loadSoldCountByProduct } = require('../lib/sales-counts');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('products');
@@ -14,13 +14,7 @@ const log = createLogger('products');
  * GET /api/products
  */
 module.exports = async function productsHandler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'GET') {
-    return methodNotAllowed(res, ['GET', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['GET'])) return;
 
   // Regra E1: sem isto o endpoint fica sem contador em produção — o limiter
   // global do server.js só existe no Express de dev. Ver RATE_LIMITS.catalog.

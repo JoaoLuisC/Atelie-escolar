@@ -30,6 +30,6 @@ import { ERROR_CODES } from '../../../constants/error-codes';
  * @param {Error & { code?: string }} error
  */
 export function isSessionError(error) {
-  const code = error?.code || error?.errorCode;
+  const code = error?.code;
   return code === ERROR_CODES.ADMIN_SESSION_INVALID || code === ERROR_CODES.UNAUTHORIZED;
 }

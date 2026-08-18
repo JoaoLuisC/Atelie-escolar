@@ -1,13 +1,6 @@
 const { ensureAdminSession } = require('../../lib/admin-session');
 const { getSupabaseConfig, supabaseRequest } = require('../../lib/supabase');
-const {
-  ERROR_CODES,
-  fail,
-  methodNotAllowed,
-  ok,
-  preflight,
-  setAdminCorsHeaders,
-} = require('../../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-cleanup-events');
@@ -26,13 +19,7 @@ const log = createLogger('admin-cleanup-events');
 module.exports = async function adminCleanupEventsHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'POST') {
-    return methodNotAllowed(res, ['POST', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['POST'])) return;
 
   if (!ensureAdminSession(req, res)) {
     return;

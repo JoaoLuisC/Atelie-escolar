@@ -1,10 +1,9 @@
 const { customerGoogleCallback } = require('../../../../lib/customer-auth-handlers');
-const { methodNotAllowed, preflight } = require('../../../../lib/http');
+const { guardMethod } = require('../../../../lib/http');
 const { enforceRateLimit, RATE_LIMITS } = require('../../../../lib/rate-limit');
 
 module.exports = async function callbackHandler(req, res) {
-  if (req.method === 'OPTIONS') return preflight(res);
-  if (req.method !== 'POST') return methodNotAllowed(res, ['POST', 'OPTIONS']);
+  if (guardMethod(req, res, ['POST'])) return;
 
   // Rate limit DEPOIS do 405 (requisição rejeitada por método não faz trabalho
   // nenhum, então cobrá-la custaria uma escrita no Postgres sem proteger nada)

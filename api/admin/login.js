@@ -9,14 +9,7 @@ const { safeCompare, setSessionCookie } = require('../../lib/admin-session');
 const { resolveSecret } = require('../../lib/env-secret');
 const { getAnonClient, getProfileRoleByEmail } = require('../../services/supabase-auth');
 const { enforceRateLimit, resolveIdentifier, RATE_LIMITS } = require('../../lib/rate-limit');
-const {
-  ERROR_CODES,
-  fail,
-  methodNotAllowed,
-  ok,
-  preflight,
-  setAdminCorsHeaders,
-} = require('../../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
 
 // TTL do desafio de 2º fator. Era 300s; caiu para 120s porque o desafio é um
 // portador de "a senha já foi conferida" e o único uso legítimo dele é o
@@ -462,13 +455,7 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
 module.exports = async function adminLoginHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'POST') {
-    return methodNotAllowed(res, ['POST', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['POST'])) return;
 
   const email = String(req.body?.email || '')
     .trim()

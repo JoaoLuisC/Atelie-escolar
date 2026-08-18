@@ -1,4 +1,4 @@
-import { apiRequest } from '../utils/api';
+import { apiRequest, apiError } from '../utils/api';
 
 export async function loginAdmin({ username, password, factorCode, challengeToken }) {
   const { response, data } = await apiRequest('/admin/login', {
@@ -13,7 +13,7 @@ export async function loginAdmin({ username, password, factorCode, challengeToke
   }
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Falha no login admin.');
+    throw apiError(data, 'Falha no login admin.');
   }
 
   return data;
@@ -26,7 +26,7 @@ export async function logoutAdmin() {
   });
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Falha ao encerrar sessao admin.');
+    throw apiError(data, 'Falha ao encerrar sessao admin.');
   }
 
   return data;
@@ -39,7 +39,7 @@ export async function getAdminSession() {
   });
 
   if (!response.ok || data.success !== true) {
-    throw new Error(data.error || 'Falha ao validar sessao admin.');
+    throw apiError(data, 'Falha ao validar sessao admin.');
   }
 
   return { authenticated: data.authenticated === true };

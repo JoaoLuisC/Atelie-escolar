@@ -1,4 +1,4 @@
-import { apiRequest } from '../utils/api';
+import { apiRequest, errorMessageOf } from '../utils/api';
 
 /**
  * Inscrição na newsletter com double opt-in (regra C2).
@@ -19,8 +19,8 @@ export async function subscribeToNewsletter({ email, source, attribution }) {
   if (!data.success) {
     return {
       ok: false,
-      message: data.error || 'Não foi possível inscrever agora.',
-      code: data.errorCode || null,
+      message: errorMessageOf(data) || 'Não foi possível inscrever agora.',
+      code: data.error?.code || null,
     };
   }
 

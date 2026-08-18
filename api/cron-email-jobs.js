@@ -4,7 +4,7 @@ const {
   serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable },
 } = require('../lib/supabase');
 const { sendEmail } = require('../lib/email-sender');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('cron-email-jobs');
@@ -658,10 +658,7 @@ async function processReactivation() {
 // HANDLER
 // ════════════════════════════════════════════════════════════════════
 module.exports = async function cronEmailJobsHandler(req, res) {
-  if (req.method === 'OPTIONS') return preflight(res);
-  if (req.method !== 'POST' && req.method !== 'GET') {
-    return methodNotAllowed(res, ['POST', 'GET', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['POST', 'GET'])) return;
 
   if (!isAuthorized(req)) {
     return fail(res, { status: 401, code: ERROR_CODES.UNAUTHORIZED, message: 'Unauthorized' });

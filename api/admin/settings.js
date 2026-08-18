@@ -7,7 +7,7 @@ const {
   fail,
   methodNotAllowed,
   ok,
-  preflight,
+  guardMethod,
   setAdminCorsHeaders,
 } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
@@ -404,7 +404,7 @@ async function writeSetting(key, value) {
 
 /**
  * Prepara o valor de adminConfig a ser gravado, incluindo o gate de
- * reautenticação. Devolve `{ response }` quando a requisição deve terminar com
+ * reautenticação. Devolve `{ error }` quando a requisição deve terminar com
  * aquele status, ou `{ handled: true }` quando a resposta JÁ foi escrita em
  * `res` (caminho do 429 do rate limit).
  */
@@ -412,7 +412,13 @@ async function prepareAdminConfigWrite(req, res, incoming) {
   const existingConfig = (await readSetting('adminConfig')) || {};
   const sanitized = sanitizeAdminConfig(incoming, existingConfig);
   if (sanitized.error) {
-    return { response: { status: 400, body: { success: false, error: sanitized.error } } };
+    return {
+      error: {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message: sanitized.error,
+      },
+    };
   }
 
   // Só faz sentido exigir o 2º fator para mudar o 2º fator quando existe um
@@ -458,15 +464,15 @@ async function prepareAdminConfigWrite(req, res, incoming) {
           fields: changedFields,
         },
       });
+      // Item P1.5: o código estava em minúsculo E fora do objeto `error`, então
+      // `parseJson` devolvia `errorCode: null` no cliente. `SECOND_FACTOR_REQUIRED`
+      // já existia no catálogo de `lib/http.js` esperando por isto.
       return {
-        response: {
+        error: {
           status: 403,
-          body: {
-            success: false,
-            code: 'second_factor_required',
-            error:
-              'Alterações no segundo fator exigem o código TOTP (ou PIN) atual em "confirmationCode".',
-          },
+          code: ERROR_CODES.SECOND_FACTOR_REQUIRED,
+          message:
+            'Alterações no segundo fator exigem o código TOTP (ou PIN) atual em "confirmationCode".',
         },
       };
     }
@@ -477,14 +483,8 @@ async function prepareAdminConfigWrite(req, res, incoming) {
 
 module.exports = async function adminSettingsHandler(req, res) {
   setAdminCorsHeaders(req, res);
-
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (!ensureAdminSession(req, res)) {
-    return;
-  }
+  if (guardMethod(req, res, ['GET', 'PUT'])) return;
+  if (!ensureAdminSession(req, res)) return;
 
   try {
     if (!getSupabaseConfig()) {
@@ -509,9 +509,9 @@ module.exports = async function adminSettingsHandler(req, res) {
       // adminConfig guarda segredos (totpSecret, fallbackPin). NUNCA os
       // devolvemos no GET — o painel só precisa saber se estão configurados.
       if (key === 'adminConfig' && value && typeof value === 'object') {
-        return ok(res, { success: true, key, value: toPublicAdminConfig(value) });
+        return ok(res, { key, value: toPublicAdminConfig(value) });
       }
-      return ok(res, { success: true, key, value });
+      return ok(res, { key, value });
     }
 
     if (req.method === 'PUT') {
@@ -523,8 +523,8 @@ module.exports = async function adminSettingsHandler(req, res) {
         // `handled` = a resposta já saiu de dentro do gate (429). Escrever de
         // novo em `res` aqui só produziria um ERR_HTTP_HEADERS_SENT.
         if (prepared.handled) return;
-        if (prepared.response) {
-          return res.status(prepared.response.status).json(prepared.response.body);
+        if (prepared.error) {
+          return fail(res, prepared.error);
         }
         valueToWrite = prepared.value;
         ignoredFields = prepared.ignored;
@@ -545,10 +545,13 @@ module.exports = async function adminSettingsHandler(req, res) {
           ...(ignoredFields.length ? { ignoredFields } : {}),
         },
       });
-      return ok(res, { success: true, key, ...(ignoredFields.length ? { ignoredFields } : {}) });
+      return ok(res, { key, ...(ignoredFields.length ? { ignoredFields } : {}) });
     }
 
-    return methodNotAllowed(res, ['OPTIONS']);
+    // Inalcançável: `guardMethod` no topo já barrou tudo fora de GET/PUT, e o
+    // header `Allow` do 405 agora sai da mesma lista — antes ele dizia só
+    // `OPTIONS`, que era falso.
+    return methodNotAllowed(res, ['GET', 'PUT', 'OPTIONS']);
   } catch (error) {
     log.error('handler_failed', { reason: error?.message || String(error) });
     return fail(res, {

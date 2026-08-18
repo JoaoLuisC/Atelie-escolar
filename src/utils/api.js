@@ -3,34 +3,31 @@ export function getApiBaseUrl() {
 }
 
 /**
- * Normaliza o corpo da resposta para o formato que as telas consomem.
+ * Corpo da resposta, tal como o backend o emitiu.
  *
- * ── O SHIM E POR QUE ELE AINDA EXISTE ───────────────────────────────
- * A regra A1 padronizou o erro do backend em `{ success:false,
- * error:{ code, message } }`. Antes disso conviviam TRÊS formatos, e esta
- * função existia só para o cliente sobreviver aos dois primeiros.
+ * ── O SHIM SAIU, E ISSO É O MARCO DO FIM DA MIGRAÇÃO A1 ─────────────
+ * Até aqui esta função ACHATAVA `error` de objeto para string e expunha o
+ * código separado em `errorCode`. Ela existia porque conviviam três formatos
+ * de erro na API, e o CONTRIBUTING elegeu a remoção dela como a prova
+ * verificável de que a migração da regra A1 tinha terminado:
  *
- * Ela continua achatando `error` para string — de propósito, e não por
- * inércia: dezenas de telas leem `data.error` como texto para jogar num
- * `setStatus({ message })`. Trocar todas por `data.error.message` seria
- * churn sem ganho.
+ *   "Quando A1 estiver aplicada, esse shim sai."
  *
- * O que MUDA é que o `code` deixou de se perder: ele sai em `errorCode`,
- * e é por ele que o cliente deve ramificar (regra A2). O caso concreto que
- * motivou isso está em `src/components/admin/utils/format.js`, que decidia se
- * a sessão tinha expirado com `includes('sessao admin')` — reescrever a frase
- * quebrava o re-login em silêncio.
+ * Ele saiu. Todo erro da API agora é `{ success: false, error: { code,
+ * message } }`, emitido por `fail()` de `lib/http.js` — conferido com
+ * `grep -rn "error: '" api lib routes`, que só retorna comentários e o tipo
+ * `{ value | error }` das funções de coerção de `api/admin/settings.js`, que
+ * nunca vira corpo HTTP.
+ *
+ * Consequência para quem escreve tela: a mensagem para a pessoa está em
+ * `data.error?.message`; o código para a máquina, em `data.error?.code`. Nunca
+ * ramifique pelo texto (regra A2) — foi assim que o re-login do admin ficou
+ * quebrado por um acento.
  */
 export async function parseJson(response) {
   try {
     const data = await response.json();
     if (!data || typeof data !== 'object') return {};
-
-    const error = data.error;
-    if (error && typeof error === 'object' && typeof error.message === 'string') {
-      return { ...data, error: error.message, errorCode: error.code || null };
-    }
-
     return data;
   } catch (parseError) {
     if (import.meta.env?.DEV) {
@@ -40,11 +37,16 @@ export async function parseJson(response) {
   }
 }
 
+/** Mensagem legível do envelope de erro, ou `''` quando não há erro. */
+export function errorMessageOf(data) {
+  return String(data?.error?.message || '');
+}
+
 /**
  * Constrói um `Error` que PRESERVA o `code` do envelope (regra A2).
  *
  * ── POR QUE ISTO PRECISOU EXISTIR (item P0.1) ───────────────────────
- * `parseJson` já expunha o `code` em `errorCode`, mas cada serviço fazia
+ * O `code` chegava do backend, mas cada serviço fazia
  * `throw new Error(data.error)` e o descartava ali mesmo. A cadeia do
  * re-login do admin tinha DUAS rupturas: o backend não emitia o código E o
  * serviço jogava fora o que chegasse. Consertar só a primeira deixaria o
@@ -60,8 +62,8 @@ export async function parseJson(response) {
  * @param {string|null} [options.defaultCode]  código quando a resposta não traz um
  */
 export function apiError(data, fallbackMessage, { defaultCode = null } = {}) {
-  const error = new Error(data?.error || fallbackMessage);
-  error.code = data?.errorCode || defaultCode;
+  const error = new Error(errorMessageOf(data) || fallbackMessage);
+  error.code = data?.error?.code || defaultCode;
   return error;
 }
 

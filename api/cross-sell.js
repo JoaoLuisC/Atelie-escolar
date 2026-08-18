@@ -3,7 +3,7 @@ const {
   serviceRoleHelpers: { getTableRow, listTableRows },
 } = require('../lib/supabase');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('cross-sell');
@@ -147,12 +147,7 @@ function shapeProduct(row) {
 }
 
 module.exports = async function crossSellHandler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-  if (req.method !== 'GET') {
-    return methodNotAllowed(res, ['GET', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['GET'])) return;
 
   // Regra E1 — ver RATE_LIMITS.catalog.
   const gate = await enforceRateLimit(req, res, RATE_LIMITS.catalog);

@@ -8,7 +8,7 @@ import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
-import { apiRequest } from '../utils/api';
+import { apiRequest, errorMessageOf } from '../utils/api';
 import { formatPrice } from '../utils/currency';
 import { buildCartPayload, getAttributionPayload, trackEvent } from '../utils/analytics';
 import { getSessionId } from '../utils/attribution';
@@ -336,7 +336,7 @@ export function CheckoutPage() {
       });
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Erro ao criar pagamento.');
+        throw new Error(errorMessageOf(data) || 'Erro ao criar pagamento.');
       }
 
       localStorage.setItem('lastOrderId', String(data.orderId || ''));

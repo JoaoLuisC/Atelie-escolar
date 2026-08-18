@@ -11,7 +11,7 @@ const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const couponHelpers = require('../lib/coupons');
 const { parseOrFail } = require('../validation');
 const { createPaymentSchema } = require('../validation/payment.schemas');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { allocateDiscountCents, sumItemsCents, toCentsOrZero, toReais } = require('../lib/money');
 const { createLogger } = require('../lib/logger');
 
@@ -149,13 +149,7 @@ function applyDiscountToItems(items, discountCents, eligibleItemIds = null) {
 }
 
 module.exports = async function createPaymentHandler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'POST') {
-    return methodNotAllowed(res, ['POST', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['POST'])) return;
 
   // Rate limit ANTES de qualquer trabalho (achado P1-3). Este handler grava em
   // duas tabelas e cria uma preferência no Mercado Pago — é a requisição mais
@@ -386,6 +380,15 @@ module.exports = async function createPaymentHandler(req, res) {
     });
   } catch (error) {
     log.error('handler_failed', { reason: error?.message || String(error) });
-    return res.status(error.statusCode || 500).json({ error: 'Erro ao criar pagamento' });
+    // Item P1.3: este era o ÚNICO dos quatro sites deste arquivo que não
+    // passava por `fail()` — e é o `catch` do endpoint que cria o pagamento,
+    // ou seja, o erro que a cliente vê quando o checkout falha. Sem `success`
+    // e sem `code`, no caminho do dinheiro.
+    const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+    return fail(res, {
+      status,
+      code: status >= 500 ? ERROR_CODES.INTERNAL_ERROR : ERROR_CODES.VALIDATION_FAILED,
+      message: 'Erro ao criar pagamento',
+    });
   }
 };

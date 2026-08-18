@@ -2,7 +2,7 @@ const { getSupabaseConfig } = require('../lib/supabase');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const { parseOrFail } = require('../validation');
 const { validateCouponSchema } = require('../validation/payment.schemas');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('validate-coupon');
@@ -14,12 +14,7 @@ const {
 } = require('../lib/coupons');
 
 module.exports = async function validateCouponHandler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-  if (req.method !== 'POST') {
-    return methodNotAllowed(res, ['POST', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['POST'])) return;
 
   // Rate limit ANTES de qualquer consulta (achado P1-3). Este endpoint é um
   // ORÁCULO: a diferença entre 422 `not_found` e 200 revela se um código existe,

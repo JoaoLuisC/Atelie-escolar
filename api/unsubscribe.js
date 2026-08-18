@@ -5,7 +5,7 @@ const {
 const { sendEmail, getAppUrl } = require('../lib/email-sender');
 const { unsubscribeSuccess } = require('../lib/email-templates');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('unsubscribe');
@@ -56,14 +56,10 @@ const NEUTRAL_EMAIL_MESSAGE =
  * disparo em massa do e-mail com o link.
  */
 module.exports = async function unsubscribeHandler(req, res) {
-  if (req.method === 'OPTIONS') return preflight(res);
+  if (guardMethod(req, res, ['GET', 'POST'])) return;
 
   const gate = await enforceRateLimit(req, res, RATE_LIMITS.unsubscribe);
   if (gate.blocked) return;
-
-  if (req.method !== 'GET' && req.method !== 'POST') {
-    return methodNotAllowed(res, ['GET', 'POST', 'OPTIONS']);
-  }
 
   try {
     if (!getSupabaseConfig()) {
@@ -203,15 +199,21 @@ async function requestUnsubscribeLink(email, res) {
     });
   }
 
-  // `success: false` de propósito: a página /desinscrever (src/pages/
-  // SubscriptionPages.jsx) troca o título para "Pronto, você foi removido"
-  // quando `success === true`, e aqui NADA foi removido ainda. Com false ela
-  // mantém o formulário e exibe a mensagem — que é exatamente o estado real.
-  // `code` deixa o front distinguir isto de um erro de verdade sem parsear texto.
+  // ── Item P1.5, e a medição corrigiu a premissa ────────────────────
+  // O documento pedia para "decidir o nome de `confirmation_required` e
+  // registrar no catálogo de erros". Mas isto NÃO é um erro: a requisição foi
+  // processada com sucesso e um e-mail de confirmação saiu. O que existia era
+  // `success: false` usado como FLAG DE DOMÍNIO — e, junto, `message` e
+  // `error` com o mesmo texto, mais um `code` minúsculo no nível de cima.
+  //
+  // Registrar `CONFIRMATION_REQUIRED` no catálogo de erros criaria um código
+  // que nunca é emitido como erro — exatamente o ramo morto que a regra A2
+  // existe para evitar, e o defeito que este documento inteiro persegue.
+  //
+  // Então o sinal de máquina vira um campo de domínio no corpo de SUCESSO, e
+  // `src/pages/SubscriptionPages.jsx` ramifica nele.
   return ok(res, {
-    success: false,
-    code: 'confirmation_required',
+    confirmationRequired: true,
     message: NEUTRAL_EMAIL_MESSAGE,
-    error: NEUTRAL_EMAIL_MESSAGE,
   });
 }

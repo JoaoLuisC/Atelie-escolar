@@ -3,14 +3,7 @@ const { ensureAdminSession } = require('../../lib/admin-session');
 const { getSupabaseConfig } = require('../../lib/supabase');
 const { isSafeObjectPath } = require('../../lib/storage-signed-url');
 const { recordSecurityEvent } = require('../../lib/security-logger');
-const {
-  ERROR_CODES,
-  fail,
-  methodNotAllowed,
-  ok,
-  preflight,
-  setAdminCorsHeaders,
-} = require('../../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-upload-url');
@@ -479,8 +472,7 @@ async function handleConfirm(req, res, { bucket, config }) {
 
 module.exports = async function adminUploadUrlHandler(req, res) {
   setAdminCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return preflight(res);
-  if (req.method !== 'POST') return methodNotAllowed(res, ['POST', 'OPTIONS']);
+  if (guardMethod(req, res, ['POST'])) return;
   if (!ensureAdminSession(req, res)) return;
 
   const { kind, action } = req.body || {};

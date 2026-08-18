@@ -148,7 +148,9 @@ describe('gate de reautenticação do adminConfig', () => {
     );
 
     expect(res.statusCode).toBe(403);
-    expect(res.body.code).toBe('second_factor_required');
+    // Item P1.5: SCREAMING_SNAKE e DENTRO do objeto `error`, senão o
+    // `parseJson` do cliente devolve `errorCode: null`.
+    expect(res.body.error.code).toBe('SECOND_FACTOR_REQUIRED');
     // E, sobretudo: NADA foi gravado.
     expect(store.stored('adminConfig').totpSecret).toBeUndefined();
     expect(securityEvents.recordSecurityEvent).toHaveBeenCalledWith(

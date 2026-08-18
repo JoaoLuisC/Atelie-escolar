@@ -1,19 +1,13 @@
 const { isClientEventAllowed, recordEvent } = require('../lib/analytics-events');
 const { getSupabaseConfig } = require('../lib/supabase'); // helpers vêm de lib/analytics-events.js
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
-const { methodNotAllowed, preflight } = require('../lib/http');
+const { guardMethod } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('track-event');
 
 module.exports = async function trackEventHandler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'POST') {
-    return methodNotAllowed(res, ['POST', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['POST'])) return;
 
   // RATE_LIMITS.trackEvent existia desde a rodada do P1-3, mas nenhum handler o
   // chamava — o preset era configuração morta e este endpoint seguia sem teto

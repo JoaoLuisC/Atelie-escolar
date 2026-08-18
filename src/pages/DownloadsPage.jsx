@@ -6,7 +6,7 @@ import { SkeletonDownloadList } from '../components/Skeleton';
 import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { apiRequest, getApiBaseUrl } from '../utils/api';
+import { apiRequest, errorMessageOf, getApiBaseUrl } from '../utils/api';
 import { formatPrice } from '../utils/currency';
 import { trackPurchaseOnce } from '../utils/analytics';
 import { ROUTES } from '../constants/routes';
@@ -166,7 +166,7 @@ export function DownloadsPage() {
         if (signal?.aborted) return;
 
         if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Não foi possível verificar o pedido agora.');
+          throw new Error(errorMessageOf(data) || 'Não foi possível verificar o pedido agora.');
         }
 
         setOrder(data.order || null);
@@ -251,7 +251,7 @@ export function DownloadsPage() {
 
         if (signal?.aborted) return;
         if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Não foi possível carregar os pedidos.');
+          throw new Error(errorMessageOf(data) || 'Não foi possível carregar os pedidos.');
         }
 
         setOrders(data.orders || []);

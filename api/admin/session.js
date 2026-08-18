@@ -1,16 +1,10 @@
 const { hasValidAdminSession } = require('../../lib/admin-session');
-const { methodNotAllowed, ok, preflight, setAdminCorsHeaders } = require('../../lib/http');
+const { guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
 
 module.exports = async function adminSessionHandler(req, res) {
   setAdminCorsHeaders(req, res);
 
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'GET') {
-    return methodNotAllowed(res, ['GET', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['GET'])) return;
 
   const authenticated = hasValidAdminSession(req);
   return ok(res, {

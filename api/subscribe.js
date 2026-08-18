@@ -7,7 +7,7 @@ const { sendEmail } = require('../lib/email-sender');
 const { optInConfirmation } = require('../lib/email-templates');
 const { sanitizeAttribution } = require('../lib/attribution-sanitize');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('subscribe');
@@ -38,15 +38,15 @@ function newToken() {
  * em produção quem conta é lib/rate-limit.js.
  */
 module.exports = async function subscribeHandler(req, res) {
-  if (req.method === 'OPTIONS') return preflight(res);
+  // Ordem da regra A3: método ANTES do rate limit. O contador ficava antes,
+  // com a justificativa de "contar mesmo a requisição malformada, pelo mesmo
+  // alcance do router.all do Express" — mas aquele router não existe mais
+  // (ADR 0007), e uma requisição que leva 405 não faz trabalho nenhum: contá-la
+  // custa uma escrita no Postgres sem proteger nada.
+  if (guardMethod(req, res, ['POST'])) return;
 
-  // Antes do método e de qualquer consulta: o balde precisa contar a requisição
-  // mesmo quando ela é malformada, senão o atacante escapa do contador só
-  // trocando o verbo. É o mesmo alcance do `router.all` do Express em dev.
   const gate = await enforceRateLimit(req, res, RATE_LIMITS.subscribe);
   if (gate.blocked) return;
-
-  if (req.method !== 'POST') return methodNotAllowed(res, ['POST', 'OPTIONS']);
 
   try {
     if (!getSupabaseConfig()) {

@@ -10,11 +10,10 @@ const log = createLogger('admin-abc-customers');
 const {
   ERROR_CODES,
   fail,
-  methodNotAllowed,
+  guardMethod,
   ok,
-  preflight,
-  setCachePolicy,
   setAdminCorsHeaders,
+  setCachePolicy,
 } = require('../../lib/http');
 
 /**
@@ -73,8 +72,7 @@ function maskEmail(email) {
 
 module.exports = async function adminAbcCustomersHandler(req, res) {
   setAdminCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return preflight(res);
-  if (req.method !== 'GET') return methodNotAllowed(res, ['GET', 'OPTIONS']);
+  if (guardMethod(req, res, ['GET'])) return;
   if (!ensureAdminSession(req, res)) return;
 
   try {

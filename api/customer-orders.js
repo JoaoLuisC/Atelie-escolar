@@ -4,7 +4,7 @@ const {
 } = require('../lib/supabase');
 const { getCustomerSessionFromRequest } = require('../lib/customer-session');
 const { getAdminClient } = require('../services/supabase-auth');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../lib/http');
+const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 
 const log = createLogger('customer-orders');
@@ -141,13 +141,7 @@ function listOwnOrders(uid) {
 }
 
 module.exports = async function customerOrdersHandler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return preflight(res);
-  }
-
-  if (req.method !== 'GET') {
-    return methodNotAllowed(res, ['GET', 'OPTIONS']);
-  }
+  if (guardMethod(req, res, ['GET'])) return;
 
   try {
     if (!getSupabaseConfig()) {
