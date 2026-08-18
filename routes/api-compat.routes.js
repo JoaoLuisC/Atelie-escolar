@@ -29,10 +29,12 @@ const crossSellHandler = require('../api/cross-sell');
 const customerOrdersHandler = require('../api/customer-orders');
 const downloadHandler = require('../api/download');
 const meDeleteAccountHandler = require('../api/me-delete-account');
+const apiNotFoundHandler = require('../api/notfound');
 const homeSectionsHandler = require('../api/home-sections');
 const productDetailsHandler = require('../api/product-details');
 const productsHandler = require('../api/products');
 const sendConfirmationEmailHandler = require('../api/send-confirmation-email');
+const sitemapXmlHandler = require('../api/sitemap.xml');
 const trackEventHandler = require('../api/track-event');
 const validateCouponHandler = require('../api/validate-coupon');
 const verifyPaymentHandler = require('../api/verify-payment');
@@ -167,5 +169,24 @@ const verifyPaymentLimiter = rateLimit({
 });
 router.all('/verify-payment', verifyPaymentLimiter, wrapCompatHandler(verifyPaymentHandler));
 router.all('/webhook', wrapCompatHandler(webhookHandler));
+
+// ── Os dois que faltavam (item P0.4) ────────────────────────────────
+// Em produção a Vercel deriva as rotas do sistema de arquivos de `api/`; aqui
+// a lista é escrita à mão, e nada comparava as duas até
+// `routes/__tests__/api-route-parity.test.js` existir.
+//
+// `/api/sitemap.xml`: o `vercel.json` roteia `/sitemap.xml` para
+// `/api/sitemap.xml`, então o endpoint existe nos DOIS caminhos em produção.
+// O `server.js` já servia o caminho da raiz; o de `/api` não existia, e era o
+// único que o teste de paridade consegue enxergar.
+//
+// `/api/notfound`: em produção é um endpoint público de verdade — o
+// `vercel.json` manda para lá toda rota `/api/*` sem função, para que ela não
+// caia no catch-all do SPA e devolva HTML com status 200. No Express o
+// `notFoundHandler` de `middleware/error.middleware.js` cobre o catch-all, mas
+// o caminho nomeado não resolvia para o MESMO módulo — que é a paridade que
+// o ADR 0002 promete.
+router.all('/sitemap.xml', wrapCompatHandler(sitemapXmlHandler));
+router.all('/notfound', wrapCompatHandler(apiNotFoundHandler));
 
 module.exports = router;

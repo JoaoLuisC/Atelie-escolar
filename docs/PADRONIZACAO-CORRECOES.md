@@ -668,7 +668,7 @@ descrever o repositório que existe.
 | `P0.1` re-login do admin                | A2       | **bug**    | ✅ fechado |
 | `P0.2` gate de cobertura no CI          | D2       | P0         | ✅ fechado |
 | `P0.3` suíte instável                   | D2       | P0         | ✅ fechado |
-| `P0.4` espelho de rotas                 | ADR 0002 | P0         | ⬜ aberto  |
+| `P0.4` espelho de rotas                 | ADR 0002 | P0         | ✅ fechado |
 | `P1.1` auth do cliente                  | A1       | P1         | ⬜ aberto  |
 | `P1.2` handlers admin de escrita        | A1       | P1         | ⬜ aberto  |
 | `P1.3` dinheiro e sessão                | A1       | P1         | ⬜ aberto  |

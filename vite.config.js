@@ -52,7 +52,19 @@ export default defineConfig({
           globals: true,
           // Corta a rede por padrão. Ver o cabeçalho do arquivo.
           setupFiles: ['./src/test/setupNodeTests.js'],
-          include: ['api/**/*.test.js', 'lib/**/*.test.js'],
+          // Mesma lista de árvores Node do `NODE_FILES` em eslint.config.js:
+          // é o mesmo recorte de runtime, e mantê-los alinhados evita que uma
+          // suíte nova (routes/, middleware/…) caia sem querer no jsdom.
+          include: [
+            'api/**/*.test.js',
+            'lib/**/*.test.js',
+            'routes/**/*.test.js',
+            'middleware/**/*.test.js',
+            'services/**/*.test.js',
+            'utils/**/*.test.js',
+            'validation/**/*.test.js',
+            'scripts/**/*.test.js',
+          ],
         },
       },
       {
