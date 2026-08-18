@@ -1,5 +1,5 @@
-const { hasValidAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
-const { methodNotAllowed, ok, preflight } = require('../../lib/http');
+const { hasValidAdminSession } = require('../../lib/admin-session');
+const { methodNotAllowed, ok, preflight, setAdminCorsHeaders } = require('../../lib/http');
 
 module.exports = async function adminSessionHandler(req, res) {
   setAdminCorsHeaders(req, res);

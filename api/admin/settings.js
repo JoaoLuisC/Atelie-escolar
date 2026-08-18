@@ -1,8 +1,15 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { ensureAdminSession } = require('../../lib/admin-session');
 const { logAdminAction } = require('../../lib/admin-audit');
 const { recordSecurityEvent, extractClientIp } = require('../../lib/security-logger');
 const { enforceRateLimit } = require('../../lib/rate-limit');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
+  setAdminCorsHeaders,
+} = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-settings');

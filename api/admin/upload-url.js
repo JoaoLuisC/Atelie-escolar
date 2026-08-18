@@ -1,9 +1,16 @@
 const crypto = require('node:crypto');
-const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { ensureAdminSession } = require('../../lib/admin-session');
 const { getSupabaseConfig } = require('../../lib/supabase');
 const { isSafeObjectPath } = require('../../lib/storage-signed-url');
 const { recordSecurityEvent } = require('../../lib/security-logger');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
+  setAdminCorsHeaders,
+} = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-upload-url');

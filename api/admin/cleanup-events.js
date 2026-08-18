@@ -1,6 +1,13 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { ensureAdminSession } = require('../../lib/admin-session');
 const { getSupabaseConfig, supabaseRequest } = require('../../lib/supabase');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
+  setAdminCorsHeaders,
+} = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-cleanup-events');

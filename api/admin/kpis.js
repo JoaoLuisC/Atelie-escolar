@@ -1,4 +1,4 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { ensureAdminSession } = require('../../lib/admin-session');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-kpis');
@@ -9,6 +9,7 @@ const {
   ok,
   preflight,
   setCachePolicy,
+  setAdminCorsHeaders,
 } = require('../../lib/http');
 const {
   getSupabaseConfig,

@@ -1,9 +1,12 @@
+const { clearSessionCookie, isSameOriginRequest } = require('../../lib/admin-session');
 const {
-  clearSessionCookie,
-  isSameOriginRequest,
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
   setAdminCorsHeaders,
-} = require('../../lib/admin-session');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
+} = require('../../lib/http');
 
 module.exports = async function adminLogoutHandler(req, res) {
   setAdminCorsHeaders(req, res);

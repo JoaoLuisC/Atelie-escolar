@@ -1,4 +1,4 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { ensureAdminSession } = require('../../lib/admin-session');
 const { getSupabaseConfig } = require('../../lib/supabase');
 const { buildSegmentationReport } = require('../../lib/customer-segmentation');
 const { createLogger } = require('../../lib/logger');
@@ -11,6 +11,7 @@ const {
   ok,
   preflight,
   setCachePolicy,
+  setAdminCorsHeaders,
 } = require('../../lib/http');
 
 // ── POR QUE NÃO HÁ MAIS CACHE EM MEMÓRIA AQUI (regra E2) ─────────────

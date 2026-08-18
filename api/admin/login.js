@@ -5,11 +5,18 @@ const {
   serviceRoleHelpers: { getTableRow },
 } = require('../../lib/supabase');
 const { recordSecurityEvent, extractClientIp } = require('../../lib/security-logger');
-const { safeCompare, setAdminCorsHeaders, setSessionCookie } = require('../../lib/admin-session');
+const { safeCompare, setSessionCookie } = require('../../lib/admin-session');
 const { resolveSecret } = require('../../lib/env-secret');
 const { getAnonClient, getProfileRoleByEmail } = require('../../services/supabase-auth');
 const { enforceRateLimit, resolveIdentifier, RATE_LIMITS } = require('../../lib/rate-limit');
-const { ERROR_CODES, fail, methodNotAllowed, ok, preflight } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  methodNotAllowed,
+  ok,
+  preflight,
+  setAdminCorsHeaders,
+} = require('../../lib/http');
 
 // TTL do desafio de 2º fator. Era 300s; caiu para 120s porque o desafio é um
 // portador de "a senha já foi conferida" e o único uso legítimo dele é o

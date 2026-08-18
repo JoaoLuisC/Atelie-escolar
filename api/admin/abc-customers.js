@@ -1,4 +1,4 @@
-const { ensureAdminSession, setAdminCorsHeaders } = require('../../lib/admin-session');
+const { ensureAdminSession } = require('../../lib/admin-session');
 const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
@@ -14,6 +14,7 @@ const {
   ok,
   preflight,
   setCachePolicy,
+  setAdminCorsHeaders,
 } = require('../../lib/http');
 
 /**

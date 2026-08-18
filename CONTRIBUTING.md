@@ -165,7 +165,8 @@ Trocar uma palavra da mensagem quebra o fluxo de re-login em silêncio, sem test
 
 ### A3 · Ordem fixa no topo de todo handler — `P1`
 
-**Regra.** CORS → `OPTIONS` → método → rate limit → autenticação → validação de schema → `try`.
+**Regra.** CORS **quando cross-origin** → `OPTIONS` → método → rate limit → autenticação →
+validação de schema → `try`.
 
 Ordem fixa transforma "esqueceram o rate limit" num bloco visivelmente ausente, em vez de um
 detalhe enterrado no meio do arquivo.
@@ -173,6 +174,21 @@ detalhe enterrado no meio do arquivo.
 **O que motivou.** `api/admin-kpis.js` segue exatamente essa ordem em cinco linhas — é o modelo
 a copiar. `api/products.js` não tem nem CORS nem rate limit. A cobertura de CORS administrativo é
 boa (19 arquivos chamam `setAdminCorsHeaders` para 18 handlers `admin-*`); a de rate limit não (ver E1).
+
+> **Correção da regra (18/08/2026).** A primeira redação abria a ordem com "CORS", sem
+> qualificação, e a remedição mediu **26 de 44 handlers sem tocar em CORS**. A regra estava
+> errada, não o código: em produção o front e a API são **same-origin** na Vercel, e em
+> desenvolvimento o `cors` do Express resolve. Os únicos que precisam emitir CORS são os
+> **administrativos**, por causa do `credentials: 'include'` do painel — e esses 18 já emitiam.
+>
+> Aplicar `setPublicCorsHeaders` nos 26 restantes teria acrescentado cabeçalho que nenhum
+> navegador consome, em 26 arquivos, para fazer a regra valer literalmente. Regra que ninguém
+> segue e nada quebra é a que ensina que as outras 24 também são opcionais — mas o conserto é
+> **corrigir a regra**, não fingir que o código a obedece.
+>
+> Junto, `setAdminCorsHeaders` saiu de `lib/admin-session.js` — um módulo de **sessão** — para
+> `lib/http.js`, onde vivem os outros helpers de resposta. Ver
+> [ADR 0006](./docs/adr/0006-cors-so-quando-cross-origin.md).
 
 ### A4 · Preflight `OPTIONS` sempre responde 204 — `P2`
 
