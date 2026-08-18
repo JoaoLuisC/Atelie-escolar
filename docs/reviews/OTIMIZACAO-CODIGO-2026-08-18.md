@@ -46,21 +46,21 @@ unificado, o `Promise.all` está nos lugares certos e a aritmética de dinheiro 
 em centavos. O que existe é outra coisa: **decisões de carregamento que ninguém
 mediu depois de escrever**, e **abstrações que foram criadas mas não adotadas**.
 
-| #   | Item                                                                            | Tipo       | Severidade | Esforço                  | Status     |
-| --- | ------------------------------------------------------------------------------- | ---------- | ---------- | ------------------------ | ---------- |
-| 1.1 | SDK do Supabase (48 KB gz) baixado por toda visita; só 4 funções usam           | Bundle     | `ALTO`     | ~30 linhas em 4 arquivos | ✅         |
-| 1.2 | `manualChunks` não produz o split que o comentário descreve                     | Bundle     | `ALTO`     | reescrever 1 função      | ✅         |
-| 1.3 | `AdminPage` = 147 KB num chunk só (14 abas + 2 wizards)                         | Bundle     | `MÉDIO`    | 14 linhas                | ✅         |
-| 1.4 | bootstrap-icons via CDN: fonte inteira + CSS render-blocking de terceiro        | Bundle     | `MÉDIO`    | self-host + subset       | ✅         |
-| 2.1 | `/admin/dashboard` varre 7 tabelas sem `limit`; truncamento silencioso          | Backend    | `ALTO`     | agregar no servidor      | ✅ piso    |
-| 2.2 | 1 conexão SMTP nova por e-mail, em série, sob `maxDuration: 60`                 | Backend    | `ALTO`     | ~10 linhas               | ✅         |
-| 2.3 | Dois loops sequenciais que deveriam ser lote (tokens, busca de usuário)         | Backend    | `MÉDIO`    | ~20 linhas               | ✅         |
-| 3.1 | 5 handlers CRUD admin byte-a-byte idênticos (~275 linhas)                       | Duplicação | `MÉDIO`    | 1 factory                | ✅         |
-| 3.2 | 27 respostas ainda no envelope legado, driblando o `fail()` (regra A1)          | Contrato   | `MÉDIO`    | sai junto com 3.1        | ✅         |
-| 3.3 | `guardMethod` existe, é testado, e **nenhum** dos 44 handlers usa (regra A3)    | Duplicação | `BAIXO`    | adotar ou remover        | ✅ P2.1    |
-| 4   | 6 exports sem consumidor em `lib/supabase.js` + 1.143 linhas de doc em retirada | Morto      | `BAIXO`    | apagar                   | ✅ exports |
-| 5.1 | Suíte instável: 3 falhas por timeout numa execução, 387/387 na seguinte         | Tooling    | `ALTO`     | config de ambiente       | ✅ P0.3    |
-| 5.2 | `--max-warnings=19` com exatamente 19 avisos — congela o débito (regra D5)      | Tooling    | `BAIXO`    | ratchet                  | ✅ P3.3    |
+| #   | Item                                                                            | Tipo       | Severidade | Esforço                  | Status  |
+| --- | ------------------------------------------------------------------------------- | ---------- | ---------- | ------------------------ | ------- |
+| 1.1 | SDK do Supabase (48 KB gz) baixado por toda visita; só 4 funções usam           | Bundle     | `ALTO`     | ~30 linhas em 4 arquivos | ✅      |
+| 1.2 | `manualChunks` não produz o split que o comentário descreve                     | Bundle     | `ALTO`     | reescrever 1 função      | ✅      |
+| 1.3 | `AdminPage` = 147 KB num chunk só (14 abas + 2 wizards)                         | Bundle     | `MÉDIO`    | 14 linhas                | ✅      |
+| 1.4 | bootstrap-icons via CDN: fonte inteira + CSS render-blocking de terceiro        | Bundle     | `MÉDIO`    | self-host + subset       | ✅      |
+| 2.1 | `/admin/dashboard` varre 7 tabelas sem `limit`; truncamento silencioso          | Backend    | `ALTO`     | agregar no servidor      | ✅ piso |
+| 2.2 | 1 conexão SMTP nova por e-mail, em série, sob `maxDuration: 60`                 | Backend    | `ALTO`     | ~10 linhas               | ✅      |
+| 2.3 | Dois loops sequenciais que deveriam ser lote (tokens, busca de usuário)         | Backend    | `MÉDIO`    | ~20 linhas               | ✅      |
+| 3.1 | 5 handlers CRUD admin byte-a-byte idênticos (~275 linhas)                       | Duplicação | `MÉDIO`    | 1 factory                | ✅      |
+| 3.2 | 27 respostas ainda no envelope legado, driblando o `fail()` (regra A1)          | Contrato   | `MÉDIO`    | sai junto com 3.1        | ✅      |
+| 3.3 | `guardMethod` existe, é testado, e **nenhum** dos 44 handlers usa (regra A3)    | Duplicação | `BAIXO`    | adotar ou remover        | ✅ P2.1 |
+| 4   | 6 exports sem consumidor em `lib/supabase.js` + 1.143 linhas de doc em retirada | Morto      | `BAIXO`    | apagar                   | ✅      |
+| 5.1 | Suíte instável: 3 falhas por timeout numa execução, 387/387 na seguinte         | Tooling    | `ALTO`     | config de ambiente       | ✅ P0.3 |
+| 5.2 | `--max-warnings=19` com exatamente 19 avisos — congela o débito (regra D5)      | Tooling    | `BAIXO`    | ratchet                  | ✅ P3.3 |
 
 📍 = a correção canônica está em [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md),
 no item indicado. Ver a nota de fronteira no topo.
