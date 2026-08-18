@@ -27,10 +27,12 @@ Aplicação **React SPA + Express API + Supabase + Mercado Pago**:
 ```
 
 **Personas**:
+
 - **Cliente** — visitante/comprador. Navega catálogo, faz checkout, baixa arquivos.
 - **Admin** — dona da loja (Profa. Marciar). Gerencia produtos, categorias, pedidos, vitrine.
 
 **Funcionalidades-chave**:
+
 - Catálogo público com filtros (categoria, preço, novidades/mais vendidos) e ordenação — sem busca textual (inputs de busca existem só no admin)
 - Carrinho client-side (localStorage)
 - Checkout integrado com Mercado Pago (cartão / pix / boleto)
@@ -49,23 +51,24 @@ Aplicação **React SPA + Express API + Supabase + Mercado Pago**:
 
 ## Stack técnico
 
-| Camada | Tecnologia | Versão | Motivo |
-|--------|------------|--------|--------|
-| Frontend | React | 19 | UI |
-| Build | Vite | 8 | Dev server + bundling |
-| Roteamento | React Router | 7 | SPA navigation |
-| Estilo | Tailwind CSS | 3.4 | Utility-first, todo customizado em `brand-*` |
-| Forms | react-hook-form + zod | 7 / 4 | Validação client-side |
-| Backend | Express | 5 | API REST |
-| Database | Supabase (Postgres 17) | — | DB + Auth + Storage |
-| Pagamento | Mercado Pago SDK | 2 | Checkout Pro |
-| Segurança | helmet + cors + rate-limit | — | Headers, CORS, throttle (5/10min em login admin e cliente; limiters ativos só no Express/dev) |
-| E-mail (app) | nodemailer | 9 | SMTP via Resend (confirmação de pedido, newsletter, e-mails do cron) |
-| E-mail (auth) | Supabase Auth SMTP custom | — | Reset senha + signup confirm via Resend |
-| Testes | Vitest + Testing Library | 4 / 16 | Unit + componente |
-| Deploy | Vercel | — | Funções serverless (`@vercel/node`) + estático |
+| Camada        | Tecnologia                 | Versão | Motivo                                                                                        |
+| ------------- | -------------------------- | ------ | --------------------------------------------------------------------------------------------- |
+| Frontend      | React                      | 19     | UI                                                                                            |
+| Build         | Vite                       | 8      | Dev server + bundling                                                                         |
+| Roteamento    | React Router               | 7      | SPA navigation                                                                                |
+| Estilo        | Tailwind CSS               | 3.4    | Utility-first, todo customizado em `brand-*`                                                  |
+| Forms         | react-hook-form + zod      | 7 / 4  | Validação client-side                                                                         |
+| Backend       | Express                    | 5      | API REST                                                                                      |
+| Database      | Supabase (Postgres 17)     | —      | DB + Auth + Storage                                                                           |
+| Pagamento     | Mercado Pago SDK           | 2      | Checkout Pro                                                                                  |
+| Segurança     | helmet + cors + rate-limit | —      | Headers, CORS, throttle (5/10min em login admin e cliente; limiters ativos só no Express/dev) |
+| E-mail (app)  | nodemailer                 | 9      | SMTP via Resend (confirmação de pedido, newsletter, e-mails do cron)                          |
+| E-mail (auth) | Supabase Auth SMTP custom  | —      | Reset senha + signup confirm via Resend                                                       |
+| Testes        | Vitest + Testing Library   | 4 / 16 | Unit + componente                                                                             |
+| Deploy        | Vercel                     | —      | Funções serverless (`@vercel/node`) + estático                                                |
 
 **Arquitetura escolhida**: SPA puro + BFF (Backend for Frontend) em Express. O Express é responsável por:
+
 - Validar input e proxy seguro pro Supabase (esconde service_role do browser)
 - Gerar/validar cookies HttpOnly de sessão
 - Integração com Mercado Pago (esconde access_token)
@@ -76,6 +79,7 @@ Aplicação **React SPA + Express API + Supabase + Mercado Pago**:
 ## Setup local
 
 ### Pré-requisitos
+
 - Node.js ≥ 20
 - Conta Supabase + credenciais
 - Conta Mercado Pago (TEST para dev) + credenciais
@@ -134,30 +138,42 @@ npm run check            # test + build (CI)
 
 ### Estratégia e regras (consultar antes de qualquer mudança)
 
-| Documento | Sobre |
-|-----------|-------|
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | **Padrões de código** — 25 regras de convenção (contrato HTTP, validação, frontend, qualidade, dinheiro, logs), cada uma com a divergência medida que a motivou |
-| [PLANO_ECOMMERCE.md](./NextFeatures/PLANO_ECOMMERCE.md) | Plano de implementação em 6 fases para chegar a um e-commerce de alta qualidade (absorve o antigo `plano-melhorias-fluxo-cliente.md`) |
-| [REGRAS_ECOMMERCE.md](./NextFeatures/REGRAS_ECOMMERCE.md) | Princípios invioláveis, anti-padrões e checklist obrigatório antes de PRs |
-| [PENDENCIAS.md](./NextFeatures/PENDENCIAS.md) | Lista única e atual de pendências de execução por fase (substitui os antigos `FASE*_PENDENCIAS` e `MELHORIAS_CLIENTE_PENDENCIAS`) |
-| [PLANO_SEGURANCA.md](./NextFeatures/PLANO_SEGURANCA.md) | Plano de hardening de segurança |
+| Documento                                                 | Sobre                                                                                                                                                             |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [CONTRIBUTING.md](../CONTRIBUTING.md)                     | **Padrões de código** — 25 regras de convenção (contrato HTTP, validação, frontend, qualidade, dinheiro, logs), cada uma com a divergência medida que a motivou   |
+| [PADRONIZACAO-CORRECOES.md](./PADRONIZACAO-CORRECOES.md)  | **Dívida aberta contra as 25 regras** — o que ainda não obedece, com arquivo e linha, prioridade e a prova executável que fecha cada item (medição de 18/08/2026) |
+| [PLANO_ECOMMERCE.md](./NextFeatures/PLANO_ECOMMERCE.md)   | Plano de implementação em 6 fases para chegar a um e-commerce de alta qualidade (absorve o antigo `plano-melhorias-fluxo-cliente.md`)                             |
+| [REGRAS_ECOMMERCE.md](./NextFeatures/REGRAS_ECOMMERCE.md) | Princípios invioláveis, anti-padrões e checklist obrigatório antes de PRs                                                                                         |
+| [PENDENCIAS.md](./NextFeatures/PENDENCIAS.md)             | Lista única e atual de pendências de execução por fase (substitui os antigos `FASE*_PENDENCIAS` e `MELHORIAS_CLIENTE_PENDENCIAS`)                                 |
+| [PLANO_SEGURANCA.md](./NextFeatures/PLANO_SEGURANCA.md)   | Plano de hardening de segurança                                                                                                                                   |
 
 ### Técnico
 
-| Documento | Sobre |
-|-----------|-------|
-| [adr/](./adr/README.md) | **Decisões estruturais** (ADRs) — por que CommonJS no backend e ESM no frontend, por que um handler serve Vercel e Express, por que a reconciliação de pagamento é módulo único |
-| [ProjectDocs/](./ProjectDocs/README.md) | Suíte consolidada em 13 volumes (visão geral, arquitetura, setup, banco, fluxos, admin, segurança, API, marketing, deploy, roadmap) — versão que está substituindo os MDs avulsos abaixo |
-| ~~[ARCHITECTURE.md](./ARCHITECTURE.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/02-ARQUITETURA.md](./ProjectDocs/02-ARQUITETURA.md) |
-| ~~[FLOWS.md](./FLOWS.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/05-FLUXOS.md](./ProjectDocs/05-FLUXOS.md) |
-| ~~[SETUP.md](./SETUP.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/03-SETUP.md](./ProjectDocs/03-SETUP.md) |
-| ~~[SECURITY.md](./SECURITY.md)~~ | **Em retirada** (regra F2) → [ProjectDocs/08-SEGURANCA.md](./ProjectDocs/08-SEGURANCA.md) |
-| [SUPABASE-SETUP.md](./SUPABASE-SETUP.md) | Setup específico do Supabase (legado) |
-| [SECURITY-ADVISORIES.md](./SECURITY-ADVISORIES.md) | Análise das advisories de dependência: o que é alcançável, o que não é, e por quê |
-| [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) | Pré-deploy |
-| [SPRING-SECURITY-BFF.md](./SPRING-SECURITY-BFF.md) | Referência de port para Spring Boot do BFF de auth (não usado em produção) |
-| [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md) | Prompts de review profundo por área |
-| [REVIEW-RESULTS.md](./REVIEW-RESULTS.md) | Resultados dos reviews (área 9 em [REVIEW-AREA-9-TESTES.md](./REVIEW-AREA-9-TESTES.md)) |
+| Documento                                          | Sobre                                                                                                                                                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [adr/](./adr/README.md)                            | **Decisões estruturais** (ADRs) — por que CommonJS no backend e ESM no frontend, por que um handler serve Vercel e Express, por que a reconciliação de pagamento é módulo único          |
+| [ProjectDocs/](./ProjectDocs/README.md)            | Suíte consolidada em 13 volumes (visão geral, arquitetura, setup, banco, fluxos, admin, segurança, API, marketing, deploy, roadmap) — versão que está substituindo os MDs avulsos abaixo |
+| ~~[ARCHITECTURE.md](./ARCHITECTURE.md)~~           | **Em retirada** (regra F2) → [ProjectDocs/02-ARQUITETURA.md](./ProjectDocs/02-ARQUITETURA.md)                                                                                            |
+| ~~[FLOWS.md](./FLOWS.md)~~                         | **Em retirada** (regra F2) → [ProjectDocs/05-FLUXOS.md](./ProjectDocs/05-FLUXOS.md)                                                                                                      |
+| ~~[SETUP.md](./SETUP.md)~~                         | **Em retirada** (regra F2) → [ProjectDocs/03-SETUP.md](./ProjectDocs/03-SETUP.md)                                                                                                        |
+| ~~[SECURITY.md](./SECURITY.md)~~                   | **Em retirada** (regra F2) → [ProjectDocs/08-SEGURANCA.md](./ProjectDocs/08-SEGURANCA.md)                                                                                                |
+| [SUPABASE-SETUP.md](./SUPABASE-SETUP.md)           | Setup específico do Supabase (legado)                                                                                                                                                    |
+| [SECURITY-ADVISORIES.md](./SECURITY-ADVISORIES.md) | Análise das advisories de dependência: o que é alcançável, o que não é, e por quê                                                                                                        |
+| [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)     | Pré-deploy                                                                                                                                                                               |
+| [SPRING-SECURITY-BFF.md](./SPRING-SECURITY-BFF.md) | Referência de port para Spring Boot do BFF de auth (não usado em produção)                                                                                                               |
+| [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md)           | Prompts de review profundo por área                                                                                                                                                      |
+| [REVIEW-RESULTS.md](./REVIEW-RESULTS.md)           | Resultados dos reviews (área 9 em [REVIEW-AREA-9-TESTES.md](./REVIEW-AREA-9-TESTES.md))                                                                                                  |
+
+### Revisões pontuais (`reviews/`)
+
+Cada arquivo é um retrato datado, amarrado a um commit. **Não são documentos vivos** — não se editam para refletir o estado atual; quando o achado é corrigido, o commit é a prova e o item vira ✅ na tabela do próprio documento.
+
+| Documento                                                                                    | Sobre                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [OTIMIZACAO-CODIGO-2026-08-18.md](./reviews/OTIMIZACAO-CODIGO-2026-08-18.md)                 | **Correções de otimização** — caminho crítico do bundle (−35% medido), tetos de escala do backend, duplicação estrutural e código sem consumidor. Traz a correção pronta e a forma de verificar cada uma. Complementa o [PADRONIZACAO-CORRECOES.md](./PADRONIZACAO-CORRECOES.md): **desempenho**, não conformidade com as regras — a fronteira entre os dois está declarada no topo do documento |
+| [REVIEW-GERAL-2026-08-12.md](./reviews/REVIEW-GERAL-2026-08-12.md)                           | Arquitetura, segurança e processos — a revisão que originou os P0/P1 e as 25 regras                                                                                                                                                                                                                                                                                                              |
+| [REVIEW-GERAL-2026-07-03.md](./reviews/REVIEW-GERAL-2026-07-03.md)                           | Revisão geral anterior                                                                                                                                                                                                                                                                                                                                                                           |
+| [AREA-08-qualidade-codigo-arquitetura.md](./reviews/AREA-08-qualidade-codigo-arquitetura.md) | Área 8 do [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md)                                                                                                                                                                                                                                                                                                                                               |
 
 ---
 
