@@ -49,12 +49,18 @@ jobs:
       - name: Formatação
         run: npm run format:check
 
-      # `npm run lint` carrega `--max-warnings=21` — uma catraca, não zero.
+      # `npm run lint` carrega `--max-warnings=19` — uma catraca, não zero.
       # Os avisos restantes são diagnósticos do React Compiler (setState dentro
       # de efeito), que são backlog real de performance e exigem refatorar
       # componente por componente. A catraca impede que o número CRESÇA
-      # enquanto o backlog é queimado; ao corrigir um, baixe o número no
-      # package.json no mesmo commit.
+      # enquanto o backlog é queimado.
+      #
+      # REGRA DE OPERAÇÃO DA CATRACA (regra D5): o número SÓ DESCE. Ao corrigir
+      # um aviso, baixe o teto no `package.json` NO MESMO COMMIT — senão o
+      # espaço liberado vira orçamento para um aviso novo, que é o oposto do
+      # que a catraca existe para fazer. Este comentário já esteve desatualizado
+      # (dizia 21 contra 19 no package.json): quando o número mudar, mude aqui
+      # junto — é o item P3.3.
       - name: Lint
         run: npm run lint
 
@@ -69,6 +75,17 @@ jobs:
 
       - name: Testes
         run: npm test
+
+      # O piso de cobertura da regra D2 mora em `vite.config.js` e, até o item
+      # P0.2, NUNCA rodava: `npm test` é `vitest run` sem `--coverage`, então
+      # apagar toda a suíte de lib/ não derrubaria o build. Este passo é o que
+      # transforma o threshold configurado em gate de verdade.
+      #
+      # `npm run check` roda o mesmo comando na mesma posição, para que o gate
+      # local e o do CI continuem sendo a mesma coisa — que é a propriedade
+      # que o `check` existe para ter.
+      - name: Cobertura (piso da regra D2)
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build

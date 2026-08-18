@@ -20,7 +20,7 @@
     "format": "prettier --write \"{src,api,lib,routes,middleware,services,utils,validation,scripts}/**/*.{js,jsx,css}\" \"*.config.js\" server.js \"**/*.{md,json}\"",
     "format:check": "prettier --check \"{src,api,lib,routes,middleware,services,utils,validation,scripts}/**/*.{js,jsx,css}\" \"*.config.js\" server.js \"**/*.{md,json}\"",
     "check:env": "node scripts/check-env.js",
-    "check": "npm run check:env && npm run format:check && npm run lint && npm run test && npm run build",
+    "check": "npm run check:env && npm run format:check && npm run lint && npm run test && npm run test:coverage && npm run build",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "rebuild": "npm run clean && npm run build",
     "supabase:login": "npx supabase login",

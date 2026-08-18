@@ -666,7 +666,7 @@ descrever o repositório que existe.
 | Item                                    | Regra    | Prioridade | Estado     |
 | --------------------------------------- | -------- | ---------- | ---------- |
 | `P0.1` re-login do admin                | A2       | **bug**    | ⬜ aberto  |
-| `P0.2` gate de cobertura no CI          | D2       | P0         | ⬜ aberto  |
+| `P0.2` gate de cobertura no CI          | D2       | P0         | ✅ fechado |
 | `P0.3` suíte instável                   | D2       | P0         | ✅ fechado |
 | `P0.4` espelho de rotas                 | ADR 0002 | P0         | ⬜ aberto  |
 | `P1.1` auth do cliente                  | A1       | P1         | ⬜ aberto  |
@@ -680,7 +680,7 @@ descrever o repositório que existe.
 | `P2.3` unificar rate limit              | E1       | P2         | ⬜ aberto  |
 | `P3.1` rate limit nos 5 públicos        | E1       | **P0**     | ⬜ aberto  |
 | `P3.2` decidir CORS                     | A3       | P2         | ⬜ aberto  |
-| `P3.3` comentário do CI                 | D5       | P2         | ⬜ aberto  |
+| `P3.3` comentário do CI                 | D5       | P2         | ✅ fechado |
 | `P3.4` markdown fora do gate            | D1       | P2         | ✅ fechado |
 | `P4.1` suítes de `lib/`                 | D3       | P1         | ⬜ aberto  |
 | `P4.2` teste de componente e serviço    | D3 / D5  | P1         | ⬜ aberto  |

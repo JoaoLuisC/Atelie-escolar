@@ -60,7 +60,7 @@ mediu depois de escrever**, e **abstrações que foram criadas mas não adotadas
 | 3.3 | `guardMethod` existe, é testado, e **nenhum** dos 44 handlers usa (regra A3)    | Duplicação | `BAIXO`    | adotar ou remover        | 📍 P2.1      |
 | 4   | 6 exports sem consumidor em `lib/supabase.js` + 1.143 linhas de doc em retirada | Morto      | `BAIXO`    | apagar                   | 🔧           |
 | 5.1 | Suíte instável: 3 falhas por timeout numa execução, 387/387 na seguinte         | Tooling    | `ALTO`     | config de ambiente       | ✅ P0.3      |
-| 5.2 | `--max-warnings=19` com exatamente 19 avisos — congela o débito (regra D5)      | Tooling    | `BAIXO`    | ratchet                  | 📍 P3.3      |
+| 5.2 | `--max-warnings=19` com exatamente 19 avisos — congela o débito (regra D5)      | Tooling    | `BAIXO`    | ratchet                  | ✅ P3.3      |
 
 📍 = a correção canônica está em [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md),
 no item indicado. Ver a nota de fronteira no topo.
