@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const authRoutes = require('./routes/auth.routes');
 const apiCompatRoutes = require('./routes/api-compat.routes');
 const { notFoundHandler, errorHandler } = require('./middleware/error.middleware');
+const { ERROR_CODES, fail } = require('./lib/http');
 
 function loadEnvFiles() {
   const initialEnv = String(process.env.APP_ENV || process.env.NODE_ENV || 'development')
@@ -124,22 +125,44 @@ app.use(cors(buildCorsConfig()));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
-const globalLimiter = rateLimit({
+// ════════════════════════════════════════════════════════════════════
+// LIMITADOR DE BORDA — genérico, e só isso (ADR 0007).
+//
+// Este é o ÚNICO `express-rate-limit` que sobrou. Ele não é a política de
+// rate limit do produto: a política é `enforceRateLimit` dentro de cada
+// handler (regra E1), com contador no Postgres, e vale em desenvolvimento E
+// em produção. Este aqui é rede contra loop acidental de script local, e
+// existe porque `server.js` não roda na Vercel — então nada que dependa dele
+// pode ser tratado como proteção.
+//
+// Os NOVE limitadores por rota de `routes/api-compat.routes.js` e o de login
+// de `routes/auth.routes.js` foram removidos: eles davam a dev um
+// comportamento que a cliente nunca encontrava, inclusive nos endpoints de
+// login, onde limite é controle de segurança e não de custo.
+//
+// `AUTH_RATE_LIMIT_MAX` saiu junto pelo mesmo motivo: um teto mais apertado
+// em /api/auth só no Express é exatamente a política falsa que o ADR proíbe —
+// em produção quem contém login é RATE_LIMITS.customerLogin, com dois baldes
+// e forma completamente diferente.
+// ════════════════════════════════════════════════════════════════════
+const edgeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: Number(process.env.RATE_LIMIT_MAX || 250),
   standardHeaders: true,
   legacyHeaders: false,
+  // Envelope da regra A1, com o código estável da A2. Sem isto o
+  // express-rate-limit responde texto puro ("Too many requests…") e o cliente
+  // recebe um formato que não existe em nenhum outro lugar da API — que era o
+  // item P1.4.
+  handler: (_req, res) =>
+    fail(res, {
+      status: 429,
+      code: ERROR_CODES.RATE_LIMITED,
+      message: 'Muitas requisições. Aguarde um instante e tente novamente.',
+    }),
 });
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: Number(process.env.AUTH_RATE_LIMIT_MAX || 30),
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-app.use('/api', globalLimiter);
-app.use('/api/auth', authLimiter);
+app.use('/api', edgeLimiter);
 
 app.get('/health', (_req, res) => {
   return res.status(200).json({ ok: true, service: 'api', port: PORT });

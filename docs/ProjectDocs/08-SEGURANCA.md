@@ -28,7 +28,7 @@ Configurado em `lib/security-headers.js` + `server.js`:
 
 - `helmet()` — CSP **estrita explícita** (script-src whitelist GA4/Meta/MP), HSTS, X-Frame-Options DENY, X-Content-Type-Options nosniff. Em produção (Vercel), headers equivalentes são aplicados pela rota `/(.*)` do `vercel.json` — com uma diferença: lá o `X-Frame-Options` é `SAMEORIGIN` (na prática o `frame-ancestors 'none'` da CSP, presente nos dois ambientes, prevalece nos browsers modernos).
 - `cors()` — allowlist explícita em prod (`CORS_ORIGINS`); permissivo só para `localhost:*` em dev
-- `express-rate-limit` global — 250 req / 15 min global (`RATE_LIMIT_MAX`); 30 req / 15 min em `/auth/*` (`AUTH_RATE_LIMIT_MAX`)
+- `express-rate-limit` de borda — 250 req / 15 min em `/api` (`RATE_LIMIT_MAX`), **só no Express de desenvolvimento**. Não é a política: a política é `enforceRateLimit` no handler, com contador no Postgres, válida nos dois ambientes (regra E1 / [ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md))
 - **HTTPS obrigatório em produção:** o boot em `server.js` **falha** se `APP_URL` não começar com `https://` quando `APP_ENV=production`. Cookies `Secure` dependem disso.
 
 ### 2.2 Rate limits específicos

@@ -65,7 +65,7 @@ Settings → Environment Variables. Adicionar **todas** as do `.env.local`, exce
 
 > O bloco `env` do `vercel.json` mapeia as principais variáveis para secrets do Vercel (`@supabase_url`, `@mercadopago_access_token`, `@app_url` etc.).
 
-Opcionais (defaults no código): `SECURITY_ALERT_WEBHOOK_URL`, `ABANDONED_CART_FIRST_HOURS` (1), `ABANDONED_CART_SECOND_HOURS` (24), `REACTIVATION_DAYS_MIN`/`MAX` (90/180), `REACTIVATION_COUPON_CODE`/`PCT` (`VOLTEI15`/15), `VIP_LTV_THRESHOLD` (300), `RATE_LIMIT_MAX` (250) e `AUTH_RATE_LIMIT_MAX` (30) — estas duas últimas só valem no Express local (rate limit não roda na Vercel).
+Opcionais (defaults no código): `SECURITY_ALERT_WEBHOOK_URL`, `ABANDONED_CART_FIRST_HOURS` (1), `ABANDONED_CART_SECOND_HOURS` (24), `REACTIVATION_DAYS_MIN`/`MAX` (90/180), `REACTIVATION_COUPON_CODE`/`PCT` (`VOLTEI15`/15), `VIP_LTV_THRESHOLD` (300), `RATE_LIMIT_MAX` (250) — esta última só vale no limitador de borda do Express local; a política real (`enforceRateLimit`) não usa variável de ambiente, os perfis estão em `lib/rate-limit.js`.
 
 ### 1.3 Domínio customizado
 

@@ -45,3 +45,4 @@ antigo é marcado como substituído. O histórico é o valor.
 | [0004](./0004-envelope-de-resposta-e-codigo-de-erro.md)      | Envelope de resposta e código de erro        |
 | [0005](./0005-factory-para-recursos-crud-do-admin.md)        | Factory para os recursos CRUD do admin       |
 | [0006](./0006-cors-so-quando-cross-origin.md)                | CORS só quando o endpoint é cross-origin     |
+| [0007](./0007-um-mecanismo-de-rate-limit.md)                 | Um mecanismo de rate limit, não dois         |

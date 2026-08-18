@@ -672,12 +672,12 @@ descrever o repositório que existe.
 | `P1.1` auth do cliente                  | A1       | P1         | ⬜ aberto  |
 | `P1.2` handlers admin de escrita        | A1       | P1         | ✅ fechado |
 | `P1.3` dinheiro e sessão                | A1       | P1         | ⬜ aberto  |
-| `P1.4` rate limit do Express            | A1       | P1         | ⬜ aberto  |
+| `P1.4` rate limit do Express            | A1       | P1         | ✅ fechado |
 | `P1.5` códigos minúsculos               | A2       | P1         | ⬜ aberto  |
 | `P1.x` apagar o shim de `parseJson`     | A1       | P1         | ⬜ aberto  |
 | `P2.1` adotar `guardMethod`             | A3       | P2         | ⬜ aberto  |
 | `P2.2` `validation/` nos handlers admin | B1       | P2         | ✅ fechado |
-| `P2.3` unificar rate limit              | E1       | P2         | ⬜ aberto  |
+| `P2.3` unificar rate limit              | E1       | P2         | ✅ fechado |
 | `P3.1` rate limit nos 5 públicos        | E1       | **P0**     | ✅ fechado |
 | `P3.2` decidir CORS                     | A3       | P2         | ✅ fechado |
 | `P3.3` comentário do CI                 | D5       | P2         | ✅ fechado |

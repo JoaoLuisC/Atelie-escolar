@@ -112,7 +112,6 @@ CORS_ORIGINS=                                      # ex prod: https://atelie.com
 
 # Rate limits (defaults conservadores)
 RATE_LIMIT_MAX=250
-AUTH_RATE_LIMIT_MAX=30
 ```
 
 ### 2.5 E-mail (Resend) — obrigatório para reset de senha e confirmação de compra

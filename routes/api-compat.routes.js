@@ -1,5 +1,22 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+
+// ════════════════════════════════════════════════════════════════════
+// SEM `express-rate-limit` AQUI — ADR 0007.
+//
+// Este arquivo tinha NOVE limitadores por rota. Nenhum deles roda em
+// produção: na Vercel cada handler de `api/` é uma função isolada e
+// `server.js` não está no caminho. O resultado era duas políticas de limite
+// para os mesmos endpoints, e o desenvolvedor testava contra um comportamento
+// que a cliente nunca encontra — inclusive nos de login, onde limite é
+// controle de segurança e não de custo.
+//
+// A política real é `enforceRateLimit` DENTRO do handler (regra E1 e ADR
+// 0002), que vale nos dois ambientes e cujo contador vive no Postgres. Todas
+// as rotas que os nove limitadores cobriam já têm perfil em `RATE_LIMITS`.
+//
+// Sobra o limitador de borda GENÉRICO de `server.js` (`/api`, 250/15min), que
+// não finge ser a política: é rede contra loop acidental de script local.
+// ════════════════════════════════════════════════════════════════════
 
 const abandonedCartHandler = require('../api/abandoned-cart');
 const adminAbcCustomersHandler = require('../api/admin/abc-customers');
@@ -64,16 +81,7 @@ function wrapCompatHandler(handler) {
   };
 }
 
-// Rate-limit dedicado em /abandoned-cart: chamado a cada keystroke
-// debounced no checkout, então tolera mais que /track-event mas
-// limita varredura/spam.
-const abandonedCartLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-router.all('/abandoned-cart', abandonedCartLimiter, wrapCompatHandler(abandonedCartHandler));
+router.all('/abandoned-cart', wrapCompatHandler(abandonedCartHandler));
 router.all('/admin/abc-customers', wrapCompatHandler(adminAbcCustomersHandler));
 router.all('/admin/abc-products', wrapCompatHandler(adminAbcProductsHandler));
 router.all('/admin/categories', wrapCompatHandler(adminCategoriesHandler));
@@ -84,15 +92,7 @@ router.all('/admin/dashboard', wrapCompatHandler(adminDashboardHandler));
 router.all('/admin/funnel', wrapCompatHandler(adminFunnelHandler));
 router.all('/admin/kpis', wrapCompatHandler(adminKpisHandler));
 router.all('/admin/segments', wrapCompatHandler(adminSegmentsHandler));
-const adminLoginLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  limit: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  message: { success: false, error: 'Muitas tentativas. Aguarde 10 minutos e tente novamente.' },
-});
-router.all('/admin/login', adminLoginLimiter, wrapCompatHandler(adminLoginHandler));
+router.all('/admin/login', wrapCompatHandler(adminLoginHandler));
 router.all('/admin/logout', wrapCompatHandler(adminLogoutHandler));
 router.all('/admin/orders', wrapCompatHandler(adminOrdersHandler));
 router.all('/admin/products', wrapCompatHandler(adminProductsHandler));
@@ -102,72 +102,24 @@ router.all('/admin/upload-url', wrapCompatHandler(adminUploadUrlHandler));
 router.all('/admin/users', wrapCompatHandler(adminUsersHandler));
 router.all('/confirm-subscription', wrapCompatHandler(confirmSubscriptionHandler));
 router.all('/create-payment', wrapCompatHandler(createPaymentHandler));
-// /cron-email-jobs autoriza por CRON_SECRET no header (não usa rate-limit
-// porque é chamado uma vez por hora pela GitHub Actions / Vercel Cron).
+// /cron-email-jobs autoriza por CRON_SECRET no header e é chamado uma vez por
+// hora pelo agendador — a dispensa está registrada em
+// api/__tests__/rate-limit-coverage.test.js.
 router.all('/cron-email-jobs', wrapCompatHandler(cronEmailJobsHandler));
 router.all('/cross-sell', wrapCompatHandler(crossSellHandler));
 router.all('/customer-orders', wrapCompatHandler(customerOrdersHandler));
 // LGPD self-service (§3.8): exclusão de conta com confirmação por e-mail.
-// Rate-limit apertado: é uma ação rara e sensível.
-const meDeleteAccountLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Muitas tentativas. Aguarde 1 minuto.' },
-});
-router.all('/me-delete-account', meDeleteAccountLimiter, wrapCompatHandler(meDeleteAccountHandler));
+router.all('/me-delete-account', wrapCompatHandler(meDeleteAccountHandler));
 router.all('/download', wrapCompatHandler(downloadHandler));
 router.all('/home-sections', wrapCompatHandler(homeSectionsHandler));
 router.all('/product-details', wrapCompatHandler(productDetailsHandler));
 router.all('/products', wrapCompatHandler(productsHandler));
 router.all('/send-confirmation-email', wrapCompatHandler(sendConfirmationEmailHandler));
-// Newsletter (Fase 3 / regra D1): rate-limit em /subscribe pra coibir
-// enumeração ou submissão automatizada. /unsubscribe e /confirm são
-// idempotentes (vide handlers) e respondem genérico — não precisam de
-// limit agressivo, mas mantemos modesto.
-const subscribeLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-router.all('/subscribe', subscribeLimiter, wrapCompatHandler(subscribeHandler));
-const unsubscribeLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-router.all('/unsubscribe', unsubscribeLimiter, wrapCompatHandler(unsubscribeHandler));
-const trackEventLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Muitos eventos por minuto.' },
-});
-router.all('/track-event', trackEventLimiter, wrapCompatHandler(trackEventHandler));
-// /validate-coupon: rate-limit para prevenir enumeração de códigos
-const validateCouponLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Muitas tentativas. Aguarde 1 minuto.' },
-});
-router.all('/validate-coupon', validateCouponLimiter, wrapCompatHandler(validateCouponHandler));
-// Rate-limit dedicado em /verify-payment: a resposta contém PII (nome,
-// email, download tokens). Mesmo com email obrigatório + comparação
-// timing-safe, limitamos a 60 req/min por IP para coibir varredura.
-const verifyPaymentLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Muitas verificações por minuto. Tente de novo em 1 minuto.' },
-});
-router.all('/verify-payment', verifyPaymentLimiter, wrapCompatHandler(verifyPaymentHandler));
+router.all('/subscribe', wrapCompatHandler(subscribeHandler));
+router.all('/unsubscribe', wrapCompatHandler(unsubscribeHandler));
+router.all('/track-event', wrapCompatHandler(trackEventHandler));
+router.all('/validate-coupon', wrapCompatHandler(validateCouponHandler));
+router.all('/verify-payment', wrapCompatHandler(verifyPaymentHandler));
 router.all('/webhook', wrapCompatHandler(webhookHandler));
 
 // ── Os dois que faltavam (item P0.4) ────────────────────────────────

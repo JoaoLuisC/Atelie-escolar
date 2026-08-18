@@ -1,5 +1,4 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const {
   customerLogin,
   customerRegister,
@@ -10,20 +9,6 @@ const {
 } = require('../lib/customer-auth-handlers');
 
 const router = express.Router();
-
-// Rate-limit de login (apenas no Express/dev). Em produção (Vercel serverless)
-// o mesmo handler roda via api/auth/customer/login.js; o rate-limit de login
-// serverless depende de um store compartilhado (KV) — ver pendência API-03.
-const customerLoginLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  limit: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    error: 'Credenciais invalidas.',
-  },
-});
 
 // GET /auth/me foi REMOVIDO. Ele era Express-only e autenticava por Bearer
 // token do Supabase (middleware/auth.middleware.js), um modelo de segurança
@@ -36,7 +21,7 @@ const customerLoginLimiter = rateLimit({
 // e middleware/validate.middleware.js, que só existiam para essas rotas mortas.
 
 // Handlers compartilhados com as funções Vercel (api/auth/*.js) — paridade.
-router.post('/auth/customer/login', customerLoginLimiter, customerLogin);
+router.post('/auth/customer/login', customerLogin);
 router.post('/auth/customer/register', customerRegister);
 router.get('/auth/customer/google/start', customerGoogleStart);
 router.post('/auth/customer/google/callback', customerGoogleCallback);
