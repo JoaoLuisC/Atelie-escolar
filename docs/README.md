@@ -1,185 +1,104 @@
-# Ateliê da Escola — Documentação
+# Documentação — Ateliê da Escola
 
-> Plataforma de vendas de materiais educativos digitais (banners, painéis, atividades pedagógicas) com download imediato após pagamento aprovado.
+Índice único da documentação. O que o projeto **é** e como rodá-lo está no
+[README da raiz](../README.md); aqui está tudo o mais.
 
-## Índice
+Três tipos de documento, e a diferença importa:
 
-- [Visão geral](#visão-geral)
-- [Stack técnico](#stack-técnico)
-- [Setup local](#setup-local)
-- [Documentos relacionados](#documentos-relacionados)
-
----
-
-## Visão geral
-
-Aplicação **React SPA + Express API + Supabase + Mercado Pago**:
-
-```
-┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐
-│  Browser (React) │──HTTP─▶│  Express API     │──REST▶│  Supabase        │
-│  Vite :5173      │       │  Node :3000      │       │  Auth + Postgres │
-└──────────────────┘       └────────┬─────────┘       └──────────────────┘
-                                    │
-                                    └──HTTPS──▶ Mercado Pago
-                                               (criar preferência,
-                                                webhook, verify)
-```
-
-**Personas**:
-
-- **Cliente** — visitante/comprador. Navega catálogo, faz checkout, baixa arquivos.
-- **Admin** — dona da loja (Profa. Marciar). Gerencia produtos, categorias, pedidos, vitrine.
-
-**Funcionalidades-chave**:
-
-- Catálogo público com filtros (categoria, preço, novidades/mais vendidos) e ordenação — sem busca textual (inputs de busca existem só no admin)
-- Carrinho client-side (localStorage)
-- Checkout integrado com Mercado Pago (cartão / pix / boleto)
-- Cupons de desconto (percentual/fixo, validação server-side)
-- Polling de pagamento (sem precisar de webhook em dev)
-- Área de downloads protegida por token de uso único
-- Painel admin com 14 abas (dashboard, produtos, desempenho de produtos, categorias, pedidos, cupons, faturamento, comparativo, funil, análise, segmentos, usuários, vitrine, segurança)
-- Auth com Supabase: e-mail/senha + Google OAuth (PKCE) + recuperação por e-mail
-- 2FA opcional para admin (TOTP + PIN de recuperação)
-- Acesso admin via URL obscurecida `/painel-acesso-privado-atelie`
-- E-mail transacional via **Resend** (confirmação de compra, newsletter e cron; 3.000/mês free); reset de senha sai pelo SMTP custom do Supabase Auth
-- Newsletter com double opt-in + e-mails automáticos via cron (carrinho abandonado 1h/24h, pós-compra D+3/D+15/D+45, reativação 90 dias)
-- LGPD: banner de consentimento, exclusão de conta em 2 passos e purga automática de logs (pg_cron)
+| Tipo           | Onde                                 | Regra                                                                  |
+| -------------- | ------------------------------------ | ---------------------------------------------------------------------- |
+| **Vivo**       | `ProjectDocs/`, `adr/`, este arquivo | Descreve o estado atual. Muda no mesmo PR que muda o comportamento     |
+| **Retrato**    | `reviews/`                           | Datado e amarrado a um commit. **Nunca se edita** — o commit é a prova |
+| **Ferramenta** | `REVIEW-PROMPTS.md`                  | Não descreve o projeto; serve para operar sobre ele                    |
 
 ---
 
-## Stack técnico
+## Os 13 volumes (`ProjectDocs/`)
 
-| Camada        | Tecnologia                 | Versão | Motivo                                                                                        |
-| ------------- | -------------------------- | ------ | --------------------------------------------------------------------------------------------- |
-| Frontend      | React                      | 19     | UI                                                                                            |
-| Build         | Vite                       | 8      | Dev server + bundling                                                                         |
-| Roteamento    | React Router               | 7      | SPA navigation                                                                                |
-| Estilo        | Tailwind CSS               | 3.4    | Utility-first, todo customizado em `brand-*`                                                  |
-| Forms         | react-hook-form + zod      | 7 / 4  | Validação client-side                                                                         |
-| Backend       | Express                    | 5      | API REST                                                                                      |
-| Database      | Supabase (Postgres 17)     | —      | DB + Auth + Storage                                                                           |
-| Pagamento     | Mercado Pago SDK           | 2      | Checkout Pro                                                                                  |
-| Segurança     | helmet + cors + rate-limit | —      | Headers, CORS, throttle (5/10min em login admin e cliente; limiters ativos só no Express/dev) |
-| E-mail (app)  | nodemailer                 | 9      | SMTP via Resend (confirmação de pedido, newsletter, e-mails do cron)                          |
-| E-mail (auth) | Supabase Auth SMTP custom  | —      | Reset senha + signup confirm via Resend                                                       |
-| Testes        | Vitest + Testing Library   | 4 / 16 | Unit + componente                                                                             |
-| Deploy        | Vercel                     | —      | Funções serverless (`@vercel/node`) + estático                                                |
+A fonte canônica. Toda decisão de produto, arquitetura, segurança e operação está aqui.
 
-**Arquitetura escolhida**: SPA puro + BFF (Backend for Frontend) em Express. O Express é responsável por:
+| #   | Documento                                                         | Quando consultar                                                |
+| --- | ----------------------------------------------------------------- | --------------------------------------------------------------- |
+| 01  | [Visão geral](./ProjectDocs/01-VISAO-GERAL.md)                    | Primeiro contato: personas, o que o sistema faz e o que não faz |
+| 02  | [Arquitetura](./ProjectDocs/02-ARQUITETURA.md)                    | Estrutura de pastas, camadas, como um request flui              |
+| 03  | [Setup](./ProjectDocs/03-SETUP.md)                                | Rodar localmente: Supabase, Mercado Pago, OAuth, Resend         |
+| 04  | [Banco de dados](./ProjectDocs/04-BANCO-DE-DADOS.md)              | Schema das 18 tabelas, RLS, triggers, migrations                |
+| 05  | [Fluxos](./ProjectDocs/05-FLUXOS.md)                              | Diagramas de auth, checkout, webhook, admin                     |
+| 06  | [Fluxo de compra e venda](./ProjectDocs/06-FLUXO-COMPRA-VENDA.md) | Jornada do cliente + rotina do vendedor                         |
+| 07  | [Dashboard admin](./ProjectDocs/07-DASHBOARD-ADMIN.md)            | As 14 abas do painel, KPIs, gestão de produtos e pedidos        |
+| 08  | [Segurança](./ProjectDocs/08-SEGURANCA.md)                        | Modelo de ameaça, RLS, secrets, auditoria, LGPD                 |
+| 09  | [API endpoints](./ProjectDocs/09-API-ENDPOINTS.md)                | Referência REST completa (cliente + admin)                      |
+| 10  | [Marketing & analytics](./ProjectDocs/10-MARKETING-ANALYTICS.md)  | GA4, Pixel, Curva ABC, e-mail marketing, funil, custos          |
+| 11  | [Regras de negócio](./ProjectDocs/11-REGRAS-NEGOCIO.md)           | Princípios invioláveis, anti-padrões, checklist de PR           |
+| 12  | [Deploy & operação](./ProjectDocs/12-DEPLOY-OPERACAO.md)          | Vercel, release checklist, troubleshooting, rollback            |
+| 13  | [Roadmap & pendências](./ProjectDocs/13-ROADMAP-PENDENCIAS.md)    | O que falta para produção + Fases 5 e 6                         |
 
-- Validar input e proxy seguro pro Supabase (esconde service_role do browser)
-- Gerar/validar cookies HttpOnly de sessão
-- Integração com Mercado Pago (esconde access_token)
-- Webhook handler
+### Atalhos por tarefa
 
----
-
-## Setup local
-
-### Pré-requisitos
-
-- Node.js ≥ 20
-- Conta Supabase + credenciais
-- Conta Mercado Pago (TEST para dev) + credenciais
-
-### Passos
-
-```bash
-# 1. Clonar e instalar deps
-git clone <repo>
-cd Projeto-mae
-npm install
-
-# 2. Configurar variáveis de ambiente
-cp .env.example .env.local
-# Edite .env.local — veja docs/ProjectDocs/03-SETUP.md para cada chave
-# Lembretes:
-# - Supabase URL + ANON + SERVICE_ROLE (obrigatório)
-# - Mercado Pago TEST tokens (pra dev) ou APP_USR (prod)
-# - SMTP do Resend (email de pedido, newsletter e e-mails do cron; o reset de senha
-#   sai pelo SMTP custom do Supabase Auth, configurado no dashboard —
-#   ver docs/ProjectDocs/03-SETUP.md)
-# - Segredos: ADMIN_SESSION_SECRET, CUSTOMER_SESSION_SECRET, WEBHOOK_SECRET, DOWNLOAD_TOKEN_SECRET
-#   (gere cada um com `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`)
-
-# 3. Aplicar schema + dados no banco
-# Opção A — pelo SQL Editor do dashboard Supabase:
-#   Cole supabase/schema.sql e rode
-#   Cole supabase/security-hardening.sql e rode
-#   Cole supabase/seed-sample-data.sql e rode (popular dados de exemplo)
-# Opção B — via Supabase CLI (aplica supabase/migrations/):
-#   npm run supabase:link
-#   npm run supabase:db:push
-# Conferir os security advisors depois (opcional):
-#   SUPABASE_PAT='sbp_...' SUPABASE_PROJECT_REF='abc' node scripts/check-advisor.js
-
-# 4. Rodar dev (frontend + API juntos)
-npm run dev:all
-
-# Frontend → http://localhost:5173
-# API      → http://localhost:3000
-```
-
-### Scripts úteis
-
-```bash
-npm run dev              # só Vite (5173)
-npm run dev:api          # só Express (3000)
-npm run dev:all          # ambos com concurrently
-npm run build            # produção
-npm run test             # vitest run
-npm run check            # test + build (CI)
-```
+| Vou…                              | Ler                                                                                                                              |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| rodar o projeto pela primeira vez | [03-SETUP](./ProjectDocs/03-SETUP.md)                                                                                            |
+| adicionar um endpoint             | [02](./ProjectDocs/02-ARQUITETURA.md) + [09](./ProjectDocs/09-API-ENDPOINTS.md) + [regra E1](../CONTRIBUTING.md)                 |
+| mexer no checkout                 | [06](./ProjectDocs/06-FLUXO-COMPRA-VENDA.md) + [05 §5](./ProjectDocs/05-FLUXOS.md) + [11 §G](./ProjectDocs/11-REGRAS-NEGOCIO.md) |
+| criar uma tabela                  | [04](./ProjectDocs/04-BANCO-DE-DADOS.md) + [08 §RLS](./ProjectDocs/08-SEGURANCA.md)                                              |
+| subir para produção               | [12 §5](./ProjectDocs/12-DEPLOY-OPERACAO.md)                                                                                     |
+| planejar uma campanha             | [10](./ProjectDocs/10-MARKETING-ANALYTICS.md) + [11 §C-D](./ProjectDocs/11-REGRAS-NEGOCIO.md)                                    |
+| investigar algo quebrado em prod  | [12 §7](./ProjectDocs/12-DEPLOY-OPERACAO.md)                                                                                     |
 
 ---
 
-## Documentos relacionados
+## Decisões estruturais (`adr/`)
 
-### Estratégia e regras (consultar antes de qualquer mudança)
+[Índice dos 7 ADRs](./adr/README.md) — uma página por decisão que atravessa vários arquivos e
+que alguém "consertaria" de volta para o estado errado sem o contexto. Por que CommonJS no
+backend e ESM no front, por que um handler serve Vercel e Express, por que um mecanismo de
+rate limit e não dois.
 
-| Documento                                                 | Sobre                                                                                                                                                             |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CONTRIBUTING.md](../CONTRIBUTING.md)                     | **Padrões de código** — 25 regras de convenção (contrato HTTP, validação, frontend, qualidade, dinheiro, logs), cada uma com a divergência medida que a motivou   |
-| [PADRONIZACAO-CORRECOES.md](./PADRONIZACAO-CORRECOES.md)  | **Dívida aberta contra as 25 regras** — o que ainda não obedece, com arquivo e linha, prioridade e a prova executável que fecha cada item (medição de 18/08/2026) |
-| [PLANO_ECOMMERCE.md](./NextFeatures/PLANO_ECOMMERCE.md)   | Plano de implementação em 6 fases para chegar a um e-commerce de alta qualidade (absorve o antigo `plano-melhorias-fluxo-cliente.md`)                             |
-| [REGRAS_ECOMMERCE.md](./NextFeatures/REGRAS_ECOMMERCE.md) | Princípios invioláveis, anti-padrões e checklist obrigatório antes de PRs                                                                                         |
-| [PENDENCIAS.md](./NextFeatures/PENDENCIAS.md)             | Lista única e atual de pendências de execução por fase (substitui os antigos `FASE*_PENDENCIAS` e `MELHORIAS_CLIENTE_PENDENCIAS`)                                 |
-| [PLANO_SEGURANCA.md](./NextFeatures/PLANO_SEGURANCA.md)   | Plano de hardening de segurança                                                                                                                                   |
+## Padrões de código
 
-### Técnico
+[CONTRIBUTING.md](../CONTRIBUTING.md) — 29 regras de convenção, cada uma com a divergência
+medida que a motivou. Cite o identificador da regra (`A1`, `E3`…) em review de PR.
 
-| Documento                                          | Sobre                                                                                                                                                                                                                                       |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [adr/](./adr/README.md)                            | **Decisões estruturais** (ADRs) — por que CommonJS no backend e ESM no frontend, por que um handler serve Vercel e Express, por que a reconciliação de pagamento é módulo único                                                             |
-| [ProjectDocs/](./ProjectDocs/README.md)            | Suíte consolidada em 13 volumes (visão geral, arquitetura, setup, banco, fluxos, admin, segurança, API, marketing, deploy, roadmap) — **a versão canônica**; os quatro MDs avulsos que a duplicavam foram apagados em 18/08/2026 (regra F2) |
-| [SUPABASE-SETUP.md](./SUPABASE-SETUP.md)           | Setup específico do Supabase (legado)                                                                                                                                                                                                       |
-| [SECURITY-ADVISORIES.md](./SECURITY-ADVISORIES.md) | Análise das advisories de dependência: o que é alcançável, o que não é, e por quê                                                                                                                                                           |
-| [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)     | Pré-deploy                                                                                                                                                                                                                                  |
-| [SPRING-SECURITY-BFF.md](./SPRING-SECURITY-BFF.md) | Referência de port para Spring Boot do BFF de auth (não usado em produção)                                                                                                                                                                  |
-| [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md)           | Prompts de review profundo por área                                                                                                                                                                                                         |
+## Análise de dependências
 
-### Revisões pontuais (`reviews/`)
-
-Cada arquivo é um retrato datado, amarrado a um commit. **Não são documentos vivos** — não se editam para refletir o estado atual; quando o achado é corrigido, o commit é a prova e o item vira ✅ na tabela do próprio documento.
-
-**Uma casa só, uma convenção só** (item `P6.2`, regra F2). Todo relatório mora aqui, e a área vai com zero à esquerda (`AREA-08`, `AREA-09`). Antes havia duas localizações e duas formas de numerar (`AREA-9` na raiz de `docs/`, `AREA-08` na subpasta). Na raiz de `docs/` fica apenas o [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md), que é **ferramenta** e não relatório.
-
-Os relatórios anteriores a 13/08/2026 abrem com um cabeçalho de **📅 retrato histórico** (item `P6.1`): sem ele, um documento de 12/08 continuava sendo lido como estado atual — e o de testes chegava a afirmar que "nenhum workflow de CI executa `npm test`", falso desde o commit `4892de9`.
-
-| Documento                                                                                    | Sobre                                                                                                                                                                                                                                                                                                                                                                                            |
-| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [OTIMIZACAO-CODIGO-2026-08-18.md](./reviews/OTIMIZACAO-CODIGO-2026-08-18.md)                 | **Correções de otimização** — caminho crítico do bundle (−35% medido), tetos de escala do backend, duplicação estrutural e código sem consumidor. Traz a correção pronta e a forma de verificar cada uma. Complementa o [PADRONIZACAO-CORRECOES.md](./PADRONIZACAO-CORRECOES.md): **desempenho**, não conformidade com as regras — a fronteira entre os dois está declarada no topo do documento |
-| [REVIEW-GERAL-2026-08-12.md](./reviews/REVIEW-GERAL-2026-08-12.md)                           | Arquitetura, segurança e processos — a revisão que originou os P0/P1 e as 25 regras                                                                                                                                                                                                                                                                                                              |
-| [REVIEW-GERAL-2026-07-03.md](./reviews/REVIEW-GERAL-2026-07-03.md)                           | Revisão geral anterior                                                                                                                                                                                                                                                                                                                                                                           |
-| [AREA-09-testes-confiabilidade.md](./reviews/AREA-09-testes-confiabilidade.md)               | Área 9 do [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md) — testes e confiabilidade                                                                                                                                                                                                                                                                                                                     |
-| [AREA-08-qualidade-codigo-arquitetura.md](./reviews/AREA-08-qualidade-codigo-arquitetura.md) | Área 8 do [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md) — qualidade de código e arquitetura                                                                                                                                                                                                                                                                                                           |
-| [REVIEW-RESULTS-2026-08-12.md](./reviews/REVIEW-RESULTS-2026-08-12.md)                       | Consolidação dos resultados por área                                                                                                                                                                                                                                                                                                                                                             |
+[SECURITY-ADVISORIES.md](./SECURITY-ADVISORIES.md) — quais advisories do `npm audit` são
+alcançáveis neste código e quais não são. Existe porque `npm audit` conta advisories, não risco.
 
 ---
 
-## Suporte
+## Retratos datados (`reviews/`)
 
-- Issues: [GitHub Issues](https://github.com/seu-org/projeto-mae/issues)
-- E-mail: contato@profamarciarcardoso.com.br
+Cada arquivo é o estado do projeto num dia, amarrado a um commit. **Não se editam** para
+refletir o presente: quando o achado é corrigido, o commit é a prova. Os anteriores a
+13/08/2026 abrem com um cabeçalho de 📅 retrato histórico — sem ele, um documento de agosto
+continuava sendo lido como estado atual.
+
+| Documento                                                                                 | Sobre                                                                                                  |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [OTIMIZACAO-CODIGO-2026-08-18](./reviews/OTIMIZACAO-CODIGO-2026-08-18.md)                 | Desempenho: caminho crítico do bundle (−35% medido), tetos de escala do backend, código sem consumidor |
+| [REVIEW-GERAL-2026-08-12](./reviews/REVIEW-GERAL-2026-08-12.md)                           | Arquitetura, segurança e processos — originou as 29 regras                                             |
+| [REVIEW-RESULTS-2026-08-12](./reviews/REVIEW-RESULTS-2026-08-12.md)                       | Consolidação dos resultados por área                                                                   |
+| [AREA-08-qualidade-codigo-arquitetura](./reviews/AREA-08-qualidade-codigo-arquitetura.md) | Qualidade de código e arquitetura                                                                      |
+| [AREA-09-testes-confiabilidade](./reviews/AREA-09-testes-confiabilidade.md)               | Testes e confiabilidade                                                                                |
+| [REVIEW-GERAL-2026-07-03](./reviews/REVIEW-GERAL-2026-07-03.md)                           | Revisão geral anterior                                                                                 |
+
+**Ferramenta, não relatório:** [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md) traz os prompts de
+review profundo, um por área. É o que gera os documentos da tabela acima.
+
+---
+
+## Convenções
+
+- Documento vivo se atualiza **no mesmo PR** que muda o comportamento que ele descreve.
+- Um assunto, um documento (regra `F2`). Se dois arquivos explicam a mesma coisa, um deles está
+  errado e ninguém sabe qual.
+- Decisão que atravessa arquivos vira [ADR](./adr/README.md); o resto fica em comentário no
+  código (regra `F3`).
+- Commits em [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`,
+  `docs:`, `refactor:`, `chore:`).
+- Documentação e commits em **português**; código em inglês.
+
+## Contato
+
+- Técnico: `desenvolvimento@oqtem.com`
+- Loja: `contato@profamarciarcardoso.com.br`

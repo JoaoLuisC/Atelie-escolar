@@ -20,7 +20,7 @@
 
 ```bash
 git clone <repo>
-cd Projeto-mae
+cd Atelie-escolar
 npm install
 ```
 
@@ -190,21 +190,13 @@ npm run supabase:db:push           # aplica todas as migrations em ordem
 
 ### 3.3 Aplicar migrations pendentes
 
-Há 13 migrations em `supabase/migrations/` (ver lista em [04-BANCO-DE-DADOS §migrations](./04-BANCO-DE-DADOS.md)). Aplicar **todas**:
+```bash
+npm run supabase:db:push     # aplica as 18 migrations em ordem
+```
 
-- `20260524000000_phase0_analytics.sql`
-- `20260525000000_phase1_product_slugs.sql`
-- `20260526000000_phase2_conversion.sql`
-- `20260526100000_phase2_log_retention.sql`
-- `20260526110000_phase2_security_events.sql`
-- `20260526120000_phase2_enable_pg_cron.sql`
-- `20260527000000_phase0_analytics_retention.sql`
-- `20260528000000_phase3_email_marketing.sql`
-- `20260530000000_phase4_admin_audit_log.sql`
-- `20260701000000_phase5_audit_immutability.sql`
-- `20260701000001_phase5_payment_hardening.sql`
-- `20260702000000_phase6_db_rls_hardening.sql`
-- `20260703000000_perf_indexes.sql`
+A lista, com o que cada uma faz e as queries de validação, está em
+[04-BANCO-DE-DADOS §migrations](./04-BANCO-DE-DADOS.md). As migrations **não substituem** o
+`schema.sql`: elas assumem as tabelas base já criadas (a primeira faz `alter table public.orders`).
 
 ### 3.4 Criar usuário admin
 
@@ -231,7 +223,7 @@ curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
 
 ### 3.5 Storage para uploads e downloads
 
-O upload do painel admin (`POST /api/admin-upload-url`, usado pelo wizard de produto) usa 3 buckets com nomes **fixos no código**:
+O upload do painel admin (`POST /api/admin/upload-url`, usado pelo wizard de produto) usa 3 buckets com nomes **fixos no código**:
 
 | Bucket           | Visibilidade | Limite | Conteúdo                                 |
 | ---------------- | ------------ | ------ | ---------------------------------------- |
@@ -456,7 +448,7 @@ taskkill /F /PID <pid>
 - **Em dev**: qualquer `localhost:*` é liberado (configurado em `server.js`)
 - **Em prod**: adicione sua origem em `CORS_ORIGINS=https://seu-dominio.com.br`
 
-### `Authentication required` ao chamar `/api/admin-*`
+### `Authentication required` ao chamar `/api/admin/*`
 
 - Cookie `admin_session` ausente ou inválido
 - Sessão expirada (TTL 8h)

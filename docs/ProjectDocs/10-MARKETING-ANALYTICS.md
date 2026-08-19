@@ -60,7 +60,7 @@ export function trackEvent(name, params = {}) {
 
 ### Retenção
 
-`analytics_events` guarda no máximo **180 dias**: purge mensal via `pg_cron` (`cleanup_old_analytics_events`, migration phase0_analytics_retention) e sob demanda pelo admin via `POST /api/admin-cleanup-events`.
+`analytics_events` guarda no máximo **180 dias**: purge mensal via `pg_cron` (`cleanup_old_analytics_events`, migration phase0_analytics_retention) e sob demanda pelo admin via `POST /api/admin/cleanup-events`.
 
 ---
 
@@ -134,7 +134,7 @@ A Curva ABC é central para tomada de decisão (regra I3). Implementação em `l
 
 ### Produtos
 
-`GET /api/admin-abc-products?period=month|quarter|year&categoryId=<uuid>` (default `month`)
+`GET /api/admin/abc-products?period=month|quarter|year&categoryId=<uuid>` (default `month`)
 
 Curva ABC de produtos por receita, baseada em `order_items` de pedidos aprovados; retorna `items` (rank, share, % acumulado, classe) + `summary {A,B,C}`.
 
@@ -142,7 +142,7 @@ Cuidado: produto C **pode ser produto de entrada** (baixo ticket, alta conversã
 
 ### Clientes
 
-`GET /api/admin-abc-customers?period=month|quarter|year|all` (default `quarter`)
+`GET /api/admin/abc-customers?period=month|quarter|year|all` (default `quarter`)
 
 Agrupa pedidos aprovados por `customer_email`, aplica a mesma curva ABC e acrescenta classificação de relacionamento:
 
@@ -154,7 +154,7 @@ Email **mascarado** (`cli***@dominio.com`) para LGPD — inclusive no export CSV
 
 ### Coorte
 
-`GET /api/admin-cohort?months=12` (1-36)
+`GET /api/admin/cohort?months=12` (1-36)
 
 Matriz: linhas = mês da primeira compra (coorte), colunas = índice de meses subsequentes (M+0, M+1, ...), células = % da coorte ativa naquele mês relativo.
 
@@ -180,7 +180,7 @@ Implementação em `lib/customer-segmentation.js`: tags calculadas a partir dos 
 
 Carrinho abandonado não é tag: é tratado direto pelo cron sobre `abandoned_carts` (`recovered_at IS NULL`), com lembretes ~1h e ~24h.
 
-Acessível na aba **Segmentos** do admin via `GET /api/admin-segments` (cache 30 min): relatório **agregado** (totais de confirmados/pendentes/desinscritos + contagem por tag), sem lista bruta de e-mails. O export CSV para envio externo (regra I4) ainda não existe — o código prevê endpoint dedicado com confirmação.
+Acessível na aba **Segmentos** do admin via `GET /api/admin/segments` (cache 30 min): relatório **agregado** (totais de confirmados/pendentes/desinscritos + contagem por tag), sem lista bruta de e-mails. O export CSV para envio externo (regra I4) ainda não existe — o código prevê endpoint dedicado com confirmação.
 
 ---
 
@@ -248,7 +248,7 @@ Setup em [03-SETUP §2.5 e §5](./03-SETUP.md).
 
 ## 8. Funil de conversão
 
-`GET /api/admin-funnel?days=30` (1-180; a aba oferece 7/30/90 dias; cache 1h, `?nocache=1` invalida)
+`GET /api/admin/funnel?days=30` (1-180; a aba oferece 7/30/90 dias; cache 1h, `?nocache=1` invalida)
 
 Conta **sessões únicas** por etapa em `analytics_events`; a etapa `purchase` vem da contagem de pedidos aprovados do período (não de evento de cliente). Retorna:
 
@@ -302,7 +302,7 @@ Aba **Funil** renderiza com drop-off por etapa + tabela de atribuição por orig
 | **Retenção**  | Recompra · LTV 12m · Frequência · Tempo entre compras        | Recompra > 20%    |
 | **Saúde**     | ROAS por canal · **LTV/CAC ≥ 3** · Aprovação MP · NPS        | LTV/CAC ≥ 3       |
 
-Parte disso já é servido por `GET /api/admin-kpis?window=12` (1-36 meses, cache 1h): receita MTD vs mês anterior, ticket médio, pedidos, LTV médio e taxa de recompra — `CAC` retorna `null` até existir mídia paga (Fase 5). Consumido pela aba **Dashboard**.
+Parte disso já é servido por `GET /api/admin/kpis?window=12` (1-36 meses, cache 1h): receita MTD vs mês anterior, ticket médio, pedidos, LTV médio e taxa de recompra — `CAC` retorna `null` até existir mídia paga (Fase 5). Consumido pela aba **Dashboard**.
 
 Glossário em [11-REGRAS-NEGOCIO §glossário](./11-REGRAS-NEGOCIO.md).
 
@@ -410,7 +410,7 @@ Hotjar / GrowthBook Cloud só se Clarity ficar pequeno.
 
 ### Médio prazo (3-6 meses)
 
-- [ ] Recompra ≥ 20% (visível nos KPIs da aba **Dashboard**, via `/api/admin-kpis`)
+- [ ] Recompra ≥ 20% (visível nos KPIs da aba **Dashboard**, via `/api/admin/kpis`)
 - [ ] LTV 12m subindo
 - [ ] Curva ABC com 50+ pedidos → dá pra planejar Fase 5
 - [ ] Taxa de carrinhos recuperados > 10%

@@ -24,7 +24,7 @@
 ### 1.1 Conectar repositório
 
 1. [vercel.com](https://vercel.com) → New Project → Import do GitHub
-2. Selecionar repo `Projeto-mae`
+2. Selecionar repo `Atelie-escolar`
 3. Framework Preset: `Other` (Vercel detecta `vercel.json`)
 4. Build Command: `npm run build` (default)
 5. Output Directory: `dist`
@@ -256,7 +256,7 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 ```
 ✓ /painel-acesso-privado-atelie carrega
 ✓ Login admin com 2FA funciona
-✓ 5 tentativas falhas em 10min retorna 429 (só no Express local — na Vercel não há rate limit de app, pendência API-03)
+✓ 5 tentativas falhas em 10min retorna 429 (vale em produção — contador no Postgres)
 ✓ Sessão de 8h ainda vale
 ✓ Todas as 14 abas renderizam
 ✓ Criar produto via wizard funciona

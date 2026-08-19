@@ -9,8 +9,7 @@
 > arquivos para 55, e `lib/` deixou de ter módulo sem teste (item `P4.1`).
 >
 > Este documento **não se atualiza**: ele é o retrato do dia, e é ele que explica
-> por que as regras existem. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md) e
-> [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).
+> por que as regras existem. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ## Sumário executivo
 

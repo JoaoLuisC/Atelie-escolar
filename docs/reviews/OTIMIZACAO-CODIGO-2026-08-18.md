@@ -19,7 +19,7 @@
 
 > ### ⚠️ Fronteira com `PADRONIZACAO-CORRECOES.md` (regra F2)
 >
-> [`docs/PADRONIZACAO-CORRECOES.md`](../PADRONIZACAO-CORRECOES.md) foi levantado no
+> `docs/PADRONIZACAO-CORRECOES.md` foi levantado no
 > **mesmo dia, sobre o mesmo commit**, e mede dívida contra as 25 regras do
 > CONTRIBUTING. Os dois documentos se cruzam em quatro pontos. Para não terem duas
 > versões da mesma verdade, a divisão é:
@@ -62,7 +62,7 @@ mediu depois de escrever**, e **abstrações que foram criadas mas não adotadas
 | 5.1 | Suíte instável: 3 falhas por timeout numa execução, 387/387 na seguinte         | Tooling    | `ALTO`     | config de ambiente       | ✅ P0.3 |
 | 5.2 | `--max-warnings=19` com exatamente 19 avisos — congela o débito (regra D5)      | Tooling    | `BAIXO`    | ratchet                  | ✅ P3.3 |
 
-📍 = a correção canônica está em [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md),
+📍 = a correção canônica está em `PADRONIZACAO-CORRECOES.md`,
 no item indicado. Ver a nota de fronteira no topo.
 
 **Ganho medido dos itens 1.1 + 1.2:** de **158 KB** para **~103 KB** gzipped no
@@ -638,7 +638,7 @@ handler realmente aceita.
 
 ### 3.2 · 27 respostas ainda no envelope legado, driblando o `fail()` — `MÉDIO`
 
-> ### 📍 Canônico: **P1.1 / P1.2 / P1.3** de [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md)
+> ### 📍 Canônico: **P1.1 / P1.2 / P1.3** de `PADRONIZACAO-CORRECOES.md`
 >
 > Aquele levantamento é mais amplo (59 sites, incluindo auth do cliente e rate limit do
 > Express, que esta revisão não varreu). **A correção a seguir é a de lá.** O que esta
@@ -670,7 +670,7 @@ por código, nunca por texto") não vale nelas, e o
 
 Pior no caso de [`admin-session.js:202`](../../lib/admin-session.js#L202): é a resposta
 de **sessão admin inválida**, justamente a que o
-[`format.js`](../../src/components/admin/utils/format.js) precisa reconhecer para
+`format.js` precisa reconhecer para
 disparar o re-login. O `ADMIN_SESSION_INVALID` existe no catálogo dos dois lados
 ([lib/http.js](../../lib/http.js) e
 [src/constants/error-codes.js](../../src/constants/error-codes.js)) — e não é emitido
@@ -691,7 +691,7 @@ por `fail(res, { status: 401, code: ERROR_CODES.ADMIN_SESSION_INVALID, … })`.
 
 ### 3.3 · `guardMethod` existe, é testado, e nenhum handler usa — `BAIXO`
 
-> ### 📍 Canônico: **P2.1** de [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md)
+> ### 📍 Canônico: **P2.1** de `PADRONIZACAO-CORRECOES.md`
 >
 > Mesmo achado, medido independentemente nos dois documentos (zero adoções em 44
 > handlers). **Siga o P2.1.** Registrado aqui porque a factory do §3.1 já usa
@@ -789,7 +789,7 @@ As três falhas foram `Error: Test timed out in 5000ms` — não asserção — 
 `webhook-signature.test.js`, `payment-integrity.test.js` e `checkout-money.test.js`.
 São exatamente as suítes do **caminho do dinheiro**.
 
-> ### 📍 Canônico: **P0.3** de [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md)
+> ### 📍 Canônico: **P0.3** de `PADRONIZACAO-CORRECOES.md`
 >
 > Aquele item chegou à mesma correção (`test.projects`) e a **uma causa a mais que esta
 > revisão não pegou**: a suíte faz rede de verdade —
@@ -831,7 +831,7 @@ protegem o dinheiro.
 
 ### 5.2 · `--max-warnings=19` com exatamente 19 avisos — `BAIXO`
 
-> ### 📍 Canônico: **P3.3** de [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md)
+> ### 📍 Canônico: **P3.3** de `PADRONIZACAO-CORRECOES.md`
 >
 > Mantido aqui só pelo ângulo de desempenho: a regra que gera os 19 avisos é sobre
 > renders em cascata, então este é backlog de performance, não de estilo.
@@ -900,11 +900,11 @@ Agrupada por commit, cada um verificável isoladamente:
 | 6      | **2.3** + **4** (lotes + código morto) | `upsertIntoTable` deixa de ser morto ao ganhar uso em 2.3.a                              | `download-single-use.test.js`                 |
 | 7      | **1.3** + **1.4** + **5.2**            | Polimento; o 5.2 é contínuo, não um commit                                               | `npm run build`, Lighthouse                   |
 
-**Os itens 2, 4 e 5 merecem entrada no [PENDENCIAS.md](../NextFeatures/PENDENCIAS.md)**
+**Os itens 2, 4 e 5 merecem entrada no `PENDENCIAS.md`**
 se não forem executados na mesma janela — são os que degradam com crescimento, e o
 custo de adiar não é constante.
 
-> **Sobre a ordem combinada com o [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).**
+> **Sobre a ordem combinada com o `PADRONIZACAO-CORRECOES.md`.**
 > Aquele documento tem a própria ordem de execução, e os dois **compartilham o commit 1**
 > (P0.3 / §5.1). Fora isso, os blocos não colidem: os P0/P1 de lá tratam de contrato e
 > gates, os §1/§2 daqui tratam de bytes e tetos de escala — arquivos diferentes, exceto

@@ -4,8 +4,7 @@
 >
 > Levantamento anterior às rodadas de padronização de 13/08 e 18/08/2026.
 > **Vários achados foram corrigidos.** Este documento não se atualiza — ele é o
-> retrato do dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md) e
-> [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).
+> retrato do dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 > Documento **companheiro** de [`REVIEW-PROMPTS.md`](../REVIEW-PROMPTS.md). Cada área
 > (1 a 10) escreve **sua seção aqui** conforme roda o prompt correspondente. Ao
@@ -189,7 +188,7 @@ do Express **não rodam no serverless da Vercel** (AREA1-10).
 
 Iniciado como review multi-agente (workflow de 4 fases: mapear → revisar 9 dimensões → verificação adversarial → síntese). A orquestração **abortou duas vezes** por _rate-limiting transitório do servidor_ ("Server is temporarily limiting requests — not your usage limit", não limite de conta) — todos os 13 subagentes falharam em ~20s nas duas tentativas. O review foi então **concluído inline**, lendo por inteiro todos os arquivos do escopo e confirmando cada `arquivo:linha` no código atual (inclusive o caminho de autorização que usa `profiles.role`).
 
-**Modelo de acesso (base para todos os achados):** `lib/supabase.js` usa **anon por default**; só o namespace `serviceRoleHelpers` bypassa RLS ([lib/supabase.js:91,192-200](../lib/supabase.js#L91-L200)). Logo, toda tabela cujas policies liberem `anon`/`authenticated` é atacável **direto no PostgREST** com a chave anon pública (embutida no front), sem passar pelo backend.
+**Modelo de acesso (base para todos os achados):** `lib/supabase.js` usa **anon por default**; só o namespace `serviceRoleHelpers` bypassa RLS ([lib/supabase.js:91,192-200](../../lib/supabase.js#L91-L200)). Logo, toda tabela cujas policies liberem `anon`/`authenticated` é atacável **direto no PostgREST** com a chave anon pública (embutida no front), sem passar pelo backend.
 
 ### Achados
 
@@ -209,9 +208,9 @@ Iniciado como review multi-agente (workflow de 4 fases: mapear → revisar 9 dim
 
 ### Detalhe + correção aplicada
 
-- **RLS-01 — Cliente se auto-promove a ADMIN via `profiles.role` (escalonamento de privilégio).** A policy `profiles_own_update` só checa `id = auth.uid()` e RLS **não filtra colunas**; não havia `revoke`/trigger. Como `profiles.role` é fonte de autorização (`checkRole` no [middleware/auth.middleware.js:77-86](../middleware/auth.middleware.js#L77-L86), gate do [api/admin-login.js:234](../api/admin-login.js#L234)), um cliente qualquer fazia `PATCH /rest/v1/profiles?id=eq.<uid>` com `{"role":"ADMIN"}` (chave anon + JWT próprio) e passava a ser aceito em `POST /produtos` (`checkRole('ADMIN')`, [routes/products.routes.js:32](../routes/products.routes.js#L32)) — **caminho direto, sem 2FA**. **Fix:** trigger `profiles_guard_privileged_cols` (BEFORE UPDATE, _invoker_ → `current_user`) que preserva `id/email/role/provider` para qualquer papel que não seja `service_role`/DBA; o backend (service-role) segue livre. Adicionado à migration e ao `security-hardening.sql`.
+- **RLS-01 — Cliente se auto-promove a ADMIN via `profiles.role` (escalonamento de privilégio).** A policy `profiles_own_update` só checa `id = auth.uid()` e RLS **não filtra colunas**; não havia `revoke`/trigger. Como `profiles.role` é fonte de autorização (`checkRole` no `middleware/auth.middleware.js:77-86` (removido desde então), gate do [api/admin-login.js:234](../../api/admin/login.js#L234)), um cliente qualquer fazia `PATCH /rest/v1/profiles?id=eq.<uid>` com `{"role":"ADMIN"}` (chave anon + JWT próprio) e passava a ser aceito em `POST /produtos` (`checkRole('ADMIN')`, `routes/products.routes.js:32` (removido desde então)) — **caminho direto, sem 2FA**. **Fix:** trigger `profiles_guard_privileged_cols` (BEFORE UPDATE, _invoker_ → `current_user`) que preserva `id/email/role/provider` para qualquer papel que não seja `service_role`/DBA; o backend (service-role) segue livre. Adicionado à migration e ao `security-hardening.sql`.
 
-- **RLS-02 — `abandoned_carts` com escrita/edição pública irrestrita.** `abandoned_carts_public_insert (with check(true))` + `abandoned_carts_public_update (using(true) with check(true))` deixavam qualquer `anon` **inserir e sobrescrever qualquer linha** (adulteração cross-user, supressão de e-mails de recuperação, relay de e-mail semeando carrinhos, e possível leitura de PII via `UPDATE … RETURNING`). O backend grava só via service-role ([api/abandoned-cart.js](../api/abandoned-cart.js#L3)); não há escrita direta do front. **Fix:** `drop policy` nas duas → tabela vira service-role only.
+- **RLS-02 — `abandoned_carts` com escrita/edição pública irrestrita.** `abandoned_carts_public_insert (with check(true))` + `abandoned_carts_public_update (using(true) with check(true))` deixavam qualquer `anon` **inserir e sobrescrever qualquer linha** (adulteração cross-user, supressão de e-mails de recuperação, relay de e-mail semeando carrinhos, e possível leitura de PII via `UPDATE … RETURNING`). O backend grava só via service-role ([api/abandoned-cart.js](../../api/abandoned-cart.js#L3)); não há escrita direta do front. **Fix:** `drop policy` nas duas → tabela vira service-role only.
 
 - **RLS-03 — RLS das tabelas núcleo morava fora da sequência de migrations.** `enable row level security` + policies de `categories/products/orders/order_items/profiles/user_products/…` só existiam em `security-hardening.sql` (aplicado à mão). Um deploy/DR só-migrations deixaria essas tabelas **sem RLS** → `anon` lê `orders` (e-mail/CPF/telefone) direto no PostgREST. **Fix:** baseline de RLS (enable em 17 tabelas + policies essenciais, já corrigidas) versionado na migration `phase6`; `security-hardening.sql` marcado como espelho.
 
@@ -234,7 +233,7 @@ Iniciado como review multi-agente (workflow de 4 fases: mapear → revisar 9 dim
 
 ### 🔎 Verificado-OK (hipóteses refutadas)
 
-- **"Client grava PII em `analytics_events`" → REFUTADO.** A policy de INSERT exige `order_id is null AND customer_email is null` + whitelist de `event_name` ([…phase0_analytics.sql:49-66](../supabase/migrations/20260524000000_phase0_analytics.sql#L49-L66)). Bem projetada.
+- **"Client grava PII em `analytics_events`" → REFUTADO.** A policy de INSERT exige `order_id is null AND customer_email is null` + whitelist de `event_name` ([…phase0_analytics.sql:49-66](../../supabase/migrations/20260524000000_phase0_analytics.sql#L49-L66)). Bem projetada.
 - **"Alguma tabela sensível ficou sem RLS" → REFUTADO.** As 17 tabelas têm RLS habilitado (10 no hardening, 7 nas migrations). O problema era _policies permissivas_ e _onde_ o RLS é ligado (RLS-03), não ausência de RLS.
 - **`security_events`/`download_logs`/`download_tokens`/`settings`/`coupons`/`email_*`/`admin_audit_log`** confirmados **service-role only** (RLS ON, zero policy).
 - **`user_products`/`orders`/`order_items`** só têm policy de SELECT amarrada a `auth.uid()`/jwt email; escrita é service-role only. Sem caminho de escrita cross-user.

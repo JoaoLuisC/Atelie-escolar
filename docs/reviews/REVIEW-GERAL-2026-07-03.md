@@ -2,8 +2,7 @@
 >
 > O mais antigo dos relatórios, anterior a toda a série de correções de 2026.
 > **A maior parte dos achados foi corrigida.** Este documento não se atualiza —
-> ele é o retrato do dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md) e
-> [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).
+> ele é o retrato do dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 # Review Geral Consolidado — Ateliê da Escola
 

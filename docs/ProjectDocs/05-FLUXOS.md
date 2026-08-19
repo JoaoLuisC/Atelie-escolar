@@ -115,7 +115,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[/painel-acesso-privado-atelie/] --> B[POST /api/admin-login<br/>email + password]
+    A[/painel-acesso-privado-atelie/] --> B[POST /api/admin/login<br/>email + password]
     B --> C[Valida via Supabase Auth<br/>password grant]
     C -->|inválido| C1[401 + log security_events.admin_login_failed]
     C -->|válido| D[Lê profile.role]
@@ -126,7 +126,7 @@ flowchart TD
     F --> Z[Redirect /admin]
 
     E -->|sim| G[Retorna requiresSecondFactor=true<br/>+ methods + challengeToken - TTL 5 min<br/>frontend pede código]
-    G --> H[POST /api/admin-login<br/>email + password + challengeToken + factorCode]
+    G --> H[POST /api/admin/login<br/>email + password + challengeToken + factorCode]
     H -->|factorCode bate TOTP OU PIN de fallback| F
     H -->|código inválido| I1[401 'Código de verificação inválido']
     H -->|challengeToken inválido/expirado| I2[401 'Desafio de 2FA inválido ou expirado']
@@ -233,15 +233,15 @@ flowchart LR
     C --> D[ProductWizard abre - ModalWizard]
 
     D --> D1[Step 1: Básico<br/>nome + categoria + descrição]
-    D1 --> D2[Step 2: Mídia<br/>multi-images + multi-videos + arquivo de download<br/>upload via POST /api/admin-upload-url<br/>→ signed upload URL do Supabase Storage<br/>limites: 500kB img / 50MB vídeo-arquivo]
+    D1 --> D2[Step 2: Mídia<br/>multi-images + multi-videos + arquivo de download<br/>upload via POST /api/admin/upload-url<br/>→ signed upload URL do Supabase Storage<br/>limites: 500kB img / 50MB vídeo-arquivo]
     D2 --> D3[Step 3: Preço & Variações<br/>price + originalPrice + productType individual/kit]
     D3 --> D4[Step 4: Conversão<br/>benefits + faq + reviews]
     D4 --> E[Submit do form]
 
     E --> F["AdminPage.handleProductSave<br/>monta payload com images[] e videos[]"]
     F --> G{Tem ID?}
-    G -->|Sim| H[PUT /api/admin-products<br/>updateAdminProduct]
-    G -->|Não| I[POST /api/admin-products<br/>createAdminProduct]
+    G -->|Sim| H[PUT /api/admin/products<br/>updateAdminProduct]
+    G -->|Não| I[POST /api/admin/products<br/>createAdminProduct]
 
     H --> J[Backend valida sessão admin<br/>ensureAdminSession]
     I --> J
@@ -357,5 +357,5 @@ graph TB
 - O **Express é BFF** (Backend for Frontend): browser não fala direto com Supabase para dados (só Auth).
 - **Service role nunca sai do servidor** — fica em variáveis de env do backend.
 - **`utils/api.js`** centraliza fetch, timeout (15s) e parsing de erro.
-- **Supabase JS Client no browser**: usado **apenas** para auth — `signInWithOAuth`, `signOut`, `getSession`, `resetPasswordForEmail`, `exchangeCodeForSession`/`setSession` e `updateUser` (reset de senha). Toda CRUD em tabelas vai via backend. Exceção pontual: o upload de mídia do admin faz PUT direto no Storage via **signed upload URL** emitida pelo backend (`/api/admin-upload-url`).
+- **Supabase JS Client no browser**: usado **apenas** para auth — `signInWithOAuth`, `signOut`, `getSession`, `resetPasswordForEmail`, `exchangeCodeForSession`/`setSession` e `updateUser` (reset de senha). Toda CRUD em tabelas vai via backend. Exceção pontual: o upload de mídia do admin faz PUT direto no Storage via **signed upload URL** emitida pelo backend (`/api/admin/upload-url`).
 - **GA4/Pixel** só disparam após consentimento LGPD concedido — `getConsentState() === 'granted'` / `hasMarketingConsent()` (ver `utils/consent.js` + `ConsentBanner.jsx`).

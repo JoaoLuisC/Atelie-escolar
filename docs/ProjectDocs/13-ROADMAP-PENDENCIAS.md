@@ -15,22 +15,17 @@
 
 ## §1. Aplicar migrations no Supabase
 
-Sem isso o backend tenta colunas inexistentes e quebra. **Aplicar tudo de uma vez** no SQL Editor ou `npm run supabase:db:push`.
+Sem isso o backend consulta colunas que não existem e quebra.
 
-| Migration                                                                                                      | Conteúdo                                                                                                   | Validação rápida                                                                               |
-| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| [`20260524_phase0_analytics`](../../supabase/migrations/20260524000000_phase0_analytics.sql)                   | `analytics_events` + `orders.attribution_data`                                                             | `select count(*) from analytics_events;`                                                       |
-| [`20260525_phase1_product_slugs`](../../supabase/migrations/20260525000000_phase1_product_slugs.sql)           | `products.slug` + trigger auto-gerador                                                                     | `select slug from products limit 3;`                                                           |
-| [`20260526_phase2_conversion`](../../supabase/migrations/20260526000000_phase2_conversion.sql)                 | `coupons` + `abandoned_carts` + `products.{faq,reviews,benefits}` + `orders.{coupon_code,discount_amount}` | `select relrowsecurity from pg_class where relname = 'coupons';`                               |
-| [`20260527_phase0_retention`](../../supabase/migrations/20260527000000_phase0_analytics_retention.sql)         | `cleanup_old_analytics_events()` + `pg_cron` se disponível                                                 | `select proname from pg_proc where proname like 'cleanup%';`                                   |
-| [`20260528_phase3_email`](../../supabase/migrations/20260528000000_phase3_email_marketing.sql)                 | `email_subscribers` + `email_sent_log` + cleanup                                                           | `select tablename from pg_tables where tablename like 'email_%';`                              |
-| [`20260530_phase4_admin_audit_log`](../../supabase/migrations/20260530000000_phase4_admin_audit_log.sql)       | `admin_audit_log` (auditoria de escrita do painel admin)                                                   | `select count(*) from admin_audit_log;`                                                        |
-| [`20260701_phase5_audit_immutability`](../../supabase/migrations/20260701000000_phase5_audit_immutability.sql) | `admin_audit_log` append-only (revoke update/delete + triggers)                                            | `select tgname from pg_trigger where tgname like 'admin_audit_log_no%';`                       |
-| [`20260701_phase5_payment_hardening`](../../supabase/migrations/20260701000001_phase5_payment_hardening.sql)   | UNIQUE `(order_id, product_id)` em `download_tokens` + `increment_coupon_usage()` atômico                  | `select proname from pg_proc where proname = 'increment_coupon_usage';`                        |
-| [`20260702_phase6_db_rls_hardening`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql)     | Baseline RLS nas 17 tabelas + guard de `profiles` + `handle_new_user()` versionado + purges agendados      | `select count(*) from pg_policies where schemaname = 'public';`                                |
-| [`20260703_perf_indexes`](../../supabase/migrations/20260703000000_perf_indexes.sql)                           | 5 índices de performance (`orders`, `email_sent_log`, `abandoned_carts`)                                   | `select indexname from pg_indexes where indexname = 'orders_payment_status_completed_at_idx';` |
+```bash
+npm run supabase:db:push     # aplica as 18 migrations de supabase/migrations/
+```
 
-Plus 3 do Phase 2 já incluídas: `phase2_log_retention`, `phase2_security_events`, `phase2_enable_pg_cron` — total: **13 migrations** em `supabase/migrations/`.
+A lista completa, com o que cada uma faz, é mantida em
+[04-BANCO-DE-DADOS §migrations](./04-BANCO-DE-DADOS.md) — e mora **só lá**. As queries de
+validação pós-aplicação estão na mesma seção.
+
+**Status:** aplicação em produção não confirmada.
 
 ---
 
@@ -126,8 +121,8 @@ Workflow já roda. Sem token, relatórios vão para `temporary-public-storage`. 
 
 ### 3.4 Wizards admin — ✅ ENTREGUE (2026-05-30)
 
-- ✅ **Editar `faq`/`reviews`/`benefits`** — aba "Conversão" no `ProductWizard.jsx` com editores de benefícios, FAQ e depoimentos; gravado por `api/admin-products.js`.
-- ✅ **CRUD de cupons** — aba "Cupons" no painel (`CouponsTab` + `CouponWizard`) com endpoint `api/admin-coupons.js` (GET/POST/PUT/DELETE). Validação no checkout segue em `validate-coupon.js`.
+- ✅ **Editar `faq`/`reviews`/`benefits`** — aba "Conversão" no `ProductWizard.jsx` com editores de benefícios, FAQ e depoimentos; gravado por `api/admin/products.js`.
+- ✅ **CRUD de cupons** — aba "Cupons" no painel (`CouponsTab` + `CouponWizard`) com endpoint `api/admin/coupons.js` (GET/POST/PUT/DELETE). Validação no checkout segue em `validate-coupon.js`.
 
 ### 3.5 Validar Google OAuth em produção
 
@@ -144,7 +139,7 @@ Resta apenas **validar em produção**: o Supabase exige a URL no `uri_allow_lis
 
 ### 3.7 Login admin com Google (OAuth) — futuro
 
-Hoje o painel só aceita e-mail + senha + 2FA opcional (`api/admin-login.js`). Cliente já tem Google OAuth funcionando — dá pra reusar a infra.
+Hoje o painel só aceita e-mail + senha + 2FA opcional (`api/admin/login.js`). Cliente já tem Google OAuth funcionando — dá pra reusar a infra.
 
 **Para implementar:**
 
@@ -287,7 +282,7 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 | 2026-05-24 | **Fase 4 entregue** — Curva ABC produtos + clientes + coorte mensal + KPIs (LTV, recompra, LTV/CAC) + aba Análise com Pareto + heatmap + export CSV                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 2026-05-24 | **Decisão registrada:** stack 100% gratuito até Fase 4; Fase 5 (mídia paga) só quando dados justificarem                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 2026-05-24 | **Documentação consolidada** em `docs/ProjectDocs/` — 13 documentos numerados como fonte única                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| 2026-05-30 | **§3.4 fechada — Wizards admin** — aba "Conversão" no `ProductWizard` (FAQ/depoimentos/benefícios) + CRUD de cupons no painel (`CouponsTab`/`CouponWizard`/`api/admin-coupons.js`). Produtos e cupons deixam de depender de SQL bruto.                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-05-30 | **§3.4 fechada — Wizards admin** — aba "Conversão" no `ProductWizard` (FAQ/depoimentos/benefícios) + CRUD de cupons no painel (`CouponsTab`/`CouponWizard`/`api/admin/coupons.js`). Produtos e cupons deixam de depender de SQL bruto.                                                                                                                                                                                                                                                                                                                                                                                   |
 | 2026-05-30 | **§3.2 e §3.6 fechadas — Acessibilidade + guard rail** — toques ≥ 44px (hambúrguer, menu mobile, CTAs dos cards), hierarquia reduzida no menu mobile, line-clamp confirmado e bloqueio de upload de imagem > 500kB.                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 2026-05-30 | **Reconciliação de documentação** — features já no código mas ausentes do histórico mapeadas: CRUD de Categorias, Vitrine configurável, abas Faturamento/Desempenho/Comparativo/Segurança (2FA pela UI), Cross-sell, upload assinado, cleanup manual de analytics. §3.5 (Google OAuth do cliente) reclassificada de "wirado" para "código completo, falta validar em prod".                                                                                                                                                                                                                                              |
 | 2026-07-01 | **Hardening Fase 5** — `admin_audit_log` append-only (revoke + triggers anti update/delete), dedup + UNIQUE `(order_id, product_id)` em `download_tokens` (webhooks MP reentregues) e `increment_coupon_usage()` atômico respeitando `max_uses`.                                                                                                                                                                                                                                                                                                                                                                         |
@@ -300,7 +295,7 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 
 **Fases 0-4 estão com código pronto.** Bloqueio agora é operacional:
 
-1. ⏳ Aplicar as 13 migrations no Supabase — 15 min (§1; aplicação em prod não confirmada)
+1. ⏳ Aplicar as 18 migrations no Supabase — 15 min (§1; aplicação em prod não confirmada)
 2. ⏳ Plugar credenciais grátis (GA4 ID, Pixel ID, `CRON_SECRET`, Resend já está) — 1-2h
 3. ⏳ Autenticar domínio no Resend (DNS — propagação até 24h)
 4. ⏳ Criar `public/og-default.png` 1200×630 — 30 min

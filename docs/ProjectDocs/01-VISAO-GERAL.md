@@ -78,7 +78,7 @@ Personas não-humanas (atores técnicos):
 3. **Desempenho** — desempenho de vendas por produto (pedidos aprovados)
 4. **Categorias** — wizard com cor, badge, featured, sort_order
 5. **Pedidos** — listagem, filtro por status, modal de detalhe
-6. **Cupons** — CRUD de cupons via wizard (`/api/admin-coupons`)
+6. **Cupons** — CRUD de cupons via wizard (`/api/admin/coupons`)
 7. **Faturamento** — série de faturamento de pedidos aprovados
 8. **Comparativo** — comparação período-a-período (mês atual vs anterior, etc.)
 9. **Funil** — visualização do funil (view_catalog → view_item → add_to_cart → begin_checkout → purchase) por período
@@ -113,7 +113,6 @@ Lista resumida — detalhes em [13-ROADMAP-PENDENCIAS](./13-ROADMAP-PENDENCIAS.m
 
 - ❌ **Mídia paga** (Google Ads, Meta Ads) — Fase 5 ainda não iniciada
 - ❌ **Login admin com Google OAuth** — só e-mail/senha + 2FA opcional
-- ❌ **Rate limiting em produção** — os limiters `express-rate-limit` só rodam no Express de dev; nas funções serverless da Vercel dependeria de store compartilhado/KV (pendência API-03)
 - ❌ **A/B testing** (planejado com GrowthBook self-hosted na Fase 6)
 - ❌ **Heatmaps** (planejado com Microsoft Clarity na Fase 6)
 - ❌ **Submissão de sitemap** no Search Console — operacional pós-deploy

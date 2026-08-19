@@ -8,7 +8,7 @@
 
 - **Engine:** Postgres (Supabase managed); dev local usa Postgres 17 (`supabase/config.toml`, `major_version = 17`)
 - **Schemas:** `public` (app) + `auth` (Supabase Auth) + `storage` (Supabase Storage)
-- **RLS:** ativado em **todas** as 17 tabelas do app
+- **RLS:** ativado em **todas** as 18 tabelas do app
 - **Service role:** bypassa RLS (usada apenas pelo backend); browser nunca tem service role
 - **Anon key:** respeita RLS; só acessa o que as policies permitem
 - **Extensões:** `pgcrypto` (gen_random_uuid), `unaccent` (slugify), `pg_cron` (purges agendados)
@@ -18,12 +18,12 @@ Arquivos:
 - [`supabase/schema.sql`](../../supabase/schema.sql) — DDL canônico (14 tabelas; as 3 restantes nascem em migrations)
 - [`supabase/security-hardening.sql`](../../supabase/security-hardening.sql) — RLS + policies + funções + grants (espelho fora da sequência de migrations)
 - [`supabase/seed-sample-data.sql`](../../supabase/seed-sample-data.sql) — dados de exemplo
-- [`supabase/migrations/`](../../supabase/migrations/) — 13 migrations versionadas
+- [`supabase/migrations/`](../../supabase/migrations/) — 18 migrations versionadas
 - [`supabase/config.toml`](../../supabase/config.toml) — config do Supabase CLI/local
 
 ---
 
-## Tabelas (17)
+## Tabelas (18)
 
 ### `categories`
 
@@ -241,7 +241,7 @@ Cupons. RLS service-only.
 | `created_at`       | timestamptz            |                                                                   |
 | `updated_at`       | timestamptz            | Trigger `set_updated_at`                                          |
 
-> CRUD de cupons no admin: aba **Cupons** (`CouponWizard` + `/api/admin-coupons`). Validação no checkout via `/api/validate-coupon` (prévia) e revalidação no `create-payment`.
+> CRUD de cupons no admin: aba **Cupons** (`CouponWizard` + `/api/admin/coupons`). Validação no checkout via `/api/validate-coupon` (prévia) e revalidação no `create-payment`.
 
 ### `abandoned_carts`
 
@@ -321,6 +321,26 @@ Configurações chave-valor JSON. Service-only.
 | `updated_at`    | timestamptz |                               |
 
 `adminConfig` guarda `totpSecret` e `fallbackPin` (armazenados em texto claro; a API nunca os devolve no GET e a comparação do PIN é timing-safe), além de preferências do admin. `homeSections` guarda as seções da vitrine da home.
+
+### `rate_limit_hit`
+
+Contador de rate limit. É o que faz a regra E1 valer **em produção**: as funções serverless da
+Vercel não compartilham memória, então o contador mora no único estado que todas enxergam — o
+Postgres. Janela fixa, uma linha por `(bucket, identificador, janela)`. Service-only.
+
+| Coluna         | Tipo            | Notas                                                            |
+| -------------- | --------------- | ---------------------------------------------------------------- |
+| `bucket`       | text PK¹        | Nome do limite: `admin-login`, `validate-coupon`, `download`, …  |
+| `identifier`   | text PK¹        | IP resolvido na borda, ou escopo (e-mail de login, `order_code`) |
+| `window_start` | timestamptz PK¹ | Início da janela                                                 |
+| `count`        | integer         | Acessos na janela                                                |
+| `updated_at`   | timestamptz     |                                                                  |
+
+¹ PK composta `(bucket, identifier, window_start)`.
+
+Escrita só pela função `rate_limit_hit()` (`SECURITY DEFINER`, `EXECUTE` só para `service_role`),
+que faz `insert … on conflict do update` atômico. Chamada por `enforceRateLimit` em
+[`lib/rate-limit.js`](../../lib/rate-limit.js). Ver [ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md).
 
 ---
 
@@ -421,7 +441,7 @@ Função idempotente (versão final na phase6) que deleta:
 
 ---
 
-## Migrations (13 arquivos)
+## Migrations (18 arquivos)
 
 Aplicar em ordem. Pode-se rodar tudo de uma vez via `npm run supabase:db:push`.
 
@@ -440,6 +460,11 @@ Aplicar em ordem. Pode-se rodar tudo de uma vez via `npm run supabase:db:push`.
 | [`20260701000001_phase5_payment_hardening.sql`](../../supabase/migrations/20260701000001_phase5_payment_hardening.sql)     | Dedup + UNIQUE `(order_id, product_id)` em `download_tokens` + `increment_coupon_usage()`                                                                                                                                                |
 | [`20260702000000_phase6_db_rls_hardening.sql`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql)       | Baseline RLS nas 17 tabelas, trigger guard de `profiles`, remove escrita pública de `abandoned_carts`/`page_views`, versiona `handle_new_user()`, índices de FK, `purge_old_logs()` v3, `purge_stale_email_subscribers()` + jobs mensais |
 | [`20260703000000_perf_indexes.sql`](../../supabase/migrations/20260703000000_perf_indexes.sql)                             | 5 índices de performance para painel/cron (`orders`, `email_sent_log`, `abandoned_carts`)                                                                                                                                                |
+| [`20260812000000_security_hardening_wave1.sql`](../../supabase/migrations/20260812000000_security_hardening_wave1.sql)     | Wave 1 do hardening de 12/08: revoga `products.download_url` do `anon` (RLS filtra linha, não coluna), reancora as policies de `orders`/`order_items` em `customer_id = auth.uid()` no lugar do claim `email`                            |
+| [`20260813000000_rate_limit.sql`](../../supabase/migrations/20260813000000_rate_limit.sql)                                 | Cria `rate_limit_hit` + função `rate_limit_hit()` — o rate limit que vale em produção ([ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md))                                                                                            |
+| [`20260813000001_best_sellers_aggregate.sql`](../../supabase/migrations/20260813000001_best_sellers_aggregate.sql)         | Função de agregação de mais-vendidos no banco: `/api/products`, `/home-sections` e `/cross-sell` deixam de baixar `orders`+`order_items` inteiras a cada hit                                                                             |
+| [`20260813000002_orders_customer_id_index.sql`](../../supabase/migrations/20260813000002_orders_customer_id_index.sql)     | Índice em `orders(customer_id)` — a âncora nova da RLS estava sem índice e fazia seq scan                                                                                                                                                |
+| [`20260818000000_profiles_lower_email_index.sql`](../../supabase/migrations/20260818000000_profiles_lower_email_index.sql) | Índice funcional em `profiles(lower(email))` — substitui a paginação da Admin API no webhook de pagamento, que tinha teto de 2.000 usuários                                                                                              |
 
 ### Como aplicar
 
@@ -468,7 +493,7 @@ select count(*) from analytics_events;
 select slug from products limit 3;
 
 -- 3. coupons RLS ativada
-select rowsecurity from pg_class where relname = 'coupons';
+select relrowsecurity from pg_class where relname = 'coupons';
 
 -- 4. funções de purge criadas
 select proname from pg_proc where proname like 'purge%' or proname like 'cleanup%';
@@ -513,6 +538,21 @@ Padrão a seguir:
 ```
 
 ---
+
+## Armadilhas conhecidas
+
+Coisas que já custaram tempo de depuração:
+
+- **`profiles.role` é MAIÚSCULO** — `CUSTOMER` | `ADMIN` | `MASTER`, default `CUSTOMER`. O login
+  do admin aceita `ADMIN` ou `MASTER`. Comparar com `'admin'` minúsculo falha em silêncio.
+- **Nunca inserir em `profiles` direto.** A linha nasce do trigger `handle_new_user` sobre
+  `auth.users`; um `insert` sem o usuário correspondente estoura erro de FK. Crie o usuário pela
+  Admin API e deixe o trigger criar o perfil.
+- **`auth.users.instance_id`** precisa ser `00000000-0000-0000-0000-000000000000` — a Admin API já
+  preenche; scripts que inserem à mão, não.
+- **Migration não substitui o `schema.sql`.** As migrations assumem que as tabelas base já
+  existem (a primeira faz `alter table public.orders`). Em projeto novo, rode o `schema.sql`
+  primeiro.
 
 ## Backups
 

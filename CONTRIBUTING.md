@@ -1,6 +1,6 @@
 # Padrões de código — Ateliê da Escola
 
-Convenções de engenharia deste repositório. **25 regras**, agrupadas em 6 áreas.
+Convenções de engenharia deste repositório. **29 regras**, agrupadas em 6 áreas.
 
 Cada regra existe porque uma divergência foi **medida no código**, não por preferência estética.
 Toda regra traz a evidência que a motivou, para que dê para discordar com dados na mão.
@@ -10,128 +10,49 @@ Toda regra traz a evidência que a motivou, para que dê para discordar com dado
 
 ---
 
-## Estado da padronização
+## Estado
 
-Duas rodadas, medidas no código e não estimadas. A coluna **13/08** é o levantamento sobre o
-commit `97be97f`; a **18/08** é a remedição sobre `4b42fe8` — que encontrou dívida aberta em dez
-regras — e a execução que a fechou.
+As 29 regras estão **aplicadas**. Duas rodadas de padronização (13/08 e 18/08 de 2026), ambas
+medidas no código e não estimadas, fecharam a dívida:
 
-| Medida                                             |      Antes |                    13/08 |                        18/08 |
-| -------------------------------------------------- | ---------: | -----------------------: | ---------------------------: |
-| Arquivos que reprovam `prettier --check`           |        189 |                        0 |                        **0** |
-| Idem, contando `.md` e `.json`                     |  não media |                       56 |         **0** (gate estende) |
-| Sites que devolvem `error` como string             |          — |                       58 |                        **0** |
-| Códigos de erro fora de SCREAMING_SNAKE            |          — |                        3 |                        **0** |
-| Handlers usando `guardMethod`                      |          — |                0 (de 44) |                   **35** (¹) |
-| Handlers com o par `OPTIONS`/405 manual            |          — |                       40 |                        **0** |
-| Endpoints públicos sem rate limit                  |          5 |                        5 |             **0** (com gate) |
-| Handlers com cache em memória em função serverless |          6 |                        0 |                        **0** |
-| Chamadas de `console.*` no backend                 |         79 |                        0 |                        **0** |
-| Caminhos de rota literais no JSX                   |         50 |                        0 |                        **0** |
-| Mecanismos de rate limit concorrentes              |          2 |                        2 |             **1** (ADR 0007) |
-| Endpoints usando `validation/` + zod               |          0 |                        3 |                        **8** |
-| Módulos de `lib/` sem suíte                        | 13 (de 21) |               10 (de 24) |            **0** (de 26) (²) |
-| Testes                                             |        274 |                      387 |                      **691** |
-| Cobertura medida (statements)                      | não rodava |                    27,3% | **39,8%** (piso 39, no CI ³) |
-| Erros de lint                                      |          0 |                        0 |                        **0** |
-| Avisos de lint                                     |         30 |                       19 |             **17** (catraca) |
-| Pares de documento duplicados                      |          4 | 0 ativos (4 em retirada) |             **0** (apagados) |
-| Caminho crítico do bundle (gzip)                   |          — |                 157,8 KB |        **100,5 KB** (−36,3%) |
+| Medida                                   |      Antes |                   Hoje |
+| ---------------------------------------- | ---------: | ---------------------: |
+| Arquivos que reprovam `prettier --check` |        189 |                  **0** |
+| Sites que devolvem `error` como string   |         58 |                  **0** |
+| Endpoints públicos sem rate limit        |          5 |                  **0** |
+| Chamadas de `console.*` no backend       |         79 |                  **0** |
+| Caminhos de rota literais no JSX         |         50 |                  **0** |
+| Mecanismos de rate limit concorrentes    |          2 |                  **1** |
+| Módulos de `lib/` sem suíte              | 13 (de 21) |          **0** (de 26) |
+| Testes                                   |        274 |                **691** |
+| Cobertura (statements)                   | não rodava | **39,8%** (piso no CI) |
+| Avisos de lint                           |         30 |       **17** (catraca) |
+| Caminho crítico do bundle (gzip)         |   157,8 KB |           **100,5 KB** |
 
-¹ Os 9 restantes não têm o par método/OPTIONS a substituir: são os cinco recursos CRUD (que o
-recebem pela factory do [ADR 0005](./docs/adr/0005-factory-para-recursos-crud-do-admin.md)),
-`sitemap.xml`, `notfound`, `webhook` e `download`.
+Duas coisas dessa tabela valem para quem chega:
 
-² 25 suítes para 26 módulos. `payment-integrity` é o único sem arquivo próprio, e é testado em
-`api/__tests__/payment-integrity.test.js` — o item `P4.1` já o contava assim.
+**`D5` está em catraca, não em zero.** Os 17 avisos restantes são diagnósticos do React Compiler
+(`setState` dentro de efeito) em 12 componentes. `npm run lint` roda com `--max-warnings=17`, então
+o número não pode crescer — e ao corrigir um aviso, **baixe o teto no `package.json` no mesmo
+commit**.
 
-³ O piso agora RODA: `npm run test:coverage` é passo dedicado no workflow e entrou no
-`npm run check`, para o gate local e o do CI serem a mesma coisa (item `P0.2`).
+**O que segura a regra é o gate, não a disciplina.** Todo número que já tinha sido declarado "0" e
+voltou a subir tinha a mesma coisa em comum: era contagem, não teste. Os que hoje têm gate
+executável não regridem em silêncio — `api/__tests__/envelope-contract.test.js`,
+`api/__tests__/rate-limit-coverage.test.js`, `routes/__tests__/api-route-parity.test.js` e
+`scripts/__tests__/icon-subset.test.js` falham apontando arquivo e linha.
 
-### Onde as 25 regras estão
+### Quando a medição contradiz a regra, quem muda é a regra
 
-Todas continuam certas — a rodada de 18/08 não reescreveu nenhuma por engano, e as três que
-mudaram, mudaram porque a **medição as contradisse** (ver abaixo). O estado:
+Cinco regras foram corrigidas ao serem aplicadas, e cada uma traz a correção anotada em bloco de
+citação na própria regra. **É o mecanismo, não a exceção**: abrir exceção no código deixaria este
+documento descrevendo um repositório que não existe.
 
-| Situação                            | Regras                                                                |
-| ----------------------------------- | --------------------------------------------------------------------- |
-| Aplicadas e com **gate executável** | `A1` `A2` `A3` `D1` `D2` `E1` — teste que falha se a dívida voltar    |
-| Aplicadas                           | `A4` `A5` `B2` `B3` `C1`–`C6` `D3` `D4` `D6` `D7` `E2`–`E4` `F1`–`F3` |
-| Aplicadas com **exceção escrita**   | `A6` (rota de compatibilidade), `B1` (vale dali para frente) ⁴        |
-| Em **catraca**, não em zero         | `D5` — 17 avisos restantes ⁵                                          |
+Duas exceções permanentes estão escritas: `A6` mantém uma rota de compatibilidade, e `B1` vale
+dali para frente — endpoint novo entra com schema, os antigos seguem validando à mão.
 
-> **O que mudou desde 13/08.** A remedição de 18/08 encontrou dez regras com dívida aberta
-> (`A1` `A2` `A3` `C2` `C3` `C4` `C6` `D2` `D3` `E1`): 58 sites devolviam `error` como string,
-> `guardMethod` tinha zero adoções em 44 handlers, o gate de cobertura nunca executara no CI, e
-> o re-login do admin estava quebrado justamente pela falha que a regra `A2` descreve — por um
-> acento.
->
-> **A lição que ficou registrada é sobre GATE, não sobre disciplina.** Todo número desta tabela
-> que já tinha sido declarado "0" e voltou a subir tinha a mesma coisa em comum: era contagem,
-> não teste. Os que agora têm gate executável não podem regredir em silêncio —
-> `api/__tests__/envelope-contract.test.js`, `api/__tests__/rate-limit-coverage.test.js`,
-> `routes/__tests__/api-route-parity.test.js` e `scripts/__tests__/icon-subset.test.js` falham
-> apontando arquivo e linha.
->
-> O histórico item a item está em
-> [docs/PADRONIZACAO-CORRECOES.md](./docs/PADRONIZACAO-CORRECOES.md) e em
-> [docs/reviews/OTIMIZACAO-CODIGO-2026-08-18.md](./docs/reviews/OTIMIZACAO-CODIGO-2026-08-18.md).
-
-⁴ O schema declarativo cobre o caminho do dinheiro (`create-payment`, `validate-coupon`,
-`verify-payment`) e os cinco recursos CRUD do admin (`validation/admin.schemas.js`, item `P2.2`).
-Os demais endpoints seguem validando à mão — o contrato B1 vale dali para frente, endpoint novo
-entra com schema.
-
-⁵ `D5` está com **catraca**, não com zero: os 17 avisos restantes são diagnósticos do React
-Compiler (`setState` dentro de efeito) em 12 componentes. `npm run lint` roda com
-`--max-warnings=17`, então o número não pode crescer; ao corrigir um, **baixe o teto no
-`package.json` no mesmo commit**. Dois já foram queimados em 18/08 (`HomePage`, com
-`useSyncExternalStore`, e `ConfirmSubscriptionPage`, com inicializador lazy), cada um com teste
-que afirma sobre o PRIMEIRO render — é isso que impede o padrão de voltar.
-
-### Cinco regras foram corrigidas ao serem aplicadas
-
-Estão anotadas em bloco de citação na própria regra. **É o mecanismo, não a exceção**: quando a
-medição contradiz a regra, quem muda é a regra — abrir exceção no código deixaria o documento
-descrevendo um repositório que não existe.
-
-| Regra | O que a medição errou                                                            | Quando |
-| ----- | -------------------------------------------------------------------------------- | ------ |
-| `A1`  | O sucesso aninhado sob `data` custava mais que valia; ficou plano                | 13/08  |
-| `C3`  | Os 7 sites "de dinheiro mal formatado" eram CSV e JSON-LD, não tela              | 13/08  |
-| `E3`  | Não havia migration a fazer — as colunas já são `numeric(12,2)`, exato           | 13/08  |
-| `A3`  | "CORS sempre" descrevia algo que 26 handlers não faziam — e não precisavam fazer | 18/08  |
-| `C6`  | "`propTypes` sempre" reprovava 11 componentes que não recebem prop nenhuma       | 18/08  |
-
-As duas de 18/08 renderam ADR, porque atravessam arquivos:
-[0006](./docs/adr/0006-cors-so-quando-cross-origin.md) para o CORS; a de `C6` está na própria
-regra, porque só muda a redação.
-
-### Achado encontrado pelos testes, e corrigido
-
-A suíte da regra D3 revelou que `lib/abc-classification.js` classificava um catálogo de **um
-item só** como classe C: o acumulado é 100%, a faixa `> 95` o jogava na cauda longa, e o
-produto que gera toda a receita aparecia no painel como o menos relevante. Não é hipotético
-para esta loja — catálogo pequeno, e qualquer recorte por categoria ou período curto pode
-devolver um item só.
-
-Corrigido em 13/08/2026 com `rank === 1` sempre `A`. O tratamento é **mínimo de propósito**:
-mexer nas faixas reclassificaria distribuições de 3+ itens que já estavam certas.
-
-O mesmo cálculo existia duplicado em `src/components/admin/utils/derive.js`, com as duas
-versões alimentando a MESMA tela (widget do DashboardTab × abas de Curva ABC). O comentário no
-topo do módulo já pedia que ficassem consistentes — pedir por comentário não impede divergir.
-Agora a versão do browser mora em `src/utils/abc.js` e
-`src/utils/__tests__/abc-parity.test.js` compara as duas sobre 13 distribuições e sobre toda a
-faixa de 0 a 100%.
-
-**O diagnóstico original era: "o problema não é falta de padrão — é padrão não executado".** As
-configurações deste repositório (`eslint.config.js`, `vite.config.js`, `.prettierrc.json`) já eram
-de qualidade acima da média e explicavam o porquê de cada decisão; o que faltava era o CI
-**exigir** o que elas descreviam.
-
-É isso que `npm run check` faz agora — env, formatação, lint, testes e build, na mesma ordem do
-workflow do GitHub.
+O histórico completo item a item está nos retratos de
+[docs/reviews/](./docs/reviews/).
 
 ---
 
@@ -255,9 +176,14 @@ arquivos em oito frames indistinguíveis.
 
 Mudança de URL é _breaking_: fazer via rota de compatibilidade, sem pressa.
 
-**O que motivou.** 18 endpoints administrativos são planos (`api/admin-orders.js`) enquanto os 6 de
-autenticação de cliente são aninhados (`api/auth/customer/login.js`). O mesmo produto expõe dois
-estilos de API.
+**O que motivou.** 18 endpoints administrativos eram planos (`api/admin-orders.js`) enquanto os 6
+de autenticação de cliente eram aninhados (`api/auth/customer/login.js`) — o mesmo produto expondo
+dois estilos de API.
+
+> **Aplicada.** Os 18 viraram `api/admin/<recurso>.js`; a convenção do produto é a aninhada. As
+> URLs planas seguem atendidas por um rewrite em [`vercel.json`](./vercel.json), que existe só
+> para a janela de deploy — um painel já aberto no navegador continua chamando a URL antiga por
+> alguns minutos. Sem consumidor externo, pode ser removido após um ciclo de deploy.
 
 ---
 
@@ -497,7 +423,7 @@ apagados. Outros apontam `setState` dentro de `useEffect`, que é backlog real d
 **Regra.** Um `.gitattributes` e uma checagem no CI.
 
 O projeto já tem histórico de corrupção de acento a ponto de existirem `scripts/check-utf8.js` e
-`scripts/fix-utf8.js`. `docs/RELEASE-CHECKLIST.md` está inteiro sem acentuação pela mesma razão.
+`scripts/fix-utf8.js`.
 
 **O que motivou.** `src/services/products.js` começa com BOM (`EF BB BF`) — é o único arquivo do
 repositório nessa condição.
@@ -632,8 +558,7 @@ inclusive já anuncia que `ProjectDocs/` está _"substituindo os MDs avulsos aba
 a substituição. Documento de setup desatualizado custa uma tarde de quem chega.
 
 > **Concluído em 18/08/2026 (item `P6.2` e §4).** Os quatro foram **apagados** — 1.159 linhas —, e
-> as menções a eles no `README.md`, no `docs/README.md`, no `docs/SUPABASE-SETUP.md` e no
-> `docs/REVIEW-PROMPTS.md` apontam agora para o canônico, no mesmo commit. O aviso "documento em
+> as menções a eles no `README.md`, no `docs/README.md` e no `docs/REVIEW-PROMPTS.md` apontam agora para o canônico, no mesmo commit. O aviso "documento em
 > retirada" no topo foi o passo 1; um arquivo que ninguém pode corrigir só existe para alguém ler
 > a versão errada, e o git guarda o histórico.
 >
@@ -662,27 +587,15 @@ conteúdo é o certo, o lugar não é, porque quem chega não sabe abrir esses t
 
 ---
 
-## Ordem de execução
+## Ordem em que foram aplicadas
 
-Sequência escolhida por dois critérios: risco aberto primeiro, e mudança grande depois da mudança
-que a torna revisável.
+`E1` (risco aberto) → `D1` (formatar antes de refatorar, senão os diffs seguintes ficam
+ilegíveis) → `D4`+`D6` → `A1`+`A2` (envelope único) → `B1` (schemas na borda) → `C1`–`C3`
+(depende de A1) → `D2`+`D3` (cobertura) → `E2`+`E4`, depois `E3` → `F2`+`F3` (docs por último,
+porque só aí o documento descreve o que existe e não o que se pretende).
 
-| #   | Regras                                          | Por quê nesta posição                                                                                          |
-| --- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 1   | **E1** — rate limit nos cinco endpoints         | Única regra com risco em aberto agora, e `download` entrega produto pago. Meia hora de trabalho.               |
-| 2   | **D1** — formatar tudo num commit               | Antes de qualquer refatoração, senão os diffs das etapas seguintes ficam ilegíveis.                            |
-| 3   | **D4 + D6** — referências mortas e o BOM        | Minutos, e destrava a leitura correta de cobertura.                                                            |
-| 4   | **A1 + A2** — envelope único com `code`         | Um helper `respond()`/`fail()` em `lib/`, migração handler a handler. O shim de `src/utils/api.js` sai no fim. |
-| 5   | **B1** — schemas zod na borda                   | Recria `validation/`, começando pelos endpoints de dinheiro.                                                   |
-| 6   | **C1 + C2 + C3** — fugas do frontend            | Depende de A1: com o contrato estável, vira mecânico.                                                          |
-| 7   | **D2 + D3** — cobertura medida e `lib/` testada | Mede, usa o número como piso, sobe as suítes de `lib/`.                                                        |
-| 8   | **E2 + E4**, depois **E3**                      | Cache de CDN substitui os `Map`. Centavos por último: mais invasivo, mais dependente dos testes.               |
-| 9   | **F2 + F3** — consolidar docs e ADRs            | No fim, porque só aqui o documento descreve o que existe, não o que se pretende.                               |
-
-> **A ordem foi seguida, e o documento a manteve.** Ela não descreve mais trabalho pendente —
-> fica registrada porque explica **por que cada regra foi aplicada nesta sequência**, que é a
-> informação útil se alguma precisar ser revertida. O único desvio: E3 não exigiu migration
-> (ver a correção na própria regra).
+Fica registrada porque explica **por que cada regra foi aplicada nesta sequência** — que é a
+informação útil se alguma precisar ser revertida. Único desvio: `E3` não exigiu migration.
 
 ---
 

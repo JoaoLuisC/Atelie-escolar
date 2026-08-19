@@ -4,8 +4,7 @@
 >
 > Levantamento anterior às rodadas de padronização de 13/08 e 18/08/2026.
 > **Vários achados foram corrigidos.** Este documento não se atualiza — ele é o
-> retrato do dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md) e
-> [PADRONIZACAO-CORRECOES.md](../PADRONIZACAO-CORRECOES.md).
+> retrato do dia. Estado atual: [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 > Revisão de arquitetura, segurança e processos feita sobre o commit `e085971`
 > (`fix(security): corrige IDOR por curinga ILIKE, vazamento de download_url e bypass de max_uses`).

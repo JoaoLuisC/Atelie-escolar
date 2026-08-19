@@ -392,7 +392,7 @@ Pedidos, clientes, vendas por período, Curva ABC. Sem isso, vira refém de quem
 
 #### I5. Não permitir delete físico de pedidos
 
-Pedidos têm valor histórico. Apenas `soft delete` ou marcação de cancelado. ⚠️ Hoje `DELETE /api/admin-orders` ainda faz delete físico (auditado em `admin_audit_log`) — regra pendente de implementação.
+Pedidos têm valor histórico. Apenas `soft delete` ou marcação de cancelado. ⚠️ Hoje `DELETE /api/admin/orders` ainda faz delete físico (auditado em `admin_audit_log`) — regra pendente de implementação.
 
 ---
 
@@ -496,7 +496,7 @@ Para cada PR que toque o fluxo do cliente, fluxo de pagamento ou admin:
 
 ### Documentação
 
-- [ ] [ProjectDocs](./README.md) atualizado se mudou comportamento documentado
+- [ ] [Documentação](../README.md) atualizada se mudou comportamento documentado
 - [ ] Este documento atualizado se criou nova regra ou anti-padrão
 - [ ] [04-BANCO-DE-DADOS](./04-BANCO-DE-DADOS.md) atualizado se mudou schema
 

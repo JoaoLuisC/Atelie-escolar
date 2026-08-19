@@ -10,7 +10,7 @@
 - **Content-Type:** `application/json` para requests e responses (exceto `/api/download`, que redireciona para a URL do arquivo, e `/sitemap.xml`, que é `application/xml`)
 - **Autenticação:**
   - **Cliente** — cookie `customer_session` (HttpOnly, SameSite=Strict) emitido em `/api/auth/customer/login`
-  - **Admin** — cookie `admin_session` (HttpOnly, SameSite=Strict) emitido em `/api/admin-login`
+  - **Admin** — cookie `admin_session` (HttpOnly, SameSite=Strict) emitido em `/api/admin/login`
   - **Webhook** — header `x-signature` validado por HMAC com `WEBHOOK_SECRET`
   - **Cron** — header `X-Cron-Secret: <CRON_SECRET>` (comparação timing-safe; nunca via query string)
 - **Erros:** JSON com shape `{ "error": "mensagem humana" }` (vários handlers incluem também `"success": false`). Código de máquina só onde faz diferença: `code` no `/api/validate-coupon` e no 404 de produção (`notfound`)
@@ -360,49 +360,49 @@ Disparado pelo workflow `email-cron.yml` (GitHub Actions) de hora em hora (`cron
 
 | Endpoint             | Método | Descrição                                                                                                                                                                                                      |
 | -------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/admin-login`   | POST   | Login com email + senha via Supabase, exige role `admin`/`master` (+ TOTP ou PIN se 2FA ativo; challenge token com TTL 5 min). Resposta idêntica para senha errada e conta não-admin. Rate-limit 5/10min (dev) |
-| `/api/admin-logout`  | POST   | Limpa `admin_session` (exige request same-origin)                                                                                                                                                              |
-| `/api/admin-session` | GET    | Retorna `{ success, authenticated }` — não vaza e-mail nem role                                                                                                                                                |
+| `/api/admin/login`   | POST   | Login com email + senha via Supabase, exige role `admin`/`master` (+ TOTP ou PIN se 2FA ativo; challenge token com TTL 5 min). Resposta idêntica para senha errada e conta não-admin. Rate-limit 5/10min (dev) |
+| `/api/admin/logout`  | POST   | Limpa `admin_session` (exige request same-origin)                                                                                                                                                              |
+| `/api/admin/session` | GET    | Retorna `{ success, authenticated }` — não vaza e-mail nem role                                                                                                                                                |
 
 ### Dashboard e KPIs
 
 | Endpoint               | Método | Descrição                                                                                                                                          |
 | ---------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/admin-dashboard` | GET    | Payload agregado do painel: produtos, categorias, perfis, pedidos, itens, download logs, settings + summary de receita                             |
-| `/api/admin-kpis`      | GET    | `?window=` (meses, 1–36). Receita MTD/mês anterior, ticket médio, pedidos, LTV, taxa de recompra (CAC = null até existir input de custo). Cache 1h |
+| `/api/admin/dashboard` | GET    | Payload agregado do painel: produtos, categorias, perfis, pedidos, itens, download logs, settings + summary de receita                             |
+| `/api/admin/kpis`      | GET    | `?window=` (meses, 1–36). Receita MTD/mês anterior, ticket médio, pedidos, LTV, taxa de recompra (CAC = null até existir input de custo). Cache 1h |
 
 ### CRUD (todas as escritas geram audit log via `logAdminAction`)
 
 | Endpoint                | Métodos                       | Descrição                                                                      |
 | ----------------------- | ----------------------------- | ------------------------------------------------------------------------------ |
-| `/api/admin-products`   | GET, POST, PUT, PATCH, DELETE | Lista + cria + atualiza + remove produtos (cria categoria on-the-fly por slug) |
-| `/api/admin-categories` | GET, POST, PUT, DELETE        | Idem para categorias (slug normalizado; 409 em duplicata)                      |
-| `/api/admin-coupons`    | GET, POST, PUT, DELETE        | CRUD de cupons                                                                 |
-| `/api/admin-orders`     | GET, PUT, DELETE              | Lista (`?status=` opcional) + atualizar + excluir pedidos                      |
-| `/api/admin-users`      | GET, PUT, DELETE              | Listar + atualizar + excluir clientes (profiles)                               |
+| `/api/admin/products`   | GET, POST, PUT, PATCH, DELETE | Lista + cria + atualiza + remove produtos (cria categoria on-the-fly por slug) |
+| `/api/admin/categories` | GET, POST, PUT, DELETE        | Idem para categorias (slug normalizado; 409 em duplicata)                      |
+| `/api/admin/coupons`    | GET, POST, PUT, DELETE        | CRUD de cupons                                                                 |
+| `/api/admin/orders`     | GET, PUT, DELETE              | Lista (`?status=` opcional) + atualizar + excluir pedidos                      |
+| `/api/admin/users`      | GET, PUT, DELETE              | Listar + atualizar + excluir clientes (profiles)                               |
 
 ### Análise (cache in-memory server-side)
 
 | Endpoint                   | Método | Descrição                                                                                                |
 | -------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
-| `/api/admin-abc-products`  | GET    | Curva ABC de produtos por receita (`?period=&categoryId=`). Cache 1h                                     |
-| `/api/admin-abc-customers` | GET    | Curva ABC de clientes + classificação vip/recorrente/eventual (`?period=`; e-mails mascarados). Cache 1h |
-| `/api/admin-cohort`        | GET    | Matriz de retenção por coorte mensal (`?months=`, 1–36). Cache 1h                                        |
-| `/api/admin-funnel`        | GET    | Funil de conversão por sessão + atribuição UTM (`?days=`, 1–180; `?nocache=1` invalida). Cache 1h        |
-| `/api/admin-segments`      | GET    | Relatório agregado de segmentação de subscribers (sem lista bruta de e-mails). Cache 30 min              |
+| `/api/admin/abc-products`  | GET    | Curva ABC de produtos por receita (`?period=&categoryId=`). Cache 1h                                     |
+| `/api/admin/abc-customers` | GET    | Curva ABC de clientes + classificação vip/recorrente/eventual (`?period=`; e-mails mascarados). Cache 1h |
+| `/api/admin/cohort`        | GET    | Matriz de retenção por coorte mensal (`?months=`, 1–36). Cache 1h                                        |
+| `/api/admin/funnel`        | GET    | Funil de conversão por sessão + atribuição UTM (`?days=`, 1–180; `?nocache=1` invalida). Cache 1h        |
+| `/api/admin/segments`      | GET    | Relatório agregado de segmentação de subscribers (sem lista bruta de e-mails). Cache 30 min              |
 
 ### Vitrine, configurações e uploads
 
 | Endpoint                | Métodos  | Descrição                                                                                                                                                                                                             |
 | ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/admin-settings`   | GET, PUT | `?key=` de uma whitelist (`homeSections` — vitrine da home — e `adminConfig` — TOTP, PIN). GET de `adminConfig` nunca devolve `totpSecret`/`fallbackPin` (só `has2FA`/`hasPin`); PUT auditado com redação de segredos |
-| `/api/admin-upload-url` | POST     | Gera signed upload URL do Supabase Storage por `kind` (image/video/download), com whitelist de extensão/MIME e bloqueio de SVG/HTML em bucket público                                                                 |
+| `/api/admin/settings`   | GET, PUT | `?key=` de uma whitelist (`homeSections` — vitrine da home — e `adminConfig` — TOTP, PIN). GET de `adminConfig` nunca devolve `totpSecret`/`fallbackPin` (só `has2FA`/`hasPin`); PUT auditado com redação de segredos |
+| `/api/admin/upload-url` | POST     | Gera signed upload URL do Supabase Storage por `kind` (image/video/download), com whitelist de extensão/MIME e bloqueio de SVG/HTML em bucket público                                                                 |
 
 ### Manutenção
 
 | Endpoint                    | Método | Descrição                                                                        |
 | --------------------------- | ------ | -------------------------------------------------------------------------------- |
-| `/api/admin-cleanup-events` | POST   | Chama a RPC `cleanup_old_analytics_events` (remove eventos com mais de 180 dias) |
+| `/api/admin/cleanup-events` | POST   | Chama a RPC `cleanup_old_analytics_events` (remove eventos com mais de 180 dias) |
 
 ---
 
@@ -426,12 +426,12 @@ Rotas montadas direto no Express via `server.js`/`routes/`. **Na Vercel elas nã
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 400  | Payload/query inválido (item sem `productId`, e-mail malformado, chave de setting fora da whitelist etc.)                                                                          |
 | 401  | Cookie de sessão ausente/inválido; token de download inválido, usado ou expirado; assinatura HMAC do webhook não bate; `X-Cron-Secret` errado                                      |
-| 403  | Request cross-origin em `/api/admin-logout` e `/api/auth/customer/logout` (anti-CSRF); `/api/admin-users` recusa editar/excluir contas admin/master                                |
+| 403  | Request cross-origin em `/api/admin/logout` e `/api/auth/customer/logout` (anti-CSRF); `/api/admin/users` recusa editar/excluir contas admin/master                                |
 | 404  | Recurso não existe — também usado no `verify-payment` quando o e-mail não bate (anti-enumeração) e em qualquer `/api/*` sem função na Vercel (`notfound`, com `code: "not_found"`) |
 | 405  | Método não permitido no endpoint                                                                                                                                                   |
 | 409  | Duplicata (ex.: categoria com mesmo slug)                                                                                                                                          |
 | 422  | Cupom não aplicável em `/api/validate-coupon` (com `code` de máquina: `not_found`, `inactive`, `not_yet_valid`, `expired`, `exhausted`, `below_min`, `not_eligible`)               |
-| 429  | Excedeu rate limit (só em dev/Express). Veja headers `RateLimit-*`/`Retry-After`                                                                                                   |
+| 429  | Excedeu rate limit — vale em dev e em produção (`enforceRateLimit`, contador no Postgres). Veja headers `RateLimit-*`/`Retry-After`                                                |
 | 500  | Erro interno — mensagem genérica, não expõe stack/detalhes em prod                                                                                                                 |
 
 Pagamento rejeitado **não é erro HTTP**: o webhook responde 200 e o `verify-payment` devolve o pedido com `paymentStatus: "rejected"`.

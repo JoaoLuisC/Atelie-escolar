@@ -50,7 +50,7 @@ src/components/admin/
 
 Container: `src/pages/AdminPage.jsx` orquestra as abas (SPA interna por estado `activeTab`, sem sub-rotas) e gerencia o state global do admin. A sidebar (`AdminLayout.jsx`) agrupa três abas sob "Produtos" (Lista de produtos, Desempenho, Categorias) e duas sob "Financeiro" (Faturamento, Comparativo).
 
-As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativo, prod-saida, vitrine, produtos, categorias, analise) recarregam `GET /api/admin-dashboard` ao serem ativadas; as demais buscam os próprios dados.
+As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativo, prod-saida, vitrine, produtos, categorias, analise) recarregam `GET /api/admin/dashboard` ao serem ativadas; as demais buscam os próprios dados.
 
 ---
 
@@ -72,7 +72,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 - Pedidos recentes (últimos 8, com botão "Detalhes" que abre `OrderDetailModal`)
 - Cards-placeholder "Vendas por região" e "Funil de conversão" (instrumentação pendente — o funil real está na aba Funil)
 
-**Fonte.** `GET /api/admin-dashboard` (agregações client-side em `components/admin/utils/derive.js`) + `GET /api/admin-kpis?window=12`.
+**Fonte.** `GET /api/admin/dashboard` (agregações client-side em `components/admin/utils/derive.js`) + `GET /api/admin/kpis?window=12`.
 
 **Ações.** Apenas leitura; "Detalhes" abre o modal do pedido.
 
@@ -91,11 +91,11 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 - **Novo produto** → abre `ProductWizard` (4 steps: Básico → Mídia → Preço & Variações → Conversão; o step Conversão edita `benefits`, `faq` e `reviews`)
 - **Editar** → mesmo wizard pré-preenchido
-- **Pausar/Ativar** (soft toggle via `PATCH /api/admin-products`)
+- **Pausar/Ativar** (soft toggle via `PATCH /api/admin/products`)
 - **Excluir** (hard delete com `confirm` — usar com cautela, prefira pausar)
-- Upload de mídia (imagens/vídeos/arquivo de download) via `POST /api/admin-upload-url` → PUT direto no Supabase Storage (URL assinada; limites 10MB imagem / 50MB vídeo-download)
+- Upload de mídia (imagens/vídeos/arquivo de download) via `POST /api/admin/upload-url` → PUT direto no Supabase Storage (URL assinada; limites 10MB imagem / 50MB vídeo-download)
 
-**Fonte.** Lista vem do payload de `GET /api/admin-dashboard`; escritas via `POST/PUT/PATCH/DELETE /api/admin-products` (auditadas em `admin_audit_log`).
+**Fonte.** Lista vem do payload de `GET /api/admin/dashboard`; escritas via `POST/PUT/PATCH/DELETE /api/admin/products` (auditadas em `admin_audit_log`).
 
 ---
 
@@ -107,7 +107,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 - Tabela por produto, ordenada por unidades vendidas: vendas, receita, downloads e taxa de download (downloads/vendas)
 
-**Fonte.** Derivado client-side (`deriveProductPerformance`) de pedidos aprovados + download logs do payload de `GET /api/admin-dashboard`.
+**Fonte.** Derivado client-side (`deriveProductPerformance`) de pedidos aprovados + download logs do payload de `GET /api/admin/dashboard`.
 
 ---
 
@@ -121,11 +121,11 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 **Ações.**
 
-- **Nova categoria** → `CategoryWizard` (nome, cor, featured, ativa; o slug é gerado automaticamente pelo endpoint a partir do nome — `normalizeSlug` em `api/admin-categories.js`; o trigger de slug no banco existe só para `products`)
+- **Nova categoria** → `CategoryWizard` (nome, cor, featured, ativa; o slug é gerado automaticamente pelo endpoint a partir do nome — `normalizeSlug` em `api/admin/categories.js`; o trigger de slug no banco existe só para `products`)
 - **Editar**
 - **Excluir** (com `confirm`; produtos vinculados ficam com `category_id = null` — a FK é `on delete set null`)
 
-**Fonte.** `GET/POST/PUT/DELETE /api/admin-categories` (escritas auditadas; 409 em slug duplicado).
+**Fonte.** `GET/POST/PUT/DELETE /api/admin/categories` (escritas auditadas; 409 em slug duplicado).
 
 ---
 
@@ -142,9 +142,9 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 - **Ver detalhes** → modal `OrderDetailModal.jsx` com cliente, e-mail, status, total, data e itens do pedido
 
-**Fonte.** `GET /api/admin-orders?status=`. A API também expõe `PUT` (atualizar status/payment_status/cliente/total, seta `completed_at` ao aprovar) e `DELETE` (exclusão física) — ambos auditados —, mas a UI atual não tem botões para essas ações.
+**Fonte.** `GET /api/admin/orders?status=`. A API também expõe `PUT` (atualizar status/payment_status/cliente/total, seta `completed_at` ao aprovar) e `DELETE` (exclusão física) — ambos auditados —, mas a UI atual não tem botões para essas ações.
 
-> ⚠️ A regra I5 (nunca deletar pedidos, apenas soft cancel) vale como prática operacional — pedidos têm valor histórico para análise —, porém o endpoint `DELETE /api/admin-orders` existe e deleta de verdade. Use com muita cautela.
+> ⚠️ A regra I5 (nunca deletar pedidos, apenas soft cancel) vale como prática operacional — pedidos têm valor histórico para análise —, porém o endpoint `DELETE /api/admin/orders` existe e deleta de verdade. Use com muita cautela.
 
 ---
 
@@ -161,7 +161,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 - **Novo cupom** / **Editar** → `CouponWizard`
 - **Excluir** (com `confirm`)
 
-**Fonte.** `GET/POST/PUT/DELETE /api/admin-coupons` (aba auto-suficiente: busca os próprios dados; escritas auditadas). A validação de uso acontece no checkout via `/api/validate-coupon` + `create-payment`.
+**Fonte.** `GET/POST/PUT/DELETE /api/admin/coupons` (aba auto-suficiente: busca os próprios dados; escritas auditadas). A validação de uso acontece no checkout via `/api/validate-coupon` + `create-payment`.
 
 ---
 
@@ -174,7 +174,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 - Bruto acumulado, quantidade de pedidos aprovados, ticket médio
 - Gráfico de barras do faturamento dos últimos 6 meses (apenas pedidos aprovados)
 
-**Fonte.** Derivado client-side (`deriveFaturamentoSeries`) dos pedidos de `GET /api/admin-dashboard` com `payment_status='approved'`.
+**Fonte.** Derivado client-side (`deriveFaturamentoSeries`) dos pedidos de `GET /api/admin/dashboard` com `payment_status='approved'`.
 
 ---
 
@@ -202,7 +202,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 - Tabela de atribuição por UTM source (pedidos, receita, share; `direct` = sem UTM)
 - Seletor de período: 7 / 30 / 90 dias
 
-**Fonte.** `GET /api/admin-funnel?days=` agrega `analytics_events` + `orders`. Cache server-side de 1h (`?nocache=1` invalida).
+**Fonte.** `GET /api/admin/funnel?days=` agrega `analytics_events` + `orders`. Cache server-side de 1h (`?nocache=1` invalida).
 
 ---
 
@@ -238,7 +238,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 - Botões "Como ler" abrem modal explicativo por quadro (como calcula / o que observar / como agir)
 - Export CSV de cada quadro (regra I4): curva ABC de produtos, de clientes e coorte
 
-**Fonte.** `GET /api/admin-abc-products?period&categoryId` + `/api/admin-abc-customers?period` + `/api/admin-cohort?months=12`.
+**Fonte.** `GET /api/admin/abc-products?period&categoryId` + `/api/admin/abc-customers?period` + `/api/admin/cohort?months=12`.
 
 **Performance.** Cache server-side de 1h em todos os endpoints (regra F5); `?nocache=1` força recálculo.
 
@@ -260,7 +260,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
   - `inativo_180d` (≥ 180 dias — não enviar mais, regra D7)
   - `categoria:<slug>` (uma tag por categoria já comprada)
 
-**Fonte.** `GET /api/admin-segments` aplicando lógica de `lib/customer-segmentation.js`. Retorna relatório agregado (contagens, sem lista bruta de e-mails). Cache de 30 min; `?nocache=1` invalida.
+**Fonte.** `GET /api/admin/segments` aplicando lógica de `lib/customer-segmentation.js`. Retorna relatório agregado (contagens, sem lista bruta de e-mails). Cache de 30 min; `?nocache=1` invalida.
 
 ---
 
@@ -275,10 +275,10 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 **Ações.**
 
-- **Trocar papel** (select Admin / Suporte / Cliente → `PUT /api/admin-users`)
-- **Revogar acesso** (modal de confirmação → `DELETE /api/admin-users`; remove a linha de `profiles`)
+- **Trocar papel** (select Admin / Suporte / Cliente → `PUT /api/admin/users`)
+- **Revogar acesso** (modal de confirmação → `DELETE /api/admin/users`; remove a linha de `profiles`)
 
-**Fonte.** `GET/PUT/DELETE /api/admin-users` (escritas auditadas).
+**Fonte.** `GET/PUT/DELETE /api/admin/users` (escritas auditadas).
 
 > A exclusão de conta LGPD do próprio cliente (com anonimização de pedidos) é self-service via `/api/me-delete-account` — não passa por esta aba.
 
@@ -301,7 +301,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 - **Trocar título e limite da seção**
 - **Salvar vitrine** (persiste tudo de uma vez)
 
-**Fonte.** Setting `homeSections` (JSON na tabela `settings`) lido do payload de `GET /api/admin-dashboard` e salvo via `PUT /api/admin-settings`. A home pública consome via `GET /api/home-sections`.
+**Fonte.** Setting `homeSections` (JSON na tabela `settings`) lido do payload de `GET /api/admin/dashboard` e salvo via `PUT /api/admin/settings`. A home pública consome via `GET /api/home-sections`.
 
 ---
 
@@ -318,11 +318,11 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 **Comportamento seguro.**
 
-- O `GET /api/admin-settings?key=adminConfig` **redige os segredos**: devolve apenas as flags `has2FA`/`hasPin`
+- O `GET /api/admin/settings?key=adminConfig` **redige os segredos**: devolve apenas as flags `has2FA`/`hasPin`
 - Campos deixados em branco no save preservam o segredo já guardado (merge "pegajoso" no backend); digitar um valor novo o substitui
 - Após salvar, a aba re-busca a config para refletir as flags sem manter segredos no estado do cliente
 
-**Fonte.** `GET/PUT /api/admin-settings?key=adminConfig` (PUT auditado com redação dos segredos).
+**Fonte.** `GET/PUT /api/admin/settings?key=adminConfig` (PUT auditado com redação dos segredos).
 
 > Eventos de segurança (login admin falho, assinatura de webhook inválida, tentativa de enumeração no verify-payment) são gravados na tabela `security_events` (RLS service-only) por `lib/security-logger.js`, com PII apenas como hash `sha256.slice(0,16)` — mas ainda **não há visualização deles no painel**; consulta hoje é por SQL ou pelo webhook de alerta (`SECURITY_ALERT_WEBHOOK_URL`).
 

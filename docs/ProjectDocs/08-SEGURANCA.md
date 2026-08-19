@@ -61,7 +61,7 @@ Configurado em `lib/security-headers.js` + `server.js`:
 
 ### 2.4 Autorização (RLS no Postgres)
 
-17 tabelas, todas com RLS habilitado (baseline versionado na migration `20260702000000_phase6_db_rls_hardening.sql`, espelhado em `supabase/security-hardening.sql`). Resumo (detalhes em [04-BANCO-DE-DADOS §RLS](./04-BANCO-DE-DADOS.md)):
+18 tabelas, todas com RLS habilitado (baseline versionado na migration `20260702000000_phase6_db_rls_hardening.sql`, espelhado em `supabase/security-hardening.sql`). Resumo (detalhes em [04-BANCO-DE-DADOS §RLS](./04-BANCO-DE-DADOS.md)):
 
 | Tabela                                 | Quem lê                                                   | Quem escreve                                                                             |
 | -------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -267,7 +267,7 @@ Eventos passam por `lib/security-logger.js` que escreve em **três** destinos:
 | `event_name`                    | Origem                     | Severidade | Quando dispara                                                                                     |
 | ------------------------------- | -------------------------- | ---------- | -------------------------------------------------------------------------------------------------- |
 | `webhook_invalid_signature`     | `api/webhook.js`           | warn       | HMAC do MP não bate (ou header ausente)                                                            |
-| `admin_login_failed`            | `api/admin-login.js`       | warn       | Credencial inválida **ou** conta sem role `admin`/`master` (resposta HTTP idêntica nos dois casos) |
+| `admin_login_failed`            | `api/admin/login.js`       | warn       | Credencial inválida **ou** conta sem role `admin`/`master` (resposta HTTP idêntica nos dois casos) |
 | `verify_payment_email_mismatch` | `api/verify-payment.js`    | warn       | Order existe mas email não bate                                                                    |
 | `account_self_deleted`          | `api/me-delete-account.js` | info       | Exclusão de conta LGPD confirmada pelo cliente                                                     |
 | `admin_audit_write_failed`      | `lib/admin-audit.js`       | error      | Insert no `admin_audit_log` falhou (para não passar silencioso)                                    |
@@ -354,6 +354,22 @@ Passo a passo:
 
 Em caso de incidente (segredo vazado): rotacione tudo na hora, mesmo fora do trimestre.
 
+### 11.2.1 Pendência aberta — credenciais no histórico do git
+
+Um arquivo de handoff versionado no `main` chegou a conter dois PATs do Supabase
+(`sbp_…`) e as senhas do admin e das contas de teste. Os valores foram redigidos do arquivo e o
+arquivo foi removido, mas **continuam recuperáveis no histórico** — remover o arquivo não remove
+os commits anteriores.
+
+Nesta ordem, e a ordem importa:
+
+1. **Revogar** os PATs em https://supabase.com/dashboard/account/tokens e **trocar** a senha do
+   admin e das contas de teste.
+2. Só então expurgar o histórico (`git filter-repo --replace-text`) e forçar re-clone.
+
+Expurgar sem rotacionar apenas avisa quem já tem o dado de que ele valia a pena. Enquanto o
+passo 1 não estiver feito, trate esses segredos como comprometidos.
+
 ### 11.3 Pen-test focado (TODO externo)
 
 **Próxima janela:** prévia a cada release maior (mínimo anual).
@@ -361,7 +377,7 @@ Em caso de incidente (segredo vazado): rotacione tudo na hora, mesmo fora do tri
 Escopo mínimo recomendado:
 
 - Enumeração de `order_code` em `/verify-payment` (com e sem email)
-- IDOR em `/api/admin-*` (cookie de cliente tentando acessar endpoints de admin)
+- IDOR em `/api/admin/*` (cookie de cliente tentando acessar endpoints de admin)
 - CSRF em endpoints POST que dependem só de cookie (`/auth/customer/login`, `/admin-login`)
 - Injeção em campos de produto (nome, descrição) → XSS armazenado
 - Bypass de RLS pelo cliente usando o anon key publicado
@@ -410,7 +426,7 @@ Antes de cada release maior:
 
 ```
 ✅ HttpOnly cookies + HMAC-SHA256 + SameSite=Strict + same-origin em escritas
-✅ RLS em TODAS as 17 tabelas
+✅ RLS em TODAS as 18 tabelas
 ✅ Service role NUNCA no frontend
 ✅ CSP estrita + HSTS + frame-ancestors 'none' (X-Frame-Options: DENY no dev, SAMEORIGIN na Vercel)
 ✅ Rate-limit em endpoints sensíveis (Express/dev; serverless pendente — API-03)

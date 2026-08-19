@@ -35,7 +35,7 @@ Login com e-mail/senha e cadastro do cliente passam pelo BFF (`/api/auth/custome
 2. **Validação consistente.** Zod no backend valida cada payload antes de tocar o banco. O cliente pode mentir; o servidor confere.
 3. **Cookies HttpOnly.** Sessão de admin e de cliente ficam em cookies que o JS não acessa — defesa contra XSS.
 4. **Integração com Mercado Pago.** O `access_token` do MP precisa ficar no servidor; webhook precisa de endpoint público estável.
-5. **Rate-limit centralizado.** Helmet, CORS e `express-rate-limit` ficam num só lugar (o rate-limit vale só no Express/dev; na Vercel serverless dependeria de store compartilhado — pendência API-03).
+5. **Rate-limit em um mecanismo só.** A política vale nos dois ambientes: `enforceRateLimit` (`lib/rate-limit.js`) conta no Postgres, que é o único estado que todas as funções serverless enxergam. O `express-rate-limit` de borda do `server.js` é conveniência de dev, não a política ([ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md)).
 6. **Compatibilidade com Vercel.** Cada arquivo em `api/` vira função serverless automática; em dev, o Express monta os mesmos handlers via `api-compat.routes.js`.
 
 ---
@@ -43,7 +43,7 @@ Login com e-mail/senha e cadastro do cliente passam pelo BFF (`/api/auth/custome
 ## Estrutura de pastas
 
 ```
-Projeto-mae/
+Atelie-escolar/
 │
 ├── api/                                  # ❶ Endpoints serverless (Vercel) + montados no Express em dev
 │   ├── __tests__/                        # Testes dos endpoints
@@ -203,7 +203,7 @@ Projeto-mae/
 │   ├── security-hardening.sql            # RLS + policies + funções
 │   ├── seed-sample-data.sql              # Dados de exemplo
 │   ├── config.toml                       # Config CLI Supabase
-│   └── migrations/                       # 13 migrations versionadas
+│   └── migrations/                       # 18 migrations versionadas
 │
 ├── scripts/
 │   ├── check-advisor.js                  # Security Advisor via Management API
@@ -227,6 +227,25 @@ Projeto-mae/
 
 ---
 
+## Por onde começar a mexer
+
+| Quero alterar…               | Comece por                                                                                                                                                                                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth do admin                | [`lib/admin-session.js`](../../lib/admin-session.js), [`api/admin/login.js`](../../api/admin/login.js), [`src/services/admin-auth.js`](../../src/services/admin-auth.js)                                                                                                         |
+| Auth do cliente              | [`lib/customer-auth-handlers.js`](../../lib/customer-auth-handlers.js), [`lib/customer-session.js`](../../lib/customer-session.js), `api/auth/customer/**`                                                                                                                       |
+| Layout do painel             | [`src/components/admin/AdminLayout.jsx`](../../src/components/admin/AdminLayout.jsx), [`src/pages/AdminPage.jsx`](../../src/pages/AdminPage.jsx)                                                                                                                                 |
+| Wizard de produto e upload   | [`src/components/ProductWizard.jsx`](../../src/components/ProductWizard.jsx), [`api/admin/upload-url.js`](../../api/admin/upload-url.js), `uploadProductAsset` em [`src/services/admin-panel.js`](../../src/services/admin-panel.js)                                             |
+| Curva ABC                    | [`lib/abc-classification.js`](../../lib/abc-classification.js) (backend) e [`src/utils/abc.js`](../../src/utils/abc.js) (browser) — os dois têm teste de paridade; `api/admin/abc-{products,customers}.js`; [`AnalysisTab.jsx`](../../src/components/admin/tabs/AnalysisTab.jsx) |
+| Storage e downloads          | [`lib/storage-signed-url.js`](../../lib/storage-signed-url.js), [`api/download.js`](../../api/download.js)                                                                                                                                                                       |
+| Cupons                       | [`lib/coupons.js`](../../lib/coupons.js), [`api/validate-coupon.js`](../../api/validate-coupon.js), [`api/admin/coupons.js`](../../api/admin/coupons.js), [`CouponsTab.jsx`](../../src/components/admin/tabs/CouponsTab.jsx)                                                     |
+| Cron de e-mail               | [`api/cron-email-jobs.js`](../../api/cron-email-jobs.js), [`.github/workflows/email-cron.yml`](../../.github/workflows/email-cron.yml)                                                                                                                                           |
+| Rate limit                   | [`lib/rate-limit.js`](../../lib/rate-limit.js) e a migration `20260813000000_rate_limit.sql` ([ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md))                                                                                                                             |
+| Envelope de resposta / erros | [`lib/http.js`](../../lib/http.js) ([ADR 0004](../adr/0004-envelope-de-resposta-e-codigo-de-erro.md))                                                                                                                                                                            |
+| Header/footer do cliente     | [`src/components/Shell.jsx`](../../src/components/Shell.jsx)                                                                                                                                                                                                                     |
+| CRUD do admin em geral       | [`lib/admin-resource-handler.js`](../../lib/admin-resource-handler.js) — a factory dos cinco recursos ([ADR 0005](../adr/0005-factory-para-recursos-crud-do-admin.md))                                                                                                           |
+
+---
+
 ## Como o request flui
 
 ### Request público (catálogo)
@@ -247,12 +266,12 @@ Browser → cache no React state → render
 ### Request admin (com auth)
 
 ```
-Browser → fetch /api/admin-orders + cookie admin_session
+Browser → fetch /api/admin/orders + cookie admin_session
        → utils/api.js
 Express :3000
        → middleware/cors + middleware/rate-limit
        → routes/api-compat.routes.js
-       → api/admin-orders.js
+       → api/admin/orders.js
        → ensureAdminSession() valida HMAC do cookie
        → 401 se inválido | continua se válido
        → lib/supabase.js (service_role)

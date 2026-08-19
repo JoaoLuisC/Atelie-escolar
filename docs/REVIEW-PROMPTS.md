@@ -15,7 +15,7 @@
 
 1. Abra **uma sessão nova** para cada área (contextos isolados evitam contaminação
    de conclusões entre áreas).
-2. Configure o modelo **Opus 4.8** e **esforço máximo** (`/model` + raciocínio
+2. Configure o **modelo mais capaz disponível** e **esforço máximo** (`/model` + raciocínio
    estendido / "max effort").
 3. Cole o bloco de prompt da área inteiro (já contém as diretrizes padrão).
 4. Os reviews são **read-only por padrão**: o revisor analisa e reporta, **não
@@ -25,7 +25,7 @@
 
 ### Diretrizes padrão (já embutidas em cada prompt)
 
-- **Modelo/esforço:** Opus 4.8, esforço de raciocínio no máximo. Pense a fundo antes
+- **Modelo/esforço:** o mais capaz disponível, esforço de raciocínio no máximo. Pense a fundo antes
   de concluir.
 - **Leia tudo no escopo:** abra **cada arquivo** listado no escopo da área, por
   inteiro — não amostre, não adivinhe. Siga imports/dependências quando relevante.
@@ -75,8 +75,8 @@ urgentes**; **(c)** o que ficou **inconclusivo** e por quê.
 ## Área 1 — Pagamentos & Webhook (Mercado Pago)
 
 ```text
-PAPEL: Você é um revisor sênior de segurança de pagamentos. Modelo: Opus 4.8,
-esforço de raciocínio NO MÁXIMO. Pense a fundo. Review READ-ONLY: relate, não
+PAPEL: Você é um revisor sênior de segurança de pagamentos. Modelo: o mais capaz
+disponível, esforço de raciocínio NO MÁXIMO. Pense a fundo. Review READ-ONLY: relate, não
 altere arquivos.
 
 CONTEXTO: E-commerce de produtos digitais. Checkout via Mercado Pago (preference +
@@ -137,7 +137,8 @@ de saída padrão (tabela por achado + resumo + top-3 + inconclusivos).
 ## Área 2 — Autenticação & Sessões
 
 ```text
-PAPEL: Revisor sênior de IAM/AppSec. Modelo: Opus 4.8, esforço NO MÁXIMO. Pense a
+PAPEL: Revisor sênior de IAM/AppSec. Modelo: o mais capaz
+disponível, esforço NO MÁXIMO. Pense a
 fundo. Review READ-ONLY.
 
 CONTEXTO: Dois mundos de auth. (a) ADMIN: e-mail/senha + 2FA opcional (TOTP/PIN);
@@ -200,8 +201,8 @@ Formato de saída padrão. Dê PoC/repro para CSRF, forja de sessão e bypass de
 ## Área 3 — Banco de Dados & RLS (Supabase)
 
 ```text
-PAPEL: Revisor sênior de Postgres/Supabase e modelagem de dados. Modelo: Opus 4.8,
-esforço NO MÁXIMO. Pense a fundo. Review READ-ONLY.
+PAPEL: Revisor sênior de Postgres/Supabase e modelagem de dados. Modelo: o mais capaz
+disponível, esforço NO MÁXIMO. Pense a fundo. Review READ-ONLY.
 
 CONTEXTO: Postgres no Supabase com RLS habilitado em todas as tabelas. Padrão de
 segurança "service-role por default": tabelas sensíveis (security_events,
@@ -257,7 +258,8 @@ de saída padrão.
 ## Área 4 — API Backend / Handlers Serverless
 
 ```text
-PAPEL: Revisor sênior de backend Node. Modelo: Opus 4.8, esforço NO MÁXIMO. Pense a
+PAPEL: Revisor sênior de backend Node. Modelo: o mais capaz
+disponível, esforço NO MÁXIMO. Pense a
 fundo. Review READ-ONLY.
 
 CONTEXTO: Cada endpoint é um arquivo em api/*.js (handler estilo Vercel
@@ -318,7 +320,8 @@ cobrindo todos os api/*.
 ## Área 5 — Frontend React
 
 ```text
-PAPEL: Revisor sênior de frontend React. Modelo: Opus 4.8, esforço NO MÁXIMO. Pense a
+PAPEL: Revisor sênior de frontend React. Modelo: o mais capaz
+disponível, esforço NO MÁXIMO. Pense a
 fundo. Review READ-ONLY.
 
 CONTEXTO: React 19 + Vite + Tailwind. Sem TypeScript (JS + PropTypes). Estado via
@@ -377,7 +380,8 @@ Acessibilidade, Segurança-client, Manutenibilidade.
 ## Área 6 — LGPD / Privacidade & Compliance
 
 ```text
-PAPEL: Revisor de privacidade/DPO técnico (LGPD). Modelo: Opus 4.8, esforço NO
+PAPEL: Revisor de privacidade/DPO técnico (LGPD). Modelo: o mais capaz
+disponível, esforço NO
 MÁXIMO. Pense a fundo. Review READ-ONLY.
 
 CONTEXTO: Loja brasileira; coleta e-mail, CPF, telefone, endereço, IP, user-agent,
@@ -435,7 +439,7 @@ coletado × onde é armazenado × base legal × retenção × como é apagado.
 
 ```text
 PAPEL: Pentester/AppSec sênior fazendo threat modeling do sistema inteiro. Modelo:
-Opus 4.8, esforço NO MÁXIMO. Pense a fundo como atacante. Review READ-ONLY.
+o mais capaz disponível, esforço NO MÁXIMO. Pense a fundo como atacante. Review READ-ONLY.
 
 CONTEXTO: É a lente de segurança TRANSVERSAL (complementa, sem repetir em detalhe, as
 áreas 1/2/3). Foco em OWASP Top 10, configuração de borda, segredos e superfície de
@@ -450,14 +454,14 @@ ESCOPO:
 - .env.example, .env.local.template, .env.production, .env.test (NÃO leia segredos
   reais; avalie quais variáveis existem e se há segredos comitados por engano)
 - .gitignore (segredos/artefatos ignorados?)
-- HANDOFF.md e qualquer doc — procure por SEGREDOS VAZADOS em texto (PATs, tokens,
-  senhas, service-role keys).
+- Qualquer doc — procure por SEGREDOS VAZADOS em texto (PATs, tokens, senhas,
+  service-role keys), inclusive no histórico do git.
 - Varredura ampla por padrões: process.env, crypto, child_process, fetch/axios para
   hosts externos, console.log de dados sensíveis, eval/Function.
 
 O QUE AUDITAR (OWASP + infra):
 1. Gestão de segredos: há segredos commitados (PAT do Supabase, service-role,
-   MERCADOPAGO_ACCESS_TOKEN, senhas) em .env*, docs, HANDOFF.md, código ou histórico?
+   MERCADOPAGO_ACCESS_TOKEN, senhas) em .env*, docs, código ou histórico do git?
    Liste-os e marque para ROTAÇÃO. Front expõe só VITE_* públicos?
 2. CORS: configuração default libera qualquer localhost; o modo '*' + credentials é
    tratado? Em prod, a allowlist é estrita? Reflexão de Origin perigosa?
@@ -477,8 +481,9 @@ O QUE AUDITAR (OWASP + infra):
    nodemailer); npm audit conceitual.
 
 PONTOS QUENTES (CONFIRMAR):
-- HANDOFF.md contém PATs do Supabase e credenciais de admin/clientes em texto claro —
-  confirmar e exigir rotação + remoção do histórico git.
+- O histórico do git contém PATs do Supabase e credenciais de admin/clientes em texto
+  claro (arquivo de handoff, já removido do worktree) — confirmar e exigir rotação +
+  expurgo do histórico. Ver docs/ProjectDocs/08-SEGURANCA.md §11.2.1.
 - .env reais versionados? Conferir .gitignore e git ls-files.
 - CORS default (qualquer localhost) e tratamento de '*' com credentials.
 - trust proxy=1 vs spoofing de X-Forwarded-For fora da Vercel.
@@ -492,12 +497,13 @@ algum. Modele as 5 principais cadeias de ataque ponta a ponta.
 ## Área 8 — Qualidade de Código & Arquitetura
 
 ```text
-PAPEL: Arquiteto/tech lead revisando manutenibilidade. Modelo: Opus 4.8, esforço NO
+PAPEL: Arquiteto/tech lead revisando manutenibilidade. Modelo: o mais capaz
+disponível, esforço NO
 MÁXIMO. Pense a fundo. Review READ-ONLY.
 
 CONTEXTO: Projeto cresceu em "fases". Mesmo handler roda em Vercel e Express
-(api/* + routes/*). Front sem TS. Há docs extensos em docs/ProjectDocs e um HANDOFF.md
-que diz que parte das mudanças recentes (cupons, upload) não foi totalmente auditada.
+(api/* + routes/*). Front sem TS. Docs extensos em docs/ProjectDocs; retratos datados de
+revisões anteriores em docs/reviews/.
 
 ESCOPO (amostragem ampla + pontos estruturais):
 - Estrutura geral: api/, lib/, routes/, middleware/, services/, validation/, utils/,
@@ -509,8 +515,8 @@ ESCOPO (amostragem ampla + pontos estruturais):
   useProductFilters.js — coesão, tamanho, testabilidade.
 - Consistência: convenções de nome, padrão de erro (utils/app-error.js usado em todo
   lugar?), idioma (pt/en misturados), estilo de export, async/await vs promises.
-- Dead code / inconsistência doc×código: itens do HANDOFF.md e docs/13-ROADMAP-
-  PENDENCIAS.md ainda válidos? Referências a arquivos removidos (ex.: TrustBadgeRow)?
+- Dead code / inconsistência doc×código: itens de docs/ProjectDocs/13-ROADMAP-
+  PENDENCIAS.md ainda válidos? Referências a arquivos removidos?
 - Configs: package.json scripts, vite.config.js, tailwind.config.js, lighthouserc.json
   — coerência e itens obsoletos.
 
@@ -524,8 +530,8 @@ O QUE AUDITAR:
 5. Legibilidade: funções longas, aninhamento profundo, nomes, comentários úteis vs
    ruído, números mágicos.
 6. Gestão de dependências: libs não usadas (zod no front?), libs redundantes.
-7. Riscos de manutenção apontados no próprio HANDOFF (cupons/upload não auditados,
-   pendências) — confirmar estado atual.
+7. Riscos de manutenção apontados nos retratos de docs/reviews/ — confirmar estado
+   atual de cada um.
 8. TODO/FIXME/HACK e código comentado.
 
 Formato de saída padrão (mas severidade aqui = "dívida técnica": ALTO = trava evolução
@@ -538,7 +544,8 @@ ou esconde bugs; MÉDIO = atrito recorrente; BAIXO = cosmético). Entregue tamb�
 ## Área 9 — Testes & Confiabilidade
 
 ```text
-PAPEL: Engenheiro de qualidade/SDET sênior. Modelo: Opus 4.8, esforço NO MÁXIMO.
+PAPEL: Engenheiro de qualidade/SDET sênior. Modelo: o mais capaz
+disponível, esforço NO MÁXIMO.
 Pense a fundo. Review READ-ONLY.
 
 CONTEXTO: Testes com Vitest (+ Testing Library, jsdom). Há ~12 arquivos de teste
@@ -588,7 +595,8 @@ Formato de saída padrão. Entregue: (a) matriz "módulo crítico × tem teste? 
 ## Área 10 — DevOps, Deploy & Configuração
 
 ```text
-PAPEL: Engenheiro de plataforma/DevOps sênior. Modelo: Opus 4.8, esforço NO MÁXIMO.
+PAPEL: Engenheiro de plataforma/DevOps sênior. Modelo: o mais capaz
+disponível, esforço NO MÁXIMO.
 Pense a fundo. Review READ-ONLY.
 
 CONTEXTO: Deploy na Vercel (funções api/*.js). Dev local com Express (server.js) +
@@ -604,9 +612,7 @@ ESCOPO:
   segredos) — completude e consistência das variáveis exigidas
 - .github/workflows/* (CI/CD, cron de e-mail, lighthouse) e .github/appmod/*
 - supabase/ (fluxo de migrations, ordem, idempotência; pg_cron precisa de extensão)
-- docs/ProjectDocs/12-DEPLOY-OPERACAO.md, docs/RELEASE-CHECKLIST.md,
-  docs/ProjectDocs/03-SETUP.md,
-  docs/SUPABASE-SETUP.md, scripts/*
+- docs/ProjectDocs/12-DEPLOY-OPERACAO.md, docs/ProjectDocs/03-SETUP.md, scripts/*
 
 O QUE AUDITAR:
 1. Boot/validação de ambiente: server.js exige os segredos certos em prod (lista
@@ -625,7 +631,7 @@ O QUE AUDITAR:
    ordem.
 7. Build/artefatos: dist/ e tcc-build/ versionados por engano? .gitignore adequado?
    Source maps expostos em prod? Tamanho de bundle.
-8. Operação: healthcheck, observabilidade, rollback, runbook (RELEASE-CHECKLIST
+8. Operação: healthcheck, observabilidade, rollback, runbook (12-DEPLOY-OPERACAO §5
    cobre o essencial?), backup do banco.
 
 PONTOS QUENTES (CONFIRMAR):
