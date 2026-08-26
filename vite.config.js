@@ -91,7 +91,7 @@ export default defineConfig({
           // é o mesmo recorte de runtime, e mantê-los alinhados evita que uma
           // suíte nova (routes/, middleware/…) caia sem querer no jsdom.
           include: [
-            'api/**/*.test.js',
+            'handlers/**/*.test.js',
             'lib/**/*.test.js',
             'routes/**/*.test.js',
             'middleware/**/*.test.js',
@@ -128,7 +128,7 @@ export default defineConfig({
       // threshold vira número sem significado.
       include: [
         'src/**/*.{js,jsx}',
-        'api/**/*.js',
+        'handlers/**/*.js',
         'lib/**/*.js',
         'services/**/*.js',
         'validation/**/*.js',

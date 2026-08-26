@@ -160,7 +160,7 @@ REACTIVATION_DAYS_MAX=180         # máximo de dias p/ reativação
 VIP_LTV_THRESHOLD=300             # limiar de LTV (R$) p/ marcar cliente VIP na segmentação
 ```
 
-Usadas por `api/cron-email-jobs.js` e `lib/customer-segmentation.js`.
+Usadas por `handlers/cron-email-jobs.js` e `lib/customer-segmentation.js`.
 
 ---
 

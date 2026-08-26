@@ -43,3 +43,8 @@ coverage/
 # Temporary files
 *.tmp
 temp/
+
+# Acrescentado pelo CLI da Vercel (`vercel link` / `vercel env pull`).
+# O `.vercel` já está coberto acima; `.env*` amplia para qualquer .env novo
+# — foi exatamente um .env.production commitado que vazou credencial em março.
+.env*

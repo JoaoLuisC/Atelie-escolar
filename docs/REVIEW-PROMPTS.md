@@ -6,7 +6,7 @@
 > objetivo coletivo é cobrir **todo** o projeto sob lentes diferentes.
 >
 > Gerado a partir de uma leitura completa do repositório (React 19 + Vite no front;
-> Express 5 + funções serverless `api/*.js` na Vercel; Supabase/Postgres + RLS;
+> Express 5; na Vercel uma função (`api/index.js`) serve os handlers de `handlers/`; Supabase/Postgres + RLS;
 > Mercado Pago; Nodemailer/Resend).
 
 ---
@@ -84,17 +84,17 @@ webhook). Preços/descontos devem ser calculados no servidor. Pós-pagamento ger
 "download tokens" de uso único para baixar o arquivo do produto.
 
 ESCOPO — leia CADA arquivo por inteiro:
-- api/create-payment.js
-- api/verify-payment.js
-- api/webhook.js
-- api/validate-coupon.js
-- api/abandoned-cart.js
-- api/download.js
+- handlers/create-payment.js
+- handlers/verify-payment.js
+- handlers/webhook.js
+- handlers/validate-coupon.js
+- handlers/abandoned-cart.js
+- handlers/download.js
 - lib/mercadopago-config.js
 - lib/storage-signed-url.js
 - validation/payment.schemas.js
 - routes/payment.routes.js
-- api/__tests__/webhook-signature.test.js
+- handlers/__tests__/webhook-signature.test.js
 - server.js (apenas a parte de rate limit / body parser / trust proxy)
 
 O QUE AUDITAR:
@@ -120,7 +120,7 @@ O QUE AUDITAR:
 8. Validação de entrada (zod) cobre todos os campos? Limites de tamanho de body?
 
 PONTOS QUENTES (hipóteses a CONFIRMAR no código atual):
-- Possível bypass de assinatura quando runtimeEnv === 'test' em api/webhook.js.
+- Possível bypass de assinatura quando runtimeEnv === 'test' em handlers/webhook.js.
 - Fallback de WEBHOOK_SECRET para MERCADOPAGO_ACCESS_TOKEN em lib/mercadopago-config.js.
 - Update incondicional do pedido no webhook (sobrescreve completed_at; sem checar
   estado anterior).
@@ -151,10 +151,10 @@ ESCOPO — leia CADA arquivo por inteiro:
 - lib/admin-session.js
 - lib/customer-session.js
 - lib/admin-audit.js
-- api/admin-login.js
-- api/admin-session.js
-- api/admin-logout.js
-- api/me-delete-account.js
+- handlers/admin-login.js
+- handlers/admin-session.js
+- handlers/admin-logout.js
+- handlers/me-delete-account.js
 - services/supabase-auth.js
 - src/services/admin-auth.js
 - src/services/customer-auth.js
@@ -391,10 +391,10 @@ pg_cron. Trata-se de conformidade com a LGPD (Lei 13.709/2018).
 
 ESCOPO:
 - src/utils/consent.js, src/components/ConsentBanner.jsx
-- src/utils/analytics.js, src/utils/attribution.js, api/track-event.js,
+- src/utils/analytics.js, src/utils/attribution.js, handlers/track-event.js,
   lib/analytics-events.js
-- api/me-delete-account.js (fluxo de exclusão/anonimização)
-- api/subscribe.js, confirm-subscription.js, unsubscribe.js (double opt-in)
+- handlers/me-delete-account.js (fluxo de exclusão/anonimização)
+- handlers/subscribe.js, confirm-subscription.js, unsubscribe.js (double opt-in)
 - supabase/migrations/*.sql (retenção/purge, colunas de PII, anonimização)
 - src/pages/LegalPages.jsx (política de privacidade/termos)
 - docs/ProjectDocs/08-SEGURANCA.md, 10-MARKETING-ANALYTICS.md,
@@ -549,11 +549,11 @@ disponível, esforço NO MÁXIMO.
 Pense a fundo. Review READ-ONLY.
 
 CONTEXTO: Testes com Vitest (+ Testing Library, jsdom). Há ~12 arquivos de teste
-espalhados (api/__tests__, lib/__tests__, validation/__tests__, src/**/__tests__).
+espalhados (handlers/__tests__, lib/__tests__, validation/__tests__, src/**/__tests__).
 CI no GitHub Actions. Funções de pagamento, auth e RLS são as de maior risco.
 
 ESCOPO:
-- TODOS os arquivos *.test.* do repo (api/__tests__, lib/__tests__,
+- TODOS os arquivos *.test.* do repo (handlers/__tests__, lib/__tests__,
   validation/__tests__, src/pages/__tests__, src/utils/__tests__, etc.)
 - src/test/setupTests.js, vitest config (vite.config.js / package.json)
 - .github/workflows/* (pipelines de teste/lint/build), lighthouserc.json

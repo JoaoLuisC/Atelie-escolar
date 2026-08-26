@@ -6,16 +6,16 @@
 
 ## Stack de deploy
 
-| Componente               | Onde                          | Como atualiza                                   |
-| ------------------------ | ----------------------------- | ----------------------------------------------- |
-| Frontend                 | Vercel (static)               | `git push` → build automático                   |
-| API                      | Vercel (serverless functions) | idem, cada `api/**/*.js` vira função            |
-| Banco                    | Supabase (managed)            | `supabase db push` ou Dashboard                 |
-| Storage (arquivos)       | Supabase Storage              | Upload manual ou via API                        |
-| Cron de e-mails          | GitHub Actions                | `.github/workflows/email-cron.yml`              |
-| CI (testes + Lighthouse) | GitHub Actions                | `.github/workflows/test.yml` + `lighthouse.yml` |
-| DNS                      | Provedor do domínio           | manual                                          |
-| E-mail                   | Resend                        | gerenciado, sem deploy                          |
+| Componente               | Onde                             | Como atualiza                                   |
+| ------------------------ | -------------------------------- | ----------------------------------------------- |
+| Frontend                 | Vercel (static)                  | `git push` → build automático                   |
+| API                      | Vercel (UMA serverless function) | idem; `api/index.js` serve todos os handlers    |
+| Banco                    | Supabase (managed)               | `supabase db push` ou Dashboard                 |
+| Storage (arquivos)       | Supabase Storage                 | Upload manual ou via API                        |
+| Cron de e-mails          | GitHub Actions                   | `.github/workflows/email-cron.yml`              |
+| CI (testes + Lighthouse) | GitHub Actions                   | `.github/workflows/test.yml` + `lighthouse.yml` |
+| DNS                      | Provedor do domínio              | manual                                          |
+| E-mail                   | Resend                           | gerenciado, sem deploy                          |
 
 ---
 

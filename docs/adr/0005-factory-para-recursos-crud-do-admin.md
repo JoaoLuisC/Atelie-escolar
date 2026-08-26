@@ -4,7 +4,7 @@
 
 ## Contexto
 
-`api/admin/products.js`, `categories.js`, `coupons.js`, `orders.js` e `users.js` terminavam com o
+`handlers/admin/products.js`, `categories.js`, `coupons.js`, `orders.js` e `users.js` terminavam com o
 **mesmo bloco de ~55 linhas**, replicado caractere por caractere — inclusive o comentário
 `// Auditoria de escrita (regra I1) — best-effort.` e o mapa `actionByMethod`. Diferiam em
 exatamente três coisas: o `targetType` da auditoria, a chave do recurso na resposta e a mensagem
@@ -77,7 +77,7 @@ Corolários que não são negociáveis:
 
 **Ruins.**
 
-- Uma indireção a mais entre a URL e o código do recurso: quem lê `api/admin/orders.js` precisa
+- Uma indireção a mais entre a URL e o código do recurso: quem lê `handlers/admin/orders.js` precisa
   abrir `lib/admin-resource-handler.js` para ver o topo do handler. Mitigado por o mapa de
   operações estar no fim do arquivo, declarando explicitamente quais métodos existem.
 - Um recurso que precisar de um passo fora da sequência (um rate limit próprio, por exemplo) não

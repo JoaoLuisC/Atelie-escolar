@@ -213,7 +213,7 @@ Toda compra aprovada inicia sequência mínima:
 - D+15: cross-sell baseado em categoria comprada
 - D+45: novidades da mesma categoria
 
-Implementada em `api/cron-email-jobs.js` (roda de hora em hora via GitHub Actions), idempotente via `email_sent_log`.
+Implementada em `handlers/cron-email-jobs.js` (roda de hora em hora via GitHub Actions), idempotente via `email_sent_log`.
 
 #### D5. Segmentação por categoria, não por individualização
 

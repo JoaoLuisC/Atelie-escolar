@@ -121,12 +121,12 @@ Workflow já roda. Sem token, relatórios vão para `temporary-public-storage`. 
 
 ### 3.4 Wizards admin — ✅ ENTREGUE (2026-05-30)
 
-- ✅ **Editar `faq`/`reviews`/`benefits`** — aba "Conversão" no `ProductWizard.jsx` com editores de benefícios, FAQ e depoimentos; gravado por `api/admin/products.js`.
-- ✅ **CRUD de cupons** — aba "Cupons" no painel (`CouponsTab` + `CouponWizard`) com endpoint `api/admin/coupons.js` (GET/POST/PUT/DELETE). Validação no checkout segue em `validate-coupon.js`.
+- ✅ **Editar `faq`/`reviews`/`benefits`** — aba "Conversão" no `ProductWizard.jsx` com editores de benefícios, FAQ e depoimentos; gravado por `handlers/admin/products.js`.
+- ✅ **CRUD de cupons** — aba "Cupons" no painel (`CouponsTab` + `CouponWizard`) com endpoint `handlers/admin/coupons.js` (GET/POST/PUT/DELETE). Validação no checkout segue em `validate-coupon.js`.
 
 ### 3.5 Validar Google OAuth em produção
 
-> ℹ️ **O código está completo de ponta a ponta** — botão "Continuar com Google" + `signInWithOAuth` + callback `/api/auth/customer/google/callback` (`api/auth/customer/google/callback.js`) que valida o token no Supabase e crava cookie HttpOnly. Não é "só wirado".
+> ℹ️ **O código está completo de ponta a ponta** — botão "Continuar com Google" + `signInWithOAuth` + callback `/api/auth/customer/google/callback` (`handlers/auth/customer/google/callback.js`) que valida o token no Supabase e crava cookie HttpOnly. Não é "só wirado".
 
 Resta apenas **validar em produção**: o Supabase exige a URL no `uri_allow_list` (ver `scripts/configure-auth.js`) — config de runtime, não código.
 
@@ -139,7 +139,7 @@ Resta apenas **validar em produção**: o Supabase exige a URL no `uri_allow_lis
 
 ### 3.7 Login admin com Google (OAuth) — futuro
 
-Hoje o painel só aceita e-mail + senha + 2FA opcional (`api/admin/login.js`). Cliente já tem Google OAuth funcionando — dá pra reusar a infra.
+Hoje o painel só aceita e-mail + senha + 2FA opcional (`handlers/admin/login.js`). Cliente já tem Google OAuth funcionando — dá pra reusar a infra.
 
 **Para implementar:**
 
@@ -155,7 +155,7 @@ Hoje o painel só aceita e-mail + senha + 2FA opcional (`api/admin/login.js`). C
 
 ### 3.8 LGPD self-service: direito ao esquecimento — ✅ IMPLEMENTADO
 
-> **Entregue.** Fluxo ponta a ponta em `api/me-delete-account.js` (anonimização,
+> **Entregue.** Fluxo ponta a ponta em `handlers/me-delete-account.js` (anonimização,
 > limpeza de tokens, unsubscribe, confirmação por e-mail em 2 passos), rota com
 > rate-limit em `routes/api-compat.routes.js`, UI em `src/pages/CustomerAuthPage.jsx`
 > e client em `src/services/customer-auth.js`. Mantido abaixo como registro histórico.
@@ -282,7 +282,7 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 | 2026-05-24 | **Fase 4 entregue** — Curva ABC produtos + clientes + coorte mensal + KPIs (LTV, recompra, LTV/CAC) + aba Análise com Pareto + heatmap + export CSV                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 2026-05-24 | **Decisão registrada:** stack 100% gratuito até Fase 4; Fase 5 (mídia paga) só quando dados justificarem                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 2026-05-24 | **Documentação consolidada** em `docs/ProjectDocs/` — 13 documentos numerados como fonte única                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| 2026-05-30 | **§3.4 fechada — Wizards admin** — aba "Conversão" no `ProductWizard` (FAQ/depoimentos/benefícios) + CRUD de cupons no painel (`CouponsTab`/`CouponWizard`/`api/admin/coupons.js`). Produtos e cupons deixam de depender de SQL bruto.                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-05-30 | **§3.4 fechada — Wizards admin** — aba "Conversão" no `ProductWizard` (FAQ/depoimentos/benefícios) + CRUD de cupons no painel (`CouponsTab`/`CouponWizard`/`handlers/admin/coupons.js`). Produtos e cupons deixam de depender de SQL bruto.                                                                                                                                                                                                                                                                                                                                                                              |
 | 2026-05-30 | **§3.2 e §3.6 fechadas — Acessibilidade + guard rail** — toques ≥ 44px (hambúrguer, menu mobile, CTAs dos cards), hierarquia reduzida no menu mobile, line-clamp confirmado e bloqueio de upload de imagem > 500kB.                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 2026-05-30 | **Reconciliação de documentação** — features já no código mas ausentes do histórico mapeadas: CRUD de Categorias, Vitrine configurável, abas Faturamento/Desempenho/Comparativo/Segurança (2FA pela UI), Cross-sell, upload assinado, cleanup manual de analytics. §3.5 (Google OAuth do cliente) reclassificada de "wirado" para "código completo, falta validar em prod".                                                                                                                                                                                                                                              |
 | 2026-07-01 | **Hardening Fase 5** — `admin_audit_log` append-only (revoke + triggers anti update/delete), dedup + UNIQUE `(order_id, product_id)` em `download_tokens` (webhooks MP reentregues) e `increment_coupon_usage()` atômico respeitando `max_uses`.                                                                                                                                                                                                                                                                                                                                                                         |

@@ -1,13 +1,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const dotenv = require('dotenv');
-const express = require('express');
-const cors = require('cors');
-const { createSecurityMiddleware } = require('./lib/security-headers');
 const rateLimit = require('express-rate-limit');
-const authRoutes = require('./routes/auth.routes');
-const apiCompatRoutes = require('./routes/api-compat.routes');
-const { notFoundHandler, errorHandler } = require('./middleware/error.middleware');
+const { createApiApp } = require('./lib/express-app');
+const { errorHandler } = require('./middleware/error.middleware');
 const { ERROR_CODES, fail } = require('./lib/http');
 
 function loadEnvFiles() {
@@ -72,78 +68,21 @@ if (RUNTIME_ENV === 'production') {
 }
 
 const PORT = 3000;
-const app = express();
-
-// Atrás do load-balancer da Vercel (1 hop). Sem isto:
-//   • req.ip vira o IP do balancer, não do cliente real;
-//   • express-rate-limit rateia o LB inteiro como um único IP;
-//   • o log do webhook (event=webhook_invalid_signature) registra
-//     o IP errado, inutilizando alertas por origem.
-// Em dev (sem proxy), trust proxy=1 é seguro: o LOCALHOST_ORIGIN_PATTERN
-// abaixo já restringe a origem e não há X-Forwarded-For real para falsear.
-app.set('trust proxy', 1);
-
-const LOCALHOST_ORIGIN_PATTERN = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
-
-function buildCorsConfig() {
-  const allowedOrigins = String(process.env.CORS_ORIGINS || '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-  // Default (sem CORS_ORIGINS): libera QUALQUER porta de localhost/127.0.0.1.
-  // Vite pode subir em 5173, 5174, 5175... dependendo de portas ocupadas.
-  if (!allowedOrigins.length) {
-    return {
-      origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        if (LOCALHOST_ORIGIN_PATTERN.test(origin)) return callback(null, true);
-        return callback(new Error(`CORS: origem ${origin} não permitida em dev.`));
-      },
-      credentials: true,
-    };
-  }
-
-  // Wildcard + credentials é incompatível com browsers e expõe a API.
-  // Quando '*' está configurado, refletimos a origem sem credentials.
-  if (allowedOrigins.includes('*')) {
-    return {
-      origin: true,
-      credentials: false,
-    };
-  }
-
-  return {
-    origin: allowedOrigins,
-    credentials: true,
-  };
-}
-
-app.disable('x-powered-by');
-app.use(createSecurityMiddleware({ runtimeEnv: RUNTIME_ENV }));
-app.use(cors(buildCorsConfig()));
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
 // ════════════════════════════════════════════════════════════════════
 // LIMITADOR DE BORDA — genérico, e só isso (ADR 0007).
 //
-// Este é o ÚNICO `express-rate-limit` que sobrou. Ele não é a política de
-// rate limit do produto: a política é `enforceRateLimit` dentro de cada
-// handler (regra E1), com contador no Postgres, e vale em desenvolvimento E
-// em produção. Este aqui é rede contra loop acidental de script local, e
-// existe porque `server.js` não roda na Vercel — então nada que dependa dele
-// pode ser tratado como proteção.
+// Este é o ÚNICO `express-rate-limit` que sobrou, e ele é EXCLUSIVO do
+// Express local: `createApiApp` não o inclui, então a função serverless de
+// produção não o tem. Ele não é a política de rate limit do produto — a
+// política é `enforceRateLimit` dentro de cada handler (regra E1), com
+// contador no Postgres, e vale nos dois ambientes. Este aqui é rede contra
+// loop acidental de script local.
 //
-// Os NOVE limitadores por rota de `routes/api-compat.routes.js` e o de login
-// de `routes/auth.routes.js` foram removidos: eles davam a dev um
-// comportamento que a cliente nunca encontrava, inclusive nos endpoints de
-// login, onde limite é controle de segurança e não de custo.
-//
-// `AUTH_RATE_LIMIT_MAX` saiu junto pelo mesmo motivo: um teto mais apertado
-// em /api/auth só no Express é exatamente a política falsa que o ADR proíbe —
-// em produção quem contém login é RATE_LIMITS.customerLogin, com dois baldes
-// e forma completamente diferente.
+// Manter isto fora do app compartilhado é deliberado: um limitador de
+// processo não sobrevive a serverless (cada invocação pode ser instância
+// nova, regra E2), então promovê-lo a produção só criaria a ilusão de
+// proteção que o ADR 0007 existe para impedir.
 // ════════════════════════════════════════════════════════════════════
 const edgeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -152,8 +91,7 @@ const edgeLimiter = rateLimit({
   legacyHeaders: false,
   // Envelope da regra A1, com o código estável da A2. Sem isto o
   // express-rate-limit responde texto puro ("Too many requests…") e o cliente
-  // recebe um formato que não existe em nenhum outro lugar da API — que era o
-  // item P1.4.
+  // recebe um formato que não existe em nenhum outro lugar da API.
   handler: (_req, res) =>
     fail(res, {
       status: 429,
@@ -162,23 +100,16 @@ const edgeLimiter = rateLimit({
     }),
 });
 
-app.use('/api', edgeLimiter);
+const app = createApiApp({
+  runtimeEnv: RUNTIME_ENV,
+  beforeRoutes: (instance) => instance.use('/api', edgeLimiter),
+});
 
+// Rota só do Express local — não existe na Vercel, e o checklist de release
+// registra isso para ninguém usar /health como smoke test de produção.
 app.get('/health', (_req, res) => {
   return res.status(200).json({ ok: true, service: 'api', port: PORT });
 });
-
-// SEO endpoints servidos na raiz (espelho da rota /api/sitemap.xml na Vercel)
-const sitemapHandler = require('./api/sitemap.xml');
-app.get('/sitemap.xml', (req, res, next) => Promise.resolve(sitemapHandler(req, res)).catch(next));
-
-// Ordem importa: authRoutes expõe /auth/customer/* (handlers compartilhados
-// com api/auth/*.js) e apiCompatRoutes monta o restante de api/*.js. Não há
-// mais um "BFF" Express próprio — todo endpoint servido aqui é o MESMO módulo
-// que a Vercel publica como função, para que dev e produção não divirjam.
-app.use('/api', authRoutes);
-app.use('/api', apiCompatRoutes);
-app.use('/api', notFoundHandler);
 
 app.use((_req, res) => {
   return res.status(404).json({

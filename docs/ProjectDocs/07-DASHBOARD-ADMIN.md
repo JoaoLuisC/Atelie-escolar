@@ -121,7 +121,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 **Ações.**
 
-- **Nova categoria** → `CategoryWizard` (nome, cor, featured, ativa; o slug é gerado automaticamente pelo endpoint a partir do nome — `normalizeSlug` em `api/admin/categories.js`; o trigger de slug no banco existe só para `products`)
+- **Nova categoria** → `CategoryWizard` (nome, cor, featured, ativa; o slug é gerado automaticamente pelo endpoint a partir do nome — `normalizeSlug` em `handlers/admin/categories.js`; o trigger de slug no banco existe só para `products`)
 - **Editar**
 - **Excluir** (com `confirm`; produtos vinculados ficam com `category_id = null` — a FK é `on delete set null`)
 

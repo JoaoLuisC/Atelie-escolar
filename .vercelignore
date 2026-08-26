@@ -1,12 +1,15 @@
 # O que NÃO sobe para o deploy da Vercel.
 #
-# Por que isso importa além de tamanho: com a configuração `functions`
-# (zero-config), TODO arquivo .js dentro de api/ vira uma função serverless
-# publicada. Um arquivo de teste esquecido ali viraria endpoint público.
+# Por que isso importa além de tamanho: TODO arquivo .js dentro de api/ vira
+# uma função serverless publicada, e o plano Hobby permite 12 por deployment.
+# Por isso api/ contém UM arquivo só (index.js) e os 44 handlers moram em
+# handlers/ — que PRECISA subir, porque a função os carrega via
+# routes/*.routes.js. Um arquivo de teste esquecido dentro de api/ viraria
+# endpoint público E consumiria uma das 12 vagas.
 # E o bundle enxuto encurta o tempo de upload/build de cada deploy.
 
 # Testes — nem as funções de api/ nem o bundle do front os importam.
-api/__tests__
+handlers/__tests__
 **/__tests__
 **/*.test.js
 **/*.test.jsx

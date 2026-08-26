@@ -125,7 +125,7 @@ const BASE_RULES = {
 // Árvores que rodam em Node (funções serverless da Vercel, Express de dev,
 // scripts de manutenção). Tudo CommonJS.
 const NODE_FILES = [
-  'api/**/*.js',
+  'handlers/**/*.js',
   'lib/**/*.js',
   'routes/**/*.js',
   'middleware/**/*.js',

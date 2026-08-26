@@ -36,7 +36,7 @@ Login com e-mail/senha e cadastro do cliente passam pelo BFF (`/api/auth/custome
 3. **Cookies HttpOnly.** Sessão de admin e de cliente ficam em cookies que o JS não acessa — defesa contra XSS.
 4. **Integração com Mercado Pago.** O `access_token` do MP precisa ficar no servidor; webhook precisa de endpoint público estável.
 5. **Rate-limit em um mecanismo só.** A política vale nos dois ambientes: `enforceRateLimit` (`lib/rate-limit.js`) conta no Postgres, que é o único estado que todas as funções serverless enxergam. O `express-rate-limit` de borda do `server.js` é conveniência de dev, não a política ([ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md)).
-6. **Compatibilidade com Vercel.** Cada arquivo em `api/` vira função serverless automática; em dev, o Express monta os mesmos handlers via `api-compat.routes.js`.
+6. **Uma função serverless só.** O plano Hobby publica no máximo 12 funções por deployment e o projeto tem 44 handlers. `api/index.js` é a única função: ela serve o mesmo app Express (`lib/express-app.js`) que o `server.js` usa em dev, e os handlers moram em `handlers/`. O endpoint continua sendo o mesmo módulo nos dois ambientes ([ADR 0002](../adr/0002-handler-unico-para-vercel-e-express.md)).
 
 ---
 
@@ -45,7 +45,8 @@ Login com e-mail/senha e cadastro do cliente passam pelo BFF (`/api/auth/custome
 ```
 Atelie-escolar/
 │
-├── api/                                  # ❶ Endpoints serverless (Vercel) + montados no Express em dev
+├── api/                                  # ❶ A ÚNICA função serverless: index.js roteia tudo p/ o app Express
+├── handlers/                             #    Endpoints — carregados pela função e pelo Express de dev
 │   ├── __tests__/                        # Testes dos endpoints
 │   ├── auth/customer/                    # login.js / register.js / session.js / logout.js
 │   │   └── google/                       # start.js / callback.js (OAuth Google)
@@ -231,14 +232,14 @@ Atelie-escolar/
 
 | Quero alterar…               | Comece por                                                                                                                                                                                                                                                                       |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth do admin                | [`lib/admin-session.js`](../../lib/admin-session.js), [`api/admin/login.js`](../../api/admin/login.js), [`src/services/admin-auth.js`](../../src/services/admin-auth.js)                                                                                                         |
+| Auth do admin                | [`lib/admin-session.js`](../../lib/admin-session.js), [`handlers/admin/login.js`](../../api/admin/login.js), [`src/services/admin-auth.js`](../../src/services/admin-auth.js)                                                                                                    |
 | Auth do cliente              | [`lib/customer-auth-handlers.js`](../../lib/customer-auth-handlers.js), [`lib/customer-session.js`](../../lib/customer-session.js), `api/auth/customer/**`                                                                                                                       |
 | Layout do painel             | [`src/components/admin/AdminLayout.jsx`](../../src/components/admin/AdminLayout.jsx), [`src/pages/AdminPage.jsx`](../../src/pages/AdminPage.jsx)                                                                                                                                 |
-| Wizard de produto e upload   | [`src/components/ProductWizard.jsx`](../../src/components/ProductWizard.jsx), [`api/admin/upload-url.js`](../../api/admin/upload-url.js), `uploadProductAsset` em [`src/services/admin-panel.js`](../../src/services/admin-panel.js)                                             |
+| Wizard de produto e upload   | [`src/components/ProductWizard.jsx`](../../src/components/ProductWizard.jsx), [`handlers/admin/upload-url.js`](../../api/admin/upload-url.js), `uploadProductAsset` em [`src/services/admin-panel.js`](../../src/services/admin-panel.js)                                        |
 | Curva ABC                    | [`lib/abc-classification.js`](../../lib/abc-classification.js) (backend) e [`src/utils/abc.js`](../../src/utils/abc.js) (browser) — os dois têm teste de paridade; `api/admin/abc-{products,customers}.js`; [`AnalysisTab.jsx`](../../src/components/admin/tabs/AnalysisTab.jsx) |
-| Storage e downloads          | [`lib/storage-signed-url.js`](../../lib/storage-signed-url.js), [`api/download.js`](../../api/download.js)                                                                                                                                                                       |
-| Cupons                       | [`lib/coupons.js`](../../lib/coupons.js), [`api/validate-coupon.js`](../../api/validate-coupon.js), [`api/admin/coupons.js`](../../api/admin/coupons.js), [`CouponsTab.jsx`](../../src/components/admin/tabs/CouponsTab.jsx)                                                     |
-| Cron de e-mail               | [`api/cron-email-jobs.js`](../../api/cron-email-jobs.js), [`.github/workflows/email-cron.yml`](../../.github/workflows/email-cron.yml)                                                                                                                                           |
+| Storage e downloads          | [`lib/storage-signed-url.js`](../../lib/storage-signed-url.js), [`handlers/download.js`](../../api/download.js)                                                                                                                                                                  |
+| Cupons                       | [`lib/coupons.js`](../../lib/coupons.js), [`handlers/validate-coupon.js`](../../api/validate-coupon.js), [`handlers/admin/coupons.js`](../../api/admin/coupons.js), [`CouponsTab.jsx`](../../src/components/admin/tabs/CouponsTab.jsx)                                           |
+| Cron de e-mail               | [`handlers/cron-email-jobs.js`](../../api/cron-email-jobs.js), [`.github/workflows/email-cron.yml`](../../.github/workflows/email-cron.yml)                                                                                                                                      |
 | Rate limit                   | [`lib/rate-limit.js`](../../lib/rate-limit.js) e a migration `20260813000000_rate_limit.sql` ([ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md))                                                                                                                             |
 | Envelope de resposta / erros | [`lib/http.js`](../../lib/http.js) ([ADR 0004](../adr/0004-envelope-de-resposta-e-codigo-de-erro.md))                                                                                                                                                                            |
 | Header/footer do cliente     | [`src/components/Shell.jsx`](../../src/components/Shell.jsx)                                                                                                                                                                                                                     |
@@ -256,7 +257,7 @@ Browser → fetch /api/products?category=alfabetizacao
 Express :3000
        → middleware/cors → middleware/rate-limit (250/15min)
        → routes/api-compat.routes.js
-       → api/products.js
+       → handlers/products.js
        → lib/supabase.js (service_role)
        → Supabase REST (RLS pulado pelo service_role)
        → JSON volta
@@ -271,7 +272,7 @@ Browser → fetch /api/admin/orders + cookie admin_session
 Express :3000
        → middleware/cors + middleware/rate-limit
        → routes/api-compat.routes.js
-       → api/admin/orders.js
+       → handlers/admin/orders.js
        → ensureAdminSession() valida HMAC do cookie
        → 401 se inválido | continua se válido
        → lib/supabase.js (service_role)
@@ -288,7 +289,7 @@ Mercado Pago → POST https://app.com/api/webhook
             → headers: x-signature: ts=…,v1=hash
 Express :3000
        → middleware/rate-limit (global 250/15min; webhook sem limiter dedicado)
-       → api/webhook.js
+       → handlers/webhook.js
        → validateWebhookSignature() → HMAC-SHA256 com WEBHOOK_SECRET
        → 401 se inválido | continua se válido
        → mercadopago.payment.get(paymentId)
@@ -392,9 +393,10 @@ Express :3000
 ### `vercel.json`
 
 - Build estático em `dist/` (frontend)
-- Cada `api/**/*.js` vira função serverless (o caminho do arquivo é a rota; ex.: `api/auth/customer/login.js` → `/api/auth/customer/login`)
-- Rotas em ordem: headers de segurança em todas as respostas (HSTS, CSP, X-Frame-Options etc., com `continue`); `/api/*` → `/api/$1`; `/sitemap.xml` → `/api/sitemap.xml`; filesystem (estáticos); `/api/*` sem função → `/api/notfound` (404 JSON); `/*` → `/index.html` (SPA fallback)
-- Os `dest` são **caminhos de rota, sem `.js`** — sob zero-config a Vercel publica `api/x.js` na rota `/api/x`. E o handler do 404 **não pode** voltar a se chamar `_notfound.js`: arquivos de `api/` prefixados com `_` não viram função, o `dest` não resolveria e todo `/api/*` inexistente cairia no SPA fallback, respondendo HTML com status 200
+- **Uma** função serverless: `api/index.js`, com `maxDuration: 60` — teto do plano Hobby, e o que o cron de e-mail precisa
+- Rotas em ordem: headers de segurança em todas as respostas (HSTS, CSP, X-Frame-Options etc., com `continue`); `/api/admin-*` → função com `__path=admin/*` (regra A6); `/api/*` → função; `/sitemap.xml` → função; filesystem (estáticos); `/*` → `/index.html` (SPA fallback)
+- O caminho original viaja no parâmetro `__path` porque um `dest` da Vercel **reescreve** `req.url`: sem ele toda requisição chegaria na função como `/api/index` e o Express não saberia qual endpoint era. `api/index.js` remonta a URL antes de entregar ao app, preservando a query original
+- `/api/*` inexistente responde 404 JSON pelo `notFoundHandler` do próprio Express, não mais por uma rota do `vercel.json`. O endpoint `/api/notfound` continua existindo por si (montado em `routes/api-compat.routes.js`)
 
 ### `tailwind.config.js`
 

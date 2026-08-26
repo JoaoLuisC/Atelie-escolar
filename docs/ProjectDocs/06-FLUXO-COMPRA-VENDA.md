@@ -162,7 +162,7 @@ Diagrama detalhado de cada fluxo em [05-FLUXOS](./05-FLUXOS.md).
 - Cliente logado também vê o histórico via `GET /api/customer-orders` (e-mail vem só do cookie de sessão — anti-IDOR)
 - Renderiza lista de `download_tokens` válidos
 - Cada link aponta para `/api/download?token=Y`
-- Backend (`api/download.js`):
+- Backend (`handlers/download.js`):
   - Valida token: existe + não usado + não expirou
   - Consome o token com claim atômico (`used=false → true`) ANTES de gerar a URL — requisições concorrentes com o mesmo token são barradas
   - Gera signed URL do Supabase Storage com TTL de 5 min
@@ -181,7 +181,7 @@ Diagrama detalhado de cada fluxo em [05-FLUXOS](./05-FLUXOS.md).
 **O que o vendedor precisa garantir**
 
 - Cada produto com `download_url` apontando para path válido no Supabase Storage (ou URL externa, legado)
-- Buckets do Storage criados e arquivos uploadados — o upload do admin usa nomes fixos em `api/admin/upload-url.js` (`product_files` privado para arquivos de download; `product_images` público; `product_videos` privado). A env `SUPABASE_STORAGE_BUCKET` existe no `.env.example`, mas não é usada no fluxo de download (o bucket vem do próprio `download_url`)
+- Buckets do Storage criados e arquivos uploadados — o upload do admin usa nomes fixos em `handlers/admin/upload-url.js` (`product_files` privado para arquivos de download; `product_images` público; `product_videos` privado). A env `SUPABASE_STORAGE_BUCKET` existe no `.env.example`, mas não é usada no fluxo de download (o bucket vem do próprio `download_url`)
 - Testar download de cada produto após upload
 
 ---

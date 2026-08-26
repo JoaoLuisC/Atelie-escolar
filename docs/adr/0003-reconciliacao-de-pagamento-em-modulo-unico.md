@@ -7,8 +7,8 @@
 Existem exatamente **duas portas** que transicionam um pedido para `approved` e emitem
 `download_tokens`, ou seja, que entregam o produto pago:
 
-- `api/webhook.js` — notificação do Mercado Pago;
-- `api/verify-payment.js` — polling do frontend.
+- `handlers/webhook.js` — notificação do Mercado Pago;
+- `handlers/verify-payment.js` — polling do frontend.
 
 O achado P0-1 (revisão de 2026-08-12) foi que a única condição para liberar o produto era
 `payment.status === 'approved'` mais um `external_reference` que resolvesse para um pedido
@@ -56,6 +56,6 @@ na conferência de pagamento.
 que vão divergir na próxima edição. Já divergiram uma vez, na própria correção do achado.
 
 **Testar as duas portas e confiar nos testes.** Os testes de paridade em
-`api/__tests__/payment-integrity.test.js` continuam existindo e valendo — mas eles pegam
+`handlers/__tests__/payment-integrity.test.js` continuam existindo e valendo — mas eles pegam
 divergência no **encaixe** (uma porta que chame a função no lugar errado do fluxo, ou ignore
 o `reason`), que é a classe de bug que sobra depois da extração. Não substituem a extração.

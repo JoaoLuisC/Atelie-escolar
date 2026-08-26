@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 const requireCjs = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..');
-const API_DIR = path.join(REPO_ROOT, 'api');
+const API_DIR = path.join(REPO_ROOT, 'handlers');
 
 /** Todo `api/**\/*.js` que não seja teste, como caminho relativo a `/api`. */
 function listApiRoutePaths(dir = API_DIR, prefix = '') {

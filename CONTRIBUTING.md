@@ -38,8 +38,8 @@ commit**.
 
 **O que segura a regra é o gate, não a disciplina.** Todo número que já tinha sido declarado "0" e
 voltou a subir tinha a mesma coisa em comum: era contagem, não teste. Os que hoje têm gate
-executável não regridem em silêncio — `api/__tests__/envelope-contract.test.js`,
-`api/__tests__/rate-limit-coverage.test.js`, `routes/__tests__/api-route-parity.test.js` e
+executável não regridem em silêncio — `handlers/__tests__/envelope-contract.test.js`,
+`handlers/__tests__/rate-limit-coverage.test.js`, `routes/__tests__/api-route-parity.test.js` e
 `scripts/__tests__/icon-subset.test.js` falham apontando arquivo e linha.
 
 ### Quando a medição contradiz a regra, quem muda é a regra
@@ -114,7 +114,7 @@ Quando A1 estiver aplicada, esse shim sai — é a prova de que a migração ter
 **Regra.** A mensagem é para humano e pode mudar de redação a qualquer momento. O `code` é o
 contrato de máquina: é nele que o frontend ramifica.
 
-**O que motivou.** Só `api/validate-coupon.js` devolve `code`, e em minúsculo (`not_found`,
+**O que motivou.** Só `handlers/validate-coupon.js` devolve `code`, e em minúsculo (`not_found`,
 `not_eligible`). Nos outros o frontend é forçado a comparar texto em português —
 `src/components/admin/utils/format.js` decide se a sessão expirou com:
 
@@ -134,8 +134,8 @@ validação de schema → `try`.
 Ordem fixa transforma "esqueceram o rate limit" num bloco visivelmente ausente, em vez de um
 detalhe enterrado no meio do arquivo.
 
-**O que motivou.** `api/admin-kpis.js` segue exatamente essa ordem em cinco linhas — é o modelo
-a copiar. `api/products.js` não tem nem CORS nem rate limit. A cobertura de CORS administrativo é
+**O que motivou.** `handlers/admin-kpis.js` segue exatamente essa ordem em cinco linhas — é o modelo
+a copiar. `handlers/products.js` não tem nem CORS nem rate limit. A cobertura de CORS administrativo é
 boa (19 arquivos chamam `setAdminCorsHeaders` para 18 handlers `admin-*`); a de rate limit não (ver E1).
 
 > **Correção da regra (18/08/2026).** A primeira redação abria a ordem com "CORS", sem
@@ -161,13 +161,13 @@ boa (19 arquivos chamam `setAdminCorsHeaders` para 18 handlers `admin-*`); a de 
 
 ### A5 · Nome do handler = nome do arquivo em camelCase + `Handler` — `P2`
 
-**Regra.** `api/admin-kpis.js` exporta `adminKpisHandler`.
+**Regra.** `handlers/admin-kpis.js` exporta `adminKpisHandler`.
 
 O nome da função é o que aparece no stack trace da Vercel. `handler` genérico transforma oito
 arquivos em oito frames indistinguíveis.
 
 **O que motivou.** 36 arquivos seguem a convenção. 8 exportam `handler` puro:
-`api/admin-upload-url.js`, `api/notfound.js` e os seis de `api/auth/customer/`.
+`handlers/admin-upload-url.js`, `handlers/notfound.js` e os seis de `api/auth/customer/`.
 
 ### A6 · Uma convenção de URL, não duas — `P2`
 
@@ -176,8 +176,8 @@ arquivos em oito frames indistinguíveis.
 
 Mudança de URL é _breaking_: fazer via rota de compatibilidade, sem pressa.
 
-**O que motivou.** 18 endpoints administrativos eram planos (`api/admin-orders.js`) enquanto os 6
-de autenticação de cliente eram aninhados (`api/auth/customer/login.js`) — o mesmo produto expondo
+**O que motivou.** 18 endpoints administrativos eram planos (`handlers/admin-orders.js`) enquanto os 6
+de autenticação de cliente eram aninhados (`handlers/auth/customer/login.js`) — o mesmo produto expondo
 dois estilos de API.
 
 > **Aplicada.** Os 18 viraram `api/admin/<recurso>.js`; a convenção do produto é a aninhada. As
@@ -207,7 +207,7 @@ configurações:
 | `eslint.config.js` | `NODE_FILES`                                              |
 | `vite.config.js`   | `coverage.include` — mede cobertura de um diretório vazio |
 
-`api/create-payment.js` documenta o buraco na própria linha 15: _"os `max()` do zod em
+`handlers/create-payment.js` documenta o buraco na própria linha 15: _"os `max()` do zod em
 `validation/payment.schemas.js` NUNCA valeram neste caminho"_.
 
 Ordem sugerida ao recriar `validation/`: os endpoints de dinheiro primeiro — `create-payment`,
@@ -396,7 +396,7 @@ retorno por teste escrito, porque um bug ali se manifesta em vários endpoints.
 **O que motivou.** 8 de 21 módulos têm suíte. Sem teste direto, entre outros: `coupons.js` (desconto),
 `sales-counts.js`, `mercadopago-config.js`, `supabase.js`, `email-sender.js`, `abc-classification.js`.
 
-Onde já é forte: as 9 suítes de `api/__tests__/` cobrem o caminho do dinheiro — integridade de
+Onde já é forte: as 9 suítes de `handlers/__tests__/` cobrem o caminho do dinheiro — integridade de
 pagamento, idempotência de webhook, assinatura, download de uso único. Essa priorização é a certa;
 falta estendê-la a `lib/`.
 
@@ -451,15 +451,15 @@ funciona na máquina do desenvolvedor.
 
 **O que motivou.** 11 handlers chamam `enforceRateLimit`. Ficam descobertos em produção:
 
-| Endpoint                 | Observação                 |
-| ------------------------ | -------------------------- |
-| `api/download.js`        | **entrega o arquivo pago** |
-| `api/products.js`        |                            |
-| `api/product-details.js` |                            |
-| `api/cross-sell.js`      |                            |
-| `api/home-sections.js`   |                            |
+| Endpoint                      | Observação                 |
+| ----------------------------- | -------------------------- |
+| `handlers/download.js`        | **entrega o arquivo pago** |
+| `handlers/products.js`        |                            |
+| `handlers/product-details.js` |                            |
+| `handlers/cross-sell.js`      |                            |
+| `handlers/home-sections.js`   |                            |
 
-O projeto já pagou por essa divergência antes. O comentário em `api/validate-coupon.js` registra
+O projeto já pagou por essa divergência antes. O comentário em `handlers/validate-coupon.js` registra
 que o limiter de cupom _"só existia no Express de desenvolvimento"_ e que **a divergência dev/prod
 era a causa raiz do achado**. Os cinco acima são a mesma causa raiz, ainda aberta.
 
@@ -468,7 +468,7 @@ era a causa raiz do achado**. Os cinco acima são a mesma causa raiz, ainda aber
 **Regra.** Cache de leitura vai para `Cache-Control` com CDN, ou para tabela. O que a instância
 guarda na RAM morre com ela.
 
-**O que motivou.** `api/admin-kpis.js`, `api/admin-abc-customers.js` e `api/admin-abc-products.js`
+**O que motivou.** `handlers/admin-kpis.js`, `handlers/admin-abc-customers.js` e `handlers/admin-abc-products.js`
 mantêm `const cache = new Map()` com TTL de 1 hora. Na Vercel cada invocação pode cair numa
 instância nova: o acerto é acidental e por instância.
 
@@ -491,7 +491,7 @@ cobrada**, nunca calculado em paralelo.
 > O drift é 100% do lado JavaScript: `numeric` chega ao Node como IEEE 754, e a partir daí
 > `0.1 + 0.2 !== 0.3`. Nenhuma migration foi escrita.
 
-**O que mudou.** `api/create-payment.js` calculava `total_amount = subtotal - desconto` de um
+**O que mudou.** `handlers/create-payment.js` calculava `total_amount = subtotal - desconto` de um
 lado e, do outro, rateava o desconto escalando preços por um fator fracionário, absorvendo a
 sobra no último item elegível. Os dois números batiam por aproximação — e a diferença entre
 eles é exatamente a tolerância de 1 centavo que `lib/payment-integrity.js` precisou aceitar na
@@ -499,7 +499,7 @@ porta que entrega o produto pago.
 
 Agora o rateio é por **unidade**, em centavos, pelo método de maior resto
 (`allocateDiscountCents`), e o total do pedido sai da soma real dos itens cobrados. Os testes
-em `api/__tests__/checkout-money.test.js` travam o invariante sem folga:
+em `handlers/__tests__/checkout-money.test.js` travam o invariante sem folga:
 
 ```
 subtotal − desconto === total === soma(unit_price × quantity) da preference

@@ -34,7 +34,7 @@ const ERRO_COMO_STRING = /(^|[^/*])\berror:\s*['"]/;
  * dispensa sem motivo escrito é indistinguível de omissão.
  */
 const NAO_SAO_CORPO_HTTP = Object.freeze({
-  'api/admin/settings.js':
+  'handlers/admin/settings.js':
     'Tipo de retorno `{ value | error }` das funções de coerção; nunca vira corpo HTTP. ' +
     'O próprio item P1.2 registra esta exceção.',
   'lib/email-sender.js':
@@ -63,7 +63,7 @@ function listarFontes(dir, prefixo = '') {
   return encontrados;
 }
 
-const fontes = ['api', 'lib', 'routes', 'middleware', 'services'].flatMap((arvore) =>
+const fontes = ['handlers', 'lib', 'routes', 'middleware', 'services'].flatMap((arvore) =>
   listarFontes(path.join(REPO_ROOT, arvore), arvore),
 );
 
@@ -91,7 +91,7 @@ describe('regra A1 · envelope único de resposta (P1.1–P1.5)', () => {
     // vacuidade.
     expect(fontes.length).toBeGreaterThan(60);
     expect(fontes.map((f) => f.id)).toContain('lib/http.js');
-    expect(fontes.map((f) => f.id)).toContain('api/create-payment.js');
+    expect(fontes.map((f) => f.id)).toContain('handlers/create-payment.js');
   });
 
   it('nenhum emissor devolve `error` como string', () => {

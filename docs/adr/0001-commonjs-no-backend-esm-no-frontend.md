@@ -46,7 +46,7 @@ Também impede adotar `"type": "module"` sem renomear ~70 arquivos para `.cjs`.
 **Tudo ESM (`"type": "module"`).** Seria mais moderno e resolveria a duplicação. Custa
 renomear ~70 arquivos ou reescrever todos os `require` — inclusive os `require` dinâmicos que
 o harness de teste usa para interceptar módulos via `require.cache` (ver
-`api/__tests__/money-path-harness.js`, cuja técnica inteira depende de CommonJS). Não é uma
+`handlers/__tests__/money-path-harness.js`, cuja técnica inteira depende de CommonJS). Não é uma
 mudança de sintaxe; é uma mudança de estratégia de teste junto.
 
 **Tudo CommonJS.** Impossível no `src/`: o Vite e o React 19 assumem ESM.

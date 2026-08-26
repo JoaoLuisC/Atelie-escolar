@@ -50,7 +50,7 @@ export function trackEvent(name, params = {}) {
 
 ### Whitelist no backend
 
-`api/track-event.js` valida o `event_name` via `isClientEventAllowed` (`lib/analytics-events.js`). Eventos de cliente permitidos: `view_item`, `add_to_cart`, `remove_from_cart`, `view_cart`, `view_catalog`, `begin_checkout`, `client_error`. Eventos fora da lista são **descartados em silêncio** (o endpoint sempre responde 204 — tracking nunca quebra a UX).
+`handlers/track-event.js` valida o `event_name` via `isClientEventAllowed` (`lib/analytics-events.js`). Eventos de cliente permitidos: `view_item`, `add_to_cart`, `remove_from_cart`, `view_cart`, `view_catalog`, `begin_checkout`, `client_error`. Eventos fora da lista são **descartados em silêncio** (o endpoint sempre responde 204 — tracking nunca quebra a UX).
 
 `purchase` do cliente **não** entra no `analytics_events`: as compras entram server-side pela allowlist de servidor — `checkout_initiated` (gravado em `create-payment`) e `payment_approved` / `payment_rejected` / `payment_cancelled` (gravados no `webhook`). A allowlist de servidor também inclui `webhook_received`, mas nenhum handler grava esse evento hoje.
 
@@ -106,7 +106,7 @@ Resumo do que está implementado:
 - **Slugs** em todos os produtos e categorias (URLs como `/produtos/painel-alfabeto-cursivo`)
 - **`<title>` e `<meta description>` únicos** por página via `SEO.jsx` (`react-helmet-async`)
 - **Schema.org `Product` + `Offer`** em página de produto (JSON-LD)
-- **Sitemap dinâmico** em `/sitemap.xml` (gerado por `api/sitemap.xml.js`)
+- **Sitemap dinâmico** em `/sitemap.xml` (gerado por `handlers/sitemap.xml.js`)
 - **robots.txt** em `public/robots.txt` com `Sitemap:` declarado
 - **Canonical URLs** em todas as páginas
 - **OG tags** com fallback `/favicon.svg` como imagem default (`SEO.jsx` só emite `og:image`/`twitter:image` para asset que existe; o antigo `og-default.png` nunca foi versionado) — páginas de produto sobrescrevem com a imagem do produto

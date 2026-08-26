@@ -3,11 +3,8 @@
   "buildCommand": "npm run check:env && npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/cron-email-jobs.js": {
+    "api/index.js": {
       "maxDuration": 60
-    },
-    "api/send-confirmation-email.js": {
-      "maxDuration": 30
     }
   },
   "routes": [
@@ -25,22 +22,18 @@
     },
     {
       "src": "/api/admin-(.*)",
-      "dest": "/api/admin/$1"
+      "dest": "/api/index?__path=admin/$1"
     },
     {
       "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "dest": "/api/index?__path=$1"
     },
     {
       "src": "/sitemap.xml",
-      "dest": "/api/sitemap.xml"
+      "dest": "/api/index?__path=sitemap.xml"
     },
     {
       "handle": "filesystem"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/notfound"
     },
     {
       "src": "/(.*)",

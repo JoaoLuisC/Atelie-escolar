@@ -30,7 +30,7 @@ de custo — e os dois limitadores tinham formas completamente diferentes:
 Ou seja: quem "testasse o rate limit" em desenvolvimento estava exercitando um desenho que foi
 deliberadamente **rejeitado** para produção.
 
-O projeto já pagou por essa classe de divergência antes. O comentário em `api/validate-coupon.js`
+O projeto já pagou por essa classe de divergência antes. O comentário em `handlers/validate-coupon.js`
 registra que o limitador de cupom _"só existia no Express de desenvolvimento"_ e que a divergência
 dev/prod **era a causa raiz do achado**.
 

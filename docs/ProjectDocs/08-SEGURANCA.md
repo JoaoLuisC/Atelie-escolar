@@ -135,7 +135,7 @@ Aplicado via `middleware/validate.middleware.js` (rota Express-only de dev):
 router.post('/produtos', validateBody(createProductSchema), createProduct);
 ```
 
-No caminho serverless, `api/create-payment.js` valida manualmente: `productId` obrigatório, quantidade inteira 1–99, máx. 100 itens (anti-DoS) e **preço sempre do banco** (nunca do client). A atribuição passa por `lib/attribution-sanitize.js` (whitelist de 9 campos, strings clipadas a 200 chars).
+No caminho serverless, `handlers/create-payment.js` valida manualmente: `productId` obrigatório, quantidade inteira 1–99, máx. 100 itens (anti-DoS) e **preço sempre do banco** (nunca do client). A atribuição passa por `lib/attribution-sanitize.js` (whitelist de 9 campos, strings clipadas a 200 chars).
 
 ---
 
@@ -198,7 +198,7 @@ smtp_admin_email= <onboarding@resend.dev OU pedidos@seudominio.com.br>
 
 Rate limits relevantes: `rate_limit_email_sent=30/h` (Supabase) + limites do Resend (100/dia free).
 
-**b) E-mails transacionais do app** (confirmação de compra, abandoned cart, newsletter, sequência pós-compra, reativação) — `api/send-confirmation-email.js` + `api/cron-email-jobs.js` usam nodemailer com `SMTP_HOST/PORT/USER/PASS/FROM` em `.env.local`.
+**b) E-mails transacionais do app** (confirmação de compra, abandoned cart, newsletter, sequência pós-compra, reativação) — `handlers/send-confirmation-email.js` + `handlers/cron-email-jobs.js` usam nodemailer com `SMTP_HOST/PORT/USER/PASS/FROM` em `.env.local`.
 
 **Modo sandbox vs domínio verificado:**
 
@@ -264,13 +264,13 @@ Eventos passam por `lib/security-logger.js` que escreve em **três** destinos:
 
 ### Eventos emitidos hoje
 
-| `event_name`                    | Origem                     | Severidade | Quando dispara                                                                                     |
-| ------------------------------- | -------------------------- | ---------- | -------------------------------------------------------------------------------------------------- |
-| `webhook_invalid_signature`     | `api/webhook.js`           | warn       | HMAC do MP não bate (ou header ausente)                                                            |
-| `admin_login_failed`            | `api/admin/login.js`       | warn       | Credencial inválida **ou** conta sem role `admin`/`master` (resposta HTTP idêntica nos dois casos) |
-| `verify_payment_email_mismatch` | `api/verify-payment.js`    | warn       | Order existe mas email não bate                                                                    |
-| `account_self_deleted`          | `api/me-delete-account.js` | info       | Exclusão de conta LGPD confirmada pelo cliente                                                     |
-| `admin_audit_write_failed`      | `lib/admin-audit.js`       | error      | Insert no `admin_audit_log` falhou (para não passar silencioso)                                    |
+| `event_name`                    | Origem                          | Severidade | Quando dispara                                                                                     |
+| ------------------------------- | ------------------------------- | ---------- | -------------------------------------------------------------------------------------------------- |
+| `webhook_invalid_signature`     | `handlers/webhook.js`           | warn       | HMAC do MP não bate (ou header ausente)                                                            |
+| `admin_login_failed`            | `handlers/admin/login.js`       | warn       | Credencial inválida **ou** conta sem role `admin`/`master` (resposta HTTP idêntica nos dois casos) |
+| `verify_payment_email_mismatch` | `handlers/verify-payment.js`    | warn       | Order existe mas email não bate                                                                    |
+| `account_self_deleted`          | `handlers/me-delete-account.js` | info       | Exclusão de conta LGPD confirmada pelo cliente                                                     |
+| `admin_audit_write_failed`      | `lib/admin-audit.js`            | error      | Insert no `admin_audit_log` falhou (para não passar silencioso)                                    |
 
 Email do usuário **nunca** é gravado em claro — só `sha256(email).slice(0, 16)` para correlação cross-event sem violar LGPD.
 

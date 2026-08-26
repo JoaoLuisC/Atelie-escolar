@@ -1,6 +1,6 @@
 # 09 — API endpoints
 
-> Referência de **todos** os endpoints expostos pela API. Cada `api/**/*.js` vira função serverless no Vercel; em dev, os handlers planos de `api/*.js` são montados no Express via `routes/api-compat.routes.js` e os aninhados (`api/auth/customer/**`) via `routes/auth.routes.js` (mesmas rotas `/api/<nome>` nos dois ambientes).
+> Referência de **todos** os endpoints expostos pela API. Em produção existe **uma** função serverless (`api/index.js`) servindo o app Express de `lib/express-app.js`; em dev o mesmo app roda pelo `server.js`. Nos dois casos os handlers planos de `handlers/*.js` são montados por `routes/api-compat.routes.js` e os aninhados (`handlers/auth/customer/**`) por `routes/auth.routes.js` — mesmas rotas `/api/<nome>`.
 
 ---
 
@@ -89,7 +89,7 @@ Recomendações relacionadas.
 
 ### `GET /sitemap.xml`
 
-Sitemap dinâmico para SEO (handler `api/sitemap.xml.js`; servido na **raiz** — rewrite no `vercel.json` e mount direto no Express). Inclui as rotas estáticas `/`, `/produtos` e `/login`, as categorias ativas (como `/produtos?categoria=<slug>`) e as páginas de produto ativas (`/produtos/<slug>`). Não inclui páginas legais.
+Sitemap dinâmico para SEO (handler `handlers/sitemap.xml.js`; servido na **raiz** — rewrite no `vercel.json` e mount direto no Express). Inclui as rotas estáticas `/`, `/produtos` e `/login`, as categorias ativas (como `/produtos?categoria=<slug>`) e as páginas de produto ativas (`/produtos/<slug>`). Não inclui páginas legais.
 
 **Response:** `application/xml` (cache público 1h)
 
@@ -408,7 +408,7 @@ Disparado pelo workflow `email-cron.yml` (GitHub Actions) de hora em hora (`cron
 
 ## 8. Express routes (não em `api/` — existem SÓ em dev)
 
-Rotas montadas direto no Express via `server.js`/`routes/`. **Na Vercel elas não existem** (caem no 404 JSON de `api/notfound.js`):
+Rotas montadas direto no Express via `server.js`/`routes/`. **Na Vercel elas não existem** (caem no 404 JSON de `handlers/notfound.js`):
 
 | Path            | Métodos | Arquivo                     | Descrição                                                                             |
 | --------------- | ------- | --------------------------- | ------------------------------------------------------------------------------------- |
