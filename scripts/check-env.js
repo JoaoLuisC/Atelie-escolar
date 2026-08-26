@@ -17,8 +17,9 @@
 //     do projeto; faltando qualquer um, o DEPLOY falha em vez do cliente.
 //     PEGADINHA DE OPERAÇÃO: só enxergamos aqui o que a Vercel expõe ao BUILD.
 //     Variável cadastrada em Settings → Environment Variables é exposta ao
-//     build e ao runtime; um "secret" legado mapeado apenas pelo bloco `env`
-//     do vercel.json é RUNTIME. Se um deploy passar a falhar listando uma
+//     build e ao runtime; um "secret" legado mapeado por um bloco `env` no
+//     vercel.json seria RUNTIME (este repo não tem mais esse bloco — ver
+//     12-DEPLOY-OPERACAO §1.2). Se um deploy passar a falhar listando uma
 //     variável que você sabe que existe, é este o caso — recadastre-a em
 //     Settings para o ambiente correspondente, não desligue o gate.
 //     Em PREVIEW a lista aplicada é só a de escopo 'core' (ver VARS), então

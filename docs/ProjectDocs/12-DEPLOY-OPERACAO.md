@@ -63,7 +63,7 @@ Settings → Environment Variables. Adicionar **todas** as do `.env.local`, exce
 
 > ⚠️ **`SERVICE_ROLE_KEY` em Preview deve ser DIFERENTE** (idealmente um projeto Supabase separado de staging). Vazamento em Preview compromete prod.
 
-> O bloco `env` do `vercel.json` mapeia as principais variáveis para secrets do Vercel (`@supabase_url`, `@mercadopago_access_token`, `@app_url` etc.).
+> O `vercel.json` **não** declara bloco `env`. Todas as variáveis vivem em Settings → Environment Variables, que as expõe ao build **e** ao runtime. O bloco antigo mapeava para _Secrets_ legados da Vercel (`@supabase_url`, `@mercadopago_access_token` etc.); num projeto novo esses secrets não existem e o build morre com `references Secret ... which does not exist`. Removido em 26/08/2026, junto com uma chave `"//"` que estava dentro de um objeto de `routes` — o schema da Vercel rejeita propriedade desconhecida em rota. A rota A6 (`/api/admin-*` → `/api/admin/*`) continua lá: é compatibilidade da janela de deploy dos 18 handlers renomeados, e pode sair depois do primeiro ciclo de deploy, já que não há consumidor externo dessas URLs.
 
 Opcionais (defaults no código): `SECURITY_ALERT_WEBHOOK_URL`, `ABANDONED_CART_FIRST_HOURS` (1), `ABANDONED_CART_SECOND_HOURS` (24), `REACTIVATION_DAYS_MIN`/`MAX` (90/180), `REACTIVATION_COUPON_CODE`/`PCT` (`VOLTEI15`/15), `VIP_LTV_THRESHOLD` (300), `RATE_LIMIT_MAX` (250) — esta última só vale no limitador de borda do Express local; a política real (`enforceRateLimit`) não usa variável de ambiente, os perfis estão em `lib/rate-limit.js`.
 

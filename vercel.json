@@ -24,7 +24,6 @@
       "continue": true
     },
     {
-      "//": "Regra A6 — compatibilidade das URLs administrativas antigas. Os 18 handlers de api/admin-<recurso>.js viraram api/admin/<recurso>.js, para o produto ter UMA convenção de URL (a aninhada, que api/auth/customer/* já usava). Esta regra existe para a janela de deploy: um painel já carregado no navegador de alguém continua chamando /api/admin-orders por alguns minutos depois do deploy, e sem ela essas chamadas viram 404 no meio de uma sessão. Pode ser removida depois de um ciclo de deploy — não há consumidor externo destas URLs.",
       "src": "/api/admin-(.*)",
       "dest": "/api/admin/$1"
     },
@@ -47,18 +46,5 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ],
-  "env": {
-    "VITE_SUPABASE_URL": "@supabase_url",
-    "VITE_SUPABASE_ANON_KEY": "@supabase_anon_key",
-    "VITE_GA4_ID": "@vite_ga4_id",
-    "VITE_META_PIXEL_ID": "@vite_meta_pixel_id",
-    "SUPABASE_URL": "@supabase_url",
-    "SUPABASE_ANON_KEY": "@supabase_anon_key",
-    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
-    "SUPABASE_STORAGE_BUCKET": "@supabase_storage_bucket",
-    "MERCADOPAGO_ACCESS_TOKEN": "@mercadopago_access_token",
-    "MERCADOPAGO_PUBLIC_KEY": "@mercadopago_public_key",
-    "APP_URL": "@app_url"
-  }
+  ]
 }
