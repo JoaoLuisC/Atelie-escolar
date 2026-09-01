@@ -33,31 +33,67 @@ Configurado em `lib/security-headers.js` + `server.js`:
 
 ### 2.2 Rate limits específicos
 
-| Endpoint               | Limite                                | Justificativa                         |
-| ---------------------- | ------------------------------------- | ------------------------------------- |
-| Global                 | 250 req / 15 min                      | Throttle geral por IP                 |
-| `/auth/*`              | 30 req / 15 min                       | Brute force em login                  |
-| `/auth/customer/login` | 5 / 10 min                            | Brute force específico cliente        |
-| `/admin-login`         | 5 / 10 min (`skipSuccessfulRequests`) | Brute force admin                     |
-| `/verify-payment`      | 60 / min                              | Anti enumeração de `order_code`       |
-| `/track-event`         | 120 / min                             | Permite uso normal sem permitir flood |
-| `/validate-coupon`     | 20 / min                              | Anti enumeração de códigos            |
-| `/abandoned-cart`      | 30 / min                              | Chamado a cada keystroke debounced    |
-| `/subscribe`           | 5 / min                               | Anti enumeração de e-mails            |
-| `/unsubscribe`         | 20 / min                              | Uso normal do 1-click                 |
-| `/me-delete-account`   | 5 / min                               | Ação rara e sensível                  |
+Um mecanismo só: `enforceRateLimit` **dentro do handler**, com contador atômico no Postgres
+(`rpc/rate_limit_hit`). Os limiters de `express-rate-limit` que existiam por rota foram removidos em
+`f5b43da` — eles não rodavam em produção e desenhavam uma segunda política que mentia. Ver
+[ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md).
 
-> ⚠️ Os limiters rodam no Express (`server.js` + `routes/`), ou seja, **em dev**. Na Vercel cada função serverless é isolada e o `express-rate-limit` em memória não vale entre invocações — rate limit por endpoint em produção depende de store compartilhado (KV), pendência **API-03**. `/cron-email-jobs` não tem limiter (autentica por `CRON_SECRET` timing-safe).
+| Endpoint                         | Balde                         | Limite                        | Indisponível |
+| -------------------------------- | ----------------------------- | ----------------------------- | ------------ |
+| `/auth/customer/login`           | `customer-login` (IP+conta)   | 5 / 10 min                    | **recusa**   |
+| ⤷ teto por conexão               | `customer-login-scan` (IP)    | 20 contas distintas / 10 min  | **recusa**   |
+| `/auth/customer/register`        | `customer-register`           | 5 / 10 min                    | **recusa**   |
+| `/auth/customer/google/start`    | `customer-google-start`       | 20 / 10 min                   | passa        |
+| `/auth/customer/google/callback` | `customer-google-callback`    | 20 / 10 min                   | passa        |
+| `/admin/login` (senha)           | `admin-login`                 | 5 / 10 min                    | passa        |
+| `/admin/login` (2º fator)        | `admin-login-2fa` (IP+conta)  | 5 / 10 min                    | **recusa**   |
+| `/verify-payment`                | `verify-payment` (por pedido) | 600 / 10 min                  | passa        |
+| ⤷ teto por conexão               | `verify-payment-scan` (IP)    | 40 pedidos distintos / 10 min | passa        |
+| `/download`                      | `download` (por token)        | 20 / 10 min                   | passa        |
+| ⤷ teto por conexão               | `download-scan` (IP)          | 30 tokens distintos / 10 min  | passa        |
+| `/create-payment`                | `create-payment`              | 20 / min                      | passa        |
+| `/track-event`                   | `track-event`                 | 120 / min                     | passa        |
+| `/validate-coupon`               | `validate-coupon`             | 20 / min                      | passa        |
+| `/abandoned-cart`                | `abandoned-cart`              | 30 / min                      | passa        |
+| `/subscribe`                     | `subscribe`                   | 5 / min                       | passa        |
+| `/unsubscribe`                   | `unsubscribe`                 | 20 / min                      | passa        |
+| `/confirm-subscription`          | `confirm-subscription`        | 20 / min                      | passa        |
+| `/send-confirmation-email`       | `send-confirmation-email`     | 5 / 10 min                    | passa        |
+| `/me-delete-account`             | `me-delete-account`           | 5 / min                       | passa        |
+| catálogo público                 | `catalog`                     | 120 / min                     | passa        |
+
+> Valores conferidos contra `lib/rate-limit.js` em 01/09/2026. A tabela anterior citava
+> `/verify-payment 60/min` e um `/auth/* 30/15min` que não existem — eram do desenho de
+> `express-rate-limit`, removido em `f5b43da`.
+
+Sobra **um** limiter de borda genérico (`/api`, 250 / 15 min) apenas no `server.js` local: rede
+contra loop acidental de script, declarado no código como não sendo política.
+
+**Coluna "Indisponível"** — o que acontece quando o contador no Postgres não responde. O default é
+_passar_ (fail-open): a mesma queda já derrubaria o endpoint adiante, e trancar o `/admin/login`
+deixaria a dona fora do painel durante um incidente. Os baldes marcados **recusa** (`failMode:
+'closed'`, resposta **503 SERVICE_UNAVAILABLE**) são a exceção deliberada: eles guardam verificação
+de credencial contra serviços que continuam de pé sem o contador — `customerLogin`/`customerRegister`
+falam com o **GoTrue**, e o anti-replay do TOTP é ele próprio uma chamada de `rate_limit_hit`. Nos
+dois modos o evento `rate_limit_unavailable` é emitido.
+
+> **Cuidado ao mexer na montagem das rotas.** Entre `660fe74` e `244226c` os cinco endpoints de auth
+> de cliente rodaram **sem contador nenhum**: `routes/auth.routes.js` importava a lógica crua de
+> `lib/customer-auth-handlers` em vez dos módulos de `handlers/auth/customer/**`, que são os que
+> carregam `enforceRateLimit`. Os testes passavam porque liam o arquivo no disco, não o que estava
+> montado. Hoje `routes/__tests__/api-route-parity.test.js` compara **identidade de módulo** e
+> `handlers/__tests__/rate-limit-coverage.test.js` parte do conjunto **montado**.
 
 ### 2.3 Autenticação
 
 - **Cookies HttpOnly** — `customer_session` e `admin_session`. JavaScript não acessa.
 - **SameSite=Strict** em ambos os cookies (CSRF mitigation). Além disso, escritas admin e logouts exigem request **same-origin** (`isSameOriginRequest` checa `Origin`/`Referer` contra allowlist; sem os dois headers → bloqueia, fail-closed).
 - **HMAC-SHA256** com secrets de 32 bytes (rotacionáveis; `lib/env-secret.js` é fail-closed — fora de dev/test, secret ausente derruba o boot em vez de cair em fallback).
-- **TTL 8h** em ambos cookies.
+- **TTL 8h** em ambos cookies, sem renovação e **sem revogação** — ver §11.2.2.
+- **CORS** — `CORS_ORIGINS` é obrigatório fora de `development`/`test`: sem ele o boot falha, em vez de herdar o default de dev (que aceita qualquer `localhost` **com credenciais**). Origem fora da allowlist não recebe os headers e segue para o handler, onde a guarda de origem responde 403 — nunca 500.
 - **Senhas** — mín 8 chars (server) + maiúscula + minúscula + dígito (client; o Supabase Auth rejeita senha fraca, mapeada para mensagem amigável — defense in depth).
-- **2FA opcional para admin** (TOTP com janela ±1 step + PIN de recuperação; challenge token HMAC com TTL 5 min; `totpSecret`/`fallbackPin` ficam em `settings.adminConfig`, nunca são devolvidos no GET e a comparação é timing-safe).
-- **Google OAuth com PKCE** — `code_verifier` protege contra interceptação (`flowType: 'pkce'` em `src/services/supabase-browser.js`).
+- **2FA opcional para admin** — TOTP com janela ±1 step + PIN de recuperação; challenge token HMAC com **TTL de 120s** (`FACTOR_CHALLENGE_TTL_SECONDS`), reemitido quando expira, com binding de IP e e-mail e consumo único; código TOTP também é de uso único (anti-replay via `rate_limit_hit` com `p_limit=1`).
+- **Segredos de 2FA em repouso** (`lib/admin-2fa.js`) — `totpSecret` é **cifrado** com AES-256-GCM (chave em `ADMIN_2FA_ENC_KEY`); ele não pode ser hasheado porque o servidor precisa dele para recalcular o HMAC de cada janela. `fallbackPin` é **hasheado** com scrypt + sal, porque só é comparado. Nenhum dos dois é devolvido no GET nem aparece no audit log, e a conferência é timing-safe. Leitura aceita o formato antigo em texto puro; qualquer salvamento no painel migra.
 
 ### 2.4 Autorização (RLS no Postgres)
 

@@ -187,11 +187,14 @@ export default defineConfig({
       // piso colado no medido transforma essa oscilação em CI vermelho
       // intermitente — que é a forma mais rápida de ensinar o time a ignorar
       // o gate.
+      // Recalibrado em 01/09/2026 com a leva de testes de auth (route-mount,
+      // admin-2fa, admin-login, guardas de auth, AuthProvider, ProtectedRoute):
+      // medido 44.19 / 34.62 / 36.25 / 45.67, menos a folga de ~2pp.
       thresholds: {
-        statements: 39,
-        branches: 29,
-        functions: 32,
-        lines: 40,
+        statements: 42,
+        branches: 32,
+        functions: 34,
+        lines: 43,
       },
       // ─────────────────────────────────────────────────────────────
     },

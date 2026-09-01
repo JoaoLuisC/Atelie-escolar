@@ -75,6 +75,7 @@ continuava sendo lido como estado atual.
 
 | Documento                                                                                 | Sobre                                                                                                  |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [REVIEW-AUTH-2026-09-01](./reviews/REVIEW-AUTH-2026-09-01.md)                             | Fluxo de login de ponta a ponta: guardas fora do caminho de produção, 2FA em repouso, cobertura        |
 | [OTIMIZACAO-CODIGO-2026-08-18](./reviews/OTIMIZACAO-CODIGO-2026-08-18.md)                 | Desempenho: caminho crítico do bundle (−35% medido), tetos de escala do backend, código sem consumidor |
 | [REVIEW-GERAL-2026-08-12](./reviews/REVIEW-GERAL-2026-08-12.md)                           | Arquitetura, segurança e processos — originou as 29 regras                                             |
 | [REVIEW-RESULTS-2026-08-12](./reviews/REVIEW-RESULTS-2026-08-12.md)                       | Consolidação dos resultados por área                                                                   |
