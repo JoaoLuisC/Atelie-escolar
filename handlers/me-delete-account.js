@@ -367,6 +367,29 @@ async function executeDeletion({ uid, email, req, res }) {
     }
   }
 
+  // 3b. Apaga o carrinho abandonado do titular.
+  //
+  // `abandoned_carts` guarda o e-mail DIGITADO no checkout junto com o
+  // conteúdo do carrinho, e não pendura em `customer_id` — some do alcance
+  // do cascade de auth.users e não estava em nenhum passo acima. Resultado
+  // antes disto: quem pedia exclusão continuava com e-mail e carrinho
+  // gravados por tempo indeterminado. A migration que criou a tabela promete
+  // limpeza "após 7 dias", mas nenhuma função de purga foi escrita — então
+  // esta era a única remoção possível, e ela não existia.
+  //
+  // `eq` e não `ilike`: handlers/abandoned-cart.js grava o e-mail já em
+  // minúsculas, e `ilike` trataria `_` como coringa — o mesmo IDOR silencioso
+  // que api/customer-orders.js já pagou (ver o cabeçalho de lá).
+  //
+  // Best-effort como os outros passos não-fatais: a identidade já vai embora
+  // no passo 4, e falhar aqui não pode reverter uma exclusão em andamento —
+  // mas o log deixa o rastro para reprocessar.
+  try {
+    await deleteFromTable('abandoned_carts', { email: `eq.${normalizedEmail}` });
+  } catch (err) {
+    log.warn('limpeza_de_carrinho_falhou', { reason: err.message });
+  }
+
   // 4. Só agora remove a identidade em auth.users (cascateia profiles +
   //    user_products; orders.customer_id -> null). O uid já foi validado no
   //    passo 0 (resolveAuthIdentity), então não há guarda condicional aqui.

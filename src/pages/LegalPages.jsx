@@ -2,6 +2,7 @@ import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
+import { ConsentPreferences } from '../components/ConsentPreferences';
 import { CONSENT_POLICY_VERSION } from '../utils/consent';
 import { ROUTES } from '../constants/routes';
 
@@ -90,6 +91,8 @@ export function PrivacyPage() {
         </li>
       </ul>
 
+      <ConsentPreferences />
+
       <h2>3. Para que usamos</h2>
       <ul>
         <li>Processar pedidos, liberar downloads e enviar e-mail de confirmação.</li>
@@ -116,7 +119,9 @@ export function PrivacyPage() {
         </li>
         <li>
           <strong>Consentimento</strong> para cookies de marketing (Google/Meta) — revogável a
-          qualquer momento limpando os dados do site ou usando "Apenas essenciais" no banner.
+          qualquer momento no bloco <a href="#cookies">Suas preferências de cookies</a>, acima nesta
+          página. A revogação vale a partir do clique e recarrega a página para tirar do ar os
+          scripts que já estavam carregados.
         </li>
       </ul>
 
