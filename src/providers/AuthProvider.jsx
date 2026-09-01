@@ -29,7 +29,16 @@ export function AuthProvider({ children }) {
         const [data, customer] = await Promise.all([getAdminSession(), fetchCustomerSession()]);
         if (!cancelled) {
           setAdminAuthenticated(data.authenticated === true);
-          setCustomerSession(customer);
+          // Atualização FUNCIONAL, e não `setCustomerSession(customer)` direto:
+          // este efeito corre em paralelo com o do callback OAuth, e os dois
+          // escrevem no mesmo estado. Na volta do Google, `fetchCustomerSession`
+          // sai ANTES de o callback trocar o token pelo cookie, então devolve
+          // `null` — e uma escrita incondicional apagaria a sessão que o
+          // callback acabou de estabelecer, deixando o usuário deslogado até o
+          // próximo F5. Na prática o POST do callback costuma ser mais lento e
+          // chegar por último, o que escondia a corrida; a ordem nunca foi
+          // garantida. `atual ?? customer` só preenche o que ainda está vazio.
+          setCustomerSession((atual) => atual ?? customer);
         }
       } catch {
         if (!cancelled) {
