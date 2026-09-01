@@ -31,6 +31,20 @@ export function ProductWizard({
   const [reviews, setReviews] = useState([]);
   const [formData, setFormData] = useState({ ...EMPTY_PRODUCT_FORM });
 
+  // Declarado ANTES do efeito que o chama: o React Compiler acusa
+  // `react-hooks/immutability` quando um valor é acessado acima da própria
+  // declaração, e a ordem antiga só funcionava porque efeito roda depois do
+  // render. Mover é reordenação pura — nada muda em runtime.
+  const resetForm = () => {
+    setFormData({ ...EMPTY_PRODUCT_FORM });
+    setImages(['']);
+    setVideos([]);
+    setBenefits([]);
+    setFaq([]);
+    setReviews([]);
+    setCurrentStep(0);
+  };
+
   useEffect(() => {
     if (initialProduct) {
       const initialCategoryId = String(
@@ -66,16 +80,6 @@ export function ProductWizard({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialProduct, isOpen]);
-
-  const resetForm = () => {
-    setFormData({ ...EMPTY_PRODUCT_FORM });
-    setImages(['']);
-    setVideos([]);
-    setBenefits([]);
-    setFaq([]);
-    setReviews([]);
-    setCurrentStep(0);
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

@@ -26,15 +26,23 @@ medidas no código e não estimadas, fecharam a dívida:
 | Módulos de `lib/` sem suíte              | 13 (de 21) |          **0** (de 26) |
 | Testes                                   |        274 |                **691** |
 | Cobertura (statements)                   | não rodava | **39,8%** (piso no CI) |
-| Avisos de lint                           |         30 |       **17** (catraca) |
+| Avisos de lint                           |         30 |       **13** (catraca) |
 | Caminho crítico do bundle (gzip)         |   157,8 KB |           **100,5 KB** |
 
 Duas coisas dessa tabela valem para quem chega:
 
-**`D5` está em catraca, não em zero.** Os 17 avisos restantes são diagnósticos do React Compiler
-(`setState` dentro de efeito) em 12 componentes. `npm run lint` roda com `--max-warnings=17`, então
-o número não pode crescer — e ao corrigir um aviso, **baixe o teto no `package.json` no mesmo
-commit**.
+**`D5` está em catraca, não em zero.** Sobram **13** avisos, todos diagnósticos do React Compiler:
+12 de `setState` dentro de efeito (que exigem repensar o carregamento de dados componente a
+componente) e 1 de biblioteca incompatível em `CheckoutPage.jsx`, que é o `react-hook-form` e não
+tem conserto do nosso lado. `npm run lint` roda com `--max-warnings=13`, então o número não pode
+crescer — e ao corrigir um aviso, **baixe o teto no `package.json` no mesmo commit**.
+
+> Os 4 que saíram em 01/09/2026 eram os baratos, e ficam registrados porque a diferença entre eles
+> e os 12 restantes é o que explica por que a catraca não fecha em zero de uma vez: `resetForm`
+> declarado depois do efeito que o chama (`CategoryWizard`, `ProductWizard`) era reordenação pura;
+> `Date.now()` no render de `SegmentsTab` também _afirmava_ uma hora de geração que o backend não
+> mandou; e o `let cumulative` mutado dentro do `map` de `DashboardTab` virou soma de prefixo, com
+> o mesmo resultado por fatia. Nenhum deles mudou comportamento. Os 12 de `setState` mudam.
 
 **O que segura a regra é o gate, não a disciplina.** Todo número que já tinha sido declarado "0" e
 voltou a subir tinha a mesma coisa em comum: era contagem, não teste. Os que hoje têm gate

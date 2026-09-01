@@ -14,6 +14,21 @@ export function CategoryWizard({ isOpen, onClose, onSubmit, initialCategory = nu
     active: true,
   });
 
+  // Declarado ANTES do efeito que o chama: o React Compiler acusa
+  // `react-hooks/immutability` quando um valor é acessado acima da própria
+  // declaração, e a ordem antiga só funcionava porque efeito roda depois do
+  // render. Mover é reordenação pura — nada muda em runtime.
+  const resetForm = () => {
+    setFormData({
+      id: '',
+      name: '',
+      color: '#9B5DE5',
+      featured: false,
+      active: true,
+    });
+    setCurrentStep(0);
+  };
+
   useEffect(() => {
     if (initialCategory) {
       setFormData({
@@ -28,17 +43,6 @@ export function CategoryWizard({ isOpen, onClose, onSubmit, initialCategory = nu
       resetForm();
     }
   }, [initialCategory, isOpen]);
-
-  const resetForm = () => {
-    setFormData({
-      id: '',
-      name: '',
-      color: '#9B5DE5',
-      featured: false,
-      active: true,
-    });
-    setCurrentStep(0);
-  };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;

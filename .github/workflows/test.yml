@@ -49,7 +49,7 @@ jobs:
       - name: Formatação
         run: npm run format:check
 
-      # `npm run lint` carrega `--max-warnings=17` — uma catraca, não zero.
+      # `npm run lint` carrega `--max-warnings=13` — uma catraca, não zero.
       # Os avisos restantes são diagnósticos do React Compiler (setState dentro
       # de efeito), que são backlog real de performance e exigem refatorar
       # componente por componente. A catraca impede que o número CRESÇA

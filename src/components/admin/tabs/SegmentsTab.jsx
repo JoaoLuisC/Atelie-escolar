@@ -148,8 +148,14 @@ export function SegmentsTab() {
       </Card>
 
       <p className="text-xs text-slate-500">
-        Gerado em {new Date(data.generatedAt || Date.now()).toLocaleString('pt-BR')}. Cache de 30
-        min. Adicione <code>?nocache=1</code> à URL para forçar recálculo.
+        {/* Sem `Date.now()` no render: além de ser função impura (o React
+            Compiler acusa `react-hooks/purity`), o fallback para "agora"
+            AFIRMAVA uma hora de geração que o backend não mandou — e essa
+            é justamente a informação que o texto existe para dar. */}
+        {data.generatedAt
+          ? `Gerado em ${new Date(data.generatedAt).toLocaleString('pt-BR')}. `
+          : ''}
+        Cache de 30 min. Adicione <code>?nocache=1</code> à URL para forçar recálculo.
       </p>
     </div>
   );

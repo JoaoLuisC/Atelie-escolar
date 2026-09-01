@@ -312,12 +312,21 @@ function CategoryDonut({ entries }) {
 
   const palette = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#64748b'];
   const total = entries.reduce((sum, entry) => sum + Number(entry.value || 0), 0);
-  let cumulative = 0;
+
+  // Soma acumulada ANTES de cada fatia, calculada de uma vez em vez de
+  // mutar um `let cumulative` dentro do `map` — o React Compiler acusa
+  // `react-hooks/immutability` na reatribuição, e o valor por fatia é
+  // exatamente o mesmo. `entries` é a lista de categorias (meia dúzia),
+  // então o custo quadrático aqui é irrelevante e o código diz o que faz.
+  const valores = entries.map((entry) => Number(entry.value || 0));
+  const acumuladoAntes = valores.map((_, index) =>
+    valores.slice(0, index).reduce((soma, valor) => soma + valor, 0),
+  );
+
   const segments = entries.map((entry, index) => {
-    const value = Number(entry.value || 0);
-    const startAngle = (cumulative / total) * 360;
-    cumulative += value;
-    const endAngle = (cumulative / total) * 360;
+    const value = valores[index];
+    const startAngle = (acumuladoAntes[index] / total) * 360;
+    const endAngle = ((acumuladoAntes[index] + value) / total) * 360;
     return {
       ...entry,
       color: palette[index % palette.length],
