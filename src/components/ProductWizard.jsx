@@ -3,6 +3,16 @@ import { useEffect, useRef, useState } from 'react';
 import { ModalWizard } from './ModalWizard';
 import { useToast } from '../hooks/useToast';
 import { uploadProductAsset } from '../services/admin-panel';
+import {
+  cleanBenefits,
+  cleanFaq,
+  cleanReviews,
+  deriveDisplayName,
+  normalizeBenefits,
+  normalizeFaq,
+  normalizeReviews,
+  validateProductStep,
+} from './product-wizard-form';
 
 const EMPTY_PRODUCT_FORM = {
   id: '',
@@ -117,41 +127,16 @@ export function ProductWizard({
     setVideos(newVideos);
   };
 
+  // A REGRA mora em product-wizard-form.js; aqui fica só como avisar.
+  // Separar as duas foi o que tornou a validação testável: ela decide se um
+  // produto pode ser salvo, e vivia dentro de um componente que nenhuma
+  // suíte monta.
   const validateStep = (step) => {
-    if (step === 0) {
-      if (!formData.name.trim()) {
-        pushToast('Nome do produto é obrigatório', 'error');
-        return false;
-      }
-      if (!formData.category.trim()) {
-        pushToast('Categoria é obrigatória', 'error');
-        return false;
-      }
-      if (!formData.description.trim()) {
-        pushToast('Descrição é obrigatória', 'error');
-        return false;
-      }
+    const erro = validateProductStep(step, formData, images);
+    if (erro) {
+      pushToast(erro, 'error');
+      return false;
     }
-
-    if (step === 1) {
-      const validImages = images.filter((img) => img.trim());
-      if (validImages.length === 0) {
-        pushToast('Pelo menos uma imagem é obrigatória', 'error');
-        return false;
-      }
-      if (!formData.downloadUrl.trim()) {
-        pushToast('URL de download é obrigatória', 'error');
-        return false;
-      }
-    }
-
-    if (step === 2) {
-      if (!formData.price || Number.parseFloat(formData.price) <= 0) {
-        pushToast('Preço válido é obrigatório', 'error');
-        return false;
-      }
-    }
-
     return true;
   };
 
@@ -402,66 +387,6 @@ const INPUT_CLASS =
 const SECONDARY_BTN_CLASS =
   'inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50';
 const IMAGE_MAX_BYTES = 500 * 1024; // §3.2 guard rail: 500kB por imagem
-
-// ─── Normalização ao carregar um produto existente para edição ────────
-function normalizeBenefits(items) {
-  if (!Array.isArray(items)) return [];
-  return items.map((item) =>
-    typeof item === 'string'
-      ? { icon: '', label: item }
-      : { icon: String(item?.icon || '').trim(), label: String(item?.label || '').trim() },
-  );
-}
-
-function normalizeFaq(items) {
-  if (!Array.isArray(items)) return [];
-  return items.map((item) => ({
-    question: String(item?.question || '').trim(),
-    answer: String(item?.answer || '').trim(),
-  }));
-}
-
-function normalizeReviews(items) {
-  if (!Array.isArray(items)) return [];
-  return items.map((item) => ({
-    author: String(item?.author || '').trim(),
-    role: String(item?.role || '').trim(),
-    location: String(item?.location || '').trim(),
-    text: String(item?.text || '').trim(),
-    rating: item?.rating == null || item?.rating === '' ? '' : String(item.rating),
-  }));
-}
-
-// ─── Limpeza no submit: descarta linhas vazias e converte tipos ───────
-function cleanBenefits(items) {
-  return items
-    .map((item) => ({
-      icon: String(item.icon || '').trim(),
-      label: String(item.label || '').trim(),
-    }))
-    .filter((item) => item.label);
-}
-
-function cleanFaq(items) {
-  return items
-    .map((item) => ({
-      question: String(item.question || '').trim(),
-      answer: String(item.answer || '').trim(),
-    }))
-    .filter((item) => item.question && item.answer);
-}
-
-function cleanReviews(items) {
-  return items
-    .map((item) => ({
-      author: String(item.author || '').trim(),
-      role: String(item.role || '').trim(),
-      location: String(item.location || '').trim(),
-      text: String(item.text || '').trim(),
-      rating: item.rating === '' || item.rating == null ? null : Number(item.rating),
-    }))
-    .filter((item) => item.author && item.text);
-}
 
 const EDITOR_PROP_TYPES = {
   value: PropTypes.array.isRequired,
@@ -838,22 +763,6 @@ AssetUploader.propTypes = {
   onRemove: PropTypes.func,
   pushToast: PropTypes.func.isRequired,
 };
-
-function deriveDisplayName(url) {
-  if (!url) return '';
-  try {
-    // Path curto bucket/path
-    if (!url.startsWith('http')) {
-      const parts = url.split('/');
-      return parts[parts.length - 1] || url;
-    }
-    const u = new URL(url);
-    const last = u.pathname.split('/').filter(Boolean).pop() || '';
-    return decodeURIComponent(last);
-  } catch {
-    return url.slice(0, 60);
-  }
-}
 
 ProductWizard.propTypes = {
   isOpen: PropTypes.bool.isRequired,
