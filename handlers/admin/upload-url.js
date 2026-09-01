@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const { ensureAdminSession } = require('../../lib/admin-session');
+const { logAdminAction } = require('../../lib/admin-audit');
 const { getSupabaseConfig } = require('../../lib/supabase');
 const { isSafeObjectPath } = require('../../lib/storage-signed-url');
 const { recordSecurityEvent } = require('../../lib/security-logger');
@@ -381,6 +382,20 @@ async function handleSign(req, res, { kind, bucket, config }) {
       });
     }
 
+    // Auditoria de escrita (regra I1). O token assinado é a autorização de
+    // gravação: depois daqui o objeto entra no bucket sem passar por mais
+    // nenhum handler, então este é o único ponto em que dá para registrar
+    // QUEM mandou gravar. `filename`/`mimeType` são declarações do cliente
+    // (ver a nota no topo) e vão como tal — o que vincula é o `path`, que
+    // quem escolhe é o servidor.
+    await logAdminAction({
+      req,
+      action: 'create',
+      targetType: 'storage_object',
+      targetId: `${bucket.name}/${path}`,
+      after: { bucket: bucket.name, kind, path, mimeType: mimeType || null },
+    });
+
     return ok(res, {
       success: true,
       uploadUrl: `${base}/storage/v1${signedRel.startsWith('/') ? '' : '/'}${signedRel}`,
@@ -450,6 +465,23 @@ async function handleConfirm(req, res, { bucket, config }) {
       bucket: bucket.name,
       path,
       reasons: reasons.join('; '),
+    });
+    // Auditoria de escrita (regra I1): apagar objeto do Storage é ação de
+    // escrita, mesmo quando é o próprio handler que decide apagar. O par
+    // create/delete no audit log é o que permite reconstruir depois que um
+    // upload foi autorizado e nunca chegou a valer.
+    //
+    // A confirmação BEM-SUCEDIDA não gera linha: ela não muda estado — o
+    // objeto já foi gravado, e a linha que registra isso é o `create` do
+    // sign. Registrar as duas dobraria o volume do audit sem acrescentar
+    // fato novo.
+    await logAdminAction({
+      req,
+      action: 'delete',
+      targetType: 'storage_object',
+      targetId: `${bucket.name}/${path}`,
+      before: { bucket: bucket.name, path, size: meta.size, contentType: meta.mime || null },
+      after: { removed: true, reasons },
     });
     return fail(res, {
       status: 400,

@@ -1,4 +1,5 @@
 const { ensureAdminSession } = require('../../lib/admin-session');
+const { logAdminAction } = require('../../lib/admin-audit');
 const { getSupabaseConfig, supabaseRequest } = require('../../lib/supabase');
 const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
@@ -43,6 +44,19 @@ module.exports = async function adminCleanupEventsHandler(req, res) {
     });
 
     const deleted = Number(result) || 0;
+
+    // Auditoria de escrita (regra I1). A purga apaga linha de
+    // `analytics_events` de forma irreversível e ficava FORA do audit log:
+    // o painel registrava quem editou um cupom, mas não quem mandou apagar
+    // meses de evento. Fica depois do RPC de propósito — só registra o que
+    // de fato aconteceu, e `deleted: 0` também é informação (a purga rodou
+    // e não havia o que apagar).
+    await logAdminAction({
+      req,
+      action: 'delete',
+      targetType: 'analytics_events',
+      after: { deleted },
+    });
 
     return ok(res, {
       success: true,
