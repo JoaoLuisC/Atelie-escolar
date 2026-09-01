@@ -18,6 +18,8 @@ const express = require('express');
 // não finge ser a política: é rede contra loop acidental de script local.
 // ════════════════════════════════════════════════════════════════════
 
+const { mountHandler } = require('../lib/route-mount');
+
 const abandonedCartHandler = require('../handlers/abandoned-cart');
 const adminAbcCustomersHandler = require('../handlers/admin/abc-customers');
 const adminAbcProductsHandler = require('../handlers/admin/abc-products');
@@ -59,27 +61,12 @@ const webhookHandler = require('../handlers/webhook');
 
 const router = express.Router();
 
-function wrapCompatHandler(handler) {
-  return async function compatHandler(req, res, next) {
-    const originalSetHeader = res.setHeader.bind(res);
-
-    res.setHeader = function patchedSetHeader(name, value) {
-      const headerName = String(name || '').toLowerCase();
-      if (headerName.startsWith('access-control-allow-')) {
-        return this;
-      }
-      return originalSetHeader(name, value);
-    };
-
-    try {
-      return await handler(req, res);
-    } catch (error) {
-      return next(error);
-    } finally {
-      res.setHeader = originalSetHeader;
-    }
-  };
-}
+// `wrapCompatHandler` virou `mountHandler` em `lib/route-mount.js`, comum aos
+// dois routers. Ele guarda qual módulo de `handlers/` está por trás de cada
+// middleware montado — o que permite ao teste de paridade comparar identidade
+// de módulo, não string de caminho. O alias local mantém as 40 chamadas abaixo
+// legíveis e o diff desta mudança pequeno.
+const wrapCompatHandler = mountHandler;
 
 router.all('/abandoned-cart', wrapCompatHandler(abandonedCartHandler));
 router.all('/admin/abc-customers', wrapCompatHandler(adminAbcCustomersHandler));

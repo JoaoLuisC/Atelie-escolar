@@ -177,6 +177,17 @@ const VARS = [
   { name: 'SMTP_USER', scope: 'production', why: 'lib/email-sender.js' },
   { name: 'SMTP_PASS', scope: 'production', why: 'lib/email-sender.js' },
 
+  // — CORS. Deixou de ser aviso em 01/09/2026: `lib/express-app.js` agora
+  //   RECUSA subir sem esta variável fora de dev/test, então um deploy sem ela
+  //   quebra no boot em vez de herdar o default de dev (que aceita qualquer
+  //   localhost COM credenciais). O gate aqui é o que transforma isso em erro
+  //   de build, antes de virar erro de runtime. —
+  {
+    name: 'CORS_ORIGINS',
+    scope: 'production',
+    why: 'lib/express-app.js — sem ela o boot falha fora de development/test',
+  },
+
   // — Avisos: têm default no código, mas o default raramente é o desejado —
   {
     name: 'SMTP_FROM',
@@ -184,7 +195,6 @@ const VARS = [
     why: 'default cai no SMTP_USER (domínio não verificado)',
   },
   { name: 'APP_ENV', scope: 'advisory', why: 'define o gate de fail-closed dos segredos' },
-  { name: 'CORS_ORIGINS', scope: 'advisory', why: 'vazio libera qualquer localhost (server.js)' },
   {
     name: 'SUPABASE_STORAGE_BUCKET',
     scope: 'advisory',
