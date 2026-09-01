@@ -91,6 +91,11 @@ export default defineConfig({
           // é o mesmo recorte de runtime, e mantê-los alinhados evita que uma
           // suíte nova (routes/, middleware/…) caia sem querer no jsdom.
           include: [
+            // `api/` entra na lista porque `api/index.js` é a ÚNICA função
+            // publicada — e um teste colocado ali NÃO era coletado, então a
+            // suíte do entrypoint de produção teria ficado verde sem nunca
+            // rodar. É o mesmo modo de falha do 660fe74, uma camada acima.
+            'api/**/*.test.js',
             'handlers/**/*.test.js',
             'lib/**/*.test.js',
             'routes/**/*.test.js',
@@ -127,6 +132,7 @@ export default defineConfig({
       // configs de build, artefatos e os próprios testes, e qualquer
       // threshold vira número sem significado.
       include: [
+        'api/**/*.js',
         'src/**/*.{js,jsx}',
         'handlers/**/*.js',
         'lib/**/*.js',
@@ -190,11 +196,24 @@ export default defineConfig({
       // Recalibrado em 01/09/2026 com a leva de testes de auth (route-mount,
       // admin-2fa, admin-login, guardas de auth, AuthProvider, ProtectedRoute):
       // medido 44.19 / 34.62 / 36.25 / 45.67, menos a folga de ~2pp.
+      //
+      // Recalibrado de novo em 01/09/2026 com a suíte do entrypoint
+      // (api/__tests__/serverless-entry.test.js) e a do audit log dos writers
+      // admin: 832 → 846 testes. Junto, `api/**/*.js` entrou no `include`
+      // acima — `api/index.js` é a ÚNICA função publicada e estava fora da
+      // medição, então a cobertura do caminho por onde TODA requisição de
+      // produção passa não contava para o piso:
+      //
+      //   medida         medido     piso    folga
+      //   statements     45,63%      43      2,6pp
+      //   branches       36,19%      34      2,2pp
+      //   functions      37,38%      35      2,4pp
+      //   lines          47,20%      45      2,2pp
       thresholds: {
-        statements: 42,
-        branches: 32,
-        functions: 34,
-        lines: 43,
+        statements: 43,
+        branches: 34,
+        functions: 35,
+        lines: 45,
       },
       // ─────────────────────────────────────────────────────────────
     },

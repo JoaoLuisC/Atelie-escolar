@@ -37,13 +37,36 @@ function restoreOriginalPath(req) {
   const query = corte === -1 ? '' : bruto.slice(corte + 1);
 
   const params = new URLSearchParams(query);
-  const original = params.get('__path');
+  const valores = params.getAll('__path');
 
   // Sem `__path`: ou a requisição chegou pelo caminho real (invocação direta
   // da função, teste local), ou a rota do vercel.json mudou. Nos dois casos o
   // certo é não mexer — o app decide, e um 404 do notFoundHandler é uma
   // resposta honesta.
-  if (original === null) return;
+  if (valores.length === 0) return;
+
+  // MAIS DE UM `__path`: um veio da borda e o outro do cliente.
+  //
+  // A Vercel concatena a query ORIGINAL à query do `dest`, e a ordem dessa
+  // concatenação não é contrato publicado. Ou seja, num pedido a
+  // `/api/validate-coupon?__path=download` chegam aqui os dois valores, e
+  // `get()` devolve o primeiro — que pode ser o do cliente. O efeito medido
+  // em api/__tests__/serverless-entry.test.js: a URL roteada pela borda e o
+  // handler executado deixam de ser a mesma coisa.
+  //
+  // Não é escalada de privilégio — cada handler impõe a própria guarda, e
+  // `/api/products?__path=admin/orders` continua esbarrando em
+  // `ensureAdminSession`. O que se perde é a correspondência entre log de
+  // acesso e código executado, que é justamente o que alguém vai querer na
+  // hora de investigar um incidente no caminho do dinheiro.
+  //
+  // Escolher um dos dois valores seria apostar em qual lado a Vercel
+  // concatena. Aqui a requisição simplesmente não é roteada: a URL fica
+  // `/api/index`, cai no notFoundHandler e recebe 404 no envelope da regra
+  // A1. Nenhum chamador legítimo manda `__path` — ele é transporte da borda.
+  if (valores.length > 1) return;
+
+  const original = valores[0];
 
   params.delete('__path');
   const resto = params.toString();
