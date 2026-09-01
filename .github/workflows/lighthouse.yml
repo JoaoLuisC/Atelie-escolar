@@ -6,6 +6,12 @@ on:
   push:
     branches: [main]
 
+# Só `contents: read`: o job faz checkout e build. O status que ele publica no
+# PR sai pelo LHCI_GITHUB_APP_TOKEN, que é um token próprio — o GITHUB_TOKEN
+# não precisa de escrita aqui.
+permissions:
+  contents: read
+
 jobs:
   lighthouse:
     runs-on: ubuntu-latest

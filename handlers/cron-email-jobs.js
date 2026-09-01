@@ -730,7 +730,13 @@ module.exports = async function cronEmailJobsHandler(req, res) {
   }
 };
 
-// Best-effort: pede à Vercel até 60s de execução. O teto real depende do plano
-// (Hobby costuma limitar a 10s), por isso o processamento é BOUNDED por MAX_PER_RUN
-// e idempotente — execuções horárias drenam a fila com segurança.
-module.exports.config = { maxDuration: 60 };
+// O `module.exports.config = { maxDuration: 60 }` que ficava aqui foi REMOVIDO:
+// desde o 660fe74 este arquivo não é mais uma Serverless Function — a Vercel só
+// lê `config` de módulos dentro de `api/`, e a única função publicada é
+// `api/index.js`. O limite continua existindo, no lugar onde de fato vale:
+// o bloco `functions` do `vercel.json`. Deixar a linha aqui não aumentava
+// timeout nenhum; só afirmava um limite por endpoint que não existe mais.
+//
+// O teto real ainda depende do plano (Hobby costuma limitar a 10s), e é por
+// isso que o processamento é BOUNDED por MAX_PER_RUN e idempotente —
+// execuções horárias drenam a fila com segurança mesmo com corte antes do fim.

@@ -11,6 +11,13 @@ name: Email cron
 # Secrets necessários no GitHub:
 # - APP_URL          → https://profamarciarcardoso.com.br
 # - CRON_SECRET      → mesmo valor que está em produção (Vercel env)
+# Este job só faz um curl autenticado por CRON_SECRET: não lê o repositório,
+# não publica nada, não precisa do GITHUB_TOKEN. Sem este bloco ele herda a
+# permissão padrão do repositório, que em vários repos é escrita — token com
+# mais alcance que a tarefa, num workflow que já carrega um segredo de
+# produção. `{}` é o mínimo de verdade.
+permissions: {}
+
 on:
   schedule:
     # A cada hora em ponto, UTC
