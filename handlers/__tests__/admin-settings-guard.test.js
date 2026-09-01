@@ -9,6 +9,15 @@ import {
   resetModuleRegistry,
 } from './money-path-harness.js';
 
+import { createRequire } from 'node:module';
+
+// Os segredos de 2º fator são guardados protegidos: `totpSecret` cifrado
+// (AES-256-GCM) e `fallbackPin` com hash scrypt. As asserções abaixo
+// perguntam pelo SEGREDO, não pelos bytes gravados — exigir bytes exatos
+// prenderia o teste à embalagem e, pior, só passaria de novo se o segredo
+// voltasse a ficar em texto puro.
+const { decryptSecret, verifyPin } = createRequire(import.meta.url)('../../lib/admin-2fa.js');
+
 // ════════════════════════════════════════════════════════════════════
 // Gate de reautenticação de api/admin-settings.js.
 //
@@ -180,9 +189,9 @@ describe('gate de reautenticação do adminConfig', () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(store.stored('adminConfig').totpSecret).toBe(ATTACKER_TOTP);
+    expect(decryptSecret(store.stored('adminConfig').totpSecret)).toBe(ATTACKER_TOTP);
     // O PIN vigente sobrevive: segredo não enviado é preservado, não apagado.
-    expect(store.stored('adminConfig').fallbackPin).toBe(FALLBACK_PIN);
+    expect(verifyPin(store.stored('adminConfig').fallbackPin, FALLBACK_PIN)).toBe(true);
   });
 
   it('M3: desligar requireSecondFactor exige reautenticação', async () => {
@@ -275,8 +284,8 @@ describe('gate de reautenticação do adminConfig', () => {
     expect(securityEvents.recordSecurityEvent).not.toHaveBeenCalled();
     // Os segredos continuam intactos e as flags transitórias não vazam para o banco.
     const saved = store.stored('adminConfig');
-    expect(saved.totpSecret).toBe(STORED_TOTP);
-    expect(saved.fallbackPin).toBe(FALLBACK_PIN);
+    expect(decryptSecret(saved.totpSecret)).toBe(STORED_TOTP);
+    expect(verifyPin(saved.fallbackPin, FALLBACK_PIN)).toBe(true);
     expect(saved).not.toHaveProperty('has2FA');
     expect(saved).not.toHaveProperty('corDoBotao');
   });
@@ -295,7 +304,7 @@ describe('gate de reautenticação do adminConfig', () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(store.stored('adminConfig').totpSecret).toBe(STORED_TOTP);
+    expect(decryptSecret(store.stored('adminConfig').totpSecret)).toBe(STORED_TOTP);
   });
 
   it('chave não sensível (homeSections) segue livre', async () => {

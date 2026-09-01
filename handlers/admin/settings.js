@@ -17,13 +17,21 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { getTableRow, insertIntoTable, updateTable },
 } = require('../../lib/supabase');
-// Primitivos de 2º fator anexados ao handler de login (ver nota no fim de
-// api/admin-login.js sobre a dívida de extrair um lib/admin-2fa.js).
+// Primitivos de 2º fator. Moravam em `./login` (a dívida que o próprio
+// arquivo anotava); saíram para `lib/admin-2fa.js` quando `totpSecret` passou
+// a ser cifrado em repouso — gravar e conferir precisam das MESMAS primitivas,
+// e deixá-las penduradas no handler de login faria este importar aquele só
+// para escrever um campo.
 const {
   isSecondFactorRequired,
   extractSecondFactorMethods,
   verifySecondFactorCode,
-} = require('./login');
+  encryptSecret,
+  hashPin,
+  decryptSecret,
+  isHashedPin,
+  verifyPin,
+} = require('../../lib/admin-2fa');
 
 const ALLOWED_KEYS = new Set(['homeSections', 'adminConfig']);
 
@@ -177,7 +185,11 @@ function coerceTotpSecret(value) {
   if (normalized.length < MIN_TOTP_SECRET_LENGTH) {
     return { error: `o TOTP secret deve ter ao menos ${MIN_TOTP_SECRET_LENGTH} caracteres` };
   }
-  return { value: normalized };
+  // Valida em claro, GRAVA cifrado. O segredo do TOTP não pode ser hasheado
+  // — o servidor precisa dele para recalcular o HMAC de cada janela —, então a
+  // proteção possível é cifra em repouso: quem obtiver um dump da tabela
+  // `settings` não leva o segundo fator junto. Ver lib/admin-2fa.js.
+  return { value: encryptSecret(normalized) };
 }
 
 function coercePin(value) {
@@ -194,13 +206,24 @@ function coercePin(value) {
       error: 'o PIN de fallback é fraco demais (evite dígitos repetidos ou sequências óbvias)',
     };
   }
-  return { value: pin };
+  // Ao contrário do totpSecret, o PIN só é comparado contra o que a pessoa
+  // digita — nunca precisa voltar ao claro. Então hash (scrypt com sal), que
+  // é mais forte que cifra: nem com a chave em mãos ele é recuperável.
+  return { value: hashPin(pin) };
 }
 
 const COERCERS = Object.freeze({
   boolean: coerceBoolean,
   totpSecret: coerceTotpSecret,
   pin: coercePin,
+});
+
+// Como cada segredo é guardado. Cifra para o que precisa voltar ao claro
+// (TOTP), hash para o que só é comparado (PIN). Usado também para migrar
+// valores herdados em texto puro — ambas são idempotentes.
+const SECRET_AT_REST = Object.freeze({
+  totpSecret: encryptSecret,
+  fallbackPin: hashPin,
 });
 
 /**
@@ -247,7 +270,12 @@ function sanitizeAdminConfig(incoming, existing) {
   for (const field of SECRET_FIELDS) {
     if (result[field] !== undefined) continue;
     const stored = String(current[field] ?? '').trim();
-    if (stored) result[field] = stored;
+    // MIGRAÇÃO AUTOMÁTICA do formato antigo (valor em claro). As duas funções
+    // são idempotentes, então aplicá-las a um valor já protegido é no-op — e
+    // com isso QUALQUER salvamento do painel migra os segredos herdados, não
+    // só um que reenvie o próprio campo (que o GET redige, e portanto o painel
+    // quase nunca reenvia).
+    if (stored) result[field] = SECRET_AT_REST[field](stored);
   }
 
   return { value: result, ignored };
@@ -321,6 +349,42 @@ function effectiveSecurityValue(config, field) {
 }
 
 /**
+ * Dois valores guardados representam o MESMO segredo?
+ *
+ * POR QUE ISTO NÃO É `a === b`
+ * O critério antigo era "os bytes gravados vão mudar?", e funcionava enquanto
+ * segredo era texto puro. Com cifra e hash em repouso, os bytes mudam sem que
+ * o segredo mude: migrar um `totpSecret` herdado de claro para `enc:v1:...` é
+ * troca de EMBALAGEM. Pelo critério literal, o primeiro "Salvar" depois do
+ * deploy passaria a exigir um código de 2FA sem que nada de segurança tivesse
+ * sido alterado — e o round-trip do painel deixaria de ser inofensivo.
+ *
+ * A propriedade do R5 continua de pé: plantar um segredo INÉDITO ou trocar o
+ * existente muda o valor decifrado (ou falha na conferência do PIN), e o gate
+ * dispara igual. O que deixa de disparar é exclusivamente a mudança de
+ * formato do MESMO segredo.
+ */
+function sameSecret(field, before, after) {
+  const a = String(before ?? '').trim();
+  const b = String(after ?? '').trim();
+  if (a === b) return true;
+  if (!a || !b) return false;
+
+  // TOTP é reversível: compara os segredos em claro dos dois lados.
+  if (field === 'totpSecret') return decryptSecret(a) === decryptSecret(b);
+
+  // PIN é hash: não dá para "abrir" o lado protegido, mas dá para CONFERIR o
+  // lado em claro contra ele — que é exatamente a pergunta ("o hash novo
+  // corresponde ao PIN antigo?").
+  if (field === 'fallbackPin') {
+    if (isHashedPin(b) && !isHashedPin(a)) return verifyPin(b, a);
+    if (isHashedPin(a) && !isHashedPin(b)) return verifyPin(a, b);
+  }
+
+  return false;
+}
+
+/**
  * A escrita mexe no MECANISMO de autenticação do admin?
  *
  * REGRESSÃO CORRIGIDA (R5). A versão anterior chamava-se isSecurityWeakening e
@@ -349,9 +413,13 @@ function effectiveSecurityValue(config, field) {
  * com o que foi tocado, sem nunca carregar os valores.
  */
 function changedSecurityFields(before, after) {
-  return SECURITY_FIELDS.filter(
-    (field) => effectiveSecurityValue(before, field) !== effectiveSecurityValue(after, field),
-  );
+  return SECURITY_FIELDS.filter((field) => {
+    const antes = effectiveSecurityValue(before, field);
+    const depois = effectiveSecurityValue(after, field);
+
+    if (ADMIN_CONFIG_FIELDS[field].secret) return !sameSecret(field, antes, depois);
+    return antes !== depois;
+  });
 }
 
 function safeJsonParse(value, fallback) {

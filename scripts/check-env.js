@@ -140,6 +140,12 @@ const VARS = [
     why: 'lib/admin-session.js — assina o cookie de sessão do admin',
   },
   {
+    name: 'ADMIN_2FA_ENC_KEY',
+    scope: 'production',
+    minLength: 32,
+    why: 'lib/admin-2fa.js — cifra totpSecret em repouso; sem ela o 2FA não abre',
+  },
+  {
     name: 'CUSTOMER_SESSION_SECRET',
     scope: 'core',
     minLength: 32,

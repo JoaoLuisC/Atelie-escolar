@@ -92,3 +92,41 @@ Descartada porque um `for` de teste com erro, rodando contra `localhost:3000`, c
 requisições em segundos e — com o contador no Postgres — cada uma delas é uma escrita no banco. O
 limitador de borda custa uma linha e evita isso, desde que fique escrito que ele não é a política.
 É essa a diferença entre borda genérica e política falsa.
+
+## Adendo — 01/09/2026: política de indisponibilidade por balde
+
+`enforceRateLimit` sempre foi **fail-open**: contador inacessível, requisição passa. A decisão
+está documentada no próprio módulo e se apoiava em dois argumentos.
+
+1. A mesma indisponibilidade de Postgres que derruba a contagem já derrubaria o endpoint logo
+   adiante — negar não protege nada, só troca um 500 por um 429 enganoso.
+2. Fail-closed no `/api/admin-login` trancaria a dona para fora justamente durante um incidente,
+   que é quando ela mais precisa entrar.
+
+**O argumento (1) não vale para verificação de credencial.** `customerLogin` e `customerRegister`
+autenticam contra o **GoTrue** (`lib/customer-auth-handlers.js`), que é um serviço distinto do
+PostgREST que serve a RPC do contador; e o anti-replay do TOTP em `handlers/admin/login.js` é ele
+próprio uma chamada de `rate_limit_hit`. Nos três casos o alvo pode estar de pé com o contador
+fora do ar — e aí "passar" significa brute force sem teto contra um serviço funcionando, além de
+um código TOTP interceptado voltar a ser reutilizável.
+
+Ficou, então, `failMode` **por balde**, default `'open'`:
+
+| Balde                               | Política           | Por quê                                                  |
+| ----------------------------------- | ------------------ | -------------------------------------------------------- |
+| `customerLogin`, `customerRegister` | `closed` → **503** | GoTrue continua de pé sem o contador                     |
+| `adminLoginSecondFactor`            | `closed` → **503** | o anti-replay do TOTP mora no mesmo contador             |
+| `adminLogin`                        | `open`             | o argumento (2) continua de pé, e o 2º fator segue atrás |
+| todos os demais                     | `open`             | comportamento inalterado                                 |
+
+**503 e não 429**: 429 afirmaria "você excedeu o limite", que é falso, e mandaria o cliente esperar
+a janela inteira. 503 com `Retry-After: 30` diz o que houve — a verificação não pôde ser feita — e
+convida a tentar de novo quando o contador voltar.
+
+Isto **não** reintroduz um segundo mecanismo, que é o que este ADR proíbe: continua havendo um só
+contador, um só ponto de decisão e um só lugar onde a política é lida. O que muda é que a resposta
+à indisponibilidade passou a ser uma escolha explícita por endpoint, em vez de uma regra implícita
+uniforme que estava certa para a maioria dos baldes e errada exatamente para os de credencial.
+
+Nos dois modos o evento `rate_limit_unavailable` continua sendo emitido: recusar não pode ser mais
+silencioso do que passar.

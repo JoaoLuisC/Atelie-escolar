@@ -10,6 +10,17 @@ const { resolveSecret } = require('../../lib/env-secret');
 const { getAnonClient, getProfileRoleByEmail } = require('../../services/supabase-auth');
 const { enforceRateLimit, resolveIdentifier, RATE_LIMITS } = require('../../lib/rate-limit');
 const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
+// TOTP, PIN e o repouso cifrado dos dois. Saiu daqui em 01/09/2026: era a
+// divida ja anotada no proprio arquivo (HOTP/base32 duplicados com
+// handlers/admin/settings.js), e virou obrigatoria quando totpSecret passou a
+// ser cifrado — settings.js precisa das MESMAS primitivas para gravar.
+const {
+  matchTotpCounter,
+  isSecondFactorRequired,
+  extractSecondFactorMethods,
+  verifySecondFactorCode,
+  verifyPin,
+} = require('../../lib/admin-2fa');
 
 // TTL do desafio de 2º fator. Era 300s; caiu para 120s porque o desafio é um
 // portador de "a senha já foi conferida" e o único uso legítimo dele é o
@@ -17,12 +28,6 @@ const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../
 // indolor porque o handler REEMITE um desafio novo quando o antigo expira
 // (ver handleSecondFactor) — o painel nunca fica preso.
 const FACTOR_CHALLENGE_TTL_SECONDS = 120;
-
-const TOTP_STEP_SECONDS = 30;
-// window=1 → aceita o código anterior e o próximo (±30s) para tolerar relógio
-// dessincronizado no celular. É o que torna um código válido por ~90s e, sem
-// marcação de uso, replayável nessa janela — daí o consumo único abaixo.
-const TOTP_DRIFT_WINDOW = 1;
 
 // ─── Marcação de uso único (anti-replay) ─────────────────────────────
 // ONDE GUARDAR O "JÁ USADO": reaproveitamos public.rate_limit_hit() — o mesmo
@@ -203,124 +208,6 @@ function verifyChallengeToken(token, expectedEmail, req) {
   }
 }
 
-function decodeBase32(input) {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  const sanitized = String(input || '')
-    .toUpperCase()
-    .replaceAll(/[^A-Z2-7]/g, '');
-  if (!sanitized) return null;
-
-  let bits = '';
-  for (const char of sanitized) {
-    const value = alphabet.indexOf(char);
-    if (value < 0) return null;
-    bits += value.toString(2).padStart(5, '0');
-  }
-
-  const bytes = [];
-  for (let i = 0; i + 8 <= bits.length; i += 8) {
-    bytes.push(Number.parseInt(bits.slice(i, i + 8), 2));
-  }
-
-  return Buffer.from(bytes);
-}
-
-function generateTotpCode(secretBuffer, counter) {
-  const counterBuffer = Buffer.alloc(8);
-  counterBuffer.writeBigUInt64BE(BigInt(counter));
-
-  const hmac = crypto.createHmac('sha1', secretBuffer).update(counterBuffer).digest();
-  const offset = (hmac.at(-1) || 0) & 0xf;
-  const binary =
-    ((hmac[offset] & 0x7f) << 24) |
-    ((hmac[offset + 1] & 0xff) << 16) |
-    ((hmac[offset + 2] & 0xff) << 8) |
-    (hmac[offset + 3] & 0xff);
-
-  return String(binary % 1_000_000).padStart(6, '0');
-}
-
-/**
- * Devolve o CONTADOR TOTP que casou com o código, ou null.
- *
- * Antes isto era um booleano (`isValidTotpCode`). Precisamos do contador porque
- * ele é a identidade do código dentro da janela — é o que permite marcar
- * "este código já foi usado" sem guardar o código em lugar nenhum.
- */
-function matchTotpCounter(
-  secret,
-  code,
-  stepSeconds = TOTP_STEP_SECONDS,
-  window = TOTP_DRIFT_WINDOW,
-) {
-  const normalizedCode = String(code || '').trim();
-  if (!/^\d{6}$/.test(normalizedCode)) {
-    return null;
-  }
-
-  const secretBuffer = decodeBase32(secret);
-  if (!secretBuffer) {
-    return null;
-  }
-
-  const currentCounter = Math.floor(Date.now() / 1000 / stepSeconds);
-  for (let drift = -window; drift <= window; drift += 1) {
-    const counter = currentCounter + drift;
-    if (safeCompare(normalizedCode, generateTotpCode(secretBuffer, counter))) {
-      return counter;
-    }
-  }
-
-  return null;
-}
-
-function isSecondFactorRequired(adminConfig) {
-  return Boolean(
-    adminConfig?.requireSecondFactor || adminConfig?.require2FA || adminConfig?.twoFactorEnabled,
-  );
-}
-
-function extractSecondFactorMethods(adminConfig) {
-  const methods = [];
-  if (String(adminConfig?.totpSecret || '').trim()) {
-    methods.push('totp');
-  }
-
-  const allowPinFallback = adminConfig?.allowPinFallback !== false;
-  if (allowPinFallback && String(adminConfig?.fallbackPin || '').trim()) {
-    methods.push('pin');
-  }
-
-  return methods;
-}
-
-/**
- * Confere um código de 2º fator contra a config vigente, SEM efeito colateral
- * (não consome marcas de uso único). Usado por api/admin-settings.js para exigir
- * reautenticação antes de alterar campos sensíveis de segurança.
- *
- * DÍVIDA ASSUMIDA: TOTP/base32 deveriam morar em lib/admin-2fa.js — a revisão já
- * aponta a extração de helpers duplicados como próximo passo. Enquanto isso,
- * exportar daqui é preferível a copiar a implementação de HOTP para um segundo
- * arquivo, onde ela envelheceria em separado.
- */
-function verifySecondFactorCode(adminConfig, code) {
-  const methods = extractSecondFactorMethods(adminConfig);
-  if (methods.length === 0) return false;
-
-  const normalized = String(code || '').trim();
-  if (!normalized) return false;
-
-  if (methods.includes('totp') && matchTotpCounter(adminConfig?.totpSecret, normalized) !== null) {
-    return true;
-  }
-
-  return (
-    methods.includes('pin') &&
-    safeCompare(normalized, String(adminConfig?.fallbackPin || '').trim())
-  );
-}
-
 async function readAdminConfig() {
   const row = await getTableRow('settings', {
     select: 'setting_value',
@@ -385,8 +272,10 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
   const totpCounter = methods.includes('totp')
     ? matchTotpCounter(adminConfig?.totpSecret, code)
     : null;
-  const pinValid =
-    methods.includes('pin') && safeCompare(code, String(adminConfig?.fallbackPin || '').trim());
+  // `verifyPin` e nao `safeCompare`: o PIN agora e guardado como hash scrypt
+  // com sal, e a funcao aceita tambem o formato antigo em claro — sem isso o
+  // deploy trancaria a dona para fora ate o primeiro "Salvar" no painel.
+  const pinValid = methods.includes('pin') && verifyPin(adminConfig?.fallbackPin, code);
 
   if (totpCounter === null && !pinValid) {
     await recordSecurityEvent({
