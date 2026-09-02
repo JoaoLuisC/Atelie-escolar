@@ -8,6 +8,13 @@ import { StatusChip } from '../ui/StatusChip';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { formatDateTime } from '../../../utils/date';
+import {
+  donutArcPath,
+  donutSegments,
+  formatPct,
+  revenueChartGeometry,
+  sparklineGeometry,
+} from './dashboard-charts';
 
 const CURVE_STYLES = {
   A: {
@@ -29,13 +36,6 @@ const CURVE_STYLES = {
     bar: 'from-slate-400 to-slate-300',
   },
 };
-
-function formatPct(value, { withSign = true } = {}) {
-  if (!Number.isFinite(value)) return '0%';
-  const rounded = Math.abs(value) >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
-  const sign = withSign && rounded > 0 ? '+' : '';
-  return `${sign}${rounded}%`;
-}
 
 function TrendBadge({ trend, pct }) {
   if (!trend || trend === 'stable') {
@@ -66,16 +66,9 @@ TrendBadge.propTypes = {
 
 function Sparkline({ values = [], accent = '#7c3aed' }) {
   const gradientId = useId();
-  if (!values.length) return null;
-  const max = Math.max(1, ...values);
-  const points = values
-    .map((value, index) => {
-      const x = (index / Math.max(values.length - 1, 1)) * 100;
-      const y = 100 - (value / max) * 100;
-      return `${x},${y}`;
-    })
-    .join(' ');
-  const areaPath = `M0,100 L${points.replaceAll(' ', ' L')} L100,100 Z`;
+  const geometria = sparklineGeometry(values);
+  if (!geometria) return null;
+  const { points, areaPath } = geometria;
   return (
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-10 w-full">
       <defs>
@@ -230,16 +223,7 @@ function RevenueLineChart({ entries }) {
 
   const width = 100;
   const height = 100;
-  const values = entries.map((entry) => Number(entry.value || 0));
-  const max = Math.max(1, ...values);
-  const stepX = entries.length > 1 ? width / (entries.length - 1) : width;
-  const points = values.map((value, index) => {
-    const x = entries.length > 1 ? index * stepX : width / 2;
-    const y = height - (value / max) * height * 0.85 - 5;
-    return { x, y, value, label: entries[index].label };
-  });
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-  const areaPath = `${linePath} L${points[points.length - 1].x},${height} L${points[0].x},${height} Z`;
+  const { points, linePath, areaPath } = revenueChartGeometry(entries, { width, height });
 
   return (
     <div className="space-y-3">
@@ -310,54 +294,8 @@ function CategoryDonut({ entries }) {
     return <p className="py-10 text-center text-sm text-slate-500">Sem dados de categoria.</p>;
   }
 
-  const palette = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#64748b'];
-  const total = entries.reduce((sum, entry) => sum + Number(entry.value || 0), 0);
-
-  // Soma acumulada ANTES de cada fatia, calculada de uma vez em vez de
-  // mutar um `let cumulative` dentro do `map` — o React Compiler acusa
-  // `react-hooks/immutability` na reatribuição, e o valor por fatia é
-  // exatamente o mesmo. `entries` é a lista de categorias (meia dúzia),
-  // então o custo quadrático aqui é irrelevante e o código diz o que faz.
-  const valores = entries.map((entry) => Number(entry.value || 0));
-  const acumuladoAntes = valores.map((_, index) =>
-    valores.slice(0, index).reduce((soma, valor) => soma + valor, 0),
-  );
-
-  const segments = entries.map((entry, index) => {
-    const value = valores[index];
-    const startAngle = (acumuladoAntes[index] / total) * 360;
-    const endAngle = ((acumuladoAntes[index] + value) / total) * 360;
-    return {
-      ...entry,
-      color: palette[index % palette.length],
-      startAngle,
-      endAngle,
-      sharePct: total ? (value / total) * 100 : 0,
-    };
-  });
-
-  const radius = 38;
-  const cx = 50;
-  const cy = 50;
-  function polarToCartesian(angleDegrees, r) {
-    const angleRad = ((angleDegrees - 90) * Math.PI) / 180;
-    return { x: cx + r * Math.cos(angleRad), y: cy + r * Math.sin(angleRad) };
-  }
-  function arcPath(startAngle, endAngle) {
-    const start = polarToCartesian(endAngle, radius);
-    const end = polarToCartesian(startAngle, radius);
-    const startInner = polarToCartesian(endAngle, radius - 14);
-    const endInner = polarToCartesian(startAngle, radius - 14);
-    const largeArc = endAngle - startAngle <= 180 ? '0' : '1';
-    return [
-      `M ${start.x} ${start.y}`,
-      `A ${radius} ${radius} 0 ${largeArc} 0 ${end.x} ${end.y}`,
-      `L ${endInner.x} ${endInner.y}`,
-      `A ${radius - 14} ${radius - 14} 0 ${largeArc} 1 ${startInner.x} ${startInner.y}`,
-      'Z',
-    ].join(' ');
-  }
-
+  const { total, segments } = donutSegments(entries);
+  const arcPath = (startAngle, endAngle) => donutArcPath(startAngle, endAngle);
   return (
     <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[140px_1fr]">
       <div className="relative">
