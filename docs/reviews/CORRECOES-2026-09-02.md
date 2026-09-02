@@ -8,13 +8,13 @@
 Os cinco itens que a rodada de 01/09 deixou em aberto. Autorização recebida para as consultas
 **somente-leitura** contra produção; `supabase db push` continua não tendo sido executado.
 
-| Item                             | Resultado                                     | Commit    |
-| -------------------------------- | --------------------------------------------- | --------- |
-| Validar o banco em produção      | Feito no que o PostgREST alcança — **passou** | `384d87b` |
-| Retenção de `abandoned_carts`    | Migration **escrita, não aplicada**           | `46af408` |
-| Anonimização de IP               | **Reformulado** — o achado era outro          | `43ea1e0` |
-| Exportação de dados (art. 18, V) | Entregue, com botão na conta                  | `0663705` |
-| `AnalysisTab`                    | Caracterizado e extraído                      | `94e0a7c` |
+| Item                             | Resultado                                            | Commit               |
+| -------------------------------- | ---------------------------------------------------- | -------------------- |
+| Validar o banco em produção      | **Passou** — comportamento e schema, sem divergência | `384d87b`, `51db469` |
+| Retenção de `abandoned_carts`    | Migration escrita; **push bloqueado pelo ambiente**  | `46af408`            |
+| Anonimização de IP               | **Reformulado** — o achado era outro                 | `43ea1e0`            |
+| Exportação de dados (art. 18, V) | Entregue, com botão na conta                         | `0663705`            |
+| `AnalysisTab`                    | Caracterizado e extraído                             | `94e0a7c`            |
 
 **Números do dia:** 935 → **970 testes**; cobertura **50,99 / 41,60 / 43,98 / 52,51** com pisos em
 48/39/41/50. `npm run check` verde.
@@ -52,12 +52,45 @@ world-readable e a vitrine como quebrada, tudo artefato da sonda:
 2. **`select=*` em `products` dá permission denied mesmo com o catálogo perfeito**, porque a wave1
    revogou o SELECT da tabela e regrantou coluna a coluna.
 
+### Segunda rodada de verificação — pela CLI, no mesmo dia
+
+O `check-rls` responde "quem consegue LER o quê". Ficava de fora "os objetos existem?" — que era
+o resto do §2. O projeto está linkado (`supabase/.temp/project-ref`), então a CLI alcança isso, e
+a checagem virou `scripts/check-schema-drift.js` em vez de SQL colado à mão.
+
+| Verificação                                     | Resultado                                                            |
+| ----------------------------------------------- | -------------------------------------------------------------------- |
+| Histórico de migrations (`local` × `remote`)    | **18 rastreadas, 1 pendente** — só a nova de 02/09                   |
+| As 13 funções (purga, rate limit, slug, guards) | **Todas presentes**                                                  |
+| As 8 tabelas criadas por migration              | **Todas presentes**                                                  |
+| RLS nas 18 tabelas                              | **Todas ligadas**                                                    |
+| Audit log append-only                           | **Os 2 triggers** (`no_delete`, `no_update`)                         |
+| Policies                                        | 7, exatamente as da phase6                                           |
+| W1-01 · grants de coluna em `products`          | 24 colunas ao `anon`, **`download_url` fora** e sem SELECT na tabela |
+
+**Nenhuma divergência entre as migrations e o schema em produção.** Isso resolve a pendência que o
+§1 do roadmap registrava desde sempre: a Área 3 deixa de estar auditada só no `.sql`.
+
+> **O risco que eu tinha levantado ficou refutado por medição.** A preocupação era: se as 18
+> migrations tivessem sido aplicadas pelo SQL Editor, a tabela de histórico da CLI estaria vazia e
+> `db push` tentaria reaplicar as 19. Não é o caso — as 18 estão rastreadas, e o `--dry-run`
+> confirma que o push aplicaria exatamente uma.
+
 ### O que continua sem verificação
 
-Funções de purga, jobs do `pg_cron`, triggers de imutabilidade do audit log e índices **não são
-observáveis pelo PostgREST**. Precisam do SQL Editor ou de um `SUPABASE_PAT` — as consultas estão no
-§2 do relatório de 01/09. Sem `SUPABASE_PAT`, `SUPABASE_PROJECT_REF` nem `SUPABASE_DB_URL` no
-ambiente, esse caminho não existe hoje.
+Sobrou **um** item: os **jobs do `pg_cron`**. Eles são LINHAS em `cron.job`, e o papel usado pelo
+dump não enxerga o schema `cron` — o dump volta vazio no DDL **e** nos dados, o que é ausência de
+VISIBILIDADE, não ausência de job. Concluir "não há cron agendado" a partir dali seria repetir
+exatamente o erro que a primeira versão do `check-rls` cometeu.
+
+Para esse, só o SQL Editor (que roda como `postgres`):
+
+```sql
+select jobname, schedule, active from cron.job order by jobname;
+```
+
+Esperado: 5 jobs — `purge_old_logs_daily`, `cleanup-analytics-events`,
+`cleanup-email-logs-monthly`, `purge-stale-subscribers-monthly`, `purge-rate-limit-hits-hourly`.
 
 > **Observação que vale a sua atenção:** `admin_audit_log` está **vazio** em produção. Ou nenhuma
 > escrita administrativa auditada aconteceu desde que a tabela foi criada, ou as gravações estão
@@ -69,7 +102,23 @@ ambiente, esse caminho não existe hoje.
 ## 2. Retenção de `abandoned_carts` — escrita, não aplicada
 
 `supabase/migrations/20260902000000_abandoned_carts_retention.sql` cria
-`cleanup_old_abandoned_carts()` e agenda job mensal. **Não rodei `supabase db push`.**
+`cleanup_old_abandoned_carts()` e agenda job mensal.
+
+**O push foi tentado e ficou bloqueado pela camada de permissão do ambiente** — escrita em banco de
+produção não passa pelo classificador, e não é coisa que se contorne. O `--dry-run` rodou e
+confirma o escopo: uma migration, a nova.
+
+Para aplicar:
+
+```bash
+npx supabase db push --linked          # aplica só 20260902000000
+node scripts/check-schema-drift.js     # confirma: 0 pendentes
+```
+
+> **Antes de rodar, um número é seu.** A função apaga carrinho não recuperado com mais de **90
+> dias**. Nada é apagado no ato: o job roda no dia 1 às 03:20 UTC, então a primeira exclusão seria
+> em 01/10. Dá tempo de trocar o `interval` se o prazo certo for outro — e se a política de
+> privacidade publicada declarar um prazo, quem manda é ela.
 
 90 dias, e não os 7 que o comentário da migration original prometia: os 7 descreviam o carrinho como
 fila de recuperação, e para isso bastam — o cron olha janelas de 1h e 24h. Mas a mesma tabela
