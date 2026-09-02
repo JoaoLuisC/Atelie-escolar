@@ -19,8 +19,8 @@ import {
 //
 // O QUE ESTES TESTES TRAVAM
 // Existem exatamente DUAS portas que transicionam um pedido para `approved` e
-// emitem `download_tokens` — api/webhook.js (notificação do Mercado Pago) e
-// api/verify-payment.js (polling do frontend, que consulta o MP por
+// emitem `download_tokens` — handlers/webhook.js (notificação do Mercado Pago) e
+// handlers/verify-payment.js (polling do frontend, que consulta o MP por
 // `external_reference`). Antes da correção, as duas decidiam só por
 // `payment.status === 'approved'` + um `external_reference` que resolvesse
 // para um pedido existente: `transaction_amount` e `currency_id` não eram
@@ -695,7 +695,7 @@ describe('reconciliação de valor pago × total do pedido (P0-1)', () => {
         reason: 'order_total_unusable',
       },
       // ZERO reprova desde a extração (`due <= 0`). A linha zerada é real e não
-      // hipotética: api/create-payment.js grava o pedido ANTES de criar a
+      // hipotética: handlers/create-payment.js grava o pedido ANTES de criar a
       // preference, então um cupom de 100% deixa `total_amount = 0` em `orders`
       // mesmo quando o Mercado Pago recusa a cobrança de valor zero. Com o
       // antigo `due < 0`, esse pedido aceitava qualquer pagamento — `0.01 +

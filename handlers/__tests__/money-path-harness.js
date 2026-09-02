@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════
-// Harness dos testes do CAMINHO DO DINHEIRO (api/webhook.js,
-// api/verify-payment.js, api/download.js).
+// Harness dos testes do CAMINHO DO DINHEIRO (handlers/webhook.js,
+// handlers/verify-payment.js, handlers/download.js).
 //
 // Não é um arquivo de teste — o `include` padrão do Vitest só coleta
 // `*.test.js`, então este módulo é apenas importado pelos três.
@@ -9,7 +9,7 @@
 // Os handlers de `api/` e as libs de `lib/` são CommonJS e se resolvem por
 // `require`. Dentro do Vitest, um `await import('../webhook.js')` de um
 // módulo CJS é delegado ao carregador nativo do Node, e TODO o grafo
-// (`api/webhook.js` → `lib/supabase.js` → …) é carregado por fora do module
+// (`handlers/webhook.js` → `lib/supabase.js` → …) é carregado por fora do module
 // runner do Vitest. Consequência medida neste repo: `vi.mock('../../lib/supabase')`
 // é silenciosamente ignorado — o handler continua falando com o módulo real.
 // (A nota em `lib/__tests__/rate-limit.test.js:5-11` registra o mesmo achado.)
@@ -21,7 +21,7 @@
 // exige dependência nova nem mudar o código de produção só para testá-lo.
 //
 // ── POR QUE NÃO STUBAR SÓ O `fetch` GLOBAL ───────────────────────────
-// É a técnica de `api/__tests__/query-authz-regression.test.js`, e continua
+// É a técnica de `handlers/__tests__/query-authz-regression.test.js`, e continua
 // certa lá: aquele arquivo afirma sobre a URL REAL enviada ao PostgREST, que
 // é justamente o controle sob teste. Aqui ela não serve por dois motivos:
 //   1. o SDK do Mercado Pago usa `node-fetch` (`node_modules/mercadopago/
@@ -49,7 +49,7 @@ const installedMocks = new Set();
  * Descarta do cache do Node todo módulo do PRÓPRIO projeto (node_modules
  * fica intacto — recarregar o SDK do MP a cada teste seria caro e inútil).
  *
- * Precisa rodar ANTES de instalar os mocks: `api/webhook.js` captura suas
+ * Precisa rodar ANTES de instalar os mocks: `handlers/webhook.js` captura suas
  * dependências no topo do arquivo, então só um require novo enxerga o que
  * foi injetado. Como efeito colateral desejável, zera também o estado de
  * módulo das libs (ex.: o `mpClient` memoizado em lib/mercadopago-config.js),
@@ -250,7 +250,7 @@ export function createSupabaseStore(initial = {}) {
     // qualquer outra tabela estourava "tabela desconhecida" dentro do try/catch
     // do handler, virava um 500 genérico, e um teste que tolerasse "pedido não
     // gravado" passava sem exercitar nada. Foi exatamente o que aconteceu em
-    // api/__tests__/checkout-money.test.js antes do assert duro.
+    // handlers/__tests__/checkout-money.test.js antes do assert duro.
     ...Object.fromEntries(
       Object.entries(initial).map(([name, rows]) => [
         name,

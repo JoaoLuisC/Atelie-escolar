@@ -16,7 +16,7 @@
 //
 // Remover também foi descartado: sem este par, um `throw` não tratado numa rota
 // do Express de dev devolve a página HTML de stack trace do Express — HTML no
-// lugar de JSON, que é exatamente o sintoma que api/notfound.js existe para
+// lugar de JSON, que é exatamente o sintoma que handlers/notfound.js existe para
 // evitar do outro lado.
 //
 // O que sobrou é o escopo honesto: uma rede que só existe no Express de

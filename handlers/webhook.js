@@ -8,7 +8,7 @@ const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-p
 const { recordEvent } = require('../lib/analytics-events');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 // Reconciliação de valor (P0-1) — porta ÚNICA, compartilhada com
-// api/verify-payment.js. O porquê de não ser código local está em
+// handlers/verify-payment.js. O porquê de não ser código local está em
 // lib/payment-integrity.js: as duas cópias que existiam aqui e lá divergiram e
 // a proteção passou a valer o que valia a mais frouxa (regressão R3).
 const { checkPaymentIntegrity } = require('../lib/payment-integrity');
@@ -267,8 +267,8 @@ module.exports = async function webhookHandler(req, res) {
       // qualquer momento. A janela de frescor reduziu a janela do replay, mas o
       // conserto de verdade é não colocar segredo em resposta que qualquer um
       // provoca. Os dois consumidores legítimos continuam servidos por
-      // endpoints autenticados: api/verify-payment.js (order_code + e-mail
-      // conferidos em tempo constante) e api/customer-orders.js (sessão do
+      // endpoints autenticados: handlers/verify-payment.js (order_code + e-mail
+      // conferidos em tempo constante) e handlers/customer-orders.js (sessão do
       // cliente). Nada no frontend lia este campo — DownloadsPage.jsx consome
       // `order.downloadTokens` daqueles dois, não do webhook.
       return ok(res, { message: 'Webhook processed successfully' });

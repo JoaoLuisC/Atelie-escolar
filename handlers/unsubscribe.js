@@ -49,7 +49,7 @@ const NEUTRAL_EMAIL_MESSAGE =
  * o caminho `?token=` é idêntico ao de antes. Só o rodapé de fallback
  * `?email=...` (usado quando não havia token) deixa de descadastrar sozinho —
  * ele agora cai no fluxo de "enviamos o link", e a correção M1 em
- * api/cron-email-jobs.js garante que nenhum envio de marketing sai sem token.
+ * handlers/cron-email-jobs.js garante que nenhum envio de marketing sai sem token.
  *
  * Rate limit: 20/min por IP (paridade com unsubscribeLimiter de
  * routes/api-compat.routes.js). Segura tanto a varredura de tokens quanto o
@@ -74,7 +74,7 @@ module.exports = async function unsubscribeHandler(req, res) {
     // E-mail só pelo CORPO, nunca por query string. Um GET que dispara envio
     // seria acionado por prefetch de browser e por scanner de link de e-mail —
     // e o endereço ficaria em log de acesso e no Referer (mesma política de
-    // api/me-delete-account.js). O slice antecede o regex para não jogar
+    // handlers/me-delete-account.js). O slice antecede o regex para não jogar
     // entrada gigante no backtracking.
     const emailInput = String(req.body?.email || '')
       .trim()

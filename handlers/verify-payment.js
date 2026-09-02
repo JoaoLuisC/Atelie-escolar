@@ -10,7 +10,7 @@ const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 
 // ════════════════════════════════════════════════════════════════════
-// PARIDADE COM api/webhook.js — agora ESTRUTURAL, não por disciplina.
+// PARIDADE COM handlers/webhook.js — agora ESTRUTURAL, não por disciplina.
 //
 // Esta é a segunda porta que aprova pedido e emite download_tokens (a outra é
 // a notificação do Mercado Pago). Quando a reconciliação de valor do P0-1 foi
@@ -117,7 +117,7 @@ async function loadDownloadTokens(orderInternalId) {
 //     no faturamento, e a sequência pós-compra (que filtra
 //     `payment_status = 'approved'`) nunca dispara. Venda entregue e invisível.
 //
-// Agora cada efeito tem sua própria guarda, exatamente como em api/webhook.js:
+// Agora cada efeito tem sua própria guarda, exatamente como em handlers/webhook.js:
 // a transição é sempre TENTADA quando o pagamento reconcilia (condicionada em
 // `neq.approved`, então é idempotente e barata), os tokens são criados só se não
 // houver nenhum, e o provisionamento só na primeira aprovação. É a mesma
@@ -339,7 +339,7 @@ async function refreshApprovedOrderData(order, orderId, req) {
  * é caminho DEPRECIADO: o e-mail do comprador é PII e, na query, vaza para os
  * access logs da Vercel, para o histórico do navegador e para o header Referer
  * de qualquer recurso externo carregado na página. O projeto já adotou a
- * política oposta em api/me-delete-account.js:258-260 ("token aceito SOMENTE no
+ * política oposta em handlers/me-delete-account.js:258-260 ("token aceito SOMENTE no
  * corpo POST"); aqui ela passa a valer também.
  */
 function readVerifyPayload(req) {

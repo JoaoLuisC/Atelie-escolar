@@ -39,7 +39,7 @@ module.exports = async function downloadHandler(req, res) {
 
   try {
     // ── POR QUE O TOKEN CONTINUA NA QUERY STRING (achado M6) ───────────
-    // O padrão do projeto é o oposto — api/me-delete-account.js:258-260 aceita
+    // O padrão do projeto é o oposto — handlers/me-delete-account.js:258-260 aceita
     // token SOMENTE no corpo POST, justamente porque a query vaza por Referer,
     // logs e histórico. Aqui a exceção é DELIBERADA: este link é clicado
     // diretamente pelo comprador, inclusive a partir de e-mails de confirmação

@@ -98,8 +98,8 @@ function isAuthorized(req) {
 // O QUE MOTIVOU ESTA SEPARAÇÃO (regressão da correção M1): o portão de
 // consentimento foi aplicado uniformemente a TODO envio do cron, inclusive à
 // sequência pós-compra. Como nenhum ponto do código inscreve o comprador em
-// `email_subscribers` no momento da compra (api/create-payment.js e
-// api/webhook.js não tocam nessa tabela), o comprador típico — que recebeu a
+// `email_subscribers` no momento da compra (handlers/create-payment.js e
+// handlers/webhook.js não tocam nessa tabela), o comprador típico — que recebeu a
 // confirmação transacional e nunca preencheu o formulário do rodapé — caía em
 // `not_subscribed` e a sequência inteira parava. Marketing sem base legal foi
 // corrigido criando um bug igualmente sério do outro lado: relacionamento
@@ -193,9 +193,9 @@ async function loadMarketingConsent(email) {
  * `eq` e não `ilike`: no PostgREST o valor de `ilike` entra no padrão LIKE e
  * `_` é metacaractere legal em e-mail — `ana_lima@x.com` casaria
  * `ana.lima@x.com` e a "prova de cliente" seria o pedido de OUTRA pessoa
- * (mesmo defeito corrigido em api/customer-orders.js). Comparar em minúsculas
+ * (mesmo defeito corrigido em handlers/customer-orders.js). Comparar em minúsculas
  * é suficiente porque `orders.customer_email` é gravado já normalizado
- * (api/create-payment.js normaliza antes de inserir).
+ * (handlers/create-payment.js normaliza antes de inserir).
  */
 async function hasApprovedOrder(email) {
   try {

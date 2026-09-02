@@ -104,7 +104,7 @@ async function resolveAuthIdentity(uid) {
 
 // Reconciliação do checkout de CONVIDADO.
 //
-// api/create-payment.js grava o pedido sem customer_id (o comprador pode nem
+// handlers/create-payment.js grava o pedido sem customer_id (o comprador pode nem
 // ter conta), e ensureCustomerAccountFromCheckout cria a conta depois, sem
 // voltar para vincular o pedido. Sem esta reconciliação, escopar por
 // customer_id faria o cliente perder pedidos legítimos — a wave1 backfillou

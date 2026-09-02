@@ -4,7 +4,7 @@
 //
 // Substitui o `validation/payment.schemas.js` antigo, que existia mas NUNCA
 // era executado no caminho servido em produção (só pelo middleware do Express
-// de desenvolvimento). Os limites são os mesmos que api/create-payment.js já
+// de desenvolvimento). Os limites são os mesmos que handlers/create-payment.js já
 // aplicava à mão em `normalizeCustomer` — a migração move a validação de lugar,
 // não muda o contrato.
 // ════════════════════════════════════════════════════════════════════
@@ -24,7 +24,7 @@ const {
 
 // Teto de itens do carrinho. Sem ele, um array gigante vira N consultas
 // sequenciais (DoS barato) e uma preferência absurda no Mercado Pago.
-// api/validate-coupon.js usa o MESMO número de propósito: um carrinho que a
+// handlers/validate-coupon.js usa o MESMO número de propósito: um carrinho que a
 // prévia aceitasse e o checkout recusasse não serviria para nada.
 const MAX_ITEMS = 100;
 

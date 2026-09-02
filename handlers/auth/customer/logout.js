@@ -6,7 +6,7 @@ module.exports = function logoutHandler(req, res) {
   if (guardMethod(req, res, ['POST'])) return;
 
   // Defesa anti-CSRF: impede logout forçado por página maliciosa cross-site
-  // (consistente com api/admin-logout.js).
+  // (consistente com handlers/admin/logout.js).
   if (!isSameOriginRequest(req)) {
     return fail(res, {
       status: 403,

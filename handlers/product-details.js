@@ -9,7 +9,7 @@ const { createLogger } = require('../lib/logger');
 const log = createLogger('product-details');
 
 // download_url NÃO entra aqui: este é um endpoint público sem auth. O link do
-// arquivo só pode ser resolvido server-side em api/download.js, após validar o
+// arquivo só pode ser resolvido server-side em handlers/download.js, após validar o
 // token de uso único. Expô-lo aqui contornaria todo o gate de pagamento.
 const SELECT_FIELDS =
   'id,slug,name,description,price,original_price,image_url,images,videos,category_id,product_type,tags,is_kit,page_size,paper_type,kit_items,panel_sizes,featured,active,faq,reviews,benefits';
@@ -52,7 +52,7 @@ module.exports = async function productDetailsHandler(req, res) {
 
     const product = await getTableRow('products', {
       select: SELECT_FIELDS,
-      // Endpoint público: nunca expor produto inativo (mesmo filtro de api/products.js).
+      // Endpoint público: nunca expor produto inativo (mesmo filtro de handlers/products.js).
       filters: [
         { column: type, value },
         { column: 'active', value: true },

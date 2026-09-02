@@ -34,7 +34,7 @@ const MAX_RESULTS = 4;
 const MAX_CO_OCCURRENCE_ORDERS = 150;
 
 // `products.id` e `orders.id` são `uuid` (supabase/schema.sql:48,76). Mesmo
-// motivo do api/create-payment.js (achado B1): nada é interpolado num filtro
+// motivo do handlers/create-payment.js (achado B1): nada é interpolado num filtro
 // PostgREST antes de casar com este formato. Vale inclusive para os ids que
 // vieram do próprio banco — validar de novo custa nada e tira a query da
 // dependência de "confiar na origem do valor".

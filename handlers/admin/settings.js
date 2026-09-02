@@ -81,7 +81,7 @@ const REAUTH_RATE_LIMIT = Object.freeze({
 // a política sem ser detectado.
 // ════════════════════════════════════════════════════════════════════
 const ADMIN_CONFIG_FIELDS = Object.freeze({
-  // Três nomes para a mesma ideia por herança do código; api/admin-login.js
+  // Três nomes para a mesma ideia por herança do código; handlers/admin/login.js
   // considera 2FA exigido se QUALQUER um for verdadeiro.
   requireSecondFactor: { type: 'boolean', security: true, default: false },
   require2FA: { type: 'boolean', security: true, default: false },
@@ -173,7 +173,7 @@ function coerceBoolean(value) {
 
 function coerceTotpSecret(value) {
   // Base32 (RFC 4648) é o formato que os apps autenticadores exportam e o
-  // único que decodeBase32 (api/admin-login.js) entende. Validar aqui evita
+  // único que decodeBase32 (handlers/admin/login.js) entende. Validar aqui evita
   // gravar um segredo que só falharia na hora do login.
   const normalized = String(value ?? '')
     .toUpperCase()
@@ -501,7 +501,7 @@ async function prepareAdminConfigWrite(req, res, incoming) {
     // Balde PRÓPRIO para o gate. Sem ele, o gate seria um oráculo de força
     // bruta sem limite: o fallbackPin tem mínimo de 6 caracteres e o TOTP são 6
     // dígitos, então uma sessão roubada poderia simplesmente varrer o espaço
-    // chamando este PUT em laço. api/admin-login.js já isola o 2º fator num
+    // chamando este PUT em laço. handlers/admin/login.js já isola o 2º fator num
     // balde separado pelo mesmo motivo (P1-3); este é o mesmo controle na outra
     // porta que aceita o mesmo código. Fail-open é herdado de lib/rate-limit.js
     // e emite evento de segurança lá dentro.

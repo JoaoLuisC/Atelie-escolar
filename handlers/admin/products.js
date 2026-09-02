@@ -17,7 +17,7 @@ function invalid(message) {
 }
 
 // `normalizeSlug` vem de validation/admin.schemas.js: a cópia byte-a-byte que
-// morava aqui e em api/admin/categories.js era duas verdades sobre a mesma
+// morava aqui e em handlers/admin/categories.js era duas verdades sobre a mesma
 // regra (F2), e slug divergente entre criar produto e criar categoria produz
 // categoria duplicada no menu da loja.
 

@@ -56,7 +56,7 @@ function sanitizeItems(items) {
  * Este endpoint é PÚBLICO e não tem como provar que quem envia é dono do
  * e-mail informado — é um campo digitado num formulário anônimo. Portanto o
  * que está gravado aqui NÃO é consentimento de contato: quem decide se pode
- * enviar marketing é api/cron-email-jobs.js, que exige opt-in positivo
+ * enviar marketing é handlers/cron-email-jobs.js, que exige opt-in positivo
  * (registro confirmado em `email_subscribers`) antes de qualquer disparo.
  * Antes dessa correção, POSTar o e-mail de um terceiro aqui bastava para a
  * loja mandar marketing para ele.
@@ -73,7 +73,7 @@ module.exports = async function abandonedCartHandler(req, res) {
   // para "não deixar o atacante escapar trocando o verbo" — mas uma requisição
   // que leva 405 não faz trabalho nenhum, então contá-la custa uma escrita no
   // Postgres sem proteger nada. É o mesmo raciocínio já escrito em
-  // api/auth/customer/login.js, que estava do outro lado desta divergência.
+  // handlers/auth/customer/login.js, que estava do outro lado desta divergência.
   if (guardMethod(req, res, ['POST'])) return;
 
   const gate = await enforceRateLimit(req, res, RATE_LIMITS.abandonedCart);

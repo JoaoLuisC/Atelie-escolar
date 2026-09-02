@@ -19,7 +19,7 @@ import { createRequire } from 'node:module';
 const { decryptSecret, verifyPin } = createRequire(import.meta.url)('../../lib/admin-2fa.js');
 
 // ════════════════════════════════════════════════════════════════════
-// Gate de reautenticação de api/admin-settings.js.
+// Gate de reautenticação de handlers/admin/settings.js.
 //
 // O QUE ESTÁ TRAVADO AQUI, e por quê:
 //
@@ -41,7 +41,7 @@ const { decryptSecret, verifyPin } = createRequire(import.meta.url)('../../lib/a
 //    na primeira reclamação. O caso do round-trip do painel está travado abaixo.
 //
 // O 2º fator usado nos testes é o PIN e não o TOTP: `verifySecondFactorCode` é
-// o de VERDADE (api/admin-login.js real, sem duplo), e o PIN o exercita sem
+// o de VERDADE (handlers/admin/login.js real, sem duplo), e o PIN o exercita sem
 // depender do relógio. Um teste de gate que falha às 30 segundos por causa de
 // uma janela TOTP não travaria nada.
 // ════════════════════════════════════════════════════════════════════
@@ -81,7 +81,7 @@ function installSettingsStore(initialRows = []) {
     }),
     serviceRoleHelpers: helpers,
     ...helpers,
-    // api/admin-login.js importa supabaseRequest no topo; nunca é chamado aqui.
+    // handlers/admin/login.js importa supabaseRequest no topo; nunca é chamado aqui.
     supabaseRequest: vi.fn(async () => ({})),
   });
 

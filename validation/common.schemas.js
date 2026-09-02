@@ -17,7 +17,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // Aceita o dígito de e-mail suficiente para barrar lixo óbvio sem bancar
 // validador de RFC: quem valida o endereço de verdade é o envio da confirmação.
-// Copiado de api/create-payment.js para o comportamento não mudar na migração.
+// Copiado de handlers/create-payment.js para o comportamento não mudar na migração.
 const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 
 // \p{C} = categoria Unicode "Other": controle (\n, \t, NUL), formatação
@@ -82,7 +82,7 @@ const quantity = z.coerce
 /**
  * Valor monetário vindo do CLIENTE — usado apenas para prévia (validate-coupon).
  *
- * Nunca é fonte de verdade para cobrança: `api/create-payment.js` relê o preço
+ * Nunca é fonte de verdade para cobrança: `handlers/create-payment.js` relê o preço
  * do banco. O teto existe para que a soma do subtotal não estoure em algo que
  * o handler depois compara com o total do pedido.
  */

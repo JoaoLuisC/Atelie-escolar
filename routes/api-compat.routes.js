@@ -91,7 +91,7 @@ router.all('/confirm-subscription', wrapCompatHandler(confirmSubscriptionHandler
 router.all('/create-payment', wrapCompatHandler(createPaymentHandler));
 // /cron-email-jobs autoriza por CRON_SECRET no header e é chamado uma vez por
 // hora pelo agendador — a dispensa está registrada em
-// api/__tests__/rate-limit-coverage.test.js.
+// handlers/__tests__/rate-limit-coverage.test.js.
 router.all('/cron-email-jobs', wrapCompatHandler(cronEmailJobsHandler));
 router.all('/cross-sell', wrapCompatHandler(crossSellHandler));
 router.all('/customer-orders', wrapCompatHandler(customerOrdersHandler));

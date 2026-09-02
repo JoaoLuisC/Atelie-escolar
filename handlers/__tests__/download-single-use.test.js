@@ -13,7 +13,7 @@ import {
 } from './money-path-harness.js';
 
 // ════════════════════════════════════════════════════════════════════
-// USO ÚNICO DO TOKEN DE DOWNLOAD (api/download.js).
+// USO ÚNICO DO TOKEN DE DOWNLOAD (handlers/download.js).
 //
 // O token é a credencial que entrega o produto pago, e viaja em query string
 // de um link clicado a partir de e-mails já enviados (exceção deliberada ao

@@ -199,8 +199,8 @@ async function resolveAuthIdentity(admin, uid) {
   return { email };
 }
 
-// Reconciliação do checkout de CONVIDADO, idêntica à de api/customer-orders.js:
-// api/create-payment.js grava o pedido sem customer_id e
+// Reconciliação do checkout de CONVIDADO, idêntica à de handlers/customer-orders.js:
+// handlers/create-payment.js grava o pedido sem customer_id e
 // ensureCustomerAccountFromCheckout cria a conta depois sem voltar para
 // vincular. Sem isto, escopar por customer_id deixaria o PII dos pedidos de
 // convidado para trás numa exclusão LGPD.
@@ -379,7 +379,7 @@ async function executeDeletion({ uid, email, req, res }) {
   //
   // `eq` e não `ilike`: handlers/abandoned-cart.js grava o e-mail já em
   // minúsculas, e `ilike` trataria `_` como coringa — o mesmo IDOR silencioso
-  // que api/customer-orders.js já pagou (ver o cabeçalho de lá).
+  // que handlers/customer-orders.js já pagou (ver o cabeçalho de lá).
   //
   // Best-effort como os outros passos não-fatais: a identidade já vai embora
   // no passo 4, e falhar aqui não pode reverter uma exclusão em andamento —

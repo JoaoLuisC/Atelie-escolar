@@ -8,7 +8,7 @@ import {
 } from './money-path-harness.js';
 
 // ════════════════════════════════════════════════════════════════════
-// BASE DE ENVIO do cron de e-mails (api/cron-email-jobs.js).
+// BASE DE ENVIO do cron de e-mails (handlers/cron-email-jobs.js).
 //
 // Este arquivo trava as DUAS pontas de um par de defeitos que se corrigem
 // mutuamente — e é por isso que os casos ficam juntos, no mesmo arquivo:

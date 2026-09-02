@@ -8,7 +8,7 @@
 // `NODE_FILES` do eslint.config.js e o `coverage.include` do vite.config.js,
 // este último medindo cobertura de um diretório vazio.
 //
-// Pior que a referência morta: `api/create-payment.js` documentava, num
+// Pior que a referência morta: `handlers/create-payment.js` documentava, num
 // comentário, que "os `max()` do zod em validation/payment.schemas.js NUNCA
 // valeram neste caminho" — o schema antigo só era aplicado por um middleware
 // do Express de desenvolvimento, que não é implantado. Ou seja, o projeto

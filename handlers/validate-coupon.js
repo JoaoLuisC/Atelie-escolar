@@ -34,7 +34,7 @@ module.exports = async function validateCouponHandler(req, res) {
       });
     }
 
-    // Regra B1: o schema aplica o MESMO teto de itens de api/create-payment.js
+    // Regra B1: o schema aplica o MESMO teto de itens de handlers/create-payment.js
     // (importado de validation/payment.schemas.js, não redigitado aqui) e já
     // devolve `price`/`quantity` numéricos — por isso as somas abaixo não
     // precisam mais de `Number(item.price || 0)`, que era a coerção defensiva
@@ -89,7 +89,7 @@ module.exports = async function validateCouponHandler(req, res) {
 };
 
 // NOTA: aqui existia um `module.exports.helpers = {…}` reexportando os helpers
-// de cupom. Era resíduo do acoplamento antigo, quando api/create-payment.js
+// de cupom. Era resíduo do acoplamento antigo, quando handlers/create-payment.js
 // importava este handler só para pegar as funções. Hoje os dois importam
 // lib/coupons.js diretamente e nada mais consumia o reexport (confirmado por
 // varredura em api/, lib/, routes/, src/ e tests/). Um handler serverless que

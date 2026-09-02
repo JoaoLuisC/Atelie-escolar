@@ -38,7 +38,7 @@ const FACTOR_CHALLENGE_TTL_SECONDS = 120;
 // sem corrida entre duas lambdas concorrentes).
 //
 // POR QUE NÃO EM settings.adminConfig: aquela linha é lida no login e reescrita
-// pelo painel com merge (api/admin-settings.js). Gravar ali um contador que
+// pelo painel com merge (handlers/admin/settings.js). Gravar ali um contador que
 // muda a cada login (a) corre com o "Salvar" do painel e poderia sobrescrever
 // totpSecret/fallbackPin, (b) polui o diff do audit log a cada acesso e (c)
 // obrigaria o handler de login a ter permissão de ESCRITA na config que ele
@@ -465,7 +465,7 @@ module.exports = async function adminLoginHandler(req, res) {
   return ok(res, { success: true, user: { role: normalizedRole || 'admin', email } });
 };
 
-// Primitivos de 2º fator reaproveitados por api/admin-settings.js (reautenticação
+// Primitivos de 2º fator reaproveitados por handlers/admin/settings.js (reautenticação
 // para alterar 2FA). Anexados ao handler porque a Vercel exige que o export
 // default do arquivo em api/ seja a própria função — propriedades extras são
 // ignoradas pelo runtime e não viram rota.

@@ -34,7 +34,7 @@ const log = createLogger('admin-upload-url');
 // ════════════════════════════════════════════════════════════════════
 
 // `enforcePrivate` só em product_files: é conteúdo PAGO, cujo único caminho
-// legítimo de entrega é o signed URL de api/download.js (que funciona com o
+// legítimo de entrega é o signed URL de handlers/download.js (que funciona com o
 // bucket privado). Bucket público ali torna o arquivo alcançável por adivinhação
 // de path, contornando o gate de pagamento — por isso este é o único caso em que
 // mexemos na visibilidade. Em product_images/product_videos a visibilidade real
