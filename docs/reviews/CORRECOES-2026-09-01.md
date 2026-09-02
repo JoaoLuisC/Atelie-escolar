@@ -403,6 +403,10 @@ só então dividir. Mesma sequência para `AnalysisTab`.
 | Split de `AnalysisTab` (676 linhas)                  | Mesma sequência do DashboardTab: caracterizar antes | 8    |
 | Os 12 `set-state-in-effect`                          | Cada um muda comportamento                          | 8    |
 
+> **Atualização de 02/09/2026:** todos os itens acima foram fechados ou reformulados em
+> [CORRECOES-2026-09-02.md](./CORRECOES-2026-09-02.md) — inclusive a validação do banco em
+> produção, que foi autorizada e executada em modo somente-leitura.
+>
 > Os três itens que saíram desta tabela foram fechados na continuação da mesma sessão — ver o fim
 > do documento.
 
