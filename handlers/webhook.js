@@ -246,7 +246,6 @@ module.exports = async function webhookHandler(req, res) {
 
         await recordEvent({
           eventName: 'payment_approved',
-          customerEmail: order.customer_email,
           orderId: order.id,
           properties: {
             order_code: order.order_code,

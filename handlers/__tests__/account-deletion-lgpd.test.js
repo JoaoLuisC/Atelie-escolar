@@ -48,6 +48,11 @@ function installSupabase() {
       { id: 6, email: 'outra@example.com', session_id: 's2' },
     ],
     email_subscribers: [{ id: 9, email: EMAIL, unsubscribed_at: null }],
+    analytics_events: [
+      { id: 1, event_name: 'purchase', customer_email: EMAIL, order_id: 11 },
+      // Evento de OUTRA pessoa: a limpeza não pode alcançá-lo.
+      { id: 2, event_name: 'purchase', customer_email: 'outra@example.com', order_id: 99 },
+    ],
   };
 
   // Operador não previsto LANÇA em vez de ser ignorado, como no harness do
@@ -240,6 +245,26 @@ describe('me-delete-account · o que a exclusão precisa levar junto', () => {
     await excluirConta();
 
     expect(store.state.email_subscribers[0].unsubscribed_at).toBeTruthy();
+  });
+
+  it('limpa o e-mail que ficou em analytics_events', async () => {
+    // A coluna deixou de ser escrita, mas as linhas gravadas ANTES disso
+    // ficariam até a purga de 180 dias. Para quem pede exclusão hoje, 180
+    // dias de espera não é exclusão.
+    await excluirConta();
+
+    const daTitular = store.state.analytics_events.find((linha) => linha.id === 1);
+    expect(daTitular.customer_email).toBeNull();
+    // O vínculo analítico sobrevive: o pedido continua apontado, e ele já
+    // foi anonimizado no passo anterior.
+    expect(daTitular.order_id).toBe(11);
+  });
+
+  it('não toca no evento de outra pessoa', async () => {
+    await excluirConta();
+
+    const daOutra = store.state.analytics_events.find((linha) => linha.id === 2);
+    expect(daOutra.customer_email).toBe('outra@example.com');
   });
 
   it('não executa exclusão nenhuma sem token válido', async () => {

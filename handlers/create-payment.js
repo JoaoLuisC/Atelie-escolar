@@ -349,7 +349,6 @@ module.exports = async function createPaymentHandler(req, res) {
     await recordEvent({
       eventName: 'checkout_initiated',
       sessionId: attributionData.session_id || '',
-      customerEmail: customerData.email,
       orderId: createdOrder.id,
       properties: {
         order_code: orderCode,

@@ -390,6 +390,23 @@ async function executeDeletion({ uid, email, req, res }) {
     log.warn('limpeza_de_carrinho_falhou', { reason: err.message });
   }
 
+  // 3c. Limpa o e-mail que ficou em `analytics_events`.
+  //
+  // A coluna deixou de ser escrita (ver o cabeçalho de lib/analytics-events.js),
+  // mas as linhas gravadas ANTES disso continuam lá até a purga de 180 dias.
+  // Para quem pede exclusão hoje, 180 dias de espera não é exclusão — e o
+  // vínculo analítico não se perde, porque `order_id` continua apontando para
+  // o pedido, que já foi anonimizado no passo 2.
+  try {
+    await updateTable(
+      'analytics_events',
+      { customer_email: `eq.${normalizedEmail}` },
+      { customer_email: null },
+    );
+  } catch (err) {
+    log.warn('limpeza_de_analytics_falhou', { reason: err.message });
+  }
+
   // 4. Só agora remove a identidade em auth.users (cascateia profiles +
   //    user_products; orders.customer_id -> null). O uid já foi validado no
   //    passo 0 (resolveAuthIdentity), então não há guarda condicional aqui.
