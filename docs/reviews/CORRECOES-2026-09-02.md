@@ -221,9 +221,7 @@ mensurável. Dividir a árvore de componentes continua possível e agora é bara
 
 | Item                                                    | Bloqueio                                   |
 | ------------------------------------------------------- | ------------------------------------------ |
-| `supabase db push` da migration de retenção             | Escrita em produção — decisão sua          |
-| Funções, `pg_cron`, triggers e índices                  | Precisa do SQL Editor ou de `SUPABASE_PAT` |
-| `admin_audit_log` vazio                                 | Precisa de um teste operacional (ver §1)   |
+| Enumerar os 5 jobs antigos do `pg_cron`                 | SQL Editor; a extensão já está confirmada  |
 | Drop de `analytics_events.customer_email`               | Migration destrutiva; a coluna já é inerte |
 | Anonimização de IP em `security_events`/`download_logs` | Decisão de política, não defeito           |
 | Os 12 `set-state-in-effect`                             | Cada um muda comportamento                 |

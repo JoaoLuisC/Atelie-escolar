@@ -44,6 +44,9 @@ const FUNCOES = [
   'purge_old_logs',
   'cleanup_old_analytics_events',
   'cleanup_old_email_logs',
+  // Aplicada em 02/09/2026 (20260902000000). A tabela era a unica de PII
+  // do projeto sem prazo de retencao.
+  'cleanup_old_abandoned_carts',
   'purge_stale_email_subscribers',
   'purge_old_rate_limit_hits',
   'increment_coupon_usage',
