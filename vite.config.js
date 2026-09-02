@@ -209,11 +209,22 @@ export default defineConfig({
       //   branches       36,19%      34      2,2pp
       //   functions      37,38%      35      2,4pp
       //   lines          47,20%      45      2,2pp
+      //
+      // Recalibrado de novo em 01/09/2026, ainda na mesma rodada, com as suítes
+      // que fecharam os itens em aberto: gate de auditoria admin, caracterização
+      // do DashboardTab e a geometria dos gráficos (896 → 935 testes). O salto
+      // de ~5pp veio quase todo do painel, que era a maior área sem cobertura:
+      //
+      //   medida         medido     piso    folga
+      //   statements     49,78%      47      2,8pp
+      //   branches       40,51%      38      2,5pp
+      //   functions      42,43%      40      2,4pp
+      //   lines          51,33%      49      2,3pp
       thresholds: {
-        statements: 43,
-        branches: 34,
-        functions: 35,
-        lines: 45,
+        statements: 47,
+        branches: 38,
+        functions: 40,
+        lines: 49,
       },
       // ─────────────────────────────────────────────────────────────
     },

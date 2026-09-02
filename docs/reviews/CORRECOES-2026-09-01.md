@@ -1,6 +1,6 @@
 # Rodada de correções — 01/09/2026
 
-> **Retrato datado — 01/09/2026.** Base: commit `b8d5b8e`. Entregue nos commits `df21733`…`e17e468`.
+> **Retrato datado — 01/09/2026.** Base: commit `b8d5b8e`. Entregue nos commits `df21733`…`cedb953`.
 > Este documento **não se atualiza**: quando um item aqui for corrigido ou mudar, o commit é a prova.
 > Estado atual das regras: [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
@@ -21,8 +21,8 @@ no código de hoje.
 | 7   | Área 6 · LGPD                   | Confirmado no que importava, **2 lacunas**      | `625e6e5`              |
 | 8   | Áreas 5 e 8 · Front/Qualidade   | Manutenção feita, parcial                       | `7d136f6`, `e17e468`   |
 
-**Números:** 846 → **889 testes** (67 → 71 arquivos); cobertura medida **45,63 / 36,19 / 37,38 /
-47,20** com os pisos em 43/34/35/45; avisos de lint **17 → 13**, com a catraca baixada no mesmo
+**Números:** 846 → **935 testes** (67 → 75 arquivos); cobertura medida **49,78 / 40,51 / 42,43 /
+51,33** com os pisos em 47/38/40/49; avisos de lint **17 → 13**, com a catraca baixada no mesmo
 commit. `npm run check` verde.
 
 **O fio que costura a rodada** é o mesmo do relatório de auth: guarda escrita não é guarda
@@ -394,15 +394,17 @@ só então dividir. Mesma sequência para `AnalysisTab`.
 
 ## O que ficou de fora, consolidado
 
-| Item                                                 | Por quê                                              | §    |
-| ---------------------------------------------------- | ---------------------------------------------------- | ---- |
-| Rodar as consultas de validação no banco de produção | Precisa da sua autorização                           | 2    |
-| `cleanup_old_abandoned_carts()` + job                | É migration — proposta, não aplicada                 | 2, 7 |
-| Gate de cobertura do audit log admin                 | Chave precisa ser (rota, método); vale decidir junto | 3    |
-| Anonimização de IP em `page_views`/`security_events` | Decisão de política, não bug                         | 7    |
-| Exportação self-service de dados (art. 18, V)        | Funcionalidade nova                                  | 7    |
-| Split de `DashboardTab` e `AnalysisTab`              | Sem teste de caracterização primeiro, não            | 8    |
-| Os 12 `set-state-in-effect`                          | Cada um muda comportamento                           | 8    |
+| Item                                                 | Por quê                                             | §    |
+| ---------------------------------------------------- | --------------------------------------------------- | ---- |
+| Rodar as consultas de validação no banco de produção | **Precisa da sua autorização** — nada foi executado | 2    |
+| `cleanup_old_abandoned_carts()` + job                | É migration — proposta, não aplicada                | 2, 7 |
+| Anonimização de IP em `page_views`/`security_events` | Decisão de política, não bug                        | 7    |
+| Exportação self-service de dados (art. 18, V)        | Funcionalidade nova                                 | 7    |
+| Split de `AnalysisTab` (676 linhas)                  | Mesma sequência do DashboardTab: caracterizar antes | 8    |
+| Os 12 `set-state-in-effect`                          | Cada um muda comportamento                          | 8    |
+
+> Os três itens que saíram desta tabela foram fechados na continuação da mesma sessão — ver o fim
+> do documento.
 
 ## Achados fora do escopo dos blocos
 
@@ -417,3 +419,71 @@ Anotados, não corrigidos, conforme a regra 4 do preâmbulo:
 3. **`supabase/security-hardening.sql`** é descrito na doc como "espelho fora da sequência de
    migrations". Dois lugares descrevendo o mesmo RLS é a divergência que a regra F2 combate — vale
    decidir qual é o canônico.
+
+---
+
+## Continuação da mesma sessão — o que foi fechado depois do relatório
+
+Três dos itens que a tabela acima listava como abertos não dependiam de acesso a produção, e foram
+resolvidos na sequência.
+
+### Gate de cobertura do audit log admin → `fe28a7a`
+
+O que faltava era a **decisão de desenho**, e ela é: a chave é o par **(rota, método)**, não a rota.
+`admin/settings` audita o PUT e não o GET; a factory audita todo método que não seja GET. Dispensa
+por rota daria verde para um handler que audita uma de suas ações.
+
+A lista de métodos também não é lida do texto: é **perguntada ao módulo que o router montou**,
+chamando-o com um verbo que ninguém aceita e lendo o `Allow` do 405
+([lib/http.js:188-203](../../lib/http.js#L188-L203)). Handler que mude os métodos aceitos muda a
+resposta do gate junto; handler que não responda `Allow` cai num teste de sanidade próprio, em vez
+de sair do conjunto medido em silêncio.
+
+Duas dispensas nomeadas: `admin/login.js:POST` (autenticação, não mutação — o rastro dela é
+`security_events`, que registra tentativa recusada, coisa que o audit log não deve fazer) e
+`admin/logout.js:POST`. Verificado contra `df21733~1`: acusa `admin/cleanup-events.js:POST` e
+`admin/upload-url.js:POST`, nominalmente.
+
+O limite está escrito no cabeçalho do arquivo: o gate prova que rota+método de escrita é servida por
+um módulo que audita, **não** que aquela linha roda naquele caminho. A segunda prova é das suítes de
+comportamento — `admin-write-audit`, `admin-settings-guard` e `admin-resource-handler`.
+
+### Referências mortas a `api/` → `f6ee510`
+
+O achado nº 2 da lista "fora do escopo" era maior do que parecia: **75 referências em 37 arquivos**
+citavam `api/<handler>.js`, caminho que deixou de existir no `660fe74`. Quem lia o cabeçalho de
+`lib/payment-integrity.js` e tentava abrir `api/webhook.js` não achava nada.
+
+Só comentário e JSDoc, com todo destino conferido no disco antes de escrever — uma referência
+legítima a `api/__tests__/serverless-entry.test.js` foi corretamente deixada em paz, porque esse
+arquivo existe mesmo em `api/`. Os retratos em `docs/reviews/` **não** foram tocados: são datados de
+propósito (regra F2), e o caminho antigo neles está certo para a data que descrevem.
+
+### `DashboardTab` — a sequência que este relatório recomendou, executada → `cedb953`
+
+Na ordem, e a ordem é o ponto:
+
+1. **Caracterização primeiro** —
+   [DashboardTab.test.jsx](../../src/components/admin/tabs/__tests__/DashboardTab.test.jsx), 14 casos
+   descrevendo o que a tela **faz** hoje: os quatro KPIs do topo, o badge de tendência, os KPIs
+   avançados que chegam por `fetch` depois do primeiro render (com o travessão enquanto não chegam e
+   o `catch` da falha), os estados vazios de cada gráfico e a tabela de pedidos recentes.
+2. **Só então a extração** — a matemática dos gráficos foi para
+   [dashboard-charts.js](../../src/components/admin/tabs/dashboard-charts.js). 819 → **758 linhas**.
+3. **Os 14 continuam verdes sem uma linha alterada** — é a prova de que foi refatoração, e não
+   reescrita.
+
+Mais 25 testes cobrem as bordas que eram inalcançáveis enquanto isso vivia dentro do JSX: período
+inteiro zerado (o `Math.max(1, …)` faz a linha correr na base em vez de virar `NaN` e sumir o
+`<polyline>`), uma entrada só (denominador `n - 1`), valor ausente tratado como zero, ciclo da
+paleta, encadeamento dos ângulos fechando 360°, e o flag `largeArc` — sem ele, categoria com mais de
+50% da receita é desenhada pelo caminho curto e aparece como a **menor** fatia do gráfico.
+
+> O sintoma de um erro nessa matemática nunca foi exceção nem tela em branco: é um gráfico plausível
+> e errado, em cima do qual alguém decide preço e estoque.
+
+### E a catraca girou junto
+
+896 → 935 testes, quase tudo no painel, que era a maior área sem cobertura. Medido
+**49,78 / 40,51 / 42,43 / 51,33**, pisos recalibrados para **47/38/40/49** — deixar a folga crescer
+para 6pp seria transformar o gate em enfeite, que é o que a regra D2 existe para impedir.
