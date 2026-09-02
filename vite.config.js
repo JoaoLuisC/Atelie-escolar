@@ -220,11 +220,14 @@ export default defineConfig({
       //   branches       40,51%      38      2,5pp
       //   functions      42,43%      40      2,4pp
       //   lines          51,33%      49      2,3pp
+      //
+      // 02/09/2026, com a exportação de dados do titular e a caracterização do
+      // AnalysisTab: medido 50,91 / 41,53 / 43,98 / 52,43, pisos abaixo.
       thresholds: {
-        statements: 47,
-        branches: 38,
-        functions: 40,
-        lines: 49,
+        statements: 48,
+        branches: 39,
+        functions: 41,
+        lines: 50,
       },
       // ─────────────────────────────────────────────────────────────
     },
