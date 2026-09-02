@@ -156,7 +156,25 @@ export function PrivacyPage() {
       <h2>7. Seus direitos</h2>
       <p>
         Pela LGPD, você pode pedir confirmação de tratamento, acesso aos dados, correção,
-        anonimização, portabilidade, eliminação e informação sobre compartilhamentos. Escreva para{' '}
+        anonimização, portabilidade, eliminação e informação sobre compartilhamentos.
+      </p>
+      <p>Três deles você exerce sozinho, na hora, sem depender de ninguém responder:</p>
+      <ul>
+        <li>
+          <strong>Acesso e portabilidade:</strong> o botão <em>Baixar meus dados</em> na{' '}
+          <Link to={ROUTES.conta}>sua conta</Link> gera um arquivo com seus pedidos, itens,
+          inscrição na newsletter e carrinhos salvos.
+        </li>
+        <li>
+          <strong>Eliminação:</strong> o botão <em>Excluir minha conta</em>, na mesma página.
+        </li>
+        <li>
+          <strong>Revogação de consentimento:</strong> o bloco{' '}
+          <a href="#cookies">Suas preferências de cookies</a>, acima nesta página.
+        </li>
+      </ul>
+      <p>
+        Para os demais — correção, anonimização e informação sobre compartilhamentos — escreva para{' '}
         <a href="mailto:contato@profamarciarcardoso.com.br">contato@profamarciarcardoso.com.br</a> e
         respondemos em até 15 dias úteis.
       </p>

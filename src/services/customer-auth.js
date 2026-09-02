@@ -164,6 +164,26 @@ export async function fetchCustomerSession() {
 }
 
 /**
+ * LGPD (art. 18, V) — baixa os próprios dados. O par do direito de exclusão:
+ * a pessoa podia apagar o que a loja guarda sobre ela e não podia VER.
+ *
+ * Devolve o objeto cru do backend; quem transforma em arquivo é a página,
+ * porque só ela sabe o nome que o download deve ter.
+ */
+export async function exportMyData() {
+  const { response, data } = await apiRequest('/me-export-data', {
+    method: 'GET',
+    credentials: 'include',
+  });
+
+  if (!response.ok || data?.success !== true) {
+    throw apiError(data, 'Não foi possível exportar seus dados.');
+  }
+
+  return data;
+}
+
+/**
  * LGPD (§3.8) — passo 1: pede a exclusão da conta. O backend envia um
  * e-mail com link de confirmação. Requer sessão de cliente ativa.
  */

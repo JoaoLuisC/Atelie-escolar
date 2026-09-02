@@ -48,6 +48,7 @@ const crossSellHandler = require('../handlers/cross-sell');
 const customerOrdersHandler = require('../handlers/customer-orders');
 const downloadHandler = require('../handlers/download');
 const meDeleteAccountHandler = require('../handlers/me-delete-account');
+const meExportDataHandler = require('../handlers/me-export-data');
 const apiNotFoundHandler = require('../handlers/notfound');
 const homeSectionsHandler = require('../handlers/home-sections');
 const productDetailsHandler = require('../handlers/product-details');
@@ -97,6 +98,9 @@ router.all('/cross-sell', wrapCompatHandler(crossSellHandler));
 router.all('/customer-orders', wrapCompatHandler(customerOrdersHandler));
 // LGPD self-service (§3.8): exclusão de conta com confirmação por e-mail.
 router.all('/me-delete-account', wrapCompatHandler(meDeleteAccountHandler));
+// LGPD art. 18, V: acesso/portabilidade. O par do de cima — a pessoa podia
+// apagar os próprios dados mas não podia vê-los.
+router.all('/me-export-data', wrapCompatHandler(meExportDataHandler));
 router.all('/download', wrapCompatHandler(downloadHandler));
 router.all('/home-sections', wrapCompatHandler(homeSectionsHandler));
 router.all('/product-details', wrapCompatHandler(productDetailsHandler));

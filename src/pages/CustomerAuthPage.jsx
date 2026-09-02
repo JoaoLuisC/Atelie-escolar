@@ -7,7 +7,11 @@ import {
   buildPasswordResetRedirectUrl,
   getSupabaseBrowserClient,
 } from '../services/supabase-browser';
-import { confirmAccountDeletion, requestAccountDeletion } from '../services/customer-auth';
+import {
+  confirmAccountDeletion,
+  exportMyData,
+  requestAccountDeletion,
+} from '../services/customer-auth';
 import { ROUTES, sanitizeRedirectPath } from '../constants/routes';
 
 function getMode(search) {
@@ -181,6 +185,32 @@ export function CustomerAuthPage() {
   const deleteToken = new URLSearchParams(location.search).get('delete_token') || '';
   const [deleting, setDeleting] = useState(false);
   const [deleteRequested, setDeleteRequested] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // O arquivo é montado NO NAVEGADOR a partir da resposta: o backend não gera
+  // anexo, não guarda cópia e nada sai por e-mail. Um dossiê pessoal que só
+  // existe no disco de quem pediu é o menor raio de exposição possível para
+  // este direito.
+  async function handleExportData() {
+    setExporting(true);
+    try {
+      const dados = await exportMyData();
+      const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `meus-dados-atelie-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      pushToast('Download iniciado.', 'success');
+    } catch (error) {
+      pushToast(error?.message || 'Erro ao exportar seus dados.', 'error');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function handleRequestDeletion() {
     if (
@@ -555,6 +585,25 @@ export function CustomerAuthPage() {
               >
                 Ir para checkout <i className="bi bi-arrow-right" />
               </Link>
+            </div>
+
+            {/* Ver antes de apagar é a ordem natural, e é por isso que este
+                bloco vem primeiro: quem está decidindo excluir a conta tem o
+                direito de olhar o que vai embora. */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-sm font-bold text-slate-900">Baixar meus dados</h3>
+              <p className="mt-1 text-xs text-slate-600">
+                Um arquivo JSON com seus pedidos, itens, inscrição na newsletter e carrinhos salvos
+                (LGPD, art. 18). O download acontece direto no seu navegador.
+              </p>
+              <button
+                type="button"
+                onClick={handleExportData}
+                disabled={exporting}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
+              >
+                <i className="bi bi-download" /> {exporting ? 'Preparando…' : 'Baixar meus dados'}
+              </button>
             </div>
 
             <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4">

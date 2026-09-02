@@ -252,6 +252,28 @@ Exclusão de conta self-service (LGPD, direito ao esquecimento) em **2 passos**.
 1. **POST sem token** (auth: cookie `customer_session`) → gera token assinado (HMAC, TTL 1h) e envia link de confirmação para o e-mail do cliente
 2. **POST com `{ token }`** → executa a exclusão: deleta o usuário em `auth.users` (cascateia profiles/user_products), anonimiza PII dos pedidos (mantém histórico fiscal), apaga `download_tokens`, marca unsubscribe na newsletter, registra security event `account_self_deleted` e limpa a sessão
 
+### `GET /api/me-export-data`
+
+Acesso e portabilidade dos próprios dados (LGPD, art. 18, V). Auth: cookie
+`customer_session` **mais** confirmação do uid contra `auth.users` — o e-mail do
+cookie é cópia feita no login e não vale como prova numa resposta que devolve o
+dossiê da pessoa.
+
+**Rate-limit:** 5 req/5min por IP (`meExportData`).
+
+Devolve pedidos (com itens e metadados de download), inscrição na newsletter e
+carrinhos abandonados, todos escopados por `customer_id = uid` — nunca por
+e-mail. Responde `Cache-Control: no-store` e registra o evento de segurança
+`customer_data_exported` sem PII.
+
+**Não inclui, de propósito:** o VALOR do token de download (é credencial de uso
+único que abre o arquivo pago, não dado pessoal — um JSON exportado circula por
+e-mail e Drive), eventos de analytics (chaveados por sessão do navegador, sem
+ligação com a identidade no servidor) e registros de segurança. O próprio corpo
+da resposta declara essas omissões no campo `naoIncluido`.
+
+---
+
 ### Autenticação de cliente (funções em `api/auth/customer/`)
 
 | Endpoint                             | Método | Descrição                                               |
