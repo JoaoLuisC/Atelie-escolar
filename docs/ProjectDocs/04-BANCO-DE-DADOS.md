@@ -18,7 +18,7 @@ Arquivos:
 - [`supabase/schema.sql`](../../supabase/schema.sql) — DDL canônico (14 tabelas; as 3 restantes nascem em migrations)
 - [`supabase/security-hardening.sql`](../../supabase/security-hardening.sql) — RLS + policies + funções + grants (espelho fora da sequência de migrations)
 - [`supabase/seed-sample-data.sql`](../../supabase/seed-sample-data.sql) — dados de exemplo
-- [`supabase/migrations/`](../../supabase/migrations/) — 18 migrations versionadas
+- [`supabase/migrations/`](../../supabase/migrations/) — 19 migrations versionadas
 - [`supabase/config.toml`](../../supabase/config.toml) — config do Supabase CLI/local
 
 ---
@@ -465,6 +465,7 @@ Aplicar em ordem. Pode-se rodar tudo de uma vez via `npm run supabase:db:push`.
 | [`20260813000001_best_sellers_aggregate.sql`](../../supabase/migrations/20260813000001_best_sellers_aggregate.sql)         | Função de agregação de mais-vendidos no banco: `/api/products`, `/home-sections` e `/cross-sell` deixam de baixar `orders`+`order_items` inteiras a cada hit                                                                             |
 | [`20260813000002_orders_customer_id_index.sql`](../../supabase/migrations/20260813000002_orders_customer_id_index.sql)     | Índice em `orders(customer_id)` — a âncora nova da RLS estava sem índice e fazia seq scan                                                                                                                                                |
 | [`20260818000000_profiles_lower_email_index.sql`](../../supabase/migrations/20260818000000_profiles_lower_email_index.sql) | Índice funcional em `profiles(lower(email))` — substitui a paginação da Admin API no webhook de pagamento, que tinha teto de 2.000 usuários                                                                                              |
+| [`20260902000000_abandoned_carts_retention.sql`](../../supabase/migrations/20260902000000_abandoned_carts_retention.sql)   | `cleanup_old_abandoned_carts()` (90 dias, só carrinho não recuperado) + job mensal. **⚠️ AINDA NÃO APLICADA em produção** — a tabela era a única de PII sem prazo, apesar de a migration que a criou prometer limpeza "após 7 dias"      |
 
 ### Como aplicar
 
