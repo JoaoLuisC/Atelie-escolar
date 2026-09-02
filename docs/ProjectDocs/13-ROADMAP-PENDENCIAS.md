@@ -13,19 +13,49 @@
 
 ---
 
-## §1. Aplicar migrations no Supabase
+## §1. Aplicar migrations no Supabase — ✅ CONFIRMADO (02/09/2026)
 
 Sem isso o backend consulta colunas que não existem e quebra.
 
 ```bash
-npm run supabase:db:push     # aplica as 18 migrations de supabase/migrations/
+npm run supabase:db:push     # aplica as 19 migrations de supabase/migrations/
 ```
 
 A lista completa, com o que cada uma faz, é mantida em
 [04-BANCO-DE-DADOS §migrations](./04-BANCO-DE-DADOS.md) — e mora **só lá**. As queries de
 validação pós-aplicação estão na mesma seção.
 
-**Status:** aplicação em produção não confirmada.
+**Status: aplicado e verificado em 02/09/2026.** As 19 migrations estão rastreadas em
+`supabase_migrations.schema_migrations` (0 pendentes), e o schema em produção bate com o que elas
+declaram: as 14 funções, as 8 tabelas criadas por migration, RLS nas 18 tabelas, os 2 triggers de
+imutabilidade do audit log, 7 policies, e o revoke de coluna do W1-01 (`products.download_url`
+fora dos 24 grants do `anon`).
+
+A verificação NÃO é mais um checklist para colar à mão — são dois scripts, e o par cobre ângulos
+diferentes:
+
+```bash
+node scripts/check-rls.js            # comportamento: o que a chave anon consegue LER
+node scripts/check-schema-drift.js   # objetos: funções, triggers, policies, grants, RLS
+```
+
+Os dois são **somente leitura**. O primeiro usa a chave pública pelo PostgREST (é a pergunta que
+um atacante faria); o segundo usa a CLI e compara `local` × `remote` das migrations.
+
+Sobra **um** ponto sem cobertura automática: enumerar os jobs do `pg_cron`. Eles são linhas em
+`cron.job`, e o papel usado pelo dump não enxerga o schema `cron` — o dump volta vazio no DDL e
+nos dados, o que é ausência de VISIBILIDADE e não de job. No SQL Editor:
+
+```sql
+select jobname, schedule, active from cron.job order by jobname;
+```
+
+A extensão em si **já está confirmada ativa**: a migration de 02/09 só agenda dentro de
+`if exists (select 1 from pg_extension where extname = 'pg_cron')`, e o push imprimiu
+`NOTICE: pg_cron: cleanup-abandoned-carts-monthly agendado`.
+
+O detalhe de cada verificação está em
+[docs/reviews/CORRECOES-2026-09-02.md](../reviews/CORRECOES-2026-09-02.md).
 
 ---
 
