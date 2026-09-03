@@ -7,10 +7,12 @@
 // em JSX é uma rota que ninguém consegue renomear com segurança: o compilador
 // não ajuda, o lint não ajuda, e o teste só pega se existir teste daquela tela.
 //
-// O caso que dói de verdade é o `ADMIN_LOGIN_PATH`. Ele é obscurecido de
-// propósito (não é `/admin/login`), e essa obscuridade só vale enquanto o valor
-// existir em UM lugar. Bastava alguém escrever o caminho à mão numa tela nova
-// para o segredo passar a viver em duas cópias que divergem na próxima edição.
+// O caso que dói de verdade é o `PROFESSOR_LOGIN_PATH`. O caminho é feio de
+// propósito (não é `/admin/login`) e por muito tempo a feiura era a única pista
+// de que ele existia. Isso acabou: a tela de login do cliente agora oferece
+// "Sou professor" e o caminho aparece no HTML público. O valor continua em UM
+// lugar não mais por segredo, e sim porque ninguém consegue renomear com
+// segurança um caminho que vive em duas cópias.
 //
 // ── COMO USAR ───────────────────────────────────────────────────────
 //   import { ROUTES } from '../constants/routes';
@@ -20,14 +22,18 @@
 // ════════════════════════════════════════════════════════════════════
 
 /**
- * Caminho do painel administrativo.
+ * Caminho do login do professor — a antiga tela de admin.
  *
- * Fica FORA de `ROUTES` de propósito, com nome próprio: ele é obscurecido como
- * camada extra (não como proteção — a proteção é a sessão), e o nome separado
- * deixa isso explícito para quem for mexer. Não renomeie sem alinhar com quem
- * usa o link.
+ * Fica FORA de `ROUTES` de propósito, com nome próprio: quem for mexer precisa
+ * ver que este é o acesso privilegiado, não mais um item da lista. O VALOR
+ * segue o antigo `/painel-acesso-privado-atelie` porque a rota não mudou, só o
+ * público dela; a separação de verdade entre professor e admin ainda está por
+ * fazer, e é ela que vai decidir se este caminho ganha um nome legível.
+ *
+ * A proteção nunca foi a URL, é a sessão (`ProtectedRoute` + a sessão do
+ * backend) — por isso publicá-la no login do cliente não abre nada.
  */
-export const ADMIN_LOGIN_PATH = '/painel-acesso-privado-atelie';
+export const PROFESSOR_LOGIN_PATH = '/painel-acesso-privado-atelie';
 
 export const CUSTOMER_RESET_PASSWORD_PATH = '/reset-password';
 
@@ -48,7 +54,7 @@ export const ROUTES = Object.freeze({
   confirmarInscricao: '/confirmar-inscricao',
   desinscrever: '/desinscrever',
   admin: '/admin',
-  adminLogin: ADMIN_LOGIN_PATH,
+  professorLogin: PROFESSOR_LOGIN_PATH,
 });
 
 /**

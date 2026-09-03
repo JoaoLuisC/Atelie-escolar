@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ADMIN_LOGIN_PATH, ROUTES } from '../constants/routes';
+import { PROFESSOR_LOGIN_PATH, ROUTES } from '../constants/routes';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { AdminLayout } from '../components/admin/AdminLayout';
@@ -607,7 +607,7 @@ export function AdminPage() {
               <p className="mt-0.5 text-amber-800">
                 O painel abre sem login, mas as APIs exigem sessão: por isso o Dashboard fica vazio
                 e abas como Segmentos, Cupons e Usuários mostram “sessão expirada”.{' '}
-                <a href={ADMIN_LOGIN_PATH} className="font-semibold underline">
+                <a href={PROFESSOR_LOGIN_PATH} className="font-semibold underline">
                   Faça login
                 </a>{' '}
                 para carregar os dados.

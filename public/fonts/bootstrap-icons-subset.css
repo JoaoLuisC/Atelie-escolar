@@ -1,5 +1,5 @@
 /* GERADO por scripts/build-icon-subset.js — não edite à mão.
- * 107 ícones, extraídos de src/ e index.html (literais + dinâmicos).
+ * 110 ícones, extraídos de src/ e index.html (literais + dinâmicos).
  * Regenerar: npm run icons:subset
  */
 @font-face {
@@ -104,10 +104,13 @@
 .bi-lightning-charge-fill::before { content: "\f46c"; }
 .bi-list::before { content: "\f479"; }
 .bi-lock::before { content: "\f47b"; }
+.bi-mortarboard::before { content: "\f6fe"; }
+.bi-mortarboard-fill::before { content: "\f6fd"; }
 .bi-palette2::before { content: "\f4b2"; }
 .bi-pencil-square::before { content: "\f4ca"; }
 .bi-people::before { content: "\f4d0"; }
 .bi-people-fill::before { content: "\f4cf"; }
+.bi-person::before { content: "\f4e1"; }
 .bi-person-circle::before { content: "\f4d7"; }
 .bi-pinterest::before { content: "\f663"; }
 .bi-play-circle-fill::before { content: "\f4f2"; }

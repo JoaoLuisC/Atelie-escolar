@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { ADMIN_LOGIN_PATH } from '../constants/routes';
+import { PROFESSOR_LOGIN_PATH } from '../constants/routes';
 
 export function ProtectedRoute({ children }) {
   const location = useLocation();
@@ -20,7 +20,7 @@ export function ProtectedRoute({ children }) {
           <i className="bi bi-shield-lock-fill text-3xl text-brand-600" />
           <h3 className="mt-2 font-heading text-lg font-bold text-slate-900">Verificando sessão</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Aguarde enquanto validamos seu acesso administrativo.
+            Aguarde enquanto validamos seu acesso ao painel.
           </p>
         </article>
       </section>
@@ -28,7 +28,7 @@ export function ProtectedRoute({ children }) {
   }
 
   if (!adminAuthenticated && !allowAdminBypass) {
-    return <Navigate to={ADMIN_LOGIN_PATH} replace state={{ from: location }} />;
+    return <Navigate to={PROFESSOR_LOGIN_PATH} replace state={{ from: location }} />;
   }
 
   return children;

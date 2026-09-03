@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { ADMIN_LOGIN_PATH, ROUTES } from './constants/routes';
+import { PROFESSOR_LOGIN_PATH, ROUTES } from './constants/routes';
 
 const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })));
 const ProductsPage = lazy(() =>
@@ -35,8 +35,8 @@ const ConfirmSubscriptionPage = lazy(() =>
 const UnsubscribePage = lazy(() =>
   import('./pages/SubscriptionPages').then((m) => ({ default: m.UnsubscribePage })),
 );
-const AdminLoginPage = lazy(() =>
-  import('./pages/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })),
+const ProfessorLoginPage = lazy(() =>
+  import('./pages/ProfessorLoginPage').then((m) => ({ default: m.ProfessorLoginPage })),
 );
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
 
@@ -65,8 +65,8 @@ export default function App() {
         <Route path="/termos" element={<TermsPage />} />
         <Route path="/confirmar-inscricao" element={<ConfirmSubscriptionPage />} />
         <Route path="/desinscrever" element={<UnsubscribePage />} />
-        <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
-        <Route path="/admin-login" element={<Navigate to={ADMIN_LOGIN_PATH} replace />} />
+        <Route path={PROFESSOR_LOGIN_PATH} element={<ProfessorLoginPage />} />
+        <Route path="/admin-login" element={<Navigate to={PROFESSOR_LOGIN_PATH} replace />} />
         <Route
           path="/admin"
           element={

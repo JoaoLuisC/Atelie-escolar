@@ -12,7 +12,7 @@ import {
   exportMyData,
   requestAccountDeletion,
 } from '../services/customer-auth';
-import { ROUTES, sanitizeRedirectPath } from '../constants/routes';
+import { PROFESSOR_LOGIN_PATH, ROUTES, sanitizeRedirectPath } from '../constants/routes';
 
 function getMode(search) {
   const params = new URLSearchParams(search);
@@ -629,6 +629,31 @@ export function CustomerAuthPage() {
           </div>
         ) : (
           <>
+            {/* Duas escolhas em sequência, e a ordem importa: primeiro QUEM
+                está entrando, depois o que vai fazer. O professor sai desta
+                tela — o login dele ainda é o antigo painel, com 2FA e sessão
+                próprios —, então a segunda escolha (Entrar/Cadastrar) só faz
+                sentido para o cliente e fica embaixo. */}
+            <div className="mb-4">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Entrar como
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <span
+                  aria-current="page"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-brand-500 bg-brand-50 px-3 py-2.5 text-sm font-semibold text-brand-700"
+                >
+                  <i className="bi bi-person" aria-hidden="true" /> Cliente
+                </span>
+                <Link
+                  to={PROFESSOR_LOGIN_PATH}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                >
+                  <i className="bi bi-mortarboard" aria-hidden="true" /> Professor
+                </Link>
+              </div>
+            </div>
+
             {mode !== 'forgot' ? (
               <div className="mb-4 flex gap-1 rounded-lg bg-slate-100 p-1">
                 <button

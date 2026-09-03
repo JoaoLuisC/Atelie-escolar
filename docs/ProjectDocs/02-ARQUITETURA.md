@@ -137,7 +137,7 @@ Atelie-escolar/
 │   │   ├── ResetPasswordPage.jsx         # /reset-password
 │   │   ├── LegalPages.jsx                # /privacidade + /termos
 │   │   ├── SubscriptionPages.jsx         # /confirmar-inscricao + /desinscrever
-│   │   ├── AdminLoginPage.jsx            # /painel-acesso-privado-atelie
+│   │   ├── ProfessorLoginPage.jsx        # /painel-acesso-privado-atelie
 │   │   ├── AdminPage.jsx                 # /admin (com 14 abas)
 │   │   ├── NotFoundPage.jsx              # *
 │   │   └── __tests__/                    # Testes de página

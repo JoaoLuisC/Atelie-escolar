@@ -2,7 +2,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 
 import { ProtectedRoute } from '../ProtectedRoute';
-import { ADMIN_LOGIN_PATH } from '../../constants/routes';
+import { PROFESSOR_LOGIN_PATH } from '../../constants/routes';
 
 // ════════════════════════════════════════════════════════════════════
 // `ProtectedRoute` — o único guard de rota do app.
@@ -40,7 +40,7 @@ function renderRoute({ authReady, adminAuthenticated }) {
             </ProtectedRoute>
           }
         />
-        <Route path={ADMIN_LOGIN_PATH} element={<p>tela de login</p>} />
+        <Route path={PROFESSOR_LOGIN_PATH} element={<p>tela de login</p>} />
       </Routes>
     </MemoryRouter>,
   );

@@ -68,7 +68,7 @@ Personas não-humanas (atores técnicos):
 - Reset de senha por e-mail (`resetPasswordForEmail` → SMTP custom Resend)
 - Política de senha: mín 8 chars (validado no backend); maiúscula, minúscula e dígito exigidos no formulário do frontend (enforcement server-side dessas classes depende da config do Supabase Auth)
 - Admin com 2FA opcional (TOTP + PIN de recuperação)
-- URL admin obscurecida `/painel-acesso-privado-atelie` (link "Painel admin" aparece no header apenas para sessão com role admin/master)
+- Login do professor (antigo login admin) em `/painel-acesso-privado-atelie` — a URL não é mais um segredo: `/login` oferece a escolha "Entrar como Cliente / Professor" e publica o caminho. A proteção é a sessão, não a URL. O link "Painel admin" no header continua só para sessão com role admin/master
 - Exclusão de conta LGPD em 2 passos (solicitação → confirmação por e-mail), com anonimização dos pedidos
 
 ### Painel admin (14 abas)

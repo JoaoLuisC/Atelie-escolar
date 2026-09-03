@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { ROUTES } from '../constants/routes';
 
-export function AdminLoginPage() {
+// ════════════════════════════════════════════════════════════════════
+// Login do professor — a antiga tela de admin.
+//
+// A sessão por trás ainda é a de admin (`loginAdmin`, `adminAuthenticated`):
+// o backend não conhece "professor" ainda. Só o público mudou, e mudou de
+// propósito — a separação real entre professor e admin vem depois, e é ela
+// que vai trocar o que este formulário chama.
+// ════════════════════════════════════════════════════════════════════
+export function ProfessorLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { authReady, adminAuthenticated, loginAdmin } = useAuth();
@@ -59,10 +67,10 @@ export function AdminLoginPage() {
         return;
       }
 
-      pushToast('Login administrativo realizado.', 'success');
+      pushToast('Login de professor realizado.', 'success');
       navigate(backTo, { replace: true });
     } catch (error) {
-      const message = error.message || 'Falha no login administrativo.';
+      const message = error.message || 'Falha no login de professor.';
       setStatus(message);
       pushToast(message, 'error');
     } finally {
@@ -75,22 +83,22 @@ export function AdminLoginPage() {
       <article className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/80 p-8 shadow-2xl backdrop-blur">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-violet-700 text-white shadow-lg">
-            <i className="bi bi-shield-lock-fill text-2xl" />
+            <i className="bi bi-mortarboard-fill text-2xl" />
           </span>
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-violet-600">
-              Painel administrativo
+              Área do professor
             </p>
-            <h1 className="mt-1 text-2xl font-bold text-slate-900">Acesso restrito</h1>
+            <h1 className="mt-1 text-2xl font-bold text-slate-900">Acesso do professor</h1>
             <p className="mt-2 text-sm text-slate-600">
-              Use o e-mail Supabase do perfil master/admin para acessar o painel.
+              Entre com o e-mail e a senha cadastrados para abrir o painel.
             </p>
           </div>
         </div>
 
         <form className="flex flex-col gap-3" onSubmit={onSubmit}>
           <div>
-            <label htmlFor="admin-login-email" className="sr-only">
+            <label htmlFor="professor-login-email" className="sr-only">
               E-mail
             </label>
             <div className="relative">
@@ -98,9 +106,9 @@ export function AdminLoginPage() {
                 <i className="bi bi-envelope" />
               </span>
               <input
-                id="admin-login-email"
+                id="professor-login-email"
                 type="email"
-                placeholder="E-mail do admin"
+                placeholder="E-mail do professor"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={loading}
@@ -111,7 +119,7 @@ export function AdminLoginPage() {
           </div>
 
           <div>
-            <label htmlFor="admin-login-password" className="sr-only">
+            <label htmlFor="professor-login-password" className="sr-only">
               Senha
             </label>
             <div className="relative">
@@ -119,7 +127,7 @@ export function AdminLoginPage() {
                 <i className="bi bi-lock" />
               </span>
               <input
-                id="admin-login-password"
+                id="professor-login-password"
                 type="password"
                 placeholder="Senha"
                 value={password}
@@ -133,7 +141,7 @@ export function AdminLoginPage() {
 
           {requiresSecondFactor ? (
             <div>
-              <label htmlFor="admin-login-factor" className="sr-only">
+              <label htmlFor="professor-login-factor" className="sr-only">
                 Código de verificação
               </label>
               <div className="relative">
@@ -141,7 +149,7 @@ export function AdminLoginPage() {
                   <i className="bi bi-key" />
                 </span>
                 <input
-                  id="admin-login-factor"
+                  id="professor-login-factor"
                   type="text"
                   inputMode="numeric"
                   placeholder="Código TOTP ou PIN"
@@ -175,6 +183,13 @@ export function AdminLoginPage() {
         {status ? (
           <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{status}</p>
         ) : null}
+
+        <Link
+          to={ROUTES.login}
+          className="mt-4 flex items-center justify-center gap-1 text-xs font-semibold text-slate-500 transition hover:text-slate-700"
+        >
+          <i className="bi bi-arrow-left" /> Não é professor? Entrar como cliente
+        </Link>
       </article>
     </section>
   );

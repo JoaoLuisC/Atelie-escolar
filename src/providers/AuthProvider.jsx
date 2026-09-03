@@ -93,7 +93,7 @@ export function AuthProvider({ children }) {
       async loginAdmin(credentials) {
         const data = await loginAdmin(credentials);
         // Só autentica de fato quando NÃO há segundo fator pendente. Quando
-        // há 2FA, devolvemos o `data` para o AdminLoginPage tratar o desafio
+        // há 2FA, devolvemos o `data` para o ProfessorLoginPage tratar o desafio
         // (requiresSecondFactor / challengeToken / methods) sem marcar sessão.
         if (!data?.requiresSecondFactor) {
           setAdminAuthenticated(true);
