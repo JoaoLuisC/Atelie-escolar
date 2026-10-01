@@ -124,12 +124,24 @@ const discountType = z.enum(['percent', 'fixed'], {
   error: 'Tipo de desconto deve ser percentual ou valor fixo.',
 });
 
-/** Data opcional: vazio vira `null`; texto que não é data vira erro. */
+/**
+ * Data opcional: vazio vira `null`; texto que não é data vira erro.
+ *
+ * Data SEM hora ("2026-12-31", o que um `<input type="date">` produz) vale até o
+ * fim daquele dia no horário de Brasília. `new Date("2026-12-31")` é meia-noite
+ * UTC — 30/12 às 21h aqui —, e era isso que fazia a validade do cupom aparecer
+ * um dia antes e recuar a cada edição (ADM-39). O painel já manda o instante
+ * completo; isto protege quem mandar só a data.
+ */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const optionalDate = z
   .union([z.string(), z.number(), z.date(), z.null()])
   .transform((value) => {
     if (value === null || String(value).trim() === '') return null;
-    const date = new Date(value);
+    const raw = typeof value === 'string' ? value.trim() : value;
+    const date = new Date(
+      typeof raw === 'string' && DATE_ONLY.test(raw) ? `${raw}T23:59:59.999-03:00` : raw,
+    );
     return Number.isNaN(date.getTime()) ? Number.NaN : date.toISOString();
   })
   .refine((value) => value === null || typeof value === 'string', {
@@ -227,7 +239,10 @@ const userUpdateSchema = z
       .trim()
       .toLowerCase()
       .refine((value) => ASSIGNABLE_ROLES.includes(value), {
-        error: 'Role inválida. Não é permitido atribuir admin/master por este endpoint.',
+        // A mensagem antiga falava em "admin/master" até quando o pedido era
+        // "support" (ADM-42) — e a tela oferecia papéis que este endpoint nunca
+        // aceitou. Agora ela diz o que É aceito.
+        error: 'Papel inválido. Por aqui só é possível atribuir Cliente ou Vendedor.',
       })
       .optional(),
     provider: z.string().trim().toLowerCase().optional(),

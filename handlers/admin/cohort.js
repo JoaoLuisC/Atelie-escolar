@@ -27,7 +27,7 @@ const {
  *   sem coorte, taxa de recompra agregada esconde sazonalidade — a do
  *   ano letivo do nosso público importa muito (volta às aulas = pico).
  *
- * Cache 1h.
+ * Sem cache: recalculado a cada abertura (ADM-01).
  */
 
 // ── POR QUE NÃO HÁ MAIS CACHE EM MEMÓRIA AQUI (regra E2) ─────────────
@@ -36,9 +36,10 @@ const {
 // acidental e vale só para aquela instância — e o `X-Cache: HIT` que
 // acompanhava afirmava uma garantia que o runtime não dá.
 //
-// Fica o mecanismo real: `Cache-Control: private, max-age=3600` (regra E4,
-// CACHE_POLICIES.adminReport). Mesmo TTL, num lugar que vale. `?nocache=1`
-// continua furando, agora por construção, já que muda a URL.
+// Fica o mecanismo real: `Cache-Control` (regra E4, CACHE_POLICIES.adminReport).
+// Desde a validação de 2026-10-01 a política é `no-store`: com `max-age=3600`
+// o painel seguia mostrando o relatório velho depois de uma escrita e até
+// depois do logout (ADM-01). Cada abertura da aba recalcula.
 
 function monthKey(date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;

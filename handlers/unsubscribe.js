@@ -15,6 +15,20 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Resposta única para TODOS os caminhos que envolvem um e-mail digitado —
 // existente, inexistente, já descadastrado. Uma mensagem diferente por caso
 // transformaria o endpoint em oráculo de enumeração da lista.
+// LOJA-35: a resposta do caminho por TOKEN também precisa ser a mesma para
+// token conhecido e desconhecido (senão o endpoint vira oráculo de tokens).
+// Mas a frase antiga — "Inscrição cancelada" — afirmava uma remoção que, para
+// um token inventado, não aconteceu. Esta afirma só o que é verdade nos dois
+// casos: daqui em diante, nenhum marketing sai para o endereço deste link.
+const TOKEN_DONE_MESSAGE =
+  'Pronto. O endereço ligado a este link não receberá mais e-mails de marketing.';
+
+// Formato do `unsubscribe_token`: base64url de 32 bytes (handlers/subscribe.js
+// e handlers/cron-email-jobs.js geram 43 caracteres). A faixa é folgada para
+// aceitar token antigo em hex. Recusar o que nem tem o formato só revela o
+// formato — que é público —, não quais tokens existem.
+const TOKEN_FORMAT = /^[A-Za-z0-9_-]{16,128}$/;
+
 const NEUTRAL_EMAIL_MESSAGE =
   'Se este e-mail estiver na nossa lista, enviamos um link para concluir o cancelamento. ' +
   'Abra o e-mail e clique no link.';
@@ -83,6 +97,14 @@ module.exports = async function unsubscribeHandler(req, res) {
 
     // ── Caminho 1: token (única forma de EFETIVAR o descadastro) ──────
     if (token) {
+      if (!TOKEN_FORMAT.test(token)) {
+        return fail(res, {
+          status: 400,
+          code: ERROR_CODES.VALIDATION_FAILED,
+          message:
+            'Link de cancelamento inválido. Use o link completo do e-mail ou informe seu e-mail abaixo.',
+        });
+      }
       return await unsubscribeByToken(token, res);
     }
 
@@ -124,7 +146,7 @@ async function unsubscribeByToken(token, res) {
   if (!subscriber) {
     return ok(res, {
       success: true,
-      message: 'Inscrição cancelada. Você não receberá mais e-mails de marketing.',
+      message: TOKEN_DONE_MESSAGE,
     });
   }
 
@@ -150,7 +172,7 @@ async function unsubscribeByToken(token, res) {
 
   return ok(res, {
     success: true,
-    message: 'Inscrição cancelada. Você não receberá mais e-mails de marketing.',
+    message: TOKEN_DONE_MESSAGE,
   });
 }
 

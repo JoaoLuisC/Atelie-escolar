@@ -12,6 +12,10 @@ import { formatPrice } from '../utils/currency';
 import { trackPurchaseOnce } from '../utils/analytics';
 import { ROUTES } from '../constants/routes';
 
+// Mesma forma mínima do checkout. Sem isto, um `?email=abc` ia ao servidor e
+// voltava "email é obrigatório" — falso, e em minúsculas (LOJA-43).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function usePendingOrderPolling({
   orderId,
   orderEmail,
@@ -106,10 +110,15 @@ export function DownloadsPage() {
   const [searchingByEmail, setSearchingByEmail] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [pollingStatus, setPollingStatus] = useState('');
+  // E-mail digitado aqui para consultar um pedido sem login (LOJA-42). Fica em
+  // estado, e não na URL, pelo mesmo motivo do POST do achado M6.
+  const [typedEmail, setTypedEmail] = useState('');
+  const [manualEmail, setManualEmail] = useState('');
 
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order') || localStorage.getItem('lastOrderId') || '';
   const orderEmail = (
+    manualEmail ||
     params.get('email') ||
     localStorage.getItem('lastOrderEmail') ||
     customerSession?.email ||
@@ -117,21 +126,31 @@ export function DownloadsPage() {
   )
     .trim()
     .toLowerCase();
+  const orderEmailIsValid = EMAIL_RE.test(orderEmail);
   const hasSuccessFlag = params.get('success') === '1';
+  const isLoggedIn = Boolean(customerSession?.email);
 
   const loadOrder = useCallback(
     async (signal) => {
       if (!orderId) {
-        setStatus(
-          'Nenhum pedido selecionado. Entre na sua conta para ver o histórico de pedidos e downloads.',
-        );
+        // Logado, o histórico está logo abaixo — mandar "entrar na conta" era
+        // falso (LOJA-41). Deslogado, o convite para entrar já tem caixa
+        // própria; repeti-lo aqui só duplicava a frase.
+        setStatus(isLoggedIn ? 'Escolha um pedido no seu histórico abaixo.' : '');
         setOrder(null);
         setOrderError('');
         setLoading(false);
         return;
       }
       if (!orderEmail) {
-        setStatus('Para consultar este pedido, informe o e-mail usado na compra abaixo.');
+        setStatus('Para consultar este pedido, informe abaixo o e-mail usado na compra.');
+        setOrder(null);
+        setOrderError('');
+        setLoading(false);
+        return;
+      }
+      if (!orderEmailIsValid) {
+        setStatus('O e-mail informado não é válido. Confira e informe de novo abaixo.');
         setOrder(null);
         setOrderError('');
         setLoading(false);
@@ -196,7 +215,7 @@ export function DownloadsPage() {
         if (!signal?.aborted) setLoading(false);
       }
     },
-    [orderId, orderEmail, pushToast],
+    [orderId, orderEmail, orderEmailIsValid, isLoggedIn, pushToast],
   );
 
   useEffect(() => {
@@ -207,7 +226,7 @@ export function DownloadsPage() {
 
   usePendingOrderPolling({
     orderId,
-    orderEmail,
+    orderEmail: orderEmailIsValid ? orderEmail : '',
     paymentStatus: order?.paymentStatus,
     setOrder,
     setStatus,
@@ -274,6 +293,20 @@ export function DownloadsPage() {
     navigate(`/downloads?order=${encodeURIComponent(id)}${emailParam}`);
   }
 
+  function submitManualEmail(event) {
+    event.preventDefault();
+    const email = typedEmail.trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      setStatus('Digite um e-mail válido, como seu@email.com.');
+      return;
+    }
+    setManualEmail(email);
+  }
+
+  // Pede o e-mail quando há pedido e o e-mail que temos não serve (ausente ou
+  // inválido). Também depois de o servidor não achar o par pedido+e-mail.
+  const needsEmail = Boolean(orderId) && (!orderEmailIsValid || Boolean(orderError));
+
   let statusStep = 0;
   if (order?.paymentStatus === 'approved') {
     statusStep = 2;
@@ -284,7 +317,7 @@ export function DownloadsPage() {
   return (
     <Shell>
       <SEO
-        title="Meus downloads"
+        title="Meus produtos"
         description="Acesse os arquivos dos seus pedidos aprovados a qualquer momento."
         pathname="/downloads"
         noindex
@@ -292,8 +325,9 @@ export function DownloadsPage() {
       <section className="mx-auto max-w-4xl px-4 py-8 lg:px-6">
         <header className="mb-6">
           <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Pós-compra</p>
+          {/* Mesmo nome do link do cabeçalho (LOJA-49). */}
           <h1 className="font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">
-            Meus Downloads
+            Meus produtos
           </h1>
           <p className="mt-2 text-sm text-slate-600">
             Seu histórico e seus arquivos em um só lugar.
@@ -316,29 +350,68 @@ export function DownloadsPage() {
               </h3>
               {status ? <p className="text-sm text-slate-500">{status}</p> : null}
             </div>
-            <button
-              type="button"
-              onClick={() => loadOrder()}
-              disabled={loading}
-              className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-            >
-              {loading ? 'Atualizando…' : 'Atualizar'}
-            </button>
+            {/* Sem pedido não há o que atualizar nem progresso a mostrar
+                (LOJA-48): o stepper marcava "Processando" sem pedido nenhum. */}
+            {orderId ? (
+              <button
+                type="button"
+                onClick={() => loadOrder()}
+                disabled={loading}
+                className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                {loading ? 'Atualizando…' : 'Atualizar'}
+              </button>
+            ) : null}
           </div>
 
-          <StatusStepper
-            activeStep={statusStep}
-            description={
-              pollingStatus ||
-              status ||
-              'Acompanhe a liberação em tempo real. Pode fechar a aba e voltar quando quiser.'
-            }
-            steps={[
-              { label: 'Processando', description: 'Validando a cobrança.' },
-              { label: 'Confirmando', description: 'Organizando os links.' },
-              { label: 'Liberado', description: 'Acesso pronto.' },
-            ]}
-          />
+          {needsEmail ? (
+            <form
+              onSubmit={submitManualEmail}
+              noValidate
+              className="mb-4 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+            >
+              <div className="min-w-0 flex-1">
+                <label
+                  htmlFor="downloads-order-email"
+                  className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  E-mail usado na compra
+                </label>
+                <input
+                  id="downloads-order-email"
+                  type="email"
+                  value={typedEmail}
+                  onChange={(event) => setTypedEmail(event.target.value)}
+                  placeholder="seu@email.com"
+                  maxLength={254}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:text-sm"
+                />
+              </div>
+              <button
+                type="submit"
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+              >
+                Consultar pedido
+              </button>
+            </form>
+          ) : null}
+
+          {orderId ? (
+            <StatusStepper
+              activeStep={statusStep}
+              // O `status` já aparece logo acima; repeti-lo aqui duplicava a
+              // frase (LOJA-48). O stepper fica com o andamento da verificação.
+              description={
+                pollingStatus ||
+                'Acompanhe a liberação em tempo real. Pode fechar a aba e voltar quando quiser.'
+              }
+              steps={[
+                { label: 'Processando', description: 'Validando a cobrança.' },
+                { label: 'Confirmando', description: 'Organizando os links.' },
+                { label: 'Liberado', description: 'Acesso pronto.' },
+              ]}
+            />
+          ) : null}
 
           {customerSession?.email ? (
             <div className="mt-5">

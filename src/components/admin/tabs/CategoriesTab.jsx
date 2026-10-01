@@ -2,6 +2,7 @@ import PropTypes from 'prop-types';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
+import { categoryLabel } from '../utils/category-label';
 
 export function CategoriesTab({ categories, onCreate, onEdit, onDelete }) {
   return (
@@ -34,7 +35,12 @@ export function CategoriesTab({ categories, onCreate, onEdit, onDelete }) {
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="truncate text-sm font-semibold text-slate-900">{category.name}</h3>
+                  <h3
+                    className="truncate text-sm font-semibold text-slate-900"
+                    title={category.name}
+                  >
+                    {categoryLabel(category.name)}
+                  </h3>
                   {category.featured ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">
                       <i className="bi bi-star-fill" />
@@ -45,7 +51,12 @@ export function CategoriesTab({ categories, onCreate, onEdit, onDelete }) {
                   {category.color || '#9B5DE5'} · {category.active === false ? 'Inativa' : 'Ativa'}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-1">
-                  <Button variant="secondary" size="sm" onClick={() => onEdit(category)}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onEdit(category)}
+                    aria-label={`Editar ${categoryLabel(category.name)}`}
+                  >
                     Editar
                   </Button>
                   <Button
@@ -53,7 +64,7 @@ export function CategoriesTab({ categories, onCreate, onEdit, onDelete }) {
                     size="sm"
                     icon="trash"
                     onClick={() => onDelete(category)}
-                    aria-label="Excluir"
+                    aria-label={`Excluir ${categoryLabel(category.name)}`}
                   />
                 </div>
               </div>

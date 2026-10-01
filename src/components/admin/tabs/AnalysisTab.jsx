@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { formatCsvNumber } from '../../../utils/currency';
 import { formatCsvPercent } from '../../../utils/number';
@@ -12,6 +12,9 @@ import {
 } from '../../../services/admin-panel';
 import { formatPrice } from '../../../utils/currency';
 import { downloadCsv } from '../../../utils/csv-export';
+import { useModalBehavior } from '../ui/useModalBehavior';
+import { categoryLabel } from '../utils/category-label';
+import { friendlyAdminError } from '../utils/errors';
 import {
   CURVE_STYLES,
   EXPLANATIONS,
@@ -27,16 +30,34 @@ import {
 
 function ExplainModal({ data, onClose }) {
   if (!data) return null;
+  return <ExplainDialog data={data} onClose={onClose} />;
+}
+
+ExplainModal.propTypes = {
+  data: PropTypes.object,
+  onClose: PropTypes.func.isRequired,
+};
+
+// Componente separado para o hook rodar só com o modal aberto. Esc, foco
+// preso, `aria-modal` e página travada por trás vêm do mesmo contrato do
+// ModalWizard (ADM-13).
+function ExplainDialog({ data, onClose }) {
+  const dialogRef = useRef(null);
+  useModalBehavior(dialogRef, onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
         aria-label="Fechar explicação"
+        tabIndex={-1}
         className="absolute inset-0 bg-slate-900/50"
         onClick={onClose}
       />
       <dialog
+        ref={dialogRef}
         open
+        aria-modal="true"
+        tabIndex={-1}
         className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
         aria-labelledby="explain-modal-title"
       >
@@ -76,7 +97,7 @@ function ExplainModal({ data, onClose }) {
   );
 }
 
-ExplainModal.propTypes = {
+ExplainDialog.propTypes = {
   data: PropTypes.shape({
     title: PropTypes.string.isRequired,
     intro: PropTypes.string.isRequired,
@@ -252,6 +273,7 @@ export function AnalysisTab({ categories = [] }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [explainKey, setExplainKey] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,7 +292,7 @@ export function AnalysisTab({ categories = [] }) {
         setCohort(cohortData);
       })
       .catch((err) => {
-        if (!cancelled) setError(err?.message || 'Erro ao carregar análise.');
+        if (!cancelled) setError(friendlyAdminError(err, 'Erro ao carregar análise.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -279,13 +301,16 @@ export function AnalysisTab({ categories = [] }) {
     return () => {
       cancelled = true;
     };
-  }, [period, customerPeriod, categoryId]);
+  }, [period, customerPeriod, categoryId, reloadKey]);
 
   const productSummary = products?.summary || { A: 0, B: 0, C: 0 };
   const customerSummary = customers?.relationshipSummary || { vip: 0, recorrente: 0, eventual: 0 };
 
   const categoryOptions = useMemo(
-    () => [{ id: '', name: 'Todas as categorias' }, ...categories],
+    () => [
+      { id: '', name: 'Todas as categorias' },
+      ...categories.map((cat) => ({ ...cat, name: categoryLabel(cat.name) })),
+    ],
     [categories],
   );
 
@@ -359,16 +384,46 @@ export function AnalysisTab({ categories = [] }) {
     );
   }
 
-  if (error) {
+  // Sem dado nenhum ainda: só a mensagem e o "Tentar de novo". Com dado de
+  // antes, o erro vira faixa acima dos seletores — a aba inteira sumir e os
+  // seletores irem junto obrigava a trocar de aba para voltar (ADM-05).
+  if (error && !products) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-        {error}
+      <div
+        role="alert"
+        className="flex flex-col items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
+      >
+        <p>{error}</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon="arrow-clockwise"
+          onClick={() => setReloadKey((n) => n + 1)}
+        >
+          Tentar de novo
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-5">
+      {error ? (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+        >
+          <p>{error} Os números abaixo ainda são da consulta anterior.</p>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="arrow-clockwise"
+            onClick={() => setReloadKey((n) => n + 1)}
+          >
+            Tentar de novo
+          </Button>
+        </div>
+      ) : null}
       {/* Filters */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div>
@@ -458,7 +513,10 @@ export function AnalysisTab({ categories = [] }) {
             );
           })}
         </div>
-        <ParetoList items={products?.items} getMeta={(item) => item.categoryName} />
+        <ParetoList
+          items={products?.items}
+          getMeta={(item) => (item.categoryName ? categoryLabel(item.categoryName) : null)}
+        />
         <p className="mt-3 text-xs text-slate-500">
           Receita total no período: <strong>{formatPrice(products?.totalRevenue || 0)}</strong>
         </p>
@@ -467,7 +525,7 @@ export function AnalysisTab({ categories = [] }) {
       {/* Curva ABC Clientes */}
       <Card
         title="Curva ABC — Clientes"
-        subtitle="Quem gera quanto. Use para definir público de campanha (lookalike de VIP). Regra D5: segmentação por categoria, não personalização nominal."
+        subtitle="Quem gera quanto. Use para definir público de campanha (lookalike de VIP): segmentação por grupo, não personalização nominal."
         action={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -506,7 +564,7 @@ export function AnalysisTab({ categories = [] }) {
           }
         />
         <p className="mt-3 text-xs text-slate-500">
-          E-mails são mascarados na visualização — export CSV usa a mesma máscara.
+          Nomes e e-mails são mascarados na visualização — o export CSV usa a mesma máscara.
         </p>
       </Card>
 
@@ -543,10 +601,7 @@ export function AnalysisTab({ categories = [] }) {
         ) : null}
       </Card>
 
-      <p className="text-xs text-slate-500">
-        Dados em cache por 1h (regra F5). Adicione <code>?nocache=1</code> à URL para forçar
-        recálculo.
-      </p>
+      <p className="text-xs text-slate-500">Dados recalculados a cada abertura da aba.</p>
 
       <ExplainModal
         data={explainKey ? EXPLANATIONS[explainKey] : null}

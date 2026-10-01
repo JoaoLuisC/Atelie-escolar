@@ -25,7 +25,7 @@ const {
  *   - recorrente   → 2-4 pedidos
  *   - eventual     → 1 pedido
  *
- * Cache 1h (regra F5).
+ * Sem cache: dado de cliente, sempre recalculado (ADM-01).
  */
 
 // ── POR QUE NÃO HÁ MAIS CACHE EM MEMÓRIA AQUI (regra E2) ─────────────
@@ -34,9 +34,10 @@ const {
 // vale só para aquela instância — e o `X-Cache: HIT` que acompanhava afirmava
 // uma garantia que o runtime não dá.
 //
-// Fica o mecanismo real: `Cache-Control: private, max-age=3600` (regra E4,
-// CACHE_POLICIES.adminReport). Mesmo TTL, num lugar que vale. `?nocache=1`
-// continua furando, agora por construção, já que muda a URL.
+// Fica o mecanismo real: `Cache-Control` (regra E4, CACHE_POLICIES.adminReport).
+// Desde a validação de 2026-10-01 a política é `no-store`: com `max-age=3600`
+// o painel seguia mostrando o relatório velho depois de uma escrita e até
+// depois do logout (ADM-01). Cada abertura da aba recalcula.
 
 const PERIOD_DAYS = {
   month: 30,
@@ -68,6 +69,22 @@ function maskEmail(email) {
   if (!local || !domain) return email;
   if (local.length <= 3) return `${local[0] || ''}***@${domain}`;
   return `${local.slice(0, 3)}***@${domain}`;
+}
+
+/**
+ * Mascara o nome do cliente como iniciais: "Ana Lima" → "A. L.".
+ *
+ * A tela prometia "e-mails mascarados" e "não personalização nominal", mas
+ * exibia nome e sobrenome completos (ADM-07). O nome entra no mesmo regime do
+ * e-mail: só sai em claro com `includePII=1`.
+ */
+function maskName(name) {
+  const initials = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => `${part[0].toUpperCase()}.`);
+  return initials.join(' ');
 }
 
 module.exports = async function adminAbcCustomersHandler(req, res) {
@@ -132,6 +149,7 @@ module.exports = async function adminAbcCustomersHandler(req, res) {
       const relationship = classifyRelationship(item.orderCount, item.curve);
       return {
         ...item,
+        name: includePII ? item.name : maskName(item.name),
         email: includePII ? item.id : maskEmail(item.id),
         relationship,
         // Não expor o email completo no payload default

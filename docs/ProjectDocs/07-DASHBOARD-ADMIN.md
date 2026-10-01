@@ -6,8 +6,7 @@
 
 ## Acesso
 
-- URL: `/painel-acesso-privado-atelie` (constante `PROFESSOR_LOGIN_PATH` em `src/constants/routes.js`) ou `/admin` direto se já logado. A tela se chama "Acesso do professor" e é linkada a partir de `/login`; a sessão por trás ainda é a de admin, a separação professor × admin está por fazer
-- A rota `/admin-login` redireciona (`<Navigate>`) para essa URL
+- URL: `/admin` (`ROUTES.admin` em `src/constants/routes.js`) — sem sessão admin, a rota mostra só o formulário de login; com sessão, o painel. Sair do painel volta ao formulário na mesma URL
 - Login com e-mail + senha + (opcional) 2FA TOTP ou PIN de recuperação — a 2ª etapa usa `challengeToken` HMAC com TTL de 5 min
 - Cookie `admin_session` HttpOnly assinado com HMAC-SHA256, TTL 8h, SameSite=Strict
 - Apenas usuários com `profiles.role IN ('ADMIN', 'MASTER')` conseguem logar (resposta idêntica para senha errada e conta não-admin)

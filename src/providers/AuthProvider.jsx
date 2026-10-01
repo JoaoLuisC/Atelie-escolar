@@ -93,7 +93,7 @@ export function AuthProvider({ children }) {
       async loginAdmin(credentials) {
         const data = await loginAdmin(credentials);
         // Só autentica de fato quando NÃO há segundo fator pendente. Quando
-        // há 2FA, devolvemos o `data` para o ProfessorLoginPage tratar o desafio
+        // há 2FA, devolvemos o `data` para o AdminLoginPage tratar o desafio
         // (requiresSecondFactor / challengeToken / methods) sem marcar sessão.
         if (!data?.requiresSecondFactor) {
           setAdminAuthenticated(true);
@@ -101,7 +101,20 @@ export function AuthProvider({ children }) {
         return data;
       },
       async logoutAdmin() {
-        await logoutAdmin();
+        try {
+          await logoutAdmin();
+        } catch (error) {
+          // A resposta pode ter se perdido DEPOIS de o servidor apagar o cookie
+          // (ADM-06). Antes de dizer "a sessão continua aberta", pergunta ao
+          // servidor: se ela já acabou, o logout valeu e o painel deve fechar.
+          const session = await getAdminSession().catch(() => null);
+          if (session && session.authenticated === false) {
+            setAdminAuthenticated(false);
+            return;
+          }
+          error.sessionStillActive = true;
+          throw error;
+        }
         setAdminAuthenticated(false);
       },
       setAdminAuthenticated,
@@ -123,8 +136,23 @@ export function AuthProvider({ children }) {
         setCustomerSession(result.user || null);
         return result;
       },
+      // Só zera a sessão local DEPOIS de o servidor confirmar, e propaga a
+      // falha (LOJA-39): com a rede caída o cookie continua valendo, e limpar
+      // aqui deixaria a tela "deslogada" com a conta ainda aberta. Quem chama
+      // precisa `await` + tratar o erro antes de anunciar "Sessão encerrada.".
       async logoutCustomer() {
-        await logoutCustomerSession();
+        try {
+          await logoutCustomerSession();
+        } catch (error) {
+          // `fetch` sem rede rejeita com TypeError ("Failed to fetch"): texto
+          // do navegador, em inglês — e quem chama vai mostrá-lo num toast.
+          if (error?.name === 'TypeError') {
+            throw new Error(
+              'Não foi possível sair da conta: sem conexão com o servidor. Tente novamente.',
+            );
+          }
+          throw error;
+        }
         setCustomerSession(null);
       },
       setCustomerSession(session) {

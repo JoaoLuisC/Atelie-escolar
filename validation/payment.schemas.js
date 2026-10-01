@@ -163,8 +163,9 @@ const orderIdentifier = z
 const verifyEmail = z
   .unknown()
   .transform((value) => cleanText(value).toLowerCase())
-  .refine((value) => value.length > 0 && value.includes('@'), { error: 'email é obrigatório' })
-  .refine((value) => value.length <= 254, { error: 'email é obrigatório' });
+  .refine((value) => value.length > 0, { error: 'Informe o e-mail usado na compra.' })
+  // Formato errado ≠ ausente (LOJA-43): a mensagem não pode dizer "obrigatório".
+  .refine((value) => value.includes('@') && value.length <= 254, { error: 'E-mail inválido.' });
 
 // A ORDEM DAS CHAVES importa: o zod reporta os issues na ordem do shape, e
 // `parseOrFail` usa a primeira mensagem. Com os dois campos ausentes, a

@@ -73,6 +73,9 @@ export function ProductDetailsPage() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notFound, setNotFound] = useState(false);
+  // LOJA-15: "Tentar novamente" refaz a busca sem recarregar a página.
+  const [attempt, setAttempt] = useState(0);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
   useEffect(() => {
@@ -82,14 +85,23 @@ export function ProductDetailsPage() {
       try {
         setLoading(true);
         setError('');
+        setNotFound(false);
         const data = await fetchProductByIdentifier(slug);
-        if (!data) throw new Error('Produto não encontrado na API.');
+        // LOJA-05: "não existe" é um estado próprio (com saída para o
+        // catálogo), não uma falha com botão de tentar de novo.
+        if (!data) {
+          if (isMounted) {
+            setProduct(null);
+            setNotFound(true);
+          }
+          return;
+        }
         if (isMounted) {
           setProduct(data);
           setActiveMediaIndex(0);
           trackEvent('view_item', buildItemPayload(data));
 
-          // Soft redirect: usuário chegou por /produtos/<id-numérico>?
+          // Soft redirect: usuário chegou por /produtos/<id>?
           // Reescreve a URL para o slug canônico sem recarregar a página.
           // Garante que canonical, share e SEO usem a URL nova.
           const canonicalSlug = data.slug || String(data.id);
@@ -108,7 +120,7 @@ export function ProductDetailsPage() {
     return () => {
       isMounted = false;
     };
-  }, [slug, navigate]);
+  }, [slug, navigate, attempt]);
 
   const mediaList = useMemo(() => {
     if (!product) return [];
@@ -134,6 +146,20 @@ export function ProductDetailsPage() {
     pushToast(result.message, result.ok ? 'success' : 'warning');
   }
 
+  const hasCustomBenefits = Array.isArray(product?.benefits) && product.benefits.length > 0;
+  // LOJA-22: os kits não listavam o próprio conteúdo. `kit_items` aceita texto
+  // solto ou objeto ({ name | label | title }) — o que vier legível aparece.
+  const kitItems = useMemo(
+    () =>
+      (Array.isArray(product?.kitItems) ? product.kitItems : [])
+        .map((item) =>
+          typeof item === 'string' ? item : item?.name || item?.label || item?.title || '',
+        )
+        .map((text) => String(text).trim())
+        .filter(Boolean),
+    [product],
+  );
+
   const activeMedia = mediaList[activeMediaIndex];
   const youtubeEmbed = activeMedia?.type === 'video' ? getYoutubeEmbedUrl(activeMedia.url) : null;
 
@@ -149,7 +175,11 @@ export function ProductDetailsPage() {
           jsonLd={buildProductJsonLd(product)}
         />
       ) : (
-        <SEO title="Carregando produto" pathname={`/produtos/${slug || ''}`} noindex />
+        <SEO
+          title={notFound ? 'Produto não encontrado' : 'Carregando produto'}
+          pathname={`/produtos/${slug || ''}`}
+          noindex
+        />
       )}
       <section className="mx-auto max-w-6xl px-4 py-8 lg:px-6">
         <Link
@@ -166,10 +196,37 @@ export function ProductDetailsPage() {
           </article>
         ) : null}
 
+        {!loading && notFound ? (
+          <article className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <h1 className="font-display text-2xl font-bold text-slate-900">
+              Produto não encontrado
+            </h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Este material não existe mais ou o endereço está incorreto.
+            </p>
+            <Link
+              to={ROUTES.produtos}
+              className="mt-4 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+            >
+              Ver o catálogo
+            </Link>
+          </article>
+        ) : null}
+
         {error ? (
-          <article className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center shadow-sm">
-            <h3 className="text-lg font-bold text-rose-800">Não foi possível carregar o produto</h3>
+          <article
+            role="alert"
+            className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center shadow-sm"
+          >
+            <h1 className="text-lg font-bold text-rose-800">Não foi possível carregar o produto</h1>
             <p className="mt-1 text-sm text-rose-700/80">{error}</p>
+            <button
+              type="button"
+              onClick={() => setAttempt((value) => value + 1)}
+              className="mt-4 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-sm font-semibold text-rose-800 transition hover:bg-rose-100"
+            >
+              <i className="bi bi-arrow-clockwise" aria-hidden="true" /> Tentar novamente
+            </button>
           </article>
         ) : null}
 
@@ -239,9 +296,11 @@ export function ProductDetailsPage() {
             {/* DETALHES */}
             <div className="flex flex-col">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex rounded-full bg-brand-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">
-                  {product.category || 'Sem categoria'}
-                </span>
+                {product.category ? (
+                  <span className="inline-flex rounded-full bg-brand-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">
+                    {product.category}
+                  </span>
+                ) : null}
                 {product.featured ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">
                     <i className="bi bi-star-fill" /> Destaque
@@ -254,9 +313,10 @@ export function ProductDetailsPage() {
                 ) : null}
               </div>
 
-              <h2 className="mt-3 font-display text-2xl font-bold text-slate-900 sm:text-3xl">
+              {/* LOJA-20: o nome do produto é o título da página. */}
+              <h1 className="mt-3 font-display text-2xl font-bold text-slate-900 sm:text-3xl">
                 {product.name}
-              </h2>
+              </h1>
               <p className="mt-3 text-sm leading-relaxed text-slate-600">
                 {product.description || 'Sem descrição disponível.'}
               </p>
@@ -272,10 +332,29 @@ export function ProductDetailsPage() {
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  PDF em alta resolução · acesso permanente · download imediato após aprovação
-                </p>
+                {/* LOJA-22: sem benefícios próprios, a loja mostra os 4 padrão
+                    logo abaixo — que já dizem isto. Repetir aqui punha "PDF em
+                    alta resolução" duas vezes na mesma coluna. */}
+                {hasCustomBenefits ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    PDF em alta resolução · acesso permanente · download imediato após a aprovação
+                    do pagamento
+                  </p>
+                ) : null}
               </div>
+
+              {kitItems.length ? (
+                <div className="mt-4">
+                  <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    O que vem no kit
+                  </h2>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                    {kitItems.map((item, index) => (
+                      <li key={`${item}-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               {product.pageSize || product.paperType ? (
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">

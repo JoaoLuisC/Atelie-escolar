@@ -8,6 +8,7 @@ import { StatusChip } from '../ui/StatusChip';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { formatDateTime } from '../../../utils/date';
+import { categoryLabel } from '../utils/category-label';
 import {
   donutArcPath,
   donutSegments,
@@ -42,7 +43,7 @@ function TrendBadge({ trend, pct }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
         <i className="bi bi-dash" />
-        estável
+        Estável
       </span>
     );
   }
@@ -300,9 +301,9 @@ function CategoryDonut({ entries }) {
     <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[140px_1fr]">
       <div className="relative">
         <svg viewBox="0 0 100 100" className="h-32 w-32 sm:h-36 sm:w-36">
-          {segments.map((segment) => (
+          {segments.map((segment, index) => (
             <path
-              key={segment.label}
+              key={`${index}-${segment.label}`}
               d={arcPath(segment.startAngle, segment.endAngle)}
               fill={segment.color}
             />
@@ -316,14 +317,17 @@ function CategoryDonut({ entries }) {
         </div>
       </div>
       <ul className="flex flex-col gap-2">
-        {segments.map((segment) => (
-          <li key={segment.label} className="flex items-center justify-between gap-2 text-sm">
+        {segments.map((segment, index) => (
+          <li
+            key={`${index}-${segment.label}`}
+            className="flex items-center justify-between gap-2 text-sm"
+          >
             <span className="flex min-w-0 items-center gap-2">
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ background: segment.color }}
               />
-              <span className="truncate text-slate-700">{segment.label}</span>
+              <span className="truncate text-slate-700">{categoryLabel(segment.label)}</span>
             </span>
             <span className="shrink-0 font-semibold text-slate-900">
               {Math.round(segment.sharePct)}%
@@ -460,7 +464,9 @@ function AbcCurveCard({ abc }) {
       </ul>
       {items.length > top.length ? (
         <p className="mt-3 text-xs text-slate-500">
-          + {items.length - top.length} produtos restantes na cauda C.
+          {items.length - top.length === 1
+            ? '+ 1 produto restante na cauda C.'
+            : `+ ${items.length - top.length} produtos restantes na cauda C.`}
         </p>
       ) : null}
     </Card>
@@ -480,7 +486,7 @@ function PendingDataCard({ title, icon, message, hint }) {
         </span>
         <div>
           <h2 className="text-base font-semibold text-slate-700">{title}</h2>
-          <p className="text-xs text-slate-500">Instrumentação pendente</p>
+          <p className="text-xs text-slate-500">Em breve</p>
         </div>
       </div>
       <p className="text-sm text-slate-600">{message}</p>
@@ -628,7 +634,8 @@ export function DashboardTab({
         />
         <MiniStat
           label="LTV / CAC"
-          value={advancedKpis?.ltvCacRatio ? formatRatio(advancedKpis.ltvCacRatio) : 'Fase 5'}
+          // "—" e não "Fase 5": jargão interno do projeto não é dado (ADM-14).
+          value={advancedKpis?.ltvCacRatio ? formatRatio(advancedKpis.ltvCacRatio) : '—'}
           icon="speedometer2"
           accent={advancedKpis?.ltvCacRatio >= 3 ? 'success' : 'warning'}
         />
@@ -658,19 +665,15 @@ export function DashboardTab({
         </div>
       </div>
 
-      {/* Placeholders for KPIs requiring backend instrumentation */}
+      {/* Painel que ainda depende de dado que a loja não coleta. O cartão do
+          funil saiu: o funil existe e tem dados na aba Funil (ADM-10), e a
+          instrução de banco ("adicione a coluna…") não é para a dona da loja. */}
       <div className="grid gap-5 lg:grid-cols-2">
         <PendingDataCard
           title="Vendas por região"
           icon="geo-alt"
-          message="O mapa de pedidos por estado aparecerá aqui assim que o checkout passar a coletar o UF do cliente."
-          hint="Adicione a coluna shipping_state na tabela orders e capture o estado no formulário de checkout para destravar este painel."
-        />
-        <PendingDataCard
-          title="Funil de conversão"
-          icon="funnel"
-          message="Visitas → carrinho → checkout → pagamento. Requer rastreamento de eventos no front."
-          hint="Instrumentar eventos page_view, add_to_cart, begin_checkout e purchase (ex.: tabela page_views) para construir o funil."
+          message="O mapa de pedidos por estado aparecerá aqui quando o checkout passar a pedir o estado (UF) do cliente."
+          hint="O funil de conversão (visitas → carrinho → pagamento) já está na aba Funil."
         />
       </div>
 
@@ -683,7 +686,8 @@ export function DashboardTab({
             description="Os pedidos aparecerão aqui assim que forem criados."
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border border-slate-200">
+          // overflow-x-auto: no celular o "Detalhes" ficava fora da tela (ADM-02).
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -714,7 +718,12 @@ export function DashboardTab({
                       {formatPrice(order.totalAmount || 0)}
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <Button variant="secondary" size="sm" onClick={() => onOpenOrder(order)}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onOpenOrder(order)}
+                        aria-label={`Detalhes do pedido ${order.orderId || order.id}`}
+                      >
                         Detalhes
                       </Button>
                     </td>

@@ -275,3 +275,37 @@ describe('me-delete-account · o que a exclusão precisa levar junto', () => {
     expect(store.state.abandoned_carts).toHaveLength(2);
   });
 });
+
+describe('me-delete-account · passo 1 só diz "enviamos" quando enviou', () => {
+  it('SMTP recusando a credencial vira 503, sem prometer e-mail (LOJA-37)', async () => {
+    installModuleMock('../../lib/email-sender', {
+      sendEmail: vi.fn(async () => ({
+        sent: false,
+        reason: 'smtp_error',
+        error: 'Invalid login: 535 Authentication credentials invalid',
+      })),
+      getAppUrl: () => 'http://localhost:5173',
+    });
+
+    const res = await post({});
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error.code).toBe('SERVICE_UNAVAILABLE');
+    expect(res.body.error.message).toMatch(/Não foi possível enviar/);
+    // Nenhum link de confirmação sai numa resposta de falha.
+    expect(res.body.devConfirmUrl).toBeUndefined();
+  });
+
+  it('conta de administração não pede exclusão pela loja (CROSS-16)', async () => {
+    installModuleMock('../../lib/customer-session', {
+      getCustomerSessionFromRequest: () => ({ uid: UID, email: EMAIL, name: 'Ana', role: 'admin' }),
+      clearCustomerSessionCookie: () => {},
+    });
+
+    const res = await post({});
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+    expect(emails).toEqual([]);
+  });
+});

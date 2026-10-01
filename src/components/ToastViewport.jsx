@@ -7,11 +7,16 @@ const TOAST_STYLES = {
   info: 'border-sky-200 bg-sky-50 text-sky-800',
 };
 
+// LOJA-17: classe ESCRITA POR EXTENSO (`bi bi-…`), e não só o nome do ícone.
+// A varredura do subset de ícones (scripts/__tests__/icon-subset.test.js)
+// enxerga literais `bi bi-*` e chaves `icon:`; o mapa antigo, só com os nomes,
+// passava invisível — e `check-circle-fill`/`exclamation-circle-fill` ficaram
+// fora do subset: os toasts de sucesso e de aviso apareciam sem ícone.
 const TOAST_ICONS = {
-  success: 'check-circle-fill',
-  error: 'exclamation-triangle-fill',
-  warning: 'exclamation-circle-fill',
-  info: 'info-circle-fill',
+  success: 'bi bi-check-circle-fill',
+  error: 'bi bi-exclamation-triangle-fill',
+  warning: 'bi bi-exclamation-circle-fill',
+  info: 'bi bi-info-circle-fill',
 };
 
 export function ToastViewport({ toasts, onDismiss }) {
@@ -31,7 +36,7 @@ export function ToastViewport({ toasts, onDismiss }) {
             data-type={toast.type}
             className={`pointer-events-auto flex w-full items-start gap-3 rounded-xl border bg-white/95 px-3 py-2.5 shadow-lg backdrop-blur ${style}`}
           >
-            <i className={`bi bi-${icon} mt-0.5 shrink-0`} />
+            <i className={`${icon} mt-0.5 shrink-0`} aria-hidden="true" />
             <p className="flex-1 text-sm">{toast.message}</p>
             <button
               type="button"

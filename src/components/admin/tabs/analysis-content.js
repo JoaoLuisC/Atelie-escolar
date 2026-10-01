@@ -84,8 +84,8 @@ export const EXPLANATIONS = {
     how: [
       'Soma da receita por cliente no período (todos os pedidos aprovados).',
       'Classificação em A/B/C pela contribuição acumulada na receita.',
-      'Sobreposto a isso: relação (VIP / Recorrente / Eventual) baseada em quantidade de pedidos e ticket médio.',
-      'E-mails são mascarados na tela e no export por LGPD.',
+      'Sobreposto a isso: relação (VIP / Recorrente / Eventual) baseada na quantidade de pedidos — VIP também é quem está na classe A.',
+      'Nomes e e-mails são mascarados na tela e no export por LGPD.',
     ],
     observe: [
       'Concentração: quanto % da receita está nos top 5 clientes? Acima de 30% = risco (LTV depende de poucos).',
@@ -95,9 +95,9 @@ export const EXPLANATIONS = {
     ],
     act: [
       'VIPs → audiência semente de campanhas pagas (lookalike no Meta/Google). Acesso antecipado a lançamentos.',
-      'Recorrentes → cross-sell por categoria comprada na sequência D+15 (regra D5: segmentação por categoria, não nome).',
+      'Recorrentes → cross-sell por categoria comprada na sequência D+15 (segmentação por categoria, não por nome).',
       'Eventuais → puxar para segunda compra com email D+15 + cupom marginal (não maior que VOLTEI15).',
-      'Cliente sem compra há 90–180d → entra no fluxo de reativação automaticamente (cron). > 180d: parar de enviar (regra D7).',
+      'Cliente sem compra há 90–180d → entra no fluxo de reativação automaticamente. > 180d: parar de enviar.',
       'Nunca personalize nominalmente em escala ("Olá Maria,...") — Ferreira 2025: gera R$ 0 RPM. Segmente pelo comportamento, escreva para o grupo.',
     ],
   },
@@ -108,7 +108,7 @@ export const EXPLANATIONS = {
     how: [
       'M+0 = mês da primeira compra (sempre 100% por definição).',
       'M+1 = % do coorte que comprou de novo no mês seguinte.',
-      'M+12 = % do coorte que ainda compra um ano depois.',
+      'M+11 = % do coorte que ainda compra onze meses depois (a tabela cobre 12 meses: M+0 a M+11).',
       'Cor da célula: verde escuro = retenção forte (≥ 50%); cinza = ninguém voltou.',
       'Coluna "Tam." = quantos clientes únicos compraram pela primeira vez naquele mês.',
     ],
@@ -123,7 +123,7 @@ export const EXPLANATIONS = {
       'Retenção M+1 baixa → reforçar templates D+3 (review/satisfação) e D+15 (cross-sell). Considerar um produto barato de "segunda compra fácil".',
       'Coorte recente com queda → diagnóstico qualitativo: mudou preço? mudou produto destaque? mudou layout do checkout?',
       'Coortes sazonais (festa junina, formatura) → usar para prever caixa do próximo ciclo. Receita esperada = (coorte M+0) × (retenção média histórica) × ticket médio.',
-      'Quando expandir mídia paga (Fase 5): mirar perfil de coorte com maior retenção histórica.',
+      'Quando expandir mídia paga: mirar perfil de coorte com maior retenção histórica.',
     ],
   },
 };

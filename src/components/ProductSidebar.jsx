@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { useEffect, useId, useRef } from 'react';
 
 const PRICE_RANGES = [
   { value: 'all', label: 'Todos' },
@@ -8,17 +9,29 @@ const PRICE_RANGES = [
 ];
 
 function CollapsibleSection({ title, isOpen, onToggle, children }) {
+  const contentId = useId();
   return (
     <section className="border-b border-slate-100 last:border-b-0">
+      {/* LOJA-32: o estado aberto/fechado precisa ser anunciado, não só o
+          chevron girar. */}
       <button
         type="button"
         onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={contentId}
         className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold uppercase tracking-wide text-slate-700"
       >
         {title}
-        <i className={`bi bi-chevron-down text-xs transition ${isOpen ? 'rotate-180' : ''}`} />
+        <i
+          className={`bi bi-chevron-down text-xs transition ${isOpen ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        />
       </button>
-      {isOpen ? <div className="px-4 pb-4">{children}</div> : null}
+      {isOpen ? (
+        <div id={contentId} className="px-4 pb-4">
+          {children}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -44,6 +57,23 @@ export function ProductSidebar({
   onTogglePriceSection,
   totalByCategory,
 }) {
+  const closeButtonRef = useRef(null);
+
+  // LOJA-29: Esc fecha o painel no celular, como qualquer diálogo, e o foco
+  // entra nele ao abrir.
+  useEffect(() => {
+    if (isOpen) closeButtonRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    globalThis.addEventListener?.('keydown', onKeyDown);
+    return () => globalThis.removeEventListener?.('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   return (
     <>
       {isOpen ? (
@@ -55,20 +85,29 @@ export function ProductSidebar({
         />
       ) : null}
 
+      {/* LOJA-29: aberto no celular, o painel é um diálogo. FECHADO, ele
+          continuava no DOM fora da tela e o Tab percorria os 22 controles
+          escondidos — `max-lg:invisible` os tira da ordem de foco só abaixo
+          de lg (no desktop a sidebar é sempre visível). */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto border-r border-slate-200 bg-white shadow-xl transition-transform lg:static lg:z-0 lg:w-auto lg:translate-x-0 lg:rounded-2xl lg:border lg:shadow-sm ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+        id="product-filters"
+        role={isOpen ? 'dialog' : undefined}
+        aria-modal={isOpen ? 'true' : undefined}
+        aria-label="Filtros"
+        className={`fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto border-r border-slate-200 bg-white shadow-xl transition-[transform,visibility] lg:visible lg:static lg:z-0 lg:w-auto lg:translate-x-0 lg:rounded-2xl lg:border lg:shadow-sm ${
+          isOpen ? 'translate-x-0' : 'max-lg:invisible -translate-x-full'
         }`}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 lg:hidden">
           <span className="text-sm font-bold text-slate-800">Filtros</span>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Fechar"
             className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
           >
-            <i className="bi bi-x-lg" />
+            <i className="bi bi-x-lg" aria-hidden="true" />
           </button>
         </div>
 

@@ -7,12 +7,10 @@
 // em JSX é uma rota que ninguém consegue renomear com segurança: o compilador
 // não ajuda, o lint não ajuda, e o teste só pega se existir teste daquela tela.
 //
-// O caso que dói de verdade é o `PROFESSOR_LOGIN_PATH`. O caminho é feio de
-// propósito (não é `/admin/login`) e por muito tempo a feiura era a única pista
-// de que ele existia. Isso acabou: a tela de login do cliente agora oferece
-// "Sou professor" e o caminho aparece no HTML público. O valor continua em UM
-// lugar não mais por segredo, e sim porque ninguém consegue renomear com
-// segurança um caminho que vive em duas cópias.
+// O painel é o caso que já mudou de nome: o login admin morava num caminho
+// obscurecido próprio e hoje é a própria `ROUTES.admin` — sem sessão, o
+// `ProtectedRoute` mostra o formulário de login na mesma URL. Quem ainda
+// escrevia o caminho antigo à mão teria ficado com um link morto.
 //
 // ── COMO USAR ───────────────────────────────────────────────────────
 //   import { ROUTES } from '../constants/routes';
@@ -20,20 +18,6 @@
 //   navigate(ROUTES.checkout);
 //   navigate(productPath(product.slug));
 // ════════════════════════════════════════════════════════════════════
-
-/**
- * Caminho do login do professor — a antiga tela de admin.
- *
- * Fica FORA de `ROUTES` de propósito, com nome próprio: quem for mexer precisa
- * ver que este é o acesso privilegiado, não mais um item da lista. O VALOR
- * segue o antigo `/painel-acesso-privado-atelie` porque a rota não mudou, só o
- * público dela; a separação de verdade entre professor e admin ainda está por
- * fazer, e é ela que vai decidir se este caminho ganha um nome legível.
- *
- * A proteção nunca foi a URL, é a sessão (`ProtectedRoute` + a sessão do
- * backend) — por isso publicá-la no login do cliente não abre nada.
- */
-export const PROFESSOR_LOGIN_PATH = '/painel-acesso-privado-atelie';
 
 export const CUSTOMER_RESET_PASSWORD_PATH = '/reset-password';
 
@@ -53,8 +37,9 @@ export const ROUTES = Object.freeze({
   termos: '/termos',
   confirmarInscricao: '/confirmar-inscricao',
   desinscrever: '/desinscrever',
+  // Entrada única do painel: sem sessão admin mostra o login, com sessão o painel.
+  // A proteção é a sessão (`ProtectedRoute` + backend), não a URL.
   admin: '/admin',
-  professorLogin: PROFESSOR_LOGIN_PATH,
 });
 
 /**

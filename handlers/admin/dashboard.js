@@ -119,6 +119,9 @@ function buildSummary(payload) {
   );
   const revenueTotal = approved.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
 
+  // 2 casas: somar floats devolvia 556.5999999999999 na API (ADM-17).
+  const reais = (value) => Math.round(Number(value || 0) * 100) / 100;
+
   return {
     totalOrders: orders.length,
     approvedOrders: approved.length,
@@ -126,8 +129,8 @@ function buildSummary(payload) {
     totalProducts: products.length,
     activeProducts: products.filter((product) => product.active !== false).length,
     totalUsers: users.length,
-    revenueMonth,
-    revenueTotal,
+    revenueMonth: reais(revenueMonth),
+    revenueTotal: reais(revenueTotal),
   };
 }
 

@@ -22,8 +22,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <AuthProvider>
             <CartProvider>
               <ToastProvider>
-                <App />
+                {/* Antes do <App /> de propósito: o banner é `fixed`, então a
+                    posição no DOM não muda o visual, mas decide a ordem do Tab
+                    — depois do App ele era o último ponto da página (LOJA-30). */}
                 <ConsentBanner />
+                <App />
                 <VercelAnalytics />
               </ToastProvider>
             </CartProvider>

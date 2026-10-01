@@ -99,10 +99,11 @@ describe('DashboardTab · KPIs do topo', () => {
     expect(screen.getByText('+12%')).toBeInTheDocument();
   });
 
-  it('cai para "estável" quando não há tendência', () => {
+  it('cai para "Estável" quando não há tendência', () => {
     renderDashboard({ comparisonDelta: { pct: 0, trend: 'stable' }, ticketMedio: null });
 
-    expect(screen.getAllByText('estável').length).toBeGreaterThan(0);
+    // Maiúscula, como no Comparativo (ADM-20).
+    expect(screen.getAllByText('Estável').length).toBeGreaterThan(0);
   });
 
   it('não quebra sem summary nenhum', () => {

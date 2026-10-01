@@ -25,7 +25,15 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
   const total = Number(ctx?.total || 0);
   const removeFromCart = ctx?.removeFromCart || (() => {});
   const clearCart = ctx?.clearCart || (() => {});
+  const revalidateCart = ctx?.revalidateCart;
   const dialogRef = useRef(null);
+
+  // Ao abrir, confere preço e disponibilidade no servidor (CROSS-03/CROSS-04):
+  // o item guardado pode ter mudado de preço ou sido pausado no painel desde o
+  // "Adicionar". Diferença vira aviso no topo da lista.
+  useEffect(() => {
+    if (isOpen) revalidateCart?.();
+  }, [isOpen, revalidateCart]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -120,7 +128,10 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
         type="button"
         aria-label="Fechar carrinho"
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+        // z acima do banner de cookies (z-50, LOJA-04): no mobile ele cobria o
+        // rodapé do drawer inteiro, inclusive "Finalizar compra". O drawer é
+        // modal e curto; o banner volta a aparecer quando ele fecha.
+        className="fixed inset-0 z-[55] bg-slate-900/40 backdrop-blur-sm transition-opacity"
       />
       <aside
         ref={dialogRef}
@@ -128,7 +139,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="cart-drawer-title"
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-2xl focus:outline-none"
+        className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-md flex-col bg-white shadow-2xl focus:outline-none"
       >
         <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
@@ -138,7 +149,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
             <h2 id="cart-drawer-title" className="font-display text-lg font-bold text-slate-900">
               {cart.length === 0
                 ? 'Nada por aqui ainda'
-                : `${cart.length} item${cart.length === 1 ? '' : 's'}`}
+                : `${cart.length} ${cart.length === 1 ? 'item' : 'itens'}`}
             </h2>
           </div>
           <button
@@ -152,6 +163,11 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
+          <CartPriceNotice
+            notice={ctx?.priceNotice}
+            onDismiss={ctx?.dismissPriceNotice}
+            className="mb-3"
+          />
           {cart.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500">
               <i className="bi bi-cart3 text-4xl text-slate-300" aria-hidden="true" />
@@ -237,6 +253,61 @@ export function CartDrawer({ isOpen, onClose, onCheckout }) {
     </>
   );
 }
+
+/**
+ * Aviso de que o carrinho foi atualizado pelo servidor (CROSS-03/CROSS-04).
+ *
+ * O cliente precisa ver o valor que vai ser cobrado: se o preço mudou no
+ * painel, o total da tela muda junto — e a mudança é DITA, não só aplicada.
+ * Usado no drawer e no checkout; recebe o aviso por prop para funcionar com o
+ * `useCart` (checkout) e com o contexto lido direto (drawer).
+ */
+export function CartPriceNotice({ notice, onDismiss, className = '' }) {
+  const changed = Array.isArray(notice?.changed) ? notice.changed : [];
+  const removed = Array.isArray(notice?.removed) ? notice.removed : [];
+  if (changed.length === 0 && removed.length === 0) return null;
+
+  return (
+    <div
+      role="status"
+      className={`rounded-xl bg-amber-50 px-3 py-2.5 text-xs text-amber-900 ring-1 ring-amber-200 ${className}`}
+    >
+      <strong className="block text-sm font-bold">Seu carrinho foi atualizado</strong>
+      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+        {changed.map((item) => (
+          <li key={`p-${item.id}`}>
+            O preço de <strong>{item.name}</strong> mudou de {formatPrice(item.oldPrice)} para{' '}
+            <strong>{formatPrice(item.newPrice)}</strong>.
+          </li>
+        ))}
+        {removed.map((item) => (
+          <li key={`r-${item.id}`}>
+            <strong>{item.name}</strong> não está mais disponível e saiu do carrinho.
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1">O total abaixo já é o valor que será cobrado.</p>
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+        >
+          Entendi
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+CartPriceNotice.propTypes = {
+  notice: PropTypes.shape({
+    changed: PropTypes.array,
+    removed: PropTypes.array,
+  }),
+  onDismiss: PropTypes.func,
+  className: PropTypes.string,
+};
 
 CartDrawer.propTypes = {
   isOpen: PropTypes.bool.isRequired,

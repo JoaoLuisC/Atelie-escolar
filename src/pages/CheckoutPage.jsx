@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { CartPriceNotice } from '../components/CartDrawer';
 import { CouponField } from '../components/CouponField';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
@@ -10,6 +11,7 @@ import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
 import { captureAbandonedCart, createPayment, verifyPayment } from '../services/checkout';
 import { formatPrice } from '../utils/currency';
+import { cartSignatureOf } from '../utils/cart-storage';
 import { buildCartPayload, getAttributionPayload, trackEvent } from '../utils/analytics';
 import { getSessionId } from '../utils/attribution';
 import { ROUTES } from '../constants/routes';
@@ -58,10 +60,43 @@ function readRetryAfterMs(response, data, { minMs, maxMs }) {
   return Math.min(Math.max(seconds * 1000, minMs), maxMs);
 }
 
+/**
+ * Volta do Mercado Pago pelas `back_urls` (lib/mercadopago-config.js):
+ * `?status=failure|pending&order=…`. O MP também acrescenta os próprios
+ * parâmetros (`collection_status`, `external_reference`), usados como reserva.
+ * Antes a página ignorava a query e a volta de um pagamento recusado era
+ * idêntica a um checkout novo, sem aviso nenhum (LOJA-38).
+ */
+function readPaymentReturn(search) {
+  const params = new URLSearchParams(search);
+  const raw = String(params.get('status') || params.get('collection_status') || '')
+    .trim()
+    .toLowerCase();
+  let status = '';
+  if (['failure', 'rejected', 'cancelled', 'null'].includes(raw)) status = 'failure';
+  else if (['pending', 'in_process'].includes(raw)) status = 'pending';
+  const orderId = String(params.get('order') || params.get('external_reference') || '').trim();
+  return { status, orderId };
+}
+
 export function CheckoutPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { customerSession, loginCustomerGoogle } = useAuth();
-  const { cart, total, removeFromCart, clearCart } = useCart();
+  const {
+    cart,
+    total,
+    removeFromCart,
+    clearCart,
+    applyQuote,
+    revalidateCart,
+    priceNotice,
+    dismissPriceNotice,
+  } = useCart();
+  // Logado, o pedido é da conta: o e-mail vem da sessão e não é editável
+  // (LOJA-40). O backend faz o mesmo com o cookie — isto só alinha a tela.
+  const accountEmail = String(customerSession?.email || '').trim();
+  const paymentReturn = useMemo(() => readPaymentReturn(location.search), [location.search]);
   const { pushToast } = useToast();
   const [status, setStatus] = useState('');
   // Tom do status para diferenciar erro (vermelho) de sucesso/info.
@@ -129,20 +164,36 @@ export function CheckoutPage() {
     }
   }, [customerSession, setValue]);
 
-  // Revalida o cupom quando o conteúdo do carrinho muda: zera o desconto
-  // aplicado para o valor exibido não divergir do que será cobrado em
-  // create-payment (o servidor recalcula a elegibilidade com o cart novo).
-  const cartSignature = useMemo(
-    () => cart.map((item) => `${item.id}:${item.quantity || 1}`).join('|'),
-    [cart],
-  );
-  const previousCartSignatureRef = useRef(cartSignature);
+  // O desconto do cupom só vale para o carrinho EXATO sobre o qual o servidor o
+  // calculou: mesmos itens, quantidades E preços. Mudou qualquer um (item
+  // removido, preço revalidado), o cupom sai — para o valor exibido não
+  // divergir do que será cobrado em create-payment (CROSS-03/CROSS-06).
+  // Derivado, e não só limpo por efeito, para nunca haver um render com o
+  // desconto velho na tela.
+  const cartSignature = useMemo(() => cartSignatureOf(cart), [cart]);
+  const activeCoupon =
+    appliedCoupon && appliedCoupon.cartSignature === cartSignature ? appliedCoupon : null;
   useEffect(() => {
-    if (previousCartSignatureRef.current !== cartSignature) {
-      previousCartSignatureRef.current = cartSignature;
+    if (appliedCoupon && appliedCoupon.cartSignature !== cartSignature) {
       setAppliedCoupon(null);
     }
-  }, [cartSignature]);
+  }, [appliedCoupon, cartSignature]);
+
+  // Confere preço e disponibilidade no servidor ao abrir o checkout (CROSS-03):
+  // o carrinho guarda o preço do "Adicionar", e o painel pode tê-lo mudado.
+  useEffect(() => {
+    revalidateCart?.();
+    // Uma vez por montagem; o submit revalida de novo antes de cobrar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A prévia do cupom devolve os preços do servidor que usou. Se divergem do
+  // carrinho, o carrinho é atualizado ANTES de o cupom valer — e o cupom fica
+  // amarrado ao carrinho já atualizado.
+  function handleCouponApplied(coupon) {
+    const synced = applyQuote && coupon.items?.length ? applyQuote(coupon.items).cart : cart;
+    setAppliedCoupon({ ...coupon, cartSignature: cartSignatureOf(synced) });
+  }
 
   useEffect(() => {
     if (!cart.length) return;
@@ -187,7 +238,7 @@ export function CheckoutPage() {
           setPaymentUrl('');
           setStatusTone('info');
           setStatus(
-            'Demorou mais do que esperávamos para confirmar. Você pode acompanhar a qualquer momento em Meus Downloads — ninguém perde o pedido.',
+            'Demorou mais do que esperávamos para confirmar. Você pode acompanhar a qualquer momento em Meus produtos — ninguém perde o pedido.',
           );
         }
         return;
@@ -291,7 +342,7 @@ export function CheckoutPage() {
 
   async function onSubmit(formData) {
     const name = formData.name.trim();
-    const email = formData.email.trim();
+    const email = accountEmail || formData.email.trim();
 
     if (!cart.length) {
       setStatusTone('error');
@@ -304,12 +355,30 @@ export function CheckoutPage() {
     setPaymentUrl('');
     setStatus('Estamos preparando seu pagamento…');
 
+    // Última conferência de preço antes de cobrar (CROSS-03). Se algo mudou, a
+    // cobrança NÃO sai: a pessoa vê o total novo e confirma de novo. Sem rede
+    // (`ok: false`) segue — quem cobra é o servidor, com o preço de lá.
+    const checked = revalidateCart
+      ? await revalidateCart()
+      : { ok: false, cart, changed: [], removed: [] };
+    if (checked.ok && (checked.changed.length > 0 || checked.removed.length > 0)) {
+      setProcessing(false);
+      setStatusTone('error');
+      setStatus(
+        checked.cart.length === 0
+          ? 'Os itens do seu carrinho não estão mais disponíveis.'
+          : 'O carrinho foi atualizado com os preços de agora. Confira o novo total e clique em "Ir para pagamento" de novo.',
+      );
+      return;
+    }
+    const itemsToCharge = checked.ok ? checked.cart : cart;
+
     try {
       const payload = {
-        items: cart.map((item) => ({ productId: item.id, quantity: item.quantity || 1 })),
+        items: itemsToCharge.map((item) => ({ productId: item.id, quantity: item.quantity || 1 })),
         customer: { name, email },
         attribution: getAttributionPayload(),
-        couponCode: appliedCoupon?.code || null,
+        couponCode: activeCoupon?.code || null,
       };
 
       // Convidado: guardamos o e-mail apenas localmente. NÃO forjamos uma
@@ -363,8 +432,15 @@ export function CheckoutPage() {
     setStatus('Você pode revisar seus dados e tentar de novo. Seu carrinho continua salvo.');
   }
 
-  const discount = appliedCoupon?.discount || 0;
+  const discount = activeCoupon?.discount || 0;
   const displayTotal = Math.max(0, total - discount);
+  // Pedido da volta do MP: o e-mail é o da compra, guardado no submit.
+  const returnOrderId =
+    paymentReturn.orderId ||
+    (paymentReturn.status ? globalThis.localStorage?.getItem('lastOrderId') || '' : '');
+  const returnOrderEmail = paymentReturn.status
+    ? globalThis.localStorage?.getItem('lastOrderEmail') || accountEmail
+    : '';
 
   async function onGoogleSignIn() {
     setGoogleLoading(true);
@@ -400,6 +476,8 @@ export function CheckoutPage() {
                 <i className="bi bi-shield-check" /> Seguro
               </span>
             </header>
+
+            <CartPriceNotice notice={priceNotice} onDismiss={dismissPriceNotice} className="mb-3" />
 
             {cart.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-500">
@@ -439,8 +517,8 @@ export function CheckoutPage() {
             <div className="mt-5">
               <CouponField
                 cart={cart.map((item) => ({ ...item, categoryId: item.categoryId || null }))}
-                applied={appliedCoupon}
-                onApply={setAppliedCoupon}
+                applied={activeCoupon}
+                onApply={handleCouponApplied}
                 onClear={() => setAppliedCoupon(null)}
                 disabled={processing}
               />
@@ -483,6 +561,46 @@ export function CheckoutPage() {
                 Dados para pagamento
               </h3>
             </header>
+
+            {paymentReturn.status === 'failure' && !processing ? (
+              <div
+                role="alert"
+                className="rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-800 ring-1 ring-rose-200"
+              >
+                <strong className="block font-bold">
+                  <i className="bi bi-x-octagon mr-1.5" aria-hidden="true" />O pagamento não foi
+                  concluído
+                </strong>
+                O Mercado Pago não aprovou o pagamento
+                {returnOrderId ? ` do pedido #${returnOrderId}` : ''}. Seu carrinho continua salvo —
+                revise os dados e tente de novo, se quiser com outro meio de pagamento.
+              </div>
+            ) : null}
+
+            {paymentReturn.status === 'pending' && !processing ? (
+              <div
+                role="status"
+                className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200"
+              >
+                <strong className="block font-bold">
+                  <i className="bi bi-hourglass-split mr-1.5" aria-hidden="true" />
+                  Pagamento em análise
+                </strong>
+                O pagamento{returnOrderId ? ` do pedido #${returnOrderId}` : ''} ainda não foi
+                confirmado (boleto ou Pix podem levar um tempo). Não precisa pagar de novo: assim
+                que aprovar, os arquivos ficam liberados em Meus produtos.
+                {returnOrderId ? (
+                  <Link
+                    to={`${ROUTES.downloads}?order=${encodeURIComponent(returnOrderId)}${
+                      returnOrderEmail ? `&email=${encodeURIComponent(returnOrderEmail)}` : ''
+                    }`}
+                    className="mt-2 flex w-fit items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700"
+                  >
+                    Acompanhar pedido <i className="bi bi-arrow-right" aria-hidden="true" />
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
 
             <StatusStepper
               activeStep={statusStep}
@@ -570,9 +688,17 @@ export function CheckoutPage() {
                   type="email"
                   placeholder="seu@email.com"
                   disabled={processing}
+                  readOnly={Boolean(accountEmail)}
                   aria-invalid={Boolean(errors.email)}
-                  aria-describedby={errors.email ? 'checkout-email-error' : undefined}
-                  className={`${inputClass} ${errors.email ? errorInputClass : ''}`}
+                  aria-describedby={
+                    [
+                      errors.email ? 'checkout-email-error' : '',
+                      accountEmail ? 'checkout-email-help' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                  className={`${inputClass} ${accountEmail ? 'bg-slate-50 text-slate-600' : ''} ${errors.email ? errorInputClass : ''}`}
                   {...register('email', {
                     required: 'Informe um e-mail válido para receber a confirmação.',
                     pattern: {
@@ -581,6 +707,11 @@ export function CheckoutPage() {
                     },
                   })}
                 />
+                {accountEmail ? (
+                  <p id="checkout-email-help" className="mt-1 text-xs text-slate-500">
+                    O pedido fica na sua conta. Para comprar com outro e-mail, saia da conta.
+                  </p>
+                ) : null}
                 {errors.email ? (
                   <p id="checkout-email-error" role="alert" className="mt-1 text-xs text-rose-700">
                     {errors.email.message}

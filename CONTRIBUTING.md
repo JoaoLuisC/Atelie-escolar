@@ -522,11 +522,11 @@ webhook não é reprocessado). Zerar depois de observar volume real.
 
 **Regra.** Endpoint novo escolhe uma das três:
 
-| Classe                   | `Cache-Control`                                                  |
-| ------------------------ | ---------------------------------------------------------------- |
-| Catálogo público         | `public, max-age=300, s-maxage=300, stale-while-revalidate=3600` |
-| Relatório administrativo | `private, max-age=3600`                                          |
-| Entrega de arquivo       | `no-store, max-age=0`                                            |
+| Classe                   | `Cache-Control`                                                   |
+| ------------------------ | ----------------------------------------------------------------- |
+| Catálogo público         | `public, max-age=300, s-maxage=300, stale-while-revalidate=3600`  |
+| Relatório administrativo | `private, no-store, max-age=0` (dado de cliente; ver lib/http.js) |
+| Entrega de arquivo       | `no-store, max-age=0`                                             |
 
 **O que motivou.** As três políticas já existem e são coerentes onde aplicadas — falta estarem
 escritas e cobrirem os endpoints que hoje não mandam `Cache-Control` nenhum. Resolver E2 depende

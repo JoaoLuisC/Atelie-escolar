@@ -154,10 +154,29 @@ describe('/admin/dashboard · teto explícito e truncamento visível (§2.1)', (
   });
 
   it('declara a política de cache de relatório administrativo (regra E4)', async () => {
+    // Era `private, max-age=3600`. A validação de 2026-10-01 mostrou o custo:
+    // depois de salvar, a lista continuava velha (ADM-24), e depois do LOGOUT
+    // o painel seguia exibindo este payload — com e-mails de clientes — a
+    // partir do cache do navegador (ADM-01/CROSS-13). Dado de admin não fica
+    // guardado em lugar nenhum.
     stubSupabase({});
     const res = createRes();
     await dashboardHandler(reqAdmin(), res);
 
-    expect(res.headers['cache-control']).toBe('private, max-age=3600');
+    expect(res.headers['cache-control']).toMatch(/no-store/);
+    expect(res.headers['cache-control']).not.toMatch(/max-age=[1-9]/);
+  });
+
+  it('valores de dinheiro do resumo saem com 2 casas (ADM-17)', async () => {
+    stubSupabase({
+      orders: [
+        { id: '1', total_amount: 0.1, payment_status: 'approved' },
+        { id: '2', total_amount: 0.2, payment_status: 'approved' },
+      ],
+    });
+    const res = createRes();
+    await dashboardHandler(reqAdmin(), res);
+
+    expect(res.body.summary.revenueTotal).toBe(0.3);
   });
 });

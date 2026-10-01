@@ -112,6 +112,10 @@ export function donutSegments(entries, palette = DONUT_PALETTE) {
 
   const segments = entries.map((entry, index) => ({
     ...entry,
+    // `deriveCategoryRevenue` entrega `category`, não `label`: sem este
+    // fallback a legenda saía sem nome e a `key` do React ficava `undefined`
+    // em todas as fatias (ADM-11).
+    label: String(entry.label ?? entry.category ?? ''),
     color: palette[index % palette.length],
     startAngle: (acumuladoAntes[index] / total) * 360,
     endAngle: ((acumuladoAntes[index] + values[index]) / total) * 360,

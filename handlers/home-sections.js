@@ -6,6 +6,11 @@ const { loadSoldCountByProduct } = require('../lib/sales-counts');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
+const {
+  CATALOG_CACHE_CONTROL,
+  categoryQueryValue,
+  isPresentableCategoryName,
+} = require('../lib/public-catalog');
 
 const log = createLogger('home-sections');
 
@@ -153,10 +158,19 @@ module.exports = async function homeSectionsHandler(req, res) {
       loadSoldCountByProduct(),
     ]);
 
-    const settings = safeJsonParse(settingRow?.setting_value, {});
-    const sections = normalizeSections(settings, categoriesRows);
+    // LOJA-02: categoria com nome vazio ou com cara de UUID não vira faixa nem
+    // rótulo público. Filtrar AQUI faz `normalizeSections` descartar a seção
+    // que apontava para ela, do mesmo jeito que já descartava categoria inativa.
+    const publicCategories = categoriesRows.filter((category) =>
+      isPresentableCategoryName(category.name),
+    );
 
-    const categoryById = new Map(categoriesRows.map((category) => [String(category.id), category]));
+    const settings = safeJsonParse(settingRow?.setting_value, {});
+    const sections = normalizeSections(settings, publicCategories);
+
+    const categoryById = new Map(
+      publicCategories.map((category) => [String(category.id), category]),
+    );
 
     const normalizedProducts = productsRows.map((product) => {
       const category = categoryById.get(String(product.category_id));
@@ -173,50 +187,56 @@ module.exports = async function homeSectionsHandler(req, res) {
       };
     });
 
-    const responseSections = sections.map((section, index) => {
-      let list = normalizedProducts;
-      let link = '/produtos';
+    const responseSections = sections
+      .map((section, index) => {
+        let list = normalizedProducts;
+        let link = '/produtos';
 
-      if (section.type === 'category') {
-        const category = categoryById.get(String(section.categoryId));
-        list = normalizedProducts.filter(
-          (product) => String(product.categoryId || '') === String(section.categoryId),
-        );
-        if (category?.name) {
-          link = `/produtos?categoria=${encodeURIComponent(category.name)}`;
-        }
-      }
-
-      if (section.type === 'best_sellers') {
-        list = [...normalizedProducts].sort((a, b) => {
-          if (b.soldCount !== a.soldCount) {
-            return b.soldCount - a.soldCount;
+        if (section.type === 'category') {
+          const category = categoryById.get(String(section.categoryId));
+          list = normalizedProducts.filter(
+            (product) => String(product.categoryId || '') === String(section.categoryId),
+          );
+          // LOJA-06: o link usa o mesmo valor que o sitemap (slug) — e o filtro
+          // do catálogo aceita slug ou nome. Antes era o nome aqui e o slug lá,
+          // e só um dos dois filtrava.
+          const queryValue = category ? categoryQueryValue(category) : '';
+          if (queryValue) {
+            link = `/produtos?categoria=${encodeURIComponent(queryValue)}`;
           }
-          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-        });
-        link = '/produtos?preset=mais-vendidos';
-      }
+        }
 
-      if (section.type === 'new_arrivals') {
-        list = [...normalizedProducts].sort(
-          (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
-        );
-        link = '/produtos?preset=novidades';
-      }
+        if (section.type === 'best_sellers') {
+          list = [...normalizedProducts].sort((a, b) => {
+            if (b.soldCount !== a.soldCount) {
+              return b.soldCount - a.soldCount;
+            }
+            return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+          });
+          link = '/produtos?preset=mais-vendidos';
+        }
 
-      return {
-        key: `${section.type}-${section.categoryId || index}`,
-        type: section.type,
-        title: section.title,
-        link,
-        products: list.slice(0, clampLimit(section.limit, 8)),
-      };
-    });
+        if (section.type === 'new_arrivals') {
+          list = [...normalizedProducts].sort(
+            (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+          );
+          link = '/produtos?preset=novidades';
+        }
 
-    res.setHeader(
-      'Cache-Control',
-      'public, max-age=300, s-maxage=300, stale-while-revalidate=3600',
-    );
+        return {
+          key: `${section.type}-${section.categoryId || index}`,
+          type: section.type,
+          title: section.title,
+          link,
+          products: list.slice(0, clampLimit(section.limit, 8)),
+        };
+      })
+      // LOJA-02: faixa sem produto nenhum (ex.: categoria recém-criada) virava
+      // um título solto com setas de rolagem e nada entre elas.
+      .filter((section) => section.products.length > 0);
+
+    // CROSS-07: ver CATALOG_CACHE_CONTROL em lib/public-catalog.js.
+    res.setHeader('Cache-Control', CATALOG_CACHE_CONTROL);
     return ok(res, {
       success: true,
       sections: responseSections,

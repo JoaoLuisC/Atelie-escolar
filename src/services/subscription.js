@@ -11,11 +11,30 @@ import { apiRequest, errorMessageOf } from '../utils/api';
 //
 // Por isso todas devolvem um resultado com `ok`, em vez de jogar. Quem chama
 // pinta o estado; ninguém precisa de try/catch para o caso comum.
+//
+// Exceção: falha de REDE. Aí não há resposta para pintar, e o `fetch` joga um
+// TypeError com o texto do navegador ("Failed to fetch") — que era o que
+// aparecia sozinho em /desinscrever (LOJA-15). Ele continua jogando, mas com
+// uma frase para a pessoa; a página mostra "Tentar novamente".
 // ════════════════════════════════════════════════════════════════════
+
+export const SUBSCRIPTION_NETWORK_ERROR =
+  'Não conseguimos falar com a loja. Verifique sua conexão e tente novamente.';
+
+async function subscriptionRequest(path, options) {
+  try {
+    return await apiRequest(path, options);
+  } catch (error) {
+    if (error instanceof TypeError) throw new Error(SUBSCRIPTION_NETWORK_ERROR);
+    throw error;
+  }
+}
 
 /** @returns {Promise<{ ok: boolean, alreadyConfirmed: boolean, message: string }>} */
 export async function confirmSubscription(token) {
-  const { data } = await apiRequest(`/confirm-subscription?token=${encodeURIComponent(token)}`);
+  const { data } = await subscriptionRequest(
+    `/confirm-subscription?token=${encodeURIComponent(token)}`,
+  );
 
   if (!data.success) {
     return {
@@ -36,7 +55,7 @@ export async function confirmSubscription(token) {
 
 /** Cancelamento por LINK do e-mail: o token já prova a posse. */
 export async function unsubscribeByToken(token) {
-  const { data } = await apiRequest(`/unsubscribe?token=${encodeURIComponent(token)}`);
+  const { data } = await subscriptionRequest(`/unsubscribe?token=${encodeURIComponent(token)}`);
 
   return {
     ok: data.success === true,
@@ -56,7 +75,7 @@ export async function unsubscribeByToken(token) {
  * @returns {Promise<{ ok: boolean, confirmationRequired: boolean, message: string }>}
  */
 export async function unsubscribeByEmail(email) {
-  const { data } = await apiRequest('/unsubscribe', {
+  const { data } = await subscriptionRequest('/unsubscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),

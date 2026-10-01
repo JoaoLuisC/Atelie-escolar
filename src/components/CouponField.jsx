@@ -15,10 +15,30 @@ import { formatPrice } from '../utils/currency';
  * - onClear(): chamado quando o usuário remove o cupom
  * - disabled: bloqueia interação (ex: durante processamento)
  */
+// Mesmo teto do schema do backend (validation/payment.schemas.js): passar
+// disso só servia para a API recusar (LOJA-51).
+const MAX_CODE_LENGTH = 40;
+
 export function CouponField({ cart, applied, onApply, onClear, disabled = false }) {
   const [expanded, setExpanded] = useState(Boolean(applied));
   const [code, setCode] = useState('');
   const [status, setStatus] = useState({ type: 'idle', message: '' });
+  const [previousApplied, setPreviousApplied] = useState(applied);
+  const cartIsEmpty = !Array.isArray(cart) || cart.length === 0;
+
+  // O pai tirou o cupom porque o carrinho mudou (CROSS-06). O painel reabria
+  // com "Desconto aplicado: R$ 3,98" — um valor que já não vale. Ajuste de
+  // estado durante o render (padrão do React para "estado derivado de prop"),
+  // sem efeito e sem um render com a mensagem velha.
+  if (applied !== previousApplied) {
+    setPreviousApplied(applied);
+    if (!applied && previousApplied && status.type === 'success') {
+      setStatus({
+        type: 'info',
+        message: 'O carrinho mudou. Aplique o cupom de novo para recalcular o desconto.',
+      });
+    }
+  }
 
   if (applied) {
     return (
@@ -53,6 +73,14 @@ export function CouponField({ cart, applied, onApply, onClear, disabled = false 
     event?.preventDefault?.();
     const trimmed = code.trim();
     if (!trimmed) return;
+    // CROSS-05: com o carrinho vazio o cupom "aplicava" −R$ 0,00.
+    if (cartIsEmpty) {
+      setStatus({
+        type: 'error',
+        message: 'Adicione produtos ao carrinho antes de aplicar o cupom.',
+      });
+      return;
+    }
 
     setStatus({ type: 'loading', message: 'Validando…' });
 
@@ -74,6 +102,9 @@ export function CouponField({ cart, applied, onApply, onClear, disabled = false 
         discount: Number(data.discount || 0),
         subtotal: Number(data.subtotal || 0),
         total: Number(data.total || 0),
+        // Preços do servidor usados no cálculo: o checkout atualiza o carrinho
+        // com eles, para o subtotal da tela ser o mesmo do desconto.
+        items: data.items || [],
       });
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Não foi possível validar o cupom.' });
@@ -106,6 +137,7 @@ export function CouponField({ cart, applied, onApply, onClear, disabled = false 
               type="text"
               aria-label="Código do cupom"
               placeholder="DIGITE O CÓDIGO"
+              maxLength={MAX_CODE_LENGTH}
               value={code}
               onChange={(event) => setCode(event.target.value.toUpperCase())}
               onKeyDown={(event) => {
@@ -117,7 +149,7 @@ export function CouponField({ cart, applied, onApply, onClear, disabled = false 
             <button
               type="button"
               onClick={applyCode}
-              disabled={disabled || status.type === 'loading' || !code.trim()}
+              disabled={disabled || status.type === 'loading' || !code.trim() || cartIsEmpty}
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:bg-brand-300"
             >
               {status.type === 'loading' ? 'Validando…' : 'Aplicar'}
@@ -126,6 +158,12 @@ export function CouponField({ cart, applied, onApply, onClear, disabled = false 
           {status.type === 'error' ? (
             <p role="alert" className="mt-2 text-xs text-rose-700">
               <i className="bi bi-exclamation-circle mr-1" aria-hidden="true" />
+              {status.message}
+            </p>
+          ) : null}
+          {status.type === 'info' ? (
+            <p role="status" className="mt-2 text-xs text-amber-700">
+              <i className="bi bi-info-circle mr-1" aria-hidden="true" />
               {status.message}
             </p>
           ) : null}

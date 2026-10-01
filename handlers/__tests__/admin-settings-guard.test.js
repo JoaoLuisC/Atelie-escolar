@@ -16,7 +16,20 @@ import { createRequire } from 'node:module';
 // perguntam pelo SEGREDO, não pelos bytes gravados — exigir bytes exatos
 // prenderia o teste à embalagem e, pior, só passaria de novo se o segredo
 // voltasse a ficar em texto puro.
-const { decryptSecret, verifyPin } = createRequire(import.meta.url)('../../lib/admin-2fa.js');
+const { TOTP_STEP_SECONDS, decodeBase32, decryptSecret, generateTotpCode, verifyPin } =
+  createRequire(import.meta.url)('../../lib/admin-2fa.js');
+
+/**
+ * Código TOTP corrente de um segredo — o que o app autenticador mostraria.
+ *
+ * Desde a validação de 2026-10-01 (ADM-38/ADM-49), um `totpSecret` NOVO só é
+ * gravado com `totpVerificationCode` gerado a partir dele: segredo digitado
+ * errado não pode virar o 2º fator exigido no login. A janela de tolerância
+ * do servidor (±1 passo) cobre a virada de 30s durante o teste.
+ */
+function codigoTotpAtual(secret) {
+  return generateTotpCode(decodeBase32(secret), Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS));
+}
 
 // ════════════════════════════════════════════════════════════════════
 // Gate de reautenticação de handlers/admin/settings.js.
@@ -184,7 +197,7 @@ describe('gate de reautenticação do adminConfig', () => {
     const res = await runHandler(
       putRequest(
         { requireSecondFactor: true, totpSecret: ATTACKER_TOTP },
-        { confirmationCode: FALLBACK_PIN },
+        { confirmationCode: FALLBACK_PIN, totpVerificationCode: codigoTotpAtual(ATTACKER_TOTP) },
       ),
     );
 
@@ -297,10 +310,15 @@ describe('gate de reautenticação do adminConfig', () => {
     const store = installSettingsStore([]);
 
     const res = await runHandler(
-      putRequest({
-        requireSecondFactor: true,
-        totpSecret: STORED_TOTP,
-      }),
+      putRequest(
+        {
+          requireSecondFactor: true,
+          totpSecret: STORED_TOTP,
+        },
+        // Não é o gate (não há fator vigente): é a prova de que o segredo novo
+        // funciona no app — o que impede ligar o 2FA com um segredo digitado errado.
+        { totpVerificationCode: codigoTotpAtual(STORED_TOTP) },
+      ),
     );
 
     expect(res.statusCode).toBe(200);
@@ -339,7 +357,7 @@ describe('vazamento de segredo', () => {
     const res = await runHandler(
       putRequest(
         { requireSecondFactor: true, totpSecret: STORED_TOTP },
-        { confirmationCode: FALLBACK_PIN },
+        { confirmationCode: FALLBACK_PIN, totpVerificationCode: codigoTotpAtual(STORED_TOTP) },
       ),
     );
 
@@ -404,17 +422,95 @@ describe('validação de entrada', () => {
     // `ADMIN_CONFIG_FIELDS['constructor']` é truthy pela cadeia de protótipos:
     // com o acesso cru, o handler tentaria coagir com um coercer inexistente e
     // devolveria 500 em vez de tratar a chave como qualquer desconhecida.
+    // `requireSecondFactor: false` (era `true`): exigir 2FA sem método nenhum
+    // agora é 400 — é o trancamento do ADM-38, travado no describe abaixo. O
+    // ponto DESTE teste são as chaves de prototype, não a flag.
     const store = installSettingsStore([]);
     const res = await runHandler(
       putRequest({
         constructor: 'x',
         toString: 'y',
-        requireSecondFactor: true,
+        requireSecondFactor: false,
       }),
     );
 
     expect(res.statusCode).toBe(200);
     expect(res.body.ignoredFields).toEqual(expect.arrayContaining(['constructor', 'toString']));
-    expect(store.stored('adminConfig')).toEqual({ requireSecondFactor: true });
+    expect(store.stored('adminConfig')).toEqual({ requireSecondFactor: false });
+  });
+});
+
+describe('trava contra trancar o admin fora (ADM-38/ADM-49)', () => {
+  it('exigir 2FA sem NENHUM método configurado é 400 e nada é gravado', async () => {
+    // Cenário exato da validação: adminConfig vazio e "Exigir 2FA" marcado. Se
+    // isto fosse gravado, o login passaria a responder 500 e só SQL resolveria.
+    const store = installSettingsStore([]);
+
+    const res = await runHandler(putRequest({ twoFactorEnabled: true }));
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.message).toMatch(/sem um método configurado/);
+    expect(store.stored('adminConfig')).toBeUndefined();
+  });
+
+  it('PIN desabilitado (allowPinFallback false) e sem TOTP também não conta como método', async () => {
+    const store = installSettingsStore([]);
+
+    const res = await runHandler(
+      putRequest({ requireSecondFactor: true, allowPinFallback: false, fallbackPin: '918273' }),
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(store.stored('adminConfig')).toBeUndefined();
+  });
+
+  it('segredo TOTP novo SEM o código de verificação é 400 e não é gravado', async () => {
+    const store = installSettingsStore([]);
+
+    const res = await runHandler(putRequest({ twoFactorEnabled: true, totpSecret: STORED_TOTP }));
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.message).toMatch(/totpVerificationCode/);
+    expect(store.stored('adminConfig')).toBeUndefined();
+  });
+
+  it('segredo TOTP novo com código ERRADO é 400', async () => {
+    const store = installSettingsStore([]);
+    const errado = codigoTotpAtual(STORED_TOTP) === '000000' ? '111111' : '000000';
+
+    const res = await runHandler(
+      putRequest(
+        { twoFactorEnabled: true, totpSecret: STORED_TOTP },
+        { totpVerificationCode: errado },
+      ),
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(store.stored('adminConfig')).toBeUndefined();
+  });
+
+  it('ligar o 2FA com o PIN como único método é permitido', async () => {
+    const store = installSettingsStore([]);
+
+    const res = await runHandler(putRequest({ twoFactorEnabled: true, fallbackPin: FALLBACK_PIN }));
+
+    expect(res.statusCode).toBe(200);
+    expect(verifyPin(store.stored('adminConfig').fallbackPin, FALLBACK_PIN)).toBe(true);
+  });
+
+  it('round-trip sem segredo novo não pede totpVerificationCode', async () => {
+    // O segredo JÁ gravado não é "novo": salvar de novo a mesma config não pode
+    // virar um pedido de código a cada "Salvar".
+    const store = installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: { twoFactorEnabled: false, totpSecret: STORED_TOTP },
+      },
+    ]);
+
+    const res = await runHandler(putRequest({ twoFactorEnabled: false }));
+
+    expect(res.statusCode).toBe(200);
+    expect(decryptSecret(store.stored('adminConfig').totpSecret)).toBe(STORED_TOTP);
   });
 });

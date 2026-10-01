@@ -108,11 +108,14 @@ export function ConfirmSubscriptionPage() {
 // ════════════════════════════════════════════════════════════════════
 export function UnsubscribePage() {
   const [params] = useSearchParams();
+  const token = params.get('token') || '';
   const [emailInput, setEmailInput] = useState(params.get('email') || '');
   const [status, setStatus] = useState({ state: 'idle', message: '' });
+  // LOJA-15: sem rede, o caminho por link ficava só com a mensagem de erro, sem
+  // formulário e sem botão. Incrementar a tentativa refaz o pedido.
+  const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
-    const token = params.get('token') || '';
     if (!token) return;
 
     (async () => {
@@ -127,7 +130,7 @@ export function UnsubscribePage() {
         setStatus({ state: 'error', message: err.message || 'Erro de conexão.' });
       }
     })();
-  }, [params]);
+  }, [token, tentativa]);
 
   async function onSubmit(event) {
     event.preventDefault();
@@ -155,21 +158,39 @@ export function UnsubscribePage() {
   }
 
   const isSuccess = status.state === 'success';
-  const showForm = !params.get('token') && status.state !== 'success';
+  const isTokenError = Boolean(token) && status.state === 'error';
+  // Com link quebrado ou sem rede, o formulário por e-mail é a saída que sobra.
+  const showForm = (!token || isTokenError) && !isSuccess;
 
   return (
     <Container>
       <SEO title="Cancelar inscrição" pathname="/desinscrever" noindex />
       <p className="text-xs font-bold uppercase tracking-widest text-brand-600">
-        {isSuccess ? '✓ Cancelado' : 'Cancelar inscrição'}
+        {isSuccess ? '✓ Pronto' : 'Cancelar inscrição'}
       </p>
+      {/* LOJA-35: o backend responde igual para token conhecido e inventado
+          (anti-enumeração), então o título não pode afirmar "você foi
+          removido" — só que o cancelamento foi processado. */}
       <h1 className="mt-2 font-display text-3xl font-extrabold text-slate-900 sm:text-4xl">
-        {isSuccess ? 'Pronto, você foi removido' : 'Cancelar inscrição'}
+        {isSuccess ? 'Cancelamento processado' : 'Cancelar inscrição'}
       </h1>
       {status.message ? (
-        <p className={`mt-3 max-w-md text-sm ${isSuccess ? 'text-emerald-700' : 'text-slate-600'}`}>
+        <p
+          role={status.state === 'error' ? 'alert' : undefined}
+          className={`mt-3 max-w-md text-sm ${isSuccess ? 'text-emerald-700' : 'text-slate-600'}`}
+        >
           {status.message}
         </p>
+      ) : null}
+
+      {isTokenError ? (
+        <button
+          type="button"
+          onClick={() => setTentativa((valor) => valor + 1)}
+          className="mt-4 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+        >
+          <i className="bi bi-arrow-clockwise" aria-hidden="true" /> Tentar novamente
+        </button>
       ) : null}
 
       {showForm ? (

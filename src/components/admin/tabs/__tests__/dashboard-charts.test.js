@@ -158,6 +158,16 @@ describe('donutSegments', () => {
     expect(segments[0].extra).toBe('preservado');
   });
 
+  it('aceita `category` como rótulo — é o que deriveCategoryRevenue entrega (ADM-11)', () => {
+    // Sem isto a legenda da rosca saía sem nome e a `key` do React era
+    // `undefined` em todas as fatias (aviso no console).
+    const { segments } = donutSegments([
+      { category: 'Festa Junina', value: 2 },
+      { category: 'Formatura', value: 1 },
+    ]);
+    expect(segments.map((s) => s.label)).toEqual(['Festa Junina', 'Formatura']);
+  });
+
   it('cicla a paleta quando há mais categorias que cores', () => {
     const muitas = Array.from({ length: DONUT_PALETTE.length + 2 }, (_, i) => ({
       label: `c${i}`,

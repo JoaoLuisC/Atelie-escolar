@@ -2,6 +2,8 @@ import PropTypes from 'prop-types';
 import { useEffect, useState } from 'react';
 import { Card } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
+import { Button } from '../ui/Button';
+import { friendlyAdminError } from '../utils/errors';
 import { fetchAdminFunnel } from '../../../services/admin-panel';
 import { formatPrice } from '../../../utils/currency';
 import { formatCount } from '../../../utils/number';
@@ -113,6 +115,11 @@ export function FunnelTab() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Janela dos números EXIBIDOS, que só muda quando a carga dá certo. Com o
+  // subtítulo preso a `days` (a janela PEDIDA), um erro de rede mostrava "7
+  // dias" em cima dos números de 90 (ADM-03).
+  const [shownDays, setShownDays] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,9 +128,12 @@ export function FunnelTab() {
         setLoading(true);
         setError('');
         const response = await fetchAdminFunnel(days);
-        if (!cancelled) setData(response);
+        if (!cancelled) {
+          setData(response);
+          setShownDays(days);
+        }
       } catch (err) {
-        if (!cancelled) setError(err?.message || 'Erro ao carregar funil.');
+        if (!cancelled) setError(friendlyAdminError(err, 'Erro ao carregar funil.'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -132,7 +142,7 @@ export function FunnelTab() {
     return () => {
       cancelled = true;
     };
-  }, [days]);
+  }, [days, reloadKey]);
 
   const funnel = data?.funnel || [];
   const maxCount = funnel.reduce((max, step) => (step.count > max ? step.count : max), 0);
@@ -145,7 +155,11 @@ export function FunnelTab() {
           <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
             Funil de conversão
           </p>
-          <p className="text-sm text-slate-700">Sessões únicas por etapa nos últimos {days} dias</p>
+          <p className="text-sm text-slate-700">
+            {shownDays
+              ? `Sessões únicas por etapa nos últimos ${shownDays} dias`
+              : 'Sessões únicas por etapa'}
+          </p>
         </div>
         <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
           {RANGE_OPTIONS.map((option) => (
@@ -153,6 +167,7 @@ export function FunnelTab() {
               key={option.value}
               type="button"
               onClick={() => setDays(option.value)}
+              aria-pressed={days === option.value}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
                 days === option.value
                   ? 'bg-white text-slate-900 shadow-sm'
@@ -166,8 +181,22 @@ export function FunnelTab() {
       </div>
 
       {error ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          {error}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
+        >
+          <p>
+            {error}
+            {shownDays && data ? ` Os números abaixo ainda são dos últimos ${shownDays} dias.` : ''}
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="arrow-clockwise"
+            onClick={() => setReloadKey((n) => n + 1)}
+          >
+            Tentar de novo
+          </Button>
         </div>
       ) : null}
 
@@ -219,7 +248,7 @@ export function FunnelTab() {
           <EmptyState
             icon="funnel"
             title="Sem eventos no período"
-            description="Os trackers começarão a alimentar este funil assim que clientes navegarem com a Fase 0 ativa."
+            description="O funil se preenche conforme os clientes navegam pela loja."
           />
         ) : (
           <ul className="flex flex-col gap-4">

@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchCrossSell } from '../services/products';
+import { fetchCrossSellSuggestions } from '../services/products';
 import { formatPrice } from '../utils/currency';
 
 /**
@@ -13,6 +13,7 @@ import { formatPrice } from '../utils/currency';
  */
 export function CrossSellSection({ productId }) {
   const [items, setItems] = useState([]);
+  const [strategy, setStrategy] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -27,10 +28,11 @@ export function CrossSellSection({ productId }) {
 
     (async () => {
       try {
-        // Regra C2 — ver fetchCrossSell em src/services/products.js.
-        const products = await fetchCrossSell(productId);
+        // Regra C2 — ver fetchCrossSellSuggestions em src/services/products.js.
+        const result = await fetchCrossSellSuggestions(productId);
         if (cancelled) return;
-        setItems(products);
+        setItems(result.products);
+        setStrategy(result.strategy);
       } catch {
         if (!cancelled) setItems([]);
       } finally {
@@ -56,6 +58,11 @@ export function CrossSellSection({ productId }) {
 
   if (items.length === 0) return null;
 
+  // LOJA-21: "Quem comprou este levou também" só é verdade quando a API achou
+  // co-ocorrência em pedidos. No fallback por categoria, o título diz isso.
+  const title =
+    strategy === 'co_occurrence' ? 'Quem comprou este levou também' : 'Mais desta categoria';
+
   return (
     <section
       aria-labelledby="cross-sell-title"
@@ -66,7 +73,7 @@ export function CrossSellSection({ productId }) {
           Você também pode gostar
         </p>
         <h2 id="cross-sell-title" className="font-display text-xl font-bold text-slate-900">
-          Quem comprou este levou também
+          {title}
         </h2>
       </header>
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

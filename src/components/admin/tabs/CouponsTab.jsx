@@ -11,6 +11,7 @@ import {
   fetchAdminCoupons,
   updateAdminCoupon,
 } from '../../../services/admin-panel';
+import { friendlyAdminError } from '../utils/errors';
 
 function formatDiscount(coupon) {
   return coupon.discountType === 'percent'
@@ -26,9 +27,11 @@ function formatValidity(coupon) {
   return `${expired ? 'Expirou em' : 'Vale até'} ${date.toLocaleDateString('pt-BR')}`;
 }
 
+// Um formato só, com e sem limite (CROSS-10): "0 uso(s)" ao lado de "0/5 usos".
 function usageLabel(coupon) {
-  if (coupon.maxUses == null) return `${coupon.usedCount} uso(s)`;
-  return `${coupon.usedCount}/${coupon.maxUses} usos`;
+  const used = Number(coupon.usedCount || 0);
+  const limite = coupon.maxUses == null ? 'sem limite' : `limite ${coupon.maxUses}`;
+  return `${used} ${used === 1 ? 'uso' : 'usos'} · ${limite}`;
 }
 
 export function CouponsTab() {
@@ -38,16 +41,18 @@ export function CouponsTab() {
   const [error, setError] = useState('');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError('');
     fetchAdminCoupons()
       .then((data) => {
         if (!cancelled) setCoupons(data.coupons || []);
       })
       .catch((err) => {
-        if (!cancelled) setError(err?.message || 'Erro ao carregar cupons.');
+        if (!cancelled) setError(friendlyAdminError(err, 'Erro ao carregar cupons.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -55,7 +60,7 @@ export function CouponsTab() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   async function reload() {
     const data = await fetchAdminCoupons();
@@ -89,7 +94,7 @@ export function CouponsTab() {
       await reload();
       closeWizard();
     } catch (err) {
-      pushToast(err?.message || 'Erro ao salvar cupom.', 'error');
+      pushToast(friendlyAdminError(err, 'Erro ao salvar cupom.'), 'error');
     }
   }
 
@@ -105,7 +110,7 @@ export function CouponsTab() {
       await reload();
       pushToast('Cupom removido.', 'success');
     } catch (err) {
-      pushToast(err?.message || 'Erro ao remover cupom.', 'error');
+      pushToast(friendlyAdminError(err, 'Erro ao remover cupom.'), 'error');
     }
   }
 
@@ -117,10 +122,23 @@ export function CouponsTab() {
     );
   }
 
+  // Com "Tentar de novo": antes a aba virava só o texto do erro, sem "Novo
+  // cupom" nem saída, e era preciso trocar de aba para voltar (ADM-44).
   if (error) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-        {error}
+      <div
+        role="alert"
+        className="flex flex-col items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
+      >
+        <p>{error}</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon="arrow-clockwise"
+          onClick={() => setReloadKey((n) => n + 1)}
+        >
+          Tentar de novo
+        </Button>
       </div>
     );
   }

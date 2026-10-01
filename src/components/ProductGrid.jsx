@@ -10,12 +10,24 @@ const BADGES = {
   'Decoracao de Sala': { label: 'EXCLUSIVO', cls: 'bg-accent-sky' },
 };
 
+// LOJA-02: defesa em profundidade — nome de categoria com cara de UUID nunca
+// vira pílula, mesmo que chegue de uma resposta antiga em cache.
+const UUID_LOOKING = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function presentableCategory(name) {
+  const text = String(name || '').trim();
+  return text && !UUID_LOOKING.test(text) ? text : '';
+}
+
 function truncate(text = '', max = 90) {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 function ProductCard({ onAddToCart, product }) {
   const badge = BADGES[product.category];
+  const category = presentableCategory(product.category);
+  const hasDiscount =
+    Number(product.originalPrice) > 0 && Number(product.originalPrice) > Number(product.price);
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-brand-soft transition duration-300 hover:-translate-y-1 hover:shadow-brand">
@@ -48,10 +60,12 @@ function ProductCard({ onAddToCart, product }) {
       </Link>
 
       <div className="flex flex-1 flex-col p-4">
-        <span className="inline-flex w-fit rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">
-          {product.category || 'Banner'}
-        </span>
-        <h3 className="mt-2 line-clamp-2 font-heading text-base font-bold text-slate-900">
+        {category ? (
+          <span className="mb-2 inline-flex w-fit rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">
+            {category}
+          </span>
+        ) : null}
+        <h3 className="line-clamp-2 font-heading text-base font-bold text-slate-900">
           {product.name}
         </h3>
         <p className="mt-1 line-clamp-2 text-sm text-slate-600">{truncate(product.description)}</p>
@@ -72,6 +86,13 @@ function ProductCard({ onAddToCart, product }) {
           <span className="font-display text-xl font-bold text-brand-700">
             {formatPrice(product.price)}
           </span>
+          {/* LOJA-19: o "de/por" só aparecia na página do produto. */}
+          {hasDiscount ? (
+            <span className="text-sm text-slate-500 line-through">
+              <span className="sr-only">Preço anterior: </span>
+              {formatPrice(Number(product.originalPrice))}
+            </span>
+          ) : null}
         </div>
 
         <div className="mt-4 flex gap-2">
@@ -102,6 +123,7 @@ ProductCard.propTypes = {
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     image: PropTypes.string,
     name: PropTypes.string.isRequired,
+    originalPrice: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     price: PropTypes.number,
   }).isRequired,
 };
@@ -128,7 +150,15 @@ function ProductSkeletonCard() {
   );
 }
 
-export function ProductGrid({ error, loading, onAddToCart, products }) {
+export function ProductGrid({
+  error,
+  hasActiveFilters = false,
+  loading,
+  onAddToCart,
+  onClearFilters,
+  onRetry,
+  products,
+}) {
   if (loading) {
     return (
       <>
@@ -142,23 +172,50 @@ export function ProductGrid({ error, loading, onAddToCart, products }) {
     );
   }
 
+  // LOJA-15: a mensagem do serviço já é legível; aqui entra o botão.
   if (error) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-        Erro ao carregar produtos. Tente novamente.
-        <br />
-        <small className="text-rose-700/80">{error}</small>
+      <div
+        role="alert"
+        className="flex flex-col items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"
+      >
+        <p>
+          <strong className="block">Não foi possível carregar os produtos.</strong>
+          <span className="text-rose-700/80">{error}</span>
+        </p>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 py-2 font-semibold text-rose-800 transition hover:bg-rose-100"
+          >
+            <i className="bi bi-arrow-clockwise" aria-hidden="true" /> Tentar novamente
+          </button>
+        ) : null}
       </div>
     );
   }
 
+  // LOJA-33: a mensagem culpava "essa categoria" com qualquer filtro (faixa de
+  // preço, busca) e até sem filtro nenhum.
   if (!products.length) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-12 text-center">
-        <i className="bi bi-search text-3xl text-slate-400" />
+        <i className="bi bi-search text-3xl text-slate-400" aria-hidden="true" />
         <p className="text-sm font-semibold text-slate-700">
-          Nenhum produto encontrado nessa categoria.
+          {hasActiveFilters
+            ? 'Nenhum produto encontrado com esses filtros.'
+            : 'Nenhum produto disponível no momento.'}
         </p>
+        {hasActiveFilters && onClearFilters ? (
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="mt-1 inline-flex min-h-[44px] items-center rounded-lg px-3 text-sm font-semibold text-brand-700 hover:underline"
+          >
+            Limpar filtros
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -174,7 +231,10 @@ export function ProductGrid({ error, loading, onAddToCart, products }) {
 
 ProductGrid.propTypes = {
   error: PropTypes.string.isRequired,
+  hasActiveFilters: PropTypes.bool,
   loading: PropTypes.bool.isRequired,
   onAddToCart: PropTypes.func.isRequired,
+  onClearFilters: PropTypes.func,
+  onRetry: PropTypes.func,
   products: PropTypes.arrayOf(PropTypes.object).isRequired,
 };

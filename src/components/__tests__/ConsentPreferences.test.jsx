@@ -1,6 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConsentBanner } from '../ConsentBanner';
 import { ConsentPreferences } from '../ConsentPreferences';
 import { CONSENT_POLICY_VERSION, hasMarketingConsent, setConsentState } from '../../utils/consent';
 import { trackEvent } from '../../utils/analytics';
@@ -102,5 +104,61 @@ describe('ConsentPreferences', () => {
     fireEvent.click(screen.getByRole('button', { name: /Apenas essenciais/i }));
 
     expect(globalThis.localStorage.getItem('lgpd_consent_version')).toBe(CONSENT_POLICY_VERSION);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// LOJA-16 — banner e bloco de preferências na MESMA aba.
+//
+// Os dois só escutavam o evento `storage`, que o navegador não dispara na aba
+// que gravou. Em /privacidade os dois convivem: aceitar no bloco deixava o
+// banner aberto, e recusar no banner deixava o bloco em "Você ainda não
+// escolheu" — até o F5.
+// ════════════════════════════════════════════════════════════════════
+describe('ConsentBanner × ConsentPreferences na mesma aba', () => {
+  function renderJuntos() {
+    return render(
+      <MemoryRouter>
+        <ConsentBanner />
+        <ConsentPreferences />
+      </MemoryRouter>,
+    );
+  }
+
+  it('escolher no bloco esconde o banner na hora', () => {
+    renderJuntos();
+    const banner = screen.getByRole('dialog', { name: /Sua privacidade importa/i });
+    expect(banner).toBeInTheDocument();
+
+    const bloco = screen.getByRole('region', { name: /Preferências de cookies/i });
+    fireEvent.click(within(bloco).getByRole('button', { name: /Aceitar todos/i }));
+
+    expect(screen.queryByRole('dialog', { name: /Sua privacidade importa/i })).toBeNull();
+    expect(within(bloco).getByText(/Cookies de marketing ativos/i)).toBeInTheDocument();
+  });
+
+  it('escolher no banner atualiza o bloco na hora', () => {
+    renderJuntos();
+    const bloco = screen.getByRole('region', { name: /Preferências de cookies/i });
+    expect(within(bloco).getByText(/Você ainda não escolheu/i)).toBeInTheDocument();
+
+    const banner = screen.getByRole('dialog', { name: /Sua privacidade importa/i });
+    fireEvent.click(within(banner).getByRole('button', { name: /Apenas essenciais/i }));
+
+    expect(within(bloco).getByText(/Apenas cookies essenciais/i)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /Sua privacidade importa/i })).toBeNull();
+  });
+
+  it('se o navegador recusa gravar (cota/aba anônima), o banner ainda fecha', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('cota', 'QuotaExceededError');
+    });
+    renderJuntos();
+
+    const banner = screen.getByRole('dialog', { name: /Sua privacidade importa/i });
+    fireEvent.click(within(banner).getByRole('button', { name: /Apenas essenciais/i }));
+
+    expect(screen.queryByRole('dialog', { name: /Sua privacidade importa/i })).toBeNull();
+    setItem.mockRestore();
   });
 });

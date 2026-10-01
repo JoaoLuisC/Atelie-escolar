@@ -1,8 +1,17 @@
 const { clearSessionCookie, isSameOriginRequest } = require('../../lib/admin-session');
-const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  guardMethod,
+  ok,
+  setAdminCorsHeaders,
+  setCachePolicy,
+} = require('../../lib/http');
 
 module.exports = async function adminLogoutHandler(req, res) {
   setAdminCorsHeaders(req, res);
+  // Nenhuma resposta admin vai para o cache do navegador (ADM-01/ADM-41).
+  setCachePolicy(res, 'adminReport');
 
   if (guardMethod(req, res, ['POST'])) return;
 

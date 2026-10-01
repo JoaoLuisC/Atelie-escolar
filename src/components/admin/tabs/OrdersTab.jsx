@@ -24,6 +24,7 @@ export function OrdersTab({ orders, statusFilter, onStatusFilterChange, onOpenOr
         <select
           value={statusFilter}
           onChange={(event) => onStatusFilterChange(event.target.value)}
+          aria-label="Filtrar pedidos por status"
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
         >
           {STATUS_OPTIONS.map((option) => (
@@ -41,7 +42,8 @@ export function OrdersTab({ orders, statusFilter, onStatusFilterChange, onOpenOr
           description="Nenhum pedido corresponde ao filtro selecionado."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200">
+        // overflow-x-auto: no celular o "Detalhes" ficava fora da tela (ADM-40).
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -70,7 +72,12 @@ export function OrdersTab({ orders, statusFilter, onStatusFilterChange, onOpenOr
                     {formatPrice(order.totalAmount || 0)}
                   </td>
                   <td className="px-3 py-3 text-right">
-                    <Button variant="secondary" size="sm" onClick={() => onOpenOrder(order)}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => onOpenOrder(order)}
+                      aria-label={`Detalhes do pedido ${order.orderId || order.id}`}
+                    >
                       Detalhes
                     </Button>
                   </td>

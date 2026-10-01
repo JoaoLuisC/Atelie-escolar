@@ -31,7 +31,7 @@ const {
  *                          retorna null enquanto não houver tabela de gasto integrada
  *  - ltvCacRatio         → ltv / cac (regra: alvo ≥ 3)
  *
- * Cache 1h.
+ * Sem cache: recalculado a cada abertura (ADM-01).
  */
 
 // ── POR QUE NÃO HÁ MAIS UM `Map` DE CACHE AQUI (regra E2) ────────────
@@ -42,14 +42,10 @@ const {
 // algo que o runtime não garante, que atrapalha exatamente quem for investigar
 // por que o relatório está lento.
 //
-// O que sobra é o mecanismo que sempre foi o real: `Cache-Control`. Como o
-// relatório é por usuário, a política é `private, max-age=3600`
-// (CACHE_POLICIES.adminReport) — quem guarda é o navegador do admin, não um
-// cache compartilhado. O TTL de 1h que o Map tentava aplicar é o mesmo, agora
-// num lugar que funciona.
-//
-// `?nocache=1` continua funcionando e ficou mais honesto: como muda a URL, ele
-// fura o cache do navegador por construção, sem precisar de código.
+// O que sobra é o mecanismo que sempre foi o real: `Cache-Control`, pela
+// política CACHE_POLICIES.adminReport — hoje `no-store` (validação de
+// 2026-10-01, ADM-01): uma hora de cache no navegador servia KPI velho depois
+// de uma escrita e depois do logout.
 
 function startOfMonth(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -130,20 +126,24 @@ module.exports = async function adminKpisHandler(req, res) {
     const monthDeltaPct =
       revenuePrev > 0 ? ((revenueMTD - revenuePrev) / revenuePrev) * 100 : revenueMTD > 0 ? 100 : 0;
 
+    // Valores em reais com 2 casas: a soma de floats devolvia 55.65999999999999
+    // na API (ADM-17). A tela já formatava certo; o CSV/integração não.
+    const reais = (value) => Math.round(Number(value || 0) * 100) / 100;
+
     const payload = {
       success: true,
       windowMonths,
       generatedAt: new Date().toISOString(),
       kpis: {
-        revenueMTD,
-        revenuePrev,
+        revenueMTD: reais(revenueMTD),
+        revenuePrev: reais(revenuePrev),
         monthDeltaPct,
-        revenueWindow,
+        revenueWindow: reais(revenueWindow),
         ordersWindow,
         uniqueCustomers,
         recurringCustomers,
-        ticketMedio,
-        ltvAvg,
+        ticketMedio: reais(ticketMedio),
+        ltvAvg: reais(ltvAvg),
         repurchaseRate,
         cac,
         ltvCacRatio,

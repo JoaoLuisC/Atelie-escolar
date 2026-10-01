@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import {
   CONSENT_DENIED,
   CONSENT_GRANTED,
   getConsentMetadata,
   getConsentState,
   setConsentState,
+  subscribeConsentChanges,
 } from '../utils/consent';
 
 // ════════════════════════════════════════════════════════════════════
@@ -35,26 +36,32 @@ function formatarData(iso) {
   return data.toLocaleDateString('pt-BR');
 }
 
-export function ConsentPreferences() {
-  const [state, setState] = useState(() => getConsentState());
-  const [decididoEm, setDecididoEm] = useState(() => formatarData(getConsentMetadata()?.at));
+function lerDataDaDecisao() {
+  // Só conta a data de uma decisão que ainda VALE (versão atual da política).
+  return getConsentState() ? (getConsentMetadata()?.at ?? null) : null;
+}
 
-  useEffect(() => {
-    const onStorage = (event) => {
-      if (event.key !== 'lgpd_consent') return;
-      setState(getConsentState());
-      setDecididoEm(formatarData(getConsentMetadata()?.at));
-    };
-    globalThis.addEventListener?.('storage', onStorage);
-    return () => globalThis.removeEventListener?.('storage', onStorage);
-  }, []);
+function semServidor() {
+  return null;
+}
+
+export function ConsentPreferences() {
+  // LOJA-16: a fonte é o localStorage, assinado por `subscribeConsentChanges`
+  // (esta aba E as outras). Antes havia só o evento `storage`, que não dispara
+  // na aba que gravou: "Apenas essenciais" no banner deixava este bloco em
+  // "Você ainda não escolheu" até o F5.
+  const state = useSyncExternalStore(subscribeConsentChanges, getConsentState, semServidor);
+  const decididoEmIso = useSyncExternalStore(
+    subscribeConsentChanges,
+    lerDataDaDecisao,
+    semServidor,
+  );
+  const decididoEm = formatarData(decididoEmIso);
 
   function escolher(novo) {
     const revogando = getConsentState() === CONSENT_GRANTED && novo === CONSENT_DENIED;
 
     setConsentState(novo);
-    setState(novo);
-    setDecididoEm(formatarData(getConsentMetadata()?.at));
 
     if (revogando) {
       try {
@@ -76,7 +83,7 @@ export function ConsentPreferences() {
     <section
       id="cookies"
       aria-label="Preferências de cookies"
-      className="not-prose my-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5"
+      className="not-prose my-6 scroll-mt-20 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5"
     >
       <h3 className="text-sm font-bold text-slate-900">Suas preferências de cookies</h3>
       <p className="mt-1 text-xs text-slate-600 sm:text-sm">

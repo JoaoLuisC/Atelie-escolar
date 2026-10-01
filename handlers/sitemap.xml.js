@@ -1,20 +1,45 @@
 const { getSupabaseConfig, listTableRows } = require('../lib/supabase');
 const { createLogger } = require('../lib/logger');
+const { categoryQueryValue, isPresentableCategoryName } = require('../lib/public-catalog');
 
 const log = createLogger('sitemap.xml');
 
+// LOJA-25: /login saiu — o robots.txt o bloqueia (Disallow: /login), e
+// listar no sitemap uma URL que o robots proíbe é sinal contraditório para o
+// buscador. As páginas legais entram: são públicas e indexáveis.
 const STATIC_PATHS = [
   { loc: '/', changefreq: 'weekly', priority: 1.0 },
   { loc: '/produtos', changefreq: 'daily', priority: 0.9 },
-  { loc: '/login', changefreq: 'monthly', priority: 0.3 },
+  { loc: '/privacidade', changefreq: 'yearly', priority: 0.2 },
+  { loc: '/termos', changefreq: 'yearly', priority: 0.2 },
 ];
 
-function getBaseUrl() {
+/**
+ * Origem pública das URLs do sitemap.
+ *
+ * LOJA-13/25: o fallback era um domínio fixo (`profamarciarcardoso.com.br`)
+ * que não resolve DNS — um sitemap servido sem APP_URL listava URLs mortas.
+ * Sem APP_URL, a origem certa é a do próprio pedido (o host por onde o
+ * buscador chegou), que por construção existe.
+ */
+function getBaseUrl(req) {
   const raw = String(process.env.APP_URL || '')
     .trim()
     .replace(/\/+$/, '');
   if (raw) return raw;
-  return 'https://profamarciarcardoso.com.br';
+
+  const headers = req?.headers || {};
+  const host = String(headers['x-forwarded-host'] || headers.host || '')
+    .split(',')[0]
+    .trim();
+  // Host vem do cliente: só aceita o formato de um host (sem barra, espaço ou
+  // aspas) antes de interpolar no XML.
+  if (!/^[a-z0-9.-]+(:\d+)?$/i.test(host)) return '';
+  const proto =
+    String(headers['x-forwarded-proto'] || '')
+      .split(',')[0]
+      .trim() || (host.startsWith('localhost') ? 'http' : 'https');
+  return `${proto === 'http' ? 'http' : 'https'}://${host}`;
 }
 
 function escapeXml(value) {
@@ -55,7 +80,7 @@ async function loadActiveCategories() {
   if (!getSupabaseConfig()) return [];
   try {
     return await listTableRows('categories', {
-      select: 'slug,updated_at',
+      select: 'name,slug,updated_at',
       filters: [{ column: 'active', value: true }],
       orderBy: 'updated_at',
       ascending: false,
@@ -73,8 +98,16 @@ module.exports = async function sitemapHandler(req, res) {
     return res.status(405).end();
   }
 
-  const baseUrl = getBaseUrl();
-  const [products, categories] = await Promise.all([loadActiveProducts(), loadActiveCategories()]);
+  const baseUrl = getBaseUrl(req);
+  const [products, allCategories] = await Promise.all([
+    loadActiveProducts(),
+    loadActiveCategories(),
+  ]);
+  // LOJA-02: categoria com nome vazio ou com cara de UUID não é página
+  // pública — e a URL dela não deve ser oferecida ao buscador.
+  const categories = allCategories.filter(
+    (category) => isPresentableCategoryName(category.name) && categoryQueryValue(category),
+  );
 
   const urls = [
     ...STATIC_PATHS.map((entry) => ({
@@ -82,7 +115,7 @@ module.exports = async function sitemapHandler(req, res) {
       loc: `${baseUrl}${entry.loc}`,
     })),
     ...categories.map((category) => ({
-      loc: `${baseUrl}/produtos?categoria=${encodeURIComponent(category.slug || '')}`,
+      loc: `${baseUrl}/produtos?categoria=${encodeURIComponent(categoryQueryValue(category))}`,
       lastmod: category.updated_at,
       changefreq: 'weekly',
       priority: 0.6,

@@ -139,7 +139,7 @@ async function requestDeletion(user) {
   const confirmUrl = `${getAppUrl()}/conta?delete_token=${encodeURIComponent(token)}`;
   const { subject, html } = buildConfirmationEmail(confirmUrl);
 
-  await sendEmail({
+  const envio = await sendEmail({
     to: user.email,
     subject,
     html,
@@ -150,12 +150,35 @@ async function requestDeletion(user) {
     entityId: `${user.uid}:${Math.floor(Date.now() / 1000 / 600)}`,
   });
 
+  // O resultado do envio era descartado e a tela dizia "Enviamos um e-mail"
+  // mesmo com o SMTP recusando a credencial (LOJA-37). Quem pede a exclusão
+  // fica esperando um e-mail que nunca chega — então a falha vira resposta.
+  const devOuTeste = isLocalDevOrTest();
+  const enviado = envio?.sent === true;
+  const jaEnviado = envio?.reason === 'already_sent';
+  // Sem SMTP em dev/teste o link sai pelo `devConfirmUrl` abaixo; em produção,
+  // SMTP ausente é falha como qualquer outra.
+  const semSmtpEmDev = envio?.reason === 'smtp_not_configured' && devOuTeste;
+
+  if (!enviado && !jaEnviado && !semSmtpEmDev) {
+    return {
+      error: {
+        status: 503,
+        code: ERROR_CODES.SERVICE_UNAVAILABLE,
+        message:
+          'Não foi possível enviar o e-mail de confirmação agora. Nada foi alterado na sua conta — tente novamente mais tarde.',
+      },
+    };
+  }
+
   const body = {
-    message: 'Enviamos um e-mail para confirmar a exclusão da sua conta. O link vale 1 hora.',
+    message: jaEnviado
+      ? 'Já enviamos um e-mail de confirmação há pouco. Verifique sua caixa de entrada (e o spam). O link vale 1 hora.'
+      : 'Enviamos um e-mail para confirmar a exclusão da sua conta. O link vale 1 hora.',
   };
   // Afford de dev/testes (sem SMTP, o e-mail não é enviado de verdade).
   // Nunca vaza o token fora de desenvolvimento/teste local.
-  if (isLocalDevOrTest()) {
+  if (devOuTeste) {
     body.devConfirmUrl = confirmUrl;
   }
   return { status: 200, body };
@@ -519,6 +542,16 @@ module.exports = async function meDeleteAccountHandler(req, res) {
         status: 401,
         code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
         message: 'Faça login para excluir sua conta.',
+      });
+    }
+    // CROSS-16: a conta de administração também entra pela loja, e excluí-la
+    // por aqui trancaria o painel (com um admin só, sem volta pela interface).
+    // A tela já esconde o botão; esta é a guarda de verdade.
+    if (['admin', 'master'].includes(String(user.role || '').toLowerCase())) {
+      return fail(res, {
+        status: 403,
+        code: ERROR_CODES.FORBIDDEN,
+        message: 'Contas de administração não podem ser excluídas pela loja.',
       });
     }
     const result = await requestDeletion(user);

@@ -180,7 +180,10 @@ export async function exportMyData() {
     throw apiError(data, 'Não foi possível exportar seus dados.');
   }
 
-  return data;
+  // `success` é envelope do transporte, não dado do titular: ia parar dentro
+  // do arquivo baixado (LOJA-51).
+  const { success: _envelope, ...dados } = data;
+  return dados;
 }
 
 /**
@@ -227,9 +230,16 @@ export async function logoutCustomerSession() {
   if (supabase) {
     await supabase.auth.signOut().catch(() => {});
   }
-  // Limpa cookie HttpOnly do backend
-  await apiRequest('/auth/customer/logout', {
+  // Limpa cookie HttpOnly do backend. A sessão de verdade é ESTE cookie: se o
+  // servidor não confirmou, a pessoa continua logada, e a tela não pode dizer
+  // "Sessão encerrada." (LOJA-39). Falha de rede já chega aqui como exceção;
+  // resposta de erro também precisa virar uma, para o AuthProvider manter o
+  // estado coerente com o servidor.
+  const { response, data } = await apiRequest('/auth/customer/logout', {
     method: 'POST',
     credentials: 'include',
   });
+  if (!response.ok || data?.success === false) {
+    throw apiError(data, 'Não foi possível sair da conta. Tente novamente.');
+  }
 }

@@ -14,6 +14,7 @@ const { createPaymentSchema } = require('../validation/payment.schemas');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { allocateDiscountCents, sumItemsCents, toCentsOrZero, toReais } = require('../lib/money');
 const { createLogger } = require('../lib/logger');
+const { getCustomerSessionFromRequest } = require('../lib/customer-session');
 
 const log = createLogger('create-payment');
 
@@ -183,8 +184,29 @@ module.exports = async function createPaymentHandler(req, res) {
     const parsed = parseOrFail(res, createPaymentSchema, req.body || {});
     if (!parsed.ok) return;
 
-    const { items: normalizedItems, customer: customerData, couponCode, attribution } = parsed.data;
+    const {
+      items: normalizedItems,
+      customer: parsedCustomer,
+      couponCode,
+      attribution,
+    } = parsed.data;
     const attributionData = sanitizeAttribution(attribution);
+
+    // LOJA-40: com sessão de cliente, o pedido é DA CONTA. O e-mail sai do
+    // cookie assinado, não do formulário — antes o campo era editável e um
+    // pedido com outro e-mail nunca era adotado pela conta (a adoção de órfãos
+    // em handlers/customer-orders.js casa pelo e-mail de auth.users). O
+    // `customer_id` NÃO é gravado aqui: ele referencia auth.users, e um cookie
+    // ainda válido de conta já excluída faria o INSERT falhar por FK — a
+    // adoção continua sendo o caminho do vínculo. Convidado (sem sessão) segue
+    // exatamente como antes.
+    const session = getCustomerSessionFromRequest(req);
+    const sessionUid = String(session?.uid || '').trim();
+    const sessionEmail = String(session?.email || '')
+      .trim()
+      .toLowerCase();
+    const customerData =
+      sessionUid && sessionEmail ? { ...parsedCustomer, email: sessionEmail } : parsedCustomer;
 
     if (!getSupabaseConfig()) {
       return fail(res, {

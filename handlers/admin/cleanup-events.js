@@ -1,7 +1,14 @@
 const { ensureAdminSession } = require('../../lib/admin-session');
 const { logAdminAction } = require('../../lib/admin-audit');
 const { getSupabaseConfig, supabaseRequest } = require('../../lib/supabase');
-const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  guardMethod,
+  ok,
+  setAdminCorsHeaders,
+  setCachePolicy,
+} = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-cleanup-events');
@@ -19,6 +26,8 @@ const log = createLogger('admin-cleanup-events');
  */
 module.exports = async function adminCleanupEventsHandler(req, res) {
   setAdminCorsHeaders(req, res);
+  // Nenhuma resposta admin vai para o cache do navegador (ADM-01/ADM-41).
+  setCachePolicy(res, 'adminReport');
 
   if (guardMethod(req, res, ['POST'])) return;
 

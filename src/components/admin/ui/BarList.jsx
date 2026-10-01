@@ -30,7 +30,10 @@ export function BarList({
           <div className="h-2 overflow-hidden rounded-full bg-slate-100">
             <div
               className={`h-full rounded-full bg-gradient-to-r ${accentBar} transition-all`}
-              style={{ width: `${Math.max(4, Math.min(100, Math.round(entry.pct || 0)))}%` }}
+              // Valor zero = barra vazia; o piso de 4% é só para valor positivo pequeno.
+              style={{
+                width: `${entry.value > 0 ? Math.max(4, Math.min(100, Math.round(entry.pct || 0))) : 0}%`,
+              }}
             />
           </div>
         </li>

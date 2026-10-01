@@ -12,30 +12,45 @@ const HOME_SEO_TITLE = 'Materiais educativos digitais para professores';
 const HOME_SEO_DESCRIPTION =
   'Painéis, banners e atividades pedagógicas em PDF, prontos para imprimir. Download imediato após o pagamento. Criados por professores, para professores.';
 
-const HOME_JSON_LD = [
-  {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: 'Profa. Marciar Cardoso · Ateliê da Escola',
-    url: 'https://profamarciarcardoso.com.br',
-    logo: 'https://profamarciarcardoso.com.br/favicon.svg',
-    sameAs: [
-      'https://www.instagram.com/profamarciarcardoso',
-      'https://www.tiktok.com/@profamarciarcardoso',
-    ],
-  },
-  {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'Ateliê da Escola',
-    url: 'https://profamarciarcardoso.com.br',
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: 'https://profamarciarcardoso.com.br/produtos?q={search_term_string}',
-      'query-input': 'required name=search_term_string',
+// LOJA-13: o JSON-LD apontava para `profamarciarcardoso.com.br`, domínio que
+// não resolve DNS. A origem agora é a do próprio site no ar (a mesma que o
+// SEO usa no canonical) — certa em produção, em preview e em qualquer domínio
+// que vier a ser configurado. A SearchAction (`/produtos?q=`) passou a
+// funcionar de fato com o filtro de busca do catálogo (LOJA-23).
+function buildHomeJsonLd(origin) {
+  return [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: 'Profa. Marciar Cardoso · Ateliê da Escola',
+      url: origin,
+      logo: `${origin}/favicon.svg`,
+      sameAs: [
+        'https://www.instagram.com/profamarciarcardoso',
+        'https://www.tiktok.com/@profamarciarcardoso',
+      ],
     },
-  },
-];
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: 'Ateliê da Escola',
+      url: origin,
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: `${origin}/produtos?q={search_term_string}`,
+        'query-input': 'required name=search_term_string',
+      },
+    },
+  ];
+}
+
+function readOrigin() {
+  try {
+    return globalThis.location?.origin || '';
+  } catch {
+    return '';
+  }
+}
 
 const MARQUEE_ITEMS_TOP = ['BANNERS', 'PAINÉIS', 'ATIVIDADES', 'LEMBRANCINHAS', 'KITS'];
 
@@ -176,14 +191,22 @@ Marquee.propTypes = {
 export function HomePage() {
   const [homeSections, setHomeSections] = useState([]);
   const [homeSectionsStatus, setHomeSectionsStatus] = useState('');
+  const [homeSectionsError, setHomeSectionsError] = useState('');
+  // LOJA-15: "Tentar novamente" refaz a busca da vitrine.
+  const [attempt, setAttempt] = useState(0);
   const laneRefs = useRef({});
   const prefersReducedMotion = usePrefersReducedMotion();
+  const homeJsonLd = useMemo(() => {
+    const origin = readOrigin();
+    return origin ? buildHomeJsonLd(origin) : null;
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
     async function loadHomeSections() {
       try {
+        setHomeSectionsError('');
         setHomeSectionsStatus('Carregando vitrine...');
         const data = await fetchHomeSections();
         if (!mounted) return;
@@ -192,7 +215,8 @@ export function HomePage() {
       } catch (error) {
         if (!mounted) return;
         setHomeSections([]);
-        setHomeSectionsStatus(error.message || 'Erro ao carregar vitrine.');
+        setHomeSectionsStatus('');
+        setHomeSectionsError(error.message || 'Erro ao carregar vitrine.');
       }
     }
 
@@ -200,9 +224,18 @@ export function HomePage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [attempt]);
 
-  const hasHomeSections = useMemo(() => homeSections.length > 0, [homeSections]);
+  // LOJA-02: faixa sem produto (o backend já as descarta) nunca vira título
+  // solto com setas de rolagem — defesa contra resposta antiga em cache.
+  const visibleSections = useMemo(
+    () =>
+      homeSections.filter(
+        (section) => Array.isArray(section.products) && section.products.length > 0,
+      ),
+    [homeSections],
+  );
+  const hasHomeSections = visibleSections.length > 0;
 
   function scrollLane(laneKey, direction) {
     const laneElement = laneRefs.current[laneKey];
@@ -220,7 +253,7 @@ export function HomePage() {
         title={HOME_SEO_TITLE}
         description={HOME_SEO_DESCRIPTION}
         pathname="/"
-        jsonLd={HOME_JSON_LD}
+        jsonLd={homeJsonLd}
       />
       {/* HERO */}
       <section className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50">
@@ -310,9 +343,28 @@ export function HomePage() {
           </p>
         ) : null}
 
+        {homeSectionsError ? (
+          <div
+            role="alert"
+            className="flex flex-col items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <p>
+              <strong className="block">Não foi possível carregar a vitrine.</strong>
+              <span className="text-rose-700/80">{homeSectionsError}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setAttempt((value) => value + 1)}
+              className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 py-2 font-semibold text-rose-800 transition hover:bg-rose-100"
+            >
+              <i className="bi bi-arrow-clockwise" aria-hidden="true" /> Tentar novamente
+            </button>
+          </div>
+        ) : null}
+
         {hasHomeSections ? (
           <div className="space-y-10">
-            {homeSections.map((section) => (
+            {visibleSections.map((section) => (
               <div key={section.key}>
                 <div className="mb-4 flex items-center justify-between gap-2">
                   <h3 className="font-display text-xl font-bold text-slate-800">{section.title}</h3>
@@ -389,7 +441,9 @@ export function HomePage() {
       </section>
 
       {/* COMO FUNCIONA */}
-      <section id="como-funciona" className="bg-slate-50 py-16">
+      {/* scroll-mt: a âncora /#como-funciona não pode parar embaixo do
+          cabeçalho fixo (LOJA-09). */}
+      <section id="como-funciona" className="scroll-mt-20 bg-slate-50 py-16">
         <div className="mx-auto max-w-6xl px-4 lg:px-6">
           <div className="mb-10 text-center">
             <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">
@@ -422,9 +476,10 @@ export function HomePage() {
                 >
                   <i className={`bi bi-${step.icon}`} />
                 </div>
-                <h5 className="relative mt-3 font-heading text-lg font-bold text-slate-900">
+                {/* LOJA-31: h3 logo abaixo do h2 da seção (era h5, pulando níveis). */}
+                <h3 className="relative mt-3 font-heading text-lg font-bold text-slate-900">
                   {step.title}
-                </h5>
+                </h3>
                 <p className="relative mt-1 text-sm text-slate-600">{step.text}</p>
               </li>
             ))}
@@ -462,10 +517,13 @@ export function HomePage() {
             <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">
               Como a escola usa
             </p>
+            {/* LOJA-34: o título dizia "Mais de 16.000 professoras" e o cartão
+                logo abaixo, "4,2k seguidores". Número de audiência é dado do
+                negócio — fica só nos indicadores, num lugar só. */}
             <h2 className="font-display text-3xl font-bold text-slate-900 sm:text-4xl">
-              Mais de <span className="text-brand-600">16.000 professoras</span>
+              Professoras de todo o Brasil
               <br />
-              nos seguem nas redes 📲
+              <span className="text-brand-600">nos acompanham nas redes</span> 📲
             </h2>
             <p className="mt-3 text-sm text-slate-500">
               Veja como escolas de todo o Brasil estão usando nossos materiais.

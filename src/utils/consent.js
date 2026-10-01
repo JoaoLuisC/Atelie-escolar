@@ -4,7 +4,9 @@ const TIMESTAMP_STORAGE_KEY = 'lgpd_consent_at';
 const EVENT_NAME = 'lgpd-consent-change';
 
 // Incrementar quando a política de privacidade mudar — força nova decisão do usuário.
-export const CONSENT_POLICY_VERSION = '2026-05-24';
+// 2026-10-01: retenção de analytics corrigida para 180 dias e Vercel incluída
+// em "Com quem compartilhamos" (LOJA-12).
+export const CONSENT_POLICY_VERSION = '2026-10-01';
 
 export const CONSENT_GRANTED = 'granted';
 export const CONSENT_DENIED = 'denied';
@@ -68,4 +70,27 @@ export function subscribeConsent(handler) {
   const listener = (event) => handler(event?.detail?.state || getConsentState());
   globalThis.addEventListener?.(EVENT_NAME, listener);
   return () => globalThis.removeEventListener?.(EVENT_NAME, listener);
+}
+
+/**
+ * Assina QUALQUER mudança de decisão: nesta aba (evento próprio, disparado por
+ * `setConsentState`) e em outras abas (`storage`).
+ *
+ * LOJA-16: o banner e o bloco de /privacidade#cookies só escutavam `storage`,
+ * que o navegador NÃO dispara na aba que gravou. Resultado: aceitar no bloco
+ * deixava o banner na tela, e recusar no banner deixava o bloco em "Você ainda
+ * não escolheu" — os dois na mesma página, até o F5. O formato
+ * (`subscribe(onChange) → unsubscribe`) é o de `useSyncExternalStore`.
+ */
+export function subscribeConsentChanges(onChange) {
+  if (typeof onChange !== 'function') return () => {};
+  const onStorage = (event) => {
+    if (!event?.key || event.key.startsWith(STORAGE_KEY)) onChange();
+  };
+  globalThis.addEventListener?.(EVENT_NAME, onChange);
+  globalThis.addEventListener?.('storage', onStorage);
+  return () => {
+    globalThis.removeEventListener?.(EVENT_NAME, onChange);
+    globalThis.removeEventListener?.('storage', onStorage);
+  };
 }

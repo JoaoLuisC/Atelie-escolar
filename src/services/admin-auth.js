@@ -23,6 +23,7 @@ export async function logoutAdmin() {
   const { response, data } = await apiRequest('/admin/logout', {
     method: 'POST',
     credentials: 'include',
+    cache: 'no-store',
   });
 
   if (!response.ok || !data.success) {
@@ -36,11 +37,16 @@ export async function getAdminSession() {
   const { response, data } = await apiRequest('/admin/session', {
     method: 'GET',
     credentials: 'include',
+    // A resposta decide se o painel aparece: nunca do cache (ADM-41).
+    cache: 'no-store',
   });
 
   if (!response.ok || data.success !== true) {
     throw apiError(data, 'Falha ao validar sessao admin.');
   }
 
-  return { authenticated: data.authenticated === true };
+  return {
+    authenticated: data.authenticated === true,
+    email: typeof data.email === 'string' ? data.email : '',
+  };
 }

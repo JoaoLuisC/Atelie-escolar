@@ -207,7 +207,7 @@ A lista, com o que cada uma faz e as queries de validação, está em
    ```sql
    update public.profiles set role = 'ADMIN' where email = 'voce@example.com';
    ```
-3. Acesse `/painel-acesso-privado-atelie` — ou `/login` → "Professor" (`/admin-login` também redireciona para lá)
+3. Acesse `/admin` (sem sessão, a própria rota mostra o login admin)
 
 **Atalho via Auth Admin API** (cria direto sem signup; usa a service-role key, não o PAT):
 

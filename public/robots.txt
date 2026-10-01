@@ -1,7 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /admin
-Disallow: /painel-acesso-privado-atelie
 Disallow: /reset-password
 Disallow: /downloads
 Disallow: /checkout
@@ -10,4 +9,9 @@ Disallow: /api/
 Disallow: /confirmar-inscricao
 Disallow: /desinscrever
 
-Sitemap: https://profamarciarcardoso.com.br/sitemap.xml
+# LOJA-13/25: a linha "Sitemap:" exige URL ABSOLUTA, e o domínio que estava
+# aqui (profamarciarcardoso.com.br) não resolve DNS. Quando o domínio
+# definitivo existir, descomente e troque o host:
+# Sitemap: https://SEU-DOMINIO/sitemap.xml
+# Enquanto isso, o sitemap continua em /sitemap.xml e pode ser enviado
+# diretamente no Google Search Console.

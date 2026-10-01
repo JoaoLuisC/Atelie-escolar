@@ -35,6 +35,46 @@ function applyRecoverySessionFromUrl(supabase) {
   return Promise.resolve({ data: null, error: null });
 }
 
+/**
+ * Erro do SDK do Supabase em português (LOJA-45).
+ *
+ * O SDK devolve texto cru em inglês ("Auth session missing!") e a página o
+ * jogava direto no toast. Ramifica pelo `code`/`name` do erro quando existe, e
+ * só então pelo texto — o SDK não marca todos os casos com código.
+ */
+export function recoveryErrorMessage(error, fallback) {
+  const code = String(error?.code || '').toLowerCase();
+  const name = String(error?.name || '');
+  const message = String(error?.message || '').toLowerCase();
+
+  if (
+    name === 'AuthSessionMissingError' ||
+    code === 'session_not_found' ||
+    message.includes('session missing')
+  ) {
+    return 'O link de recuperação não foi aberto ou já expirou. Peça um novo em "Esqueci minha senha".';
+  }
+  if (
+    code === 'otp_expired' ||
+    code === 'flow_state_expired' ||
+    code === 'flow_state_not_found' ||
+    message.includes('expired') ||
+    message.includes('invalid')
+  ) {
+    return 'Este link de recuperação é inválido ou expirou. Peça um novo em "Esqueci minha senha".';
+  }
+  if (code === 'same_password' || message.includes('different from the old')) {
+    return 'A nova senha precisa ser diferente da anterior.';
+  }
+  if (code === 'weak_password' || message.includes('password')) {
+    return 'Senha fraca. Use ao menos 8 caracteres, com letra maiúscula, minúscula e número.';
+  }
+  if (Number(error?.status) === 429 || code.includes('rate_limit')) {
+    return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  }
+  return fallback;
+}
+
 export function ResetPasswordPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -91,8 +131,10 @@ export function ResetPasswordPage() {
           pushToast('Abra o link enviado por e-mail para concluir a redefinição.', 'warning');
         }
       } catch (error) {
-        const message = error?.message || 'Não foi possível validar o link de recuperação.';
-        pushToast(message, 'error');
+        pushToast(
+          recoveryErrorMessage(error, 'Não foi possível validar o link de recuperação.'),
+          'error',
+        );
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -142,8 +184,7 @@ export function ResetPasswordPage() {
       pushToast('Senha redefinida com sucesso.', 'success');
       navigate(redirectTo, { replace: true });
     } catch (error) {
-      const message = error?.message || 'Não foi possível atualizar a senha.';
-      pushToast(message, 'error');
+      pushToast(recoveryErrorMessage(error, 'Não foi possível atualizar a senha.'), 'error');
     } finally {
       setLoading(false);
     }

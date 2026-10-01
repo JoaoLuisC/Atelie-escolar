@@ -21,6 +21,13 @@
       "continue": true
     },
     {
+      "src": "/admin(/.*)?",
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "continue": true
+    },
+    {
       "src": "/api/admin-(.*)",
       "dest": "/api/index?__path=admin/$1"
     },

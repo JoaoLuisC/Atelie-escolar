@@ -31,11 +31,10 @@ const FUNNEL_STEPS = [
 // e quando acertava valia para uma instância só. O `X-Cache: HIT` que
 // acompanhava afirmava uma garantia que o runtime não dá.
 //
-// Fica o mecanismo real: `Cache-Control: private, max-age=3600` (regra E4,
-// CACHE_POLICIES.adminReport). Mesmo TTL, num lugar que vale — e a intenção
-// original ("evitar N consultas pesadas em analytics_events + orders" a cada
-// troca de range) passa a ser cumprida de fato pelo cache do navegador.
-// `?nocache=1` continua furando, agora por construção, já que muda a URL.
+// Fica o mecanismo real: `Cache-Control` (regra E4, CACHE_POLICIES.adminReport).
+// Desde a validação de 2026-10-01 a política é `no-store`: com `max-age=3600`
+// o painel seguia mostrando o relatório velho depois de uma escrita e até
+// depois do logout (ADM-01). Cada abertura da aba recalcula.
 function parseRange(req) {
   const days = Math.max(1, Math.min(180, Number.parseInt(req.query?.days || '30', 10) || 30));
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);

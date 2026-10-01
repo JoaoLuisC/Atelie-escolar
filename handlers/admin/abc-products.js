@@ -20,8 +20,7 @@ const {
  * GET /api/admin-abc-products?period=month|quarter|year&categoryId=X
  *
  * Curva ABC de produtos por receita, baseada em order_items de pedidos
- * aprovados. Cache em memória de 1h por chave `period|categoryId`
- * (regra F5 — dashboards cacheados server-side).
+ * aprovados. Sem cache: recalculado a cada abertura (ADM-01).
  */
 
 // ── POR QUE NÃO HÁ MAIS CACHE EM MEMÓRIA AQUI (regra E2) ─────────────
@@ -30,9 +29,10 @@ const {
 // vale só para aquela instância — e o `X-Cache: HIT` que acompanhava afirmava
 // uma garantia que o runtime não dá.
 //
-// Fica o mecanismo real: `Cache-Control: private, max-age=3600` (regra E4,
-// CACHE_POLICIES.adminReport). Mesmo TTL, num lugar que vale. `?nocache=1`
-// continua furando, agora por construção, já que muda a URL.
+// Fica o mecanismo real: `Cache-Control` (regra E4, CACHE_POLICIES.adminReport).
+// Desde a validação de 2026-10-01 a política é `no-store`: com `max-age=3600`
+// o painel seguia mostrando o relatório velho depois de uma escrita e até
+// depois do logout (ADM-01). Cada abertura da aba recalcula.
 
 const PERIOD_DAYS = {
   month: 30,
@@ -147,6 +147,11 @@ module.exports = async function adminAbcProductsHandler(req, res) {
     const productsMeta = await loadProducts(productIds, query.categoryId);
     const allowedIds = new Set(productsMeta.map((p) => String(p.id)));
     const productCategoryMap = new Map(productsMeta.map((p) => [String(p.id), p.category_id]));
+    // Nome ATUAL do catálogo, não o `product_name` gravado no item do pedido:
+    // pedidos antigos guardaram o nome sem acento ("Dia das Maes"), e a curva
+    // divergia do resto do painel (ADM-04). O snapshot fica só de reserva para
+    // produto já excluído.
+    const productNameMap = new Map(productsMeta.map((p) => [String(p.id), p.name]));
 
     const filteredEntries = query.categoryId
       ? [...byProduct.entries()].filter(([pid]) => allowedIds.has(pid))
@@ -157,7 +162,7 @@ module.exports = async function adminAbcProductsHandler(req, res) {
       const category = categoryId ? categoryMap.get(String(categoryId)) : null;
       return {
         id: pid,
-        name: entry.name,
+        name: productNameMap.get(pid) || entry.name,
         revenue: entry.revenue,
         qty: entry.qty,
         categoryId: categoryId ? String(categoryId) : null,

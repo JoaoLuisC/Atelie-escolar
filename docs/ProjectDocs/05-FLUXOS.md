@@ -115,7 +115,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[/painel-acesso-privado-atelie/] --> B[POST /api/admin/login<br/>email + password]
+    A["/admin sem sessão (formulário de login)"] --> B[POST /api/admin/login<br/>email + password]
     B --> C[Valida via Supabase Auth<br/>password grant]
     C -->|inválido| C1[401 + log security_events.admin_login_failed]
     C -->|válido| D[Lê profile.role]
@@ -123,7 +123,7 @@ flowchart TD
     D -->|role OK| E{adminConfig exige 2FA?<br/>requireSecondFactor / require2FA / twoFactorEnabled}
 
     E -->|não| F[Emite cookie admin_session HMAC<br/>TTL 8h SameSite=Strict]
-    F --> Z[Redirect /admin]
+    F --> Z["/admin passa a mostrar o painel"]
 
     E -->|sim| G[Retorna requiresSecondFactor=true<br/>+ methods + challengeToken - TTL 5 min<br/>frontend pede código]
     G --> H[POST /api/admin/login<br/>email + password + challengeToken + factorCode]

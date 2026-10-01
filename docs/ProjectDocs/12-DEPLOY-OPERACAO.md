@@ -254,7 +254,7 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 ### 6.4 Admin
 
 ```
-✓ /painel-acesso-privado-atelie carrega
+✓ /admin carrega o login admin
 ✓ Login admin com 2FA funciona
 ✓ 5 tentativas falhas em 10min retorna 429 (vale em produção — contador no Postgres)
 ✓ Sessão de 8h ainda vale

@@ -9,7 +9,14 @@ const { safeCompare, setSessionCookie } = require('../../lib/admin-session');
 const { resolveSecret } = require('../../lib/env-secret');
 const { getAnonClient, getProfileRoleByEmail } = require('../../services/supabase-auth');
 const { enforceRateLimit, resolveIdentifier, RATE_LIMITS } = require('../../lib/rate-limit');
-const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  guardMethod,
+  ok,
+  setAdminCorsHeaders,
+  setCachePolicy,
+} = require('../../lib/http');
 // TOTP, PIN e o repouso cifrado dos dois. Saiu daqui em 01/09/2026: era a
 // divida ja anotada no proprio arquivo (HOTP/base32 duplicados com
 // handlers/admin/settings.js), e virou obrigatoria quando totpSecret passou a
@@ -343,6 +350,8 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
 
 module.exports = async function adminLoginHandler(req, res) {
   setAdminCorsHeaders(req, res);
+  // Nenhuma resposta admin vai para o cache do navegador (ADM-01/ADM-41).
+  setCachePolicy(res, 'adminReport');
 
   if (guardMethod(req, res, ['POST'])) return;
 

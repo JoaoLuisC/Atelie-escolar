@@ -1,9 +1,13 @@
 import PropTypes from 'prop-types';
-import { Navigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { PROFESSOR_LOGIN_PATH } from '../constants/routes';
 
-export function ProtectedRoute({ children }) {
+/**
+ * Guarda do painel admin. Sem sessão admin, renderiza `fallback` (o formulário
+ * de login) na própria URL em vez de redirecionar — assim `/admin` é a única
+ * entrada: deslogado vê o login, logado vê o painel.
+ */
+export function ProtectedRoute({ children, fallback }) {
   const location = useLocation();
   const { authReady, adminAuthenticated } = useAuth();
   // Bypass do painel só em DEV e quando explicitamente ligado por env.
@@ -12,6 +16,8 @@ export function ProtectedRoute({ children }) {
   // (variáveis VITE_* são inlined no bundle público).
   const allowAdminBypass =
     import.meta.env.DEV && import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
+  // Com bypass ligado, `?login` ainda abre o formulário para obter sessão real.
+  const wantsLogin = new URLSearchParams(location.search).has('login');
 
   if (!authReady) {
     return (
@@ -27,8 +33,8 @@ export function ProtectedRoute({ children }) {
     );
   }
 
-  if (!adminAuthenticated && !allowAdminBypass) {
-    return <Navigate to={PROFESSOR_LOGIN_PATH} replace state={{ from: location }} />;
+  if (!adminAuthenticated && (!allowAdminBypass || wantsLogin)) {
+    return fallback;
   }
 
   return children;
@@ -36,4 +42,5 @@ export function ProtectedRoute({ children }) {
 
 ProtectedRoute.propTypes = {
   children: PropTypes.node.isRequired,
+  fallback: PropTypes.node.isRequired,
 };

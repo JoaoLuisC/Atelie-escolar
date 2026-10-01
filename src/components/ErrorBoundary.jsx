@@ -2,6 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { getApiBaseUrl } from '../utils/api';
 import { getSessionId } from '../utils/attribution';
+import { CART_KEY } from '../utils/cart-storage';
 
 function reportErrorToBackend(error, info) {
   try {
@@ -58,6 +59,21 @@ export class ErrorBoundary extends React.Component {
     return { hasError: true };
   }
 
+  // LOJA-01: este boundary fica ACIMA do BrowserRouter, então trocar de URL não
+  // o desmontava — o botão Voltar mudava o endereço e o cartão de erro ficava.
+  // Num `popstate`, a árvore tenta de novo; se o erro persistir, ele volta.
+  componentDidMount() {
+    globalThis.addEventListener?.('popstate', this.handlePopState);
+  }
+
+  componentWillUnmount() {
+    globalThis.removeEventListener?.('popstate', this.handlePopState);
+  }
+
+  handlePopState = () => {
+    if (this.state.hasError) this.setState({ hasError: false });
+  };
+
   componentDidCatch(error, info) {
     reportErrorToBackend(error, info);
     if (typeof console !== 'undefined' && console.error) {
@@ -73,6 +89,19 @@ export class ErrorBoundary extends React.Component {
     }
   };
 
+  // LOJA-01: um carrinho corrompido no localStorage derrubava a loja de novo a
+  // cada "Recarregar" — o dado ruim sobrevivia ao reload. Esta é a saída que
+  // não depende de abrir o DevTools. Só o carrinho sai: consentimento LGPD e o
+  // último pedido (usado em /downloads) ficam.
+  handleResetCart = () => {
+    try {
+      globalThis.localStorage?.removeItem(CART_KEY);
+    } catch {
+      /* storage bloqueado: o reload abaixo é o que resta */
+    }
+    this.handleReload();
+  };
+
   render() {
     if (!this.state.hasError) return this.props.children;
     return (
@@ -84,13 +113,22 @@ export class ErrorBoundary extends React.Component {
             Tivemos um problema ao carregar esta página. Já registramos o ocorrido. Tente
             recarregar.
           </p>
-          <button
-            type="button"
-            onClick={this.handleReload}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-          >
-            <i className="bi bi-arrow-clockwise" /> Recarregar
-          </button>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={this.handleReload}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+            >
+              <i className="bi bi-arrow-clockwise" aria-hidden="true" /> Recarregar
+            </button>
+            <button
+              type="button"
+              onClick={this.handleResetCart}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 underline-offset-2 transition hover:underline"
+            >
+              Continua com erro? Esvaziar o carrinho salvo e recarregar
+            </button>
+          </div>
         </div>
       </div>
     );

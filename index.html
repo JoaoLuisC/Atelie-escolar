@@ -4,7 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ateliê da Escola</title>
+    <!--
+      data-rh="true" marca esta tag como do react-helmet-async: ao montar, o
+      Helmet a SUBSTITUI pela description da página em vez de acrescentar uma
+      segunda (LOJA-24: havia duas meta description em todas as páginas). Sem
+      JavaScript, quem lê o HTML continua recebendo esta.
+    -->
     <meta
+      data-rh="true"
       name="description"
       content="Materiais educativos digitais — banners, painéis e atividades para professores."
     />

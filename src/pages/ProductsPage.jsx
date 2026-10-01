@@ -7,7 +7,7 @@ import { ProductSidebar } from '../components/ProductSidebar';
 import { SortDropdown } from '../components/SortDropdown';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
-import { useProductFilters } from '../hooks/useProductFilters';
+import { PRESET_LABELS, useProductFilters } from '../hooks/useProductFilters';
 import { trackEvent } from '../utils/analytics';
 
 export function ProductsPage() {
@@ -22,18 +22,25 @@ export function ProductsPage() {
   }, []);
   const {
     activeCategory,
+    activePreset,
     activePriceRange,
     activeSort,
     categories,
+    clearFilters,
+    clearSearch,
     closeSidebar,
     error,
     featuredCategories,
     filteredProducts,
+    hasActiveFilters,
     isCategorySectionOpen,
     isPriceSectionOpen,
     isSidebarOpen,
     loading,
     openSidebar,
+    resetPreset,
+    retry,
+    searchQuery,
     selectCategory,
     selectPriceRange,
     setActiveSort,
@@ -102,6 +109,8 @@ export function ProductsPage() {
               <button
                 type="button"
                 onClick={openSidebar}
+                aria-controls="product-filters"
+                aria-expanded={isSidebarOpen}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 lg:hidden"
               >
                 <i className="bi bi-sliders" /> Filtros
@@ -131,6 +140,20 @@ export function ProductsPage() {
               />
             </div>
 
+            {/* LOJA-03/23: preset e busca vindos da URL ficam VISÍVEIS, com um
+                jeito de tirar. Antes "?preset=novidades" filtrava sem nenhum
+                indicador na tela. */}
+            {activePreset || searchQuery ? (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {activePreset ? (
+                  <ActiveFilterTag label={PRESET_LABELS[activePreset]} onRemove={resetPreset} />
+                ) : null}
+                {searchQuery ? (
+                  <ActiveFilterTag label={`Busca: “${searchQuery}”`} onRemove={clearSearch} />
+                ) : null}
+              </div>
+            ) : null}
+
             {canShowResultsCount ? (
               <p className="mb-4 text-sm text-slate-500">
                 {filteredProducts.length} produto{resultSuffix} encontrado{resultSuffix}
@@ -139,8 +162,11 @@ export function ProductsPage() {
 
             <ProductGrid
               error={error}
+              hasActiveFilters={hasActiveFilters}
               loading={loading}
               onAddToCart={onAddToCart}
+              onClearFilters={clearFilters}
+              onRetry={retry}
               products={filteredProducts}
             />
           </div>
@@ -150,11 +176,33 @@ export function ProductsPage() {
   );
 }
 
+function ActiveFilterTag({ label, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 py-1 pl-3 pr-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-100">
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remover filtro: ${label}`}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-brand-100"
+      >
+        <i className="bi bi-x-lg text-[10px]" aria-hidden="true" />
+      </button>
+    </span>
+  );
+}
+
+ActiveFilterTag.propTypes = {
+  label: PropTypes.string.isRequired,
+  onRemove: PropTypes.func.isRequired,
+};
+
 function CategoryChip({ active, onClick, children }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold transition ${
         active
           ? 'bg-brand-600 text-white shadow-sm'

@@ -5,6 +5,12 @@ const {
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
+const {
+  CATALOG_CACHE_CONTROL,
+  categoryQueryValue,
+  isPresentableCategoryName,
+} = require('../lib/public-catalog');
+const { UUID_RE } = require('../validation/common.schemas');
 
 const log = createLogger('product-details');
 
@@ -14,11 +20,15 @@ const log = createLogger('product-details');
 const SELECT_FIELDS =
   'id,slug,name,description,price,original_price,image_url,images,videos,category_id,product_type,tags,is_kit,page_size,paper_type,kit_items,panel_sizes,featured,active,faq,reviews,benefits';
 
+// LOJA-05: a regra antiga era "número puro → id bigint". Mas `products.id` é
+// UUID (supabase/schema.sql), então `/produtos/123` mandava `id=eq.123` ao
+// PostgREST, o cast falhava e o visitante via um 500. Agora só um UUID vai
+// para a coluna `id`; todo o resto — inclusive número — é procurado como slug
+// e, se não existir, vira o 404 de "Produto não encontrado".
 function pickIdentifier(query) {
   const raw = String(query?.slug || query?.id || '').trim();
   if (!raw) return { type: null, value: null };
-  // Bigint id puro → busca por id; senão é slug.
-  if (/^\d+$/.test(raw)) {
+  if (UUID_RE.test(raw)) {
     return { type: 'id', value: raw };
   }
   return { type: 'slug', value: raw };
@@ -75,11 +85,14 @@ module.exports = async function productDetailsHandler(req, res) {
       });
     }
 
+    // LOJA-02: nome vazio ou com cara de UUID não aparece na pílula.
+    if (category && !isPresentableCategoryName(category.name)) {
+      category = null;
+    }
+
     const images = Array.isArray(product.images) ? product.images : [];
-    res.setHeader(
-      'Cache-Control',
-      'public, max-age=300, s-maxage=300, stale-while-revalidate=3600',
-    );
+    // CROSS-04/07: ver CATALOG_CACHE_CONTROL em lib/public-catalog.js.
+    res.setHeader('Cache-Control', CATALOG_CACHE_CONTROL);
     return ok(res, {
       success: true,
       product: {
@@ -94,7 +107,7 @@ module.exports = async function productDetailsHandler(req, res) {
         videos: Array.isArray(product.videos) ? product.videos : [],
         category: category?.name || null,
         categoryId: product.category_id ? String(product.category_id) : null,
-        categorySlug: category?.slug || null,
+        categorySlug: category ? categoryQueryValue(category) : null,
         productType: product.product_type || 'individual',
         isKit: product.is_kit === true,
         featured: product.featured === true,

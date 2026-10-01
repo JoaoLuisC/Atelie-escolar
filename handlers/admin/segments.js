@@ -19,11 +19,10 @@ const {
 // acerto é acidental e vale só para aquela instância — e o `X-Cache: HIT` que
 // acompanhava afirmava uma garantia que o runtime não dá.
 //
-// A segmentação continua cara (varre todos os subscribers), e é justamente por
-// isso que ela precisa de um cache que funcione: `Cache-Control` (regra E4).
-// Como o relatório é do admin, a política é `private` — quem guarda é o
-// navegador dele, não um cache compartilhado. `?nocache=1` continua furando,
-// agora por construção, já que muda a URL.
+// O cache que sobra é o do `Cache-Control` (regra E4), pela política
+// CACHE_POLICIES.adminReport — hoje `no-store`. A segmentação é cara, mas uma
+// hora de cache no navegador mantinha o relatório visível depois do logout
+// (ADM-01), e o painel mostrava "Cache de 30 min" para uma política de 1 h.
 
 module.exports = async function adminSegmentsHandler(req, res) {
   setAdminCorsHeaders(req, res);

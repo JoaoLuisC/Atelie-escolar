@@ -2,17 +2,20 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 
 import { ProtectedRoute } from '../ProtectedRoute';
-import { PROFESSOR_LOGIN_PATH } from '../../constants/routes';
+import { ROUTES } from '../../constants/routes';
 
 // ════════════════════════════════════════════════════════════════════
 // `ProtectedRoute` — o único guard de rota do app.
 //
 // POR QUE ELE MERECE TESTE PRÓPRIO
-// São 39 linhas com TRÊS estados, e o do meio é o que costuma sumir num
+// São poucas linhas com TRÊS estados, e o do meio é o que costuma sumir num
 // refactor: enquanto a sessão não foi verificada (`authReady === false`) o
-// componente não pode nem liberar nem redirecionar. Liberar seria abrir o
-// painel a quem não provou nada; redirecionar jogaria a dona para o login a
-// cada F5, porque no primeiro render `adminAuthenticated` é sempre `false`.
+// componente não pode nem liberar nem mostrar o login. Liberar seria abrir o
+// painel a quem não provou nada; mostrar o login pediria senha à dona a cada
+// F5, porque no primeiro render `adminAuthenticated` é sempre `false`.
+//
+// Sem sessão, o login aparece NA PRÓPRIA `/admin` (o `fallback`), sem
+// redirect: `/admin` é a única entrada do painel.
 //
 // O bypass de desenvolvimento é a outra metade: ele existe para o trabalho
 // local, e depende de `import.meta.env.DEV` para ficar INERTE no bundle de
@@ -25,22 +28,21 @@ vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => authState,
 }));
 
-function renderRoute({ authReady, adminAuthenticated }) {
+function renderRoute({ authReady, adminAuthenticated, path = ROUTES.admin }) {
   authState.authReady = authReady;
   authState.adminAuthenticated = adminAuthenticated;
 
   return render(
-    <MemoryRouter initialEntries={['/admin']}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route
-          path="/admin"
+          path={ROUTES.admin}
           element={
-            <ProtectedRoute>
+            <ProtectedRoute fallback={<p>tela de login</p>}>
               <p>painel secreto</p>
             </ProtectedRoute>
           }
         />
-        <Route path={PROFESSOR_LOGIN_PATH} element={<p>tela de login</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -55,9 +57,10 @@ describe('ProtectedRoute', () => {
     renderRoute({ authReady: true, adminAuthenticated: true });
 
     expect(screen.getByText('painel secreto')).toBeInTheDocument();
+    expect(screen.queryByText('tela de login')).not.toBeInTheDocument();
   });
 
-  it('sessão verificada e NÃO autenticado: manda para o login', () => {
+  it('sessão verificada e NÃO autenticado: mostra o login na própria /admin', () => {
     renderRoute({ authReady: true, adminAuthenticated: false });
 
     expect(screen.getByText('tela de login')).toBeInTheDocument();
@@ -72,9 +75,9 @@ describe('ProtectedRoute', () => {
       expect(screen.queryByText('painel secreto')).not.toBeInTheDocument();
     });
 
-    it('não redireciona para o login', () => {
-      // Redirecionar aqui jogaria a dona para o login a cada F5: no primeiro
-      // render `adminAuthenticated` é sempre false, antes de a sessão chegar.
+    it('não mostra o login', () => {
+      // Mostrar aqui pediria senha à dona a cada F5: no primeiro render
+      // `adminAuthenticated` é sempre false, antes de a sessão chegar.
       renderRoute({ authReady: false, adminAuthenticated: false });
 
       expect(screen.queryByText('tela de login')).not.toBeInTheDocument();
@@ -104,6 +107,18 @@ describe('ProtectedRoute', () => {
       renderRoute({ authReady: true, adminAuthenticated: false });
 
       expect(screen.getByText('painel secreto')).toBeInTheDocument();
+    });
+
+    it('com bypass ligado, `?login` ainda mostra o formulário', () => {
+      // Sem isto, ligar o bypass tornaria impossível obter uma sessão real
+      // em DEV: `/admin` é a única porta de entrada do login.
+      vi.stubEnv('DEV', true);
+      vi.stubEnv('VITE_ALLOW_ADMIN_BYPASS', 'true');
+
+      renderRoute({ authReady: true, adminAuthenticated: false, path: `${ROUTES.admin}?login` });
+
+      expect(screen.getByText('tela de login')).toBeInTheDocument();
+      expect(screen.queryByText('painel secreto')).not.toBeInTheDocument();
     });
 
     it('FORA de DEV a flag é inerte, mesmo valendo "true"', () => {

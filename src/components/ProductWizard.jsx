@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ModalWizard } from './ModalWizard';
 import { useToast } from '../hooks/useToast';
 import { uploadProductAsset } from '../services/admin-panel';
+import { categoryLabel } from './admin/utils/category-label';
 import {
   cleanBenefits,
   cleanFaq,
@@ -23,6 +24,7 @@ const EMPTY_PRODUCT_FORM = {
   price: '',
   originalPrice: '',
   productType: 'individual',
+  featured: false,
 };
 
 export function ProductWizard({
@@ -40,6 +42,7 @@ export function ProductWizard({
   const [faq, setFaq] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [formData, setFormData] = useState({ ...EMPTY_PRODUCT_FORM });
+  const [submitting, setSubmitting] = useState(false);
 
   // Declarado ANTES do efeito que o chama: o React Compiler acusa
   // `react-hooks/immutability` quando um valor é acessado acima da própria
@@ -71,7 +74,10 @@ export function ProductWizard({
         downloadUrl: initialProduct.downloadUrl || '',
         price: initialProduct.price || '',
         originalPrice: initialProduct.originalPrice || '',
-        productType: initialProduct.productType || 'individual',
+        // `is_kit` sozinho também indica kit: um produto gravado só com a
+        // flag abria como "individual" e a edição o rebaixava (ADM-23).
+        productType: initialProduct.productType || (initialProduct.isKit ? 'kit' : 'individual'),
+        featured: initialProduct.featured === true,
       });
       setImages(
         initialProduct.images && initialProduct.images.length > 0
@@ -92,10 +98,10 @@ export function ProductWizard({
   }, [initialProduct, isOpen]);
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
@@ -147,8 +153,9 @@ export function ProductWizard({
     setCurrentStep(newStep);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
 
     // Ao salvar, valida os campos obrigatórios de TODOS os steps (não só o
     // atual). Se algum falhar, leva ao primeiro step incompleto e bloqueia o
@@ -173,8 +180,15 @@ export function ProductWizard({
       reviews: cleanReviews(reviews),
     };
 
-    onSubmit(completeProduct);
-    onClose();
+    // Espera a resposta e NÃO fecha sozinho (ADM-27): quem fecha é o pai, só
+    // no sucesso. Com 4 passos e uploads, fechar antes da resposta perdia o
+    // formulário inteiro numa falha de salvamento.
+    setSubmitting(true);
+    try {
+      await onSubmit(completeProduct);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -182,7 +196,9 @@ export function ProductWizard({
   const steps = [
     { id: 'basic', label: 'Básico' },
     { id: 'media', label: 'Mídia' },
-    { id: 'pricing', label: 'Preço & Variações' },
+    // "Preço e tipo", e não "Preço & Variações": o passo não tem variação
+    // nenhuma, só preço, preço original e tipo (ADM-30).
+    { id: 'pricing', label: 'Preço e tipo' },
     { id: 'conversion', label: 'Conversão' },
   ];
 
@@ -196,6 +212,7 @@ export function ProductWizard({
       onSubmit={handleSubmit}
       submitLabel="Salvar Produto"
       size="modal-large"
+      submitting={submitting}
     >
       {currentStep === 0 ? (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -222,11 +239,33 @@ export function ProductWizard({
               <option value="">Selecione uma categoria…</option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
-                  {cat.name}
+                  {categoryLabel(cat.name)}
                 </option>
               ))}
             </select>
           </Field>
+
+          {/* Destaque editável aqui (ADM-28): antes o wizard sempre mandava
+              `featured: false` e editar um produto em destaque o tirava dele. */}
+          <label
+            htmlFor="product-featured"
+            className="flex cursor-pointer items-start gap-3 self-end rounded-xl border border-slate-200 bg-slate-50/60 p-3"
+          >
+            <input
+              id="product-featured"
+              type="checkbox"
+              name="featured"
+              checked={formData.featured}
+              onChange={handleInputChange}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">★ Destaque</span>
+              <span className="block text-xs text-slate-500">
+                Produtos em destaque ganham o selo na loja.
+              </span>
+            </span>
+          </label>
 
           <Field className="sm:col-span-2" label="Descrição *" htmlFor="product-description">
             <textarea
@@ -275,7 +314,7 @@ export function ProductWizard({
           <Field
             label="Vídeos (opcional)"
             htmlFor="product-videos"
-            hint="MP4, WebM ou MOV até 50MB. Sobe pro Storage privado."
+            hint="MP4, WebM ou MOV até 50MB."
           >
             <div id="product-videos" className="flex flex-col gap-3">
               {videos.map((video, idx) => (
@@ -514,7 +553,7 @@ function ReviewsEditor({ value, onChange }) {
     <Field
       label="Depoimentos"
       htmlFor="product-reviews"
-      hint="Depoimentos reais (não inventar — regra B6). Autor e texto são obrigatórios; o resto é opcional."
+      hint="Só depoimentos reais, de clientes de verdade. Autor e texto são obrigatórios; o resto é opcional."
     >
       <div id="product-reviews" className="flex flex-col gap-3">
         {value.map((item, idx) => (
@@ -653,7 +692,8 @@ function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToa
         onProgress: setProgress,
       });
       onChange(result.url);
-      pushToast(`${label} enviado.`, 'success');
+      // Concordância com o rótulo: "Imagem 1 enviada", "Vídeo 1 enviado" (ADM-34).
+      pushToast(`${label} ${kind === 'image' ? 'enviada' : 'enviado'}.`, 'success');
     } catch (err) {
       const msg = err?.message || 'Falha no upload.';
       setError(msg);
@@ -701,7 +741,7 @@ function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToa
               {value}
             </p>
           ) : (
-            <p className="text-[11px] text-slate-500">Clique em &quot;Escolher arquivo&quot;.</p>
+            <p className="text-[11px] text-slate-500">Clique em &quot;Escolher&quot;.</p>
           )}
           {uploading ? (
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
@@ -785,6 +825,8 @@ ProductWizard.propTypes = {
     images: PropTypes.arrayOf(PropTypes.string),
     videos: PropTypes.arrayOf(PropTypes.string),
     productType: PropTypes.string,
+    isKit: PropTypes.bool,
+    featured: PropTypes.bool,
     faq: PropTypes.array,
     reviews: PropTypes.array,
     benefits: PropTypes.array,

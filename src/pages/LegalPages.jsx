@@ -137,6 +137,10 @@ export function PrivacyPage() {
           <strong>Resend</strong> — envio de e-mails transacionais.
         </li>
         <li>
+          <strong>Vercel</strong> — hospedagem do site e métricas de visita agregadas (Vercel Web
+          Analytics), que não usam cookies nem identificam quem você é.
+        </li>
+        <li>
           <strong>Google Analytics / Meta</strong> — somente com consentimento ativo.
         </li>
       </ul>
@@ -149,7 +153,7 @@ export function PrivacyPage() {
       <ul>
         <li>Dados de pedido: 5 anos (obrigação fiscal).</li>
         <li>Logs de download (IP + User-Agent): 12 meses.</li>
-        <li>Eventos de analytics: 24 meses, depois agregados.</li>
+        <li>Eventos de analytics: 180 dias, depois apagados.</li>
         <li>Conta de cliente: até pedido de exclusão.</li>
       </ul>
 

@@ -9,7 +9,8 @@ export function PerformanceTab({ productPerformance }) {
       {productPerformance.length === 0 ? (
         <EmptyState icon="graph-up" title="Sem dados de desempenho" />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200">
+        // overflow-x-auto: no celular a "Taxa de download" ficava cortada (ADM-02).
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -22,10 +23,11 @@ export function PerformanceTab({ productPerformance }) {
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {productPerformance.map((product) => {
-                const conversionPct = Math.min(
-                  100,
-                  Math.round(((product.downloads || 0) / Math.max(product.qty || 1, 1)) * 100),
-                );
+                // Sem venda não há taxa: "—" em vez de um "0%" que soa como medição.
+                const hasSales = Number(product.qty || 0) > 0;
+                const conversionPct = hasSales
+                  ? Math.min(100, Math.round(((product.downloads || 0) / product.qty) * 100))
+                  : 0;
 
                 return (
                   <tr key={product.id} className="hover:bg-slate-50/60">
@@ -42,11 +44,14 @@ export function PerformanceTab({ productPerformance }) {
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
                           <div
                             className="h-full rounded-full bg-violet-500"
-                            style={{ width: `${Math.max(6, conversionPct)}%` }}
+                            // 0% = barra vazia (ADM-09); o piso de 6% era só estética.
+                            style={{
+                              width: `${conversionPct > 0 ? Math.max(6, conversionPct) : 0}%`,
+                            }}
                           />
                         </div>
                         <span className="w-10 text-right text-xs font-semibold text-slate-600">
-                          {conversionPct}%
+                          {hasSales ? `${conversionPct}%` : '—'}
                         </span>
                       </div>
                     </td>

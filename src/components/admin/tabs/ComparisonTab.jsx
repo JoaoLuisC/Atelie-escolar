@@ -49,7 +49,7 @@ export function ComparisonTab({ monthlyComparison, comparisonDelta }) {
             <p className="text-xs uppercase tracking-wide text-slate-500">
               {index === 0 ? 'Mês anterior' : 'Mês atual'}
             </p>
-            <p className="mt-1 text-base font-semibold capitalize text-slate-900">{month.label}</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{month.label}</p>
             <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
               <div>
                 <dt className="text-xs text-slate-500">Vendas</dt>

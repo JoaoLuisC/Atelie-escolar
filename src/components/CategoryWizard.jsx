@@ -6,6 +6,7 @@ import { useToast } from '../hooks/useToast';
 export function CategoryWizard({ isOpen, onClose, onSubmit, initialCategory = null }) {
   const { pushToast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     id: '',
     name: '',
@@ -64,15 +65,22 @@ export function CategoryWizard({ isOpen, onClose, onSubmit, initialCategory = nu
     return true;
   };
 
-  const handleSubmit = (e) => {
+  // Espera a resposta e NÃO fecha sozinho (ADM-27): quem fecha é o
+  // `onSubmit` do pai, e só no sucesso. Antes o modal sumia antes da resposta,
+  // e um 400/409 ("Categoria já existe.") obrigava a redigitar tudo.
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    if (!validateForm() || submitting) {
       return;
     }
 
-    onSubmit(formData);
-    onClose();
+    setSubmitting(true);
+    try {
+      await onSubmit(formData);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -90,6 +98,7 @@ export function CategoryWizard({ isOpen, onClose, onSubmit, initialCategory = nu
       submitLabel="Salvar Categoria"
       showProgress={false}
       size="modal-medium"
+      submitting={submitting}
     >
       <div className="flex flex-col gap-4">
         <div>

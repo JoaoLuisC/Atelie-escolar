@@ -23,6 +23,10 @@ export async function createPayment(payload) {
   const { response, data } = await apiRequest('/create-payment', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    // O cookie de sessão vai junto (LOJA-40): logado, o backend usa o e-mail
+    // da CONTA, não o do formulário. Em dev a API é outra origem (porta 3000),
+    // e sem `include` o cookie não atravessaria.
+    credentials: 'include',
     body: JSON.stringify(payload),
   });
 
@@ -39,6 +43,39 @@ export async function createPayment(payload) {
   }
 
   return { orderId: String(data.orderId || ''), paymentUrl };
+}
+
+/**
+ * Preço ATUAL de cada item do carrinho, lido do banco (CROSS-03).
+ *
+ * O carrinho guarda o preço do momento em que o item entrou; o create-payment
+ * cobra o preço de agora. Sem esta consulta, depois de uma mudança de preço no
+ * painel a tela mostrava um total e o Mercado Pago cobrava outro. Usa o modo
+ * cotação de /validate-coupon (`quote: true`) — o mesmo cálculo da prévia de
+ * cupom, sem cupom.
+ *
+ * @returns {Promise<Array<{ productId: string, name: string|null, price: number,
+ *   categoryId: string|null, available: boolean }>>}
+ * @throws  quando a API falha — quem chama decide se segue com o preço guardado
+ */
+export async function quoteCart(cart = []) {
+  const { response, data } = await apiRequest('/validate-coupon', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      quote: true,
+      items: (Array.isArray(cart) ? cart : []).map((item) => ({
+        productId: String(item.id),
+        quantity: Number(item.quantity || 1),
+      })),
+    }),
+  });
+
+  if (!response.ok || !data.success || !Array.isArray(data.items)) {
+    throw apiError(data, 'Não foi possível atualizar os preços do carrinho.');
+  }
+
+  return data.items;
 }
 
 /**

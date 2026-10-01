@@ -6,6 +6,11 @@ const { loadSoldCountByProduct } = require('../lib/sales-counts');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
+const {
+  CATALOG_CACHE_CONTROL,
+  categoryQueryValue,
+  isPresentableCategoryName,
+} = require('../lib/public-catalog');
 
 const log = createLogger('products');
 
@@ -47,7 +52,7 @@ module.exports = async function productsHandler(req, res) {
         ascending: false,
       }),
       listTableRows('categories', {
-        select: 'id,name',
+        select: 'id,name,slug',
         filters: [{ column: 'active', value: true }],
         orderBy: 'name',
         ascending: true,
@@ -55,12 +60,17 @@ module.exports = async function productsHandler(req, res) {
       loadSoldCountByProduct(),
     ]);
 
+    // LOJA-02: categoria com nome vazio ou com cara de UUID não vira filtro
+    // público. O produto continua listado, só sem rótulo de categoria.
     const categoryById = new Map(
-      categoriesRows.map((category) => [String(category.id), category.name]),
+      categoriesRows
+        .filter((category) => isPresentableCategoryName(category.name))
+        .map((category) => [String(category.id), category]),
     );
 
     const products = productsRows.map((row) => {
       const images = Array.isArray(row.images) ? row.images : [];
+      const category = row.category_id ? categoryById.get(String(row.category_id)) : null;
       return {
         id: String(row.id),
         slug: row.slug || String(row.id),
@@ -71,8 +81,11 @@ module.exports = async function productsHandler(req, res) {
         image: row.image_url || images[0] || '',
         images,
         videos: Array.isArray(row.videos) ? row.videos : [],
-        category: row.category_id ? categoryById.get(String(row.category_id)) || null : null,
+        category: category?.name || null,
         categoryId: row.category_id ? String(row.category_id) : null,
+        // LOJA-06: o catálogo filtra por `?categoria=<slug>` (formato do
+        // sitemap e da home) e precisa do slug para casar e para escrever a URL.
+        categorySlug: category ? categoryQueryValue(category) : null,
         tags: Array.isArray(row.tags) ? row.tags : [],
         productType: row.product_type || 'individual',
         isKit: row.is_kit === true,
@@ -86,10 +99,8 @@ module.exports = async function productsHandler(req, res) {
       };
     });
 
-    res.setHeader(
-      'Cache-Control',
-      'public, max-age=300, s-maxage=300, stale-while-revalidate=3600',
-    );
+    // CROSS-07/14: ver CATALOG_CACHE_CONTROL em lib/public-catalog.js.
+    res.setHeader('Cache-Control', CATALOG_CACHE_CONTROL);
     return ok(res, {
       success: true,
       products,

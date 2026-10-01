@@ -77,16 +77,38 @@ async function createCategory(body) {
   return { status: 201, body: { id: String(created.id) } };
 }
 
-async function updateCategory(body) {
-  const parsed = parse(categoryUpdateSchema, body);
-  if (!parsed.ok) return invalid(parsed.message);
+function categoryConflict() {
+  return { error: { status: 409, code: ERROR_CODES.CONFLICT, message: 'Categoria já existe.' } };
+}
 
-  const { id } = parsed.data;
+/** Violação de unicidade do Postgres (23505), vinda pelo PostgREST como 409. */
+function isUniqueViolation(error) {
+  return (
+    error?.statusCode === 409 ||
+    error?.details?.code === '23505' ||
+    /duplicate key value/i.test(String(error?.message || ''))
+  );
+}
+
+async function updateCategory(body) {
+  const parsedId = parse(uuidId, body.id);
+  if (!parsedId.ok) return invalid('id é obrigatório.');
+  const id = parsedId.data;
 
   const existing = await getTableRow('categories', {
     select: SELECT_FIELDS,
     filters: [{ column: 'id', value: id }],
   });
+
+  // CROSS-12: as categorias-fantasma (nome = UUID, criadas pela rota de
+  // produtos antes da correção do ADM-22) não podiam nem ser DESATIVADAS — o
+  // wizard reenvia o nome, e a validação recusava o nome que o próprio
+  // servidor tinha criado. Nome igual ao gravado não é edição de nome: não
+  // passa pela validação de nome. Renomear continua validado normalmente.
+  const sameName =
+    existing && typeof body.name === 'string' && body.name.trim() === String(existing.name);
+  const parsed = parse(categoryUpdateSchema, sameName ? { ...body, name: undefined } : body);
+  if (!parsed.ok) return invalid(parsed.message);
 
   if (!existing) {
     return {
@@ -105,7 +127,26 @@ async function updateCategory(body) {
     return invalid('Nome da categoria é obrigatório.');
   }
 
-  await updateTable('categories', { id: `eq.${id}` }, toCategoryRow(parsed.data, existing));
+  const row = toCategoryRow(parsed.data, existing);
+
+  // ADM-26: renomear para o nome de OUTRA categoria batia no índice único de
+  // `slug` e virava 500 "Erro ao processar categorias". O POST já respondia
+  // 409; o PUT agora confere antes e, se a corrida passar da conferência,
+  // traduz a violação de unicidade no mesmo 409.
+  if (row.slug !== existing.slug) {
+    const clash = await getTableRow('categories', {
+      select: 'id',
+      filters: [{ column: 'slug', value: row.slug }],
+    });
+    if (clash && String(clash.id) !== String(id)) return categoryConflict();
+  }
+
+  try {
+    await updateTable('categories', { id: `eq.${id}` }, row);
+  } catch (error) {
+    if (isUniqueViolation(error)) return categoryConflict();
+    throw error;
+  }
   return { status: 200, body: {} };
 }
 

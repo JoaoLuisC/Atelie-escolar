@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  NETWORK_ERROR_MESSAGE,
   fetchCrossSell,
+  fetchCrossSellSuggestions,
   fetchHomeSections,
   fetchProductByIdentifier,
   fetchProducts,
@@ -64,6 +66,15 @@ describe('src/services/products', () => {
       globalThis.fetch = vi.fn(async () => respostaErro(500));
       await expect(fetchProducts()).rejects.toThrow(/500/);
     });
+
+    it('sem rede, a mensagem é para gente — não o "Failed to fetch" do navegador (LOJA-15)', async () => {
+      globalThis.fetch = vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      });
+      await expect(fetchProducts()).rejects.toThrow(NETWORK_ERROR_MESSAGE);
+      await expect(fetchHomeSections()).rejects.toThrow(NETWORK_ERROR_MESSAGE);
+      await expect(fetchProductByIdentifier('kit')).rejects.toThrow(NETWORK_ERROR_MESSAGE);
+    });
   });
 
   describe('fetchHomeSections', () => {
@@ -77,14 +88,21 @@ describe('src/services/products', () => {
   });
 
   describe('fetchProductByIdentifier', () => {
-    it('identificador numérico vira `id`; o resto vira `slug`', async () => {
+    it('UUID vira `id`; o resto — inclusive número puro — vira `slug` (LOJA-05)', async () => {
       // O backend decide a coluna pelo parâmetro. Trocar os dois faria a
       // página de produto responder 404 para todo slug — silenciosamente,
       // porque 404 aqui é "não existe", não "erro".
-      globalThis.fetch = vi.fn(async () => respostaOk({ success: true, product: { id: 7 } }));
+      const uuid = '3f4b1c9e-0d2a-4a7b-9c11-8e5f6a2b3c4d';
+      globalThis.fetch = vi.fn(async () => respostaOk({ success: true, product: { id: uuid } }));
 
-      await fetchProductByIdentifier('7');
-      expect(caminhoDa()).toContain('/product-details?id=7');
+      await fetchProductByIdentifier(uuid);
+      expect(caminhoDa()).toContain(`/product-details?id=${uuid}`);
+
+      // `products.id` é UUID: "123" como id fazia o PostgREST falhar o cast e
+      // a página mostrar um 500. Como slug, vira o 404 de "não encontrado".
+      globalThis.fetch.mockClear();
+      await fetchProductByIdentifier('123');
+      expect(caminhoDa()).toContain('/product-details?slug=123');
 
       globalThis.fetch.mockClear();
       await fetchProductByIdentifier('kit-alfabetizacao');
@@ -169,6 +187,16 @@ describe('src/services/products', () => {
     it('sem productId nem chama a API', async () => {
       await expect(fetchCrossSell('')).resolves.toEqual([]);
       expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('a versão com estratégia devolve a `strategy` da API (LOJA-21)', async () => {
+      globalThis.fetch = vi.fn(async () =>
+        respostaOk({ success: true, strategy: 'same_category', products: [{ id: 2 }] }),
+      );
+      await expect(fetchCrossSellSuggestions('1')).resolves.toEqual({
+        products: [{ id: 2 }],
+        strategy: 'same_category',
+      });
     });
 
     it('repassa o signal do chamador', async () => {

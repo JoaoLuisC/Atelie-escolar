@@ -4,6 +4,7 @@ import { formatPrice } from '../../../utils/currency';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
+import { categoryLabel } from '../utils/category-label';
 
 export function ProductsTab({ products, categories, onCreate, onEdit, onToggleActive, onDelete }) {
   const [search, setSearch] = useState('');
@@ -47,24 +48,27 @@ export function ProductsTab({ products, categories, onCreate, onEdit, onToggleAc
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
+          aria-label="Buscar produto por nome"
           placeholder="Buscar por nome..."
           className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 md:max-w-xs"
         />
         <select
           value={filterCategory}
           onChange={(event) => setFilterCategory(event.target.value)}
+          aria-label="Filtrar por categoria"
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
         >
           <option value="">Todas as categorias</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
-              {category.name}
+              {categoryLabel(category.name)}
             </option>
           ))}
         </select>
         <select
           value={filterActive}
           onChange={(event) => setFilterActive(event.target.value)}
+          aria-label="Filtrar por status"
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
         >
           <option value="all">Todos</option>
@@ -80,7 +84,9 @@ export function ProductsTab({ products, categories, onCreate, onEdit, onToggleAc
           description="Crie um novo produto ou ajuste os filtros."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200">
+        // overflow-x-auto: no celular a coluna Ações ficava cortada sem
+        // rolagem, e não dava para editar/pausar/excluir (ADM-25).
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -102,9 +108,7 @@ export function ProductsTab({ products, categories, onCreate, onEdit, onToggleAc
                       </span>
                     ) : null}
                   </td>
-                  <td className="px-3 py-3 text-slate-600">
-                    {product.category || 'Sem categoria'}
-                  </td>
+                  <td className="px-3 py-3 text-slate-600">{categoryLabel(product.category)}</td>
                   <td className="px-3 py-3 text-right font-semibold text-slate-900">
                     {formatPrice(product.price)}
                   </td>
@@ -121,10 +125,20 @@ export function ProductsTab({ products, categories, onCreate, onEdit, onToggleAc
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex justify-end gap-1">
-                      <Button variant="secondary" size="sm" onClick={() => onEdit(product)}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onEdit(product)}
+                        aria-label={`Editar ${product.name}`}
+                      >
                         Editar
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => onToggleActive(product)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onToggleActive(product)}
+                        aria-label={`${product.active === false ? 'Ativar' : 'Pausar'} ${product.name}`}
+                      >
                         {product.active === false ? 'Ativar' : 'Pausar'}
                       </Button>
                       <Button
@@ -132,7 +146,7 @@ export function ProductsTab({ products, categories, onCreate, onEdit, onToggleAc
                         size="sm"
                         icon="trash"
                         onClick={() => onDelete(product)}
-                        aria-label="Excluir"
+                        aria-label={`Excluir ${product.name}`}
                       />
                     </div>
                   </td>

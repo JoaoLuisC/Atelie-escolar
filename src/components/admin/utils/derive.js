@@ -32,7 +32,9 @@ export function deriveMonthlyComparison(approvedOrders) {
     const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
     const start = new Date(date.getFullYear(), date.getMonth(), 1);
     const end = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-    const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    // Só a 1ª letra em maiúscula: o `capitalize` do CSS fazia "Setembro De 2026" (ADM-20).
+    const rawLabel = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
     const monthOrders = approvedOrders.filter((order) => {
       const dt = new Date(order.completedAt || order.createdAt || 0);
       return dt >= start && dt < end;
@@ -98,7 +100,8 @@ export function deriveDailyRevenue(approvedOrders, days = 7) {
   return values.map((value, index) => ({
     label: labels[index],
     value,
-    pct: Math.max(6, Math.round((value / max) * 100)),
+    // Dia sem venda fica sem barra: o piso de 6% desenhava venda onde não houve.
+    pct: value > 0 ? Math.max(6, Math.round((value / max) * 100)) : 0,
   }));
 }
 
@@ -126,7 +129,7 @@ export function deriveCategoryRevenue(products, approvedOrders, limit = 5) {
   const max = Math.max(1, ...list.map((item) => item.value), 1);
   return list.map((item) => ({
     ...item,
-    pct: Math.max(8, Math.round((item.value / max) * 100)),
+    pct: item.value > 0 ? Math.max(8, Math.round((item.value / max) * 100)) : 0,
   }));
 }
 
@@ -151,10 +154,14 @@ export function deriveFaturamentoSeries(approvedOrders, monthsCount = 6) {
     });
   }
 
+  // Seis meses zerados viram lista vazia, para o "Sem vendas no período." da
+  // tela aparecer; e mês com R$ 0,00 fica sem barra (ADM-15) — o piso de 8% só
+  // existe para uma venda pequena continuar visível ao lado de uma grande.
+  if (months.every((item) => item.value <= 0)) return [];
   const max = Math.max(1, ...months.map((item) => item.value), 1);
   return months.map((item) => ({
     ...item,
-    pct: Math.max(8, Math.round((item.value / max) * 100)),
+    pct: item.value > 0 ? Math.max(8, Math.round((item.value / max) * 100)) : 0,
   }));
 }
 

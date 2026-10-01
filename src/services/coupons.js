@@ -3,16 +3,15 @@ import { apiRequest, errorMessageOf } from '../utils/api';
 /**
  * Prévia de desconto para o carrinho (regra C2 — componente não fala com a API).
  *
- * A montagem do payload mora aqui, e não em `CouponField`, porque o backend
- * exige `categoryId` em cada item para decidir elegibilidade de cupom restrito.
- * Enquanto isso vivia dentro do componente, qualquer nova tela que aplicasse
- * cupom teria de redescobrir o formato — e um item sem `categoryId` faz o
- * cupom restrito reportar "não elegível", divergindo da cobrança real em
- * `create-payment`.
+ * Só vão `productId` e `quantity`: o backend relê preço e categoria de cada
+ * item no banco (CROSS-03/CROSS-08), como o create-payment. Antes iam o
+ * `price` e o `categoryId` guardados no carrinho, e a prévia calculava o
+ * desconto sobre um preço que o checkout não cobraria mais.
  *
  * @param {string} code           código digitado pelo cliente
  * @param {Array}  cart           itens do carrinho (formato do CartProvider)
- * @returns {Promise<{ok: true, coupon, subtotal, discount, total} | {ok: false, message: string, code: string|null}>}
+ * @returns {Promise<{ok: true, coupon, items, subtotal, discount, total} | {ok: false, message: string, code: string|null}>}
+ *   `items` são os preços do servidor usados no cálculo (formato de `quoteCart`).
  */
 export async function validateCoupon(code, cart = []) {
   const { data } = await apiRequest('/validate-coupon', {
@@ -22,8 +21,6 @@ export async function validateCoupon(code, cart = []) {
       code: String(code || '').trim(),
       items: (Array.isArray(cart) ? cart : []).map((item) => ({
         productId: String(item.id),
-        categoryId: item.categoryId || null,
-        price: Number(item.price || 0),
         quantity: Number(item.quantity || 1),
       })),
     }),
@@ -43,6 +40,7 @@ export async function validateCoupon(code, cart = []) {
   return {
     ok: true,
     coupon: data.coupon,
+    items: Array.isArray(data.items) ? data.items : [],
     subtotal: data.subtotal,
     discount: data.discount,
     total: data.total,

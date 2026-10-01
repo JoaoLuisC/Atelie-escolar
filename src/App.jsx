@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { PROFESSOR_LOGIN_PATH, ROUTES } from './constants/routes';
+import { ScrollToTop } from './components/ScrollToTop';
+import { ROUTES } from './constants/routes';
 
 const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })));
 const ProductsPage = lazy(() =>
@@ -35,8 +36,8 @@ const ConfirmSubscriptionPage = lazy(() =>
 const UnsubscribePage = lazy(() =>
   import('./pages/SubscriptionPages').then((m) => ({ default: m.UnsubscribePage })),
 );
-const ProfessorLoginPage = lazy(() =>
-  import('./pages/ProfessorLoginPage').then((m) => ({ default: m.ProfessorLoginPage })),
+const AdminLoginPage = lazy(() =>
+  import('./pages/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })),
 );
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
 
@@ -51,33 +52,35 @@ function RouteFallback() {
 
 export default function App() {
   return (
-    <Suspense fallback={<RouteFallback />}>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/produtos" element={<ProductsPage />} />
-        <Route path="/produtos/:slug" element={<ProductDetailsPage />} />
-        <Route path="/checkout" element={<CheckoutPage />} />
-        <Route path="/login" element={<CustomerAuthPage />} />
-        <Route path="/conta" element={<CustomerAuthPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/downloads" element={<DownloadsPage />} />
-        <Route path="/privacidade" element={<PrivacyPage />} />
-        <Route path="/termos" element={<TermsPage />} />
-        <Route path="/confirmar-inscricao" element={<ConfirmSubscriptionPage />} />
-        <Route path="/desinscrever" element={<UnsubscribePage />} />
-        <Route path={PROFESSOR_LOGIN_PATH} element={<ProfessorLoginPage />} />
-        <Route path="/admin-login" element={<Navigate to={PROFESSOR_LOGIN_PATH} replace />} />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute>
-              <AdminPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/admin/usuarios" element={<Navigate to={ROUTES.admin} replace />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </Suspense>
+    <>
+      {/* LOJA-08/09: topo na troca de rota e rolagem até #âncora. */}
+      <ScrollToTop />
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/produtos" element={<ProductsPage />} />
+          <Route path="/produtos/:slug" element={<ProductDetailsPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/login" element={<CustomerAuthPage />} />
+          <Route path="/conta" element={<CustomerAuthPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/downloads" element={<DownloadsPage />} />
+          <Route path="/privacidade" element={<PrivacyPage />} />
+          <Route path="/termos" element={<TermsPage />} />
+          <Route path="/confirmar-inscricao" element={<ConfirmSubscriptionPage />} />
+          <Route path="/desinscrever" element={<UnsubscribePage />} />
+          <Route
+            path={ROUTES.admin}
+            element={
+              <ProtectedRoute fallback={<AdminLoginPage />}>
+                <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/admin/usuarios" element={<Navigate to={ROUTES.admin} replace />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
+    </>
   );
 }

@@ -126,7 +126,27 @@ describe('UnsubscribePage', () => {
 
     renderEm('/desinscrever?token=tok-1', <UnsubscribePage />);
 
-    expect(await screen.findByText(/Pronto, você foi removido/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Cancelamento processado/i)).toBeInTheDocument();
+  });
+
+  it('sem rede, o link mostra mensagem legível, "Tentar novamente" e o formulário (LOJA-15)', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    renderEm('/desinscrever?token=tok-1', <UnsubscribePage />);
+
+    expect(await screen.findByText(/Verifique sua conexão/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to fetch/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Email cadastrado/i)).toBeInTheDocument();
+
+    globalThis.fetch = vi.fn(async () =>
+      respostaJson({ success: true, message: 'Pronto. Nada mais de marketing.' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Tentar novamente/i }));
+
+    expect(await screen.findByText(/Cancelamento processado/i)).toBeInTheDocument();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('`confirmationRequired` NÃO é sucesso nem erro — o formulário fica', async () => {
@@ -148,8 +168,8 @@ describe('UnsubscribePage', () => {
     fireEvent.submit(campo.closest('form'));
 
     expect(await screen.findByText(/enviamos um link de confirmação/i)).toBeInTheDocument();
-    // Título NÃO vira "Pronto, você foi removido" — nada foi removido ainda.
-    expect(screen.queryByText(/Pronto, você foi removido/i)).not.toBeInTheDocument();
+    // Título NÃO vira "Cancelamento processado" — nada foi removido ainda.
+    expect(screen.queryByText(/Cancelamento processado/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Email cadastrado/i)).toBeInTheDocument();
   });
 });

@@ -137,7 +137,7 @@ Atelie-escolar/
 │   │   ├── ResetPasswordPage.jsx         # /reset-password
 │   │   ├── LegalPages.jsx                # /privacidade + /termos
 │   │   ├── SubscriptionPages.jsx         # /confirmar-inscricao + /desinscrever
-│   │   ├── ProfessorLoginPage.jsx        # /painel-acesso-privado-atelie
+│   │   ├── AdminLoginPage.jsx            # /admin sem sessão admin
 │   │   ├── AdminPage.jsx                 # /admin (com 14 abas)
 │   │   ├── NotFoundPage.jsx              # *
 │   │   └── __tests__/                    # Testes de página
@@ -196,7 +196,7 @@ Atelie-escolar/
 │   │   ├── csv-export.js                 # Export de relatórios admin
 │   │   └── currency.js
 │   │
-│   ├── constants/                        # routes.js (ADMIN_LOGIN_PATH, reset-password)
+│   ├── constants/                        # routes.js (ROUTES, reset-password)
 │   └── test/                             # Setup Vitest
 │
 ├── supabase/

@@ -18,6 +18,7 @@ export function ModalWizard({
   submitLabel = 'Salvar',
   showProgress = true,
   size = 'modal-large',
+  submitting = false,
 }) {
   const sizeClass = SIZE_CLASSES[size] || SIZE_CLASSES['modal-large'];
   const dialogRef = useRef(null);
@@ -80,6 +81,25 @@ export function ModalWizard({
       }
     };
   }, [onClose]);
+
+  const isLastStep = currentStep === steps.length - 1;
+
+  // Enter num campo de um passo INTERMEDIÁRIO dispara o submit implícito do
+  // <form>. Antes ele ia direto para o salvamento, que validava todos os passos
+  // e acusava "imagem obrigatória" antes de a pessoa ver a Mídia (ADM-32).
+  // Agora Enter nesses passos equivale a "Avançar"; só no último salva.
+  const handleFormSubmit = (event) => {
+    if (!isLastStep) {
+      event.preventDefault();
+      onStepChange(currentStep + 1);
+      return;
+    }
+    if (submitting) {
+      event.preventDefault();
+      return;
+    }
+    onSubmit(event);
+  };
 
   // Trava o scroll do body enquanto o modal está aberto.
   useEffect(() => {
@@ -156,7 +176,7 @@ export function ModalWizard({
           ) : null}
         </header>
 
-        <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+        <form onSubmit={handleFormSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
@@ -192,12 +212,22 @@ export function ModalWizard({
                   Avançar →
                 </button>
               ) : null}
-              {currentStep === steps.length - 1 ? (
+              {isLastStep ? (
                 <button
                   type="submit"
-                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                  disabled={submitting}
+                  aria-busy={submitting}
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-wait disabled:opacity-70"
                 >
-                  <i className="bi bi-check2" /> {submitLabel}
+                  {submitting ? (
+                    <>
+                      <i className="bi bi-arrow-clockwise animate-spin" /> Salvando…
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-check2" /> {submitLabel}
+                    </>
+                  )}
                 </button>
               ) : null}
             </div>
@@ -224,4 +254,6 @@ ModalWizard.propTypes = {
   submitLabel: PropTypes.string,
   showProgress: PropTypes.bool,
   size: PropTypes.string,
+  /** Salvamento em andamento: o botão trava e o modal só fecha com a resposta. */
+  submitting: PropTypes.bool,
 };

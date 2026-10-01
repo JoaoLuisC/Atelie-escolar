@@ -1,21 +1,14 @@
 import { useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { ROUTES } from '../constants/routes';
+import { SEO } from '../components/SEO';
 
-// ════════════════════════════════════════════════════════════════════
-// Login do professor — a antiga tela de admin.
-//
-// A sessão por trás ainda é a de admin (`loginAdmin`, `adminAuthenticated`):
-// o backend não conhece "professor" ainda. Só o público mudou, e mudou de
-// propósito — a separação real entre professor e admin vem depois, e é ela
-// que vai trocar o que este formulário chama.
-// ════════════════════════════════════════════════════════════════════
-export function ProfessorLoginPage() {
+// Renderizada pelo ProtectedRoute na própria /admin quando não há sessão admin.
+export function AdminLoginPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { authReady, adminAuthenticated, loginAdmin } = useAuth();
+  const { loginAdmin } = useAuth();
   const { pushToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
@@ -26,15 +19,9 @@ export function ProfessorLoginPage() {
   const [challengeToken, setChallengeToken] = useState('');
   const [factorMethods, setFactorMethods] = useState([]);
 
-  const backTo = location.state?.from?.pathname || '/admin';
-
   let submitLabel = 'Entrar';
   if (requiresSecondFactor) submitLabel = 'Validar código';
   if (loading) submitLabel = 'Entrando...';
-
-  if (authReady && adminAuthenticated) {
-    return <Navigate to={ROUTES.admin} replace />;
-  }
 
   async function onSubmit(event) {
     event.preventDefault();
@@ -67,10 +54,15 @@ export function ProfessorLoginPage() {
         return;
       }
 
-      pushToast('Login de professor realizado.', 'success');
-      navigate(backTo, { replace: true });
+      pushToast('Login administrativo realizado.', 'success');
+      // Com a sessão marcada, o ProtectedRoute já troca o login pelo painel;
+      // o navigate só limpa um eventual `?login` da URL.
+      navigate(ROUTES.admin, { replace: true });
     } catch (error) {
-      const message = error.message || 'Falha no login de professor.';
+      // "Failed to fetch" é o texto cru do navegador sem rede (ADM-50).
+      const message = /failed to fetch|networkerror|load failed/i.test(String(error?.message))
+        ? 'Sem conexão com o servidor. Verifique a internet e tente de novo.'
+        : error.message || 'Falha no login administrativo.';
       setStatus(message);
       pushToast(message, 'error');
     } finally {
@@ -80,25 +72,27 @@ export function ProfessorLoginPage() {
 
   return (
     <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-violet-100 via-white to-sky-50 px-4 py-10">
+      {/* Título próprio da aba e fora dos buscadores (ADM-18 / LOJA-26). */}
+      <SEO title="Entrar no painel" pathname={ROUTES.admin} noindex />
       <article className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/80 p-8 shadow-2xl backdrop-blur">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-violet-700 text-white shadow-lg">
-            <i className="bi bi-mortarboard-fill text-2xl" />
+            <i className="bi bi-shield-lock-fill text-2xl" />
           </span>
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-violet-600">
-              Área do professor
+              Painel administrativo
             </p>
-            <h1 className="mt-1 text-2xl font-bold text-slate-900">Acesso do professor</h1>
+            <h1 className="mt-1 text-2xl font-bold text-slate-900">Acesso restrito</h1>
             <p className="mt-2 text-sm text-slate-600">
-              Entre com o e-mail e a senha cadastrados para abrir o painel.
+              Use o e-mail Supabase do perfil master/admin para acessar o painel.
             </p>
           </div>
         </div>
 
         <form className="flex flex-col gap-3" onSubmit={onSubmit}>
           <div>
-            <label htmlFor="professor-login-email" className="sr-only">
+            <label htmlFor="admin-login-email" className="sr-only">
               E-mail
             </label>
             <div className="relative">
@@ -106,12 +100,13 @@ export function ProfessorLoginPage() {
                 <i className="bi bi-envelope" />
               </span>
               <input
-                id="professor-login-email"
+                id="admin-login-email"
                 type="email"
-                placeholder="E-mail do professor"
+                placeholder="E-mail do admin"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={loading}
+                required
                 autoComplete="email"
                 className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
               />
@@ -119,7 +114,7 @@ export function ProfessorLoginPage() {
           </div>
 
           <div>
-            <label htmlFor="professor-login-password" className="sr-only">
+            <label htmlFor="admin-login-password" className="sr-only">
               Senha
             </label>
             <div className="relative">
@@ -127,12 +122,13 @@ export function ProfessorLoginPage() {
                 <i className="bi bi-lock" />
               </span>
               <input
-                id="professor-login-password"
+                id="admin-login-password"
                 type="password"
                 placeholder="Senha"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={loading}
+                required
                 autoComplete="current-password"
                 className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
               />
@@ -141,7 +137,7 @@ export function ProfessorLoginPage() {
 
           {requiresSecondFactor ? (
             <div>
-              <label htmlFor="professor-login-factor" className="sr-only">
+              <label htmlFor="admin-login-factor" className="sr-only">
                 Código de verificação
               </label>
               <div className="relative">
@@ -149,13 +145,14 @@ export function ProfessorLoginPage() {
                   <i className="bi bi-key" />
                 </span>
                 <input
-                  id="professor-login-factor"
+                  id="admin-login-factor"
                   type="text"
                   inputMode="numeric"
                   placeholder="Código TOTP ou PIN"
                   value={factorCode}
                   onChange={(event) => setFactorCode(event.target.value.replaceAll(/\s+/g, ''))}
                   disabled={loading}
+                  required
                   autoComplete="one-time-code"
                   className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 font-mono tracking-widest focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
                 />
@@ -181,15 +178,24 @@ export function ProfessorLoginPage() {
         </form>
 
         {status ? (
-          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{status}</p>
+          <p role="status" className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            {status}
+          </p>
         ) : null}
 
-        <Link
-          to={ROUTES.login}
-          className="mt-4 flex items-center justify-center gap-1 text-xs font-semibold text-slate-500 transition hover:text-slate-700"
-        >
-          <i className="bi bi-arrow-left" /> Não é professor? Entrar como cliente
-        </Link>
+        {/* A conta do admin é uma conta Supabase como a dos clientes: a
+            redefinição de senha da loja serve para ela também (ADM-18). */}
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <Link
+            to={`${ROUTES.login}?mode=forgot`}
+            className="font-semibold text-violet-700 hover:underline"
+          >
+            Esqueci minha senha
+          </Link>
+          <Link to={ROUTES.home} className="text-slate-500 hover:text-slate-700 hover:underline">
+            <i className="bi bi-arrow-left" /> Voltar à loja
+          </Link>
+        </div>
       </article>
     </section>
   );

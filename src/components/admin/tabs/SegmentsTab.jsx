@@ -3,6 +3,7 @@ import { Card } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
 import { fetchAdminSegments } from '../../../services/admin-panel';
 import { formatCount } from '../../../utils/number';
+import { friendlyAdminError } from '../utils/errors';
 
 const TAG_LABELS = {
   cliente_ativo: { label: 'Cliente ativo', color: 'emerald', hint: 'Comprou nos últimos 90 dias' },
@@ -50,7 +51,7 @@ export function SegmentsTab() {
         if (!cancelled) setData(response);
       })
       .catch((err) => {
-        if (!cancelled) setError(err?.message || 'Erro ao carregar segmentação.');
+        if (!cancelled) setError(friendlyAdminError(err, 'Erro ao carregar segmentação.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -120,13 +121,13 @@ export function SegmentsTab() {
 
       <Card
         title="Tags por número de assinantes"
-        subtitle="Use para definir público de campanhas (regra D5: segmentação por categoria, nunca por nome)."
+        subtitle="Use para definir público de campanhas: segmentação por categoria, nunca por nome."
       >
         {sortedTags.length === 0 ? (
           <EmptyState
             icon="tags"
             title="Sem assinantes classificados ainda"
-            description="Tags ficam disponíveis quando há pedidos aprovados ou inscritos confirmados."
+            description="As tags classificam quem assina a newsletter, a partir das compras aprovadas de cada inscrito. Pedidos de quem não assina não entram aqui."
           />
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -155,7 +156,9 @@ export function SegmentsTab() {
         {data.generatedAt
           ? `Gerado em ${new Date(data.generatedAt).toLocaleString('pt-BR')}. `
           : ''}
-        Cache de 30 min. Adicione <code>?nocache=1</code> à URL para forçar recálculo.
+        {/* O texto antigo prometia "cache de 30 min" e um `?nocache=1` que o
+            front nunca repassava (ADM-08/ADM-14). Hoje não há cache. */}
+        Recalculado a cada abertura da aba.
       </p>
     </div>
   );

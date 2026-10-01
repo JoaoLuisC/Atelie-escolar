@@ -674,7 +674,7 @@ module.exports = async function cronEmailJobsHandler(req, res) {
   if (guardMethod(req, res, ['POST', 'GET'])) return;
 
   if (!isAuthorized(req)) {
-    return fail(res, { status: 401, code: ERROR_CODES.UNAUTHORIZED, message: 'Unauthorized' });
+    return fail(res, { status: 401, code: ERROR_CODES.UNAUTHORIZED, message: 'Não autorizado.' });
   }
 
   if (!getSupabaseConfig()) {

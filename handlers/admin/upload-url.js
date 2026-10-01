@@ -4,7 +4,14 @@ const { logAdminAction } = require('../../lib/admin-audit');
 const { getSupabaseConfig } = require('../../lib/supabase');
 const { isSafeObjectPath } = require('../../lib/storage-signed-url');
 const { recordSecurityEvent } = require('../../lib/security-logger');
-const { ERROR_CODES, fail, guardMethod, ok, setAdminCorsHeaders } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  guardMethod,
+  ok,
+  setAdminCorsHeaders,
+  setCachePolicy,
+} = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
 const log = createLogger('admin-upload-url');
@@ -504,6 +511,8 @@ async function handleConfirm(req, res, { bucket, config }) {
 
 module.exports = async function adminUploadUrlHandler(req, res) {
   setAdminCorsHeaders(req, res);
+  // Nenhuma resposta admin vai para o cache do navegador (ADM-01/ADM-41).
+  setCachePolicy(res, 'adminReport');
   if (guardMethod(req, res, ['POST'])) return;
   if (!ensureAdminSession(req, res)) return;
 

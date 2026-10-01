@@ -27,55 +27,69 @@ function resolveArray(input, fallback) {
   return [];
 }
 
+// ════════════════════════════════════════════════════════════════════
+// CATEGORIA-FANTASMA (ADM-22 / CROSS-01 / CROSS-11 da validação de 2026-10-01).
+//
+// O wizard sempre mandou `categoryId` = UUID da categoria escolhida. Esta
+// função só reconhecia id NUMÉRICO (resto de quando `categories.id` era
+// serial); o UUID caía no ramo de slug, não achava nada e era INSERIDO como
+// categoria nova cujo nome era o próprio UUID. Toda criação e toda edição de
+// produto gerava uma categoria "8f3c…" e movia o produto para ela — a categoria
+// escolhida nunca era a gravada.
+//
+// Agora: UUID é procurado por id e TEM de existir; texto é procurado por slug
+// (compatibilidade com cliente antigo que mandava o nome). Em nenhum caso a
+// rota de produtos cria categoria: categoria nasce na aba Categorias, que
+// valida o nome (`categoryName` em validation/admin.schemas.js recusa UUID).
+// ════════════════════════════════════════════════════════════════════
 async function resolveCategoryId(categoryValue) {
-  const rawCategory = String(categoryValue || '').trim();
+  const rawCategory = String(categoryValue ?? '').trim();
   if (!rawCategory) {
-    return null;
+    return { id: null };
   }
 
-  if (/^\d+$/.test(rawCategory)) {
-    const existingById = await getTableRow('categories', {
-      select: 'id',
-      filters: [{ column: 'id', value: Number(rawCategory) }],
-    });
-
-    if (existingById) {
-      return existingById.id;
-    }
-  }
-
-  const slug = normalizeSlug(rawCategory);
-  const existingBySlug = await getTableRow('categories', {
+  const isUuid = parse(uuidId, rawCategory).ok;
+  const existing = await getTableRow('categories', {
     select: 'id',
-    filters: [{ column: 'slug', value: slug }],
+    filters: isUuid
+      ? [{ column: 'id', value: rawCategory.toLowerCase() }]
+      : [{ column: 'slug', value: normalizeSlug(rawCategory) }],
   });
 
-  if (existingBySlug) {
-    return existingBySlug.id;
+  if (existing) {
+    return { id: existing.id };
   }
 
-  const [created] = await insertIntoTable('categories', {
-    name: rawCategory,
-    slug,
-    color: '#9B5DE5',
-    active: true,
-    featured: false,
-    badge_label: '',
-    sort_order: 0,
-  });
-
-  return created.id;
+  return {
+    error: invalid(
+      'Categoria não encontrada. Escolha uma categoria existente ou crie-a na aba Categorias.',
+    ),
+  };
 }
 
 function toProductPayload(body = {}, existing = {}) {
+  // Ausente (undefined) preserva o gravado; `null`/vazio/0 limpa de propósito.
+  // Antes `null` virava `Number(0)` e o "de R$…" riscado da loja sumia como 0.
   const hasOriginalPrice = body.originalPrice !== undefined;
   const originalPrice = hasOriginalPrice
-    ? Number(body.originalPrice || 0)
+    ? Number(body.originalPrice) > 0
+      ? Number(body.originalPrice)
+      : null
     : (existing.original_price ?? null);
+  // `active`/`featured` ausentes PRESERVAM o gravado (ADM-23): um PUT de
+  // edição que não fala de status não pode reativar um produto pausado.
   const active = typeof body.active === 'boolean' ? body.active : existing.active !== false;
   const featured = typeof body.featured === 'boolean' ? body.featured : existing.featured === true;
   const tags = resolveArray(body.tags, existing.tags);
-  const isKit = typeof body.isKit === 'boolean' ? body.isKit : existing.is_kit === true;
+  const productType = String(body.productType ?? existing.product_type ?? 'individual');
+  // `is_kit` acompanha o tipo escolhido no wizard quando ele vem no corpo;
+  // as duas colunas dizendo coisas diferentes era o "kit" que virava individual.
+  const isKit =
+    typeof body.isKit === 'boolean'
+      ? body.isKit
+      : body.productType !== undefined
+        ? productType === 'kit'
+        : existing.is_kit === true;
   const kitItems = resolveArray(body.kitItems, existing.kit_items);
   const panelSizes = resolveArray(body.panelSizes, existing.panel_sizes);
 
@@ -128,7 +142,7 @@ function toProductPayload(body = {}, existing = {}) {
     active,
     featured,
     tags,
-    product_type: String(body.productType ?? existing.product_type ?? 'individual'),
+    product_type: productType,
     is_kit: isKit,
     page_size: String(body.pageSize ?? existing.page_size ?? ''),
     paper_type: String(body.paperType ?? existing.paper_type ?? ''),
@@ -140,11 +154,19 @@ function toProductPayload(body = {}, existing = {}) {
   };
 }
 
-async function listProducts() {
+/**
+ * Lista os produtos com TODOS os campos editáveis — ou um só, com `id`.
+ *
+ * O `id` existe para o wizard de edição (ADM-23): ele era alimentado pela linha
+ * resumida do /admin/dashboard (sem galeria, preço original, tipo, FAQ,
+ * benefícios e depoimentos) e o PUT regravava esses campos vazios.
+ */
+async function listProducts(id = null) {
   const [productsRows, categoriesRows] = await Promise.all([
     listTableRows('products', {
       select:
         'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,faq,reviews,benefits,created_at,updated_at',
+      filters: id ? [{ column: 'id', value: id }] : [],
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -191,12 +213,30 @@ async function listProducts() {
   });
 }
 
+async function getProduct(rawId) {
+  const parsed = parse(uuidId, rawId);
+  if (!parsed.ok) return invalid('id inválido');
+
+  const [product] = await listProducts(parsed.data);
+  if (!product) {
+    return {
+      error: {
+        status: 404,
+        code: ERROR_CODES.PRODUCT_NOT_FOUND,
+        message: 'Produto não encontrado',
+      },
+    };
+  }
+  return { status: 200, body: { product } };
+}
+
 async function createProduct(body) {
   const parsed = parse(productCreateSchema, body);
   if (!parsed.ok) return invalid(parsed.message);
 
-  const categoryId = await resolveCategoryId(body.categoryId ?? body.category);
-  const payload = toProductPayload({ ...body, category_id: categoryId });
+  const category = await resolveCategoryId(body.categoryId ?? body.category);
+  if (category.error) return category.error;
+  const payload = toProductPayload({ ...body, category_id: category.id });
   const [created] = await insertIntoTable('products', payload);
   return { status: 201, body: { id: String(created.id) } };
 }
@@ -223,9 +263,12 @@ async function updateProduct(body) {
   }
 
   const hasCategoryInput = body.category !== undefined || body.categoryId !== undefined;
-  const categoryId = hasCategoryInput
-    ? await resolveCategoryId(body.categoryId ?? body.category)
-    : existing.category_id;
+  let categoryId = existing.category_id;
+  if (hasCategoryInput) {
+    const category = await resolveCategoryId(body.categoryId ?? body.category);
+    if (category.error) return category.error;
+    categoryId = category.id;
+  }
   const payload = toProductPayload({ ...body, category_id: categoryId }, existing);
   await updateTable('products', { id: `eq.${id}` }, payload);
   return { status: 200, body: {} };
@@ -263,7 +306,11 @@ module.exports = createAdminResourceHandler({
   loggerName: 'admin-products',
   handlerName: 'adminProductsHandler',
   operations: {
-    GET: async () => ({ status: 200, body: { products: await listProducts() } }),
+    GET: async (req) => {
+      const id = String(req.query?.id || '').trim();
+      if (id) return getProduct(id);
+      return { status: 200, body: { products: await listProducts() } };
+    },
     POST: (req) => createProduct(req.body || {}),
     PUT: (req) => updateProduct(req.body || {}),
     PATCH: (req) => patchProduct(req.body || {}),

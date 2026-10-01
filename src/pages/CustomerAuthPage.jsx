@@ -12,7 +12,7 @@ import {
   exportMyData,
   requestAccountDeletion,
 } from '../services/customer-auth';
-import { PROFESSOR_LOGIN_PATH, ROUTES, sanitizeRedirectPath } from '../constants/routes';
+import { ROUTES, sanitizeRedirectPath } from '../constants/routes';
 
 function getMode(search) {
   const params = new URLSearchParams(search);
@@ -26,6 +26,42 @@ function getMode(search) {
   }
 
   return 'login';
+}
+
+/**
+ * Erro devolvido pelo Google/Supabase na volta do OAuth (`?error=…` ou
+ * `#error=…`). Antes ficava na URL sem nenhuma mensagem na tela (LOJA-44).
+ *
+ * O `error_description` NÃO é exibido: é texto livre que qualquer um põe num
+ * link, e mostrar "erro" escrito por terceiros com a cara da loja é convite a
+ * golpe. A tela escolhe a própria frase pelo código.
+ */
+function readOAuthError(location) {
+  const search = new URLSearchParams(location.search);
+  const hash = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+  const code = String(search.get('error') || hash.get('error') || '').trim();
+  if (!code) return '';
+  if (code === 'access_denied') {
+    return 'O login com Google foi cancelado. Você pode tentar de novo ou entrar com e-mail e senha.';
+  }
+  return 'Não foi possível entrar com Google. Tente novamente ou entre com e-mail e senha.';
+}
+
+/**
+ * Texto da falha ao pedir o link de recuperação, pelo STATUS do Supabase.
+ * O 500 de "Error sending recovery email" (SMTP com credencial inválida,
+ * LOJA-37) é falha do envio, não do e-mail digitado — e a pessoa precisa saber
+ * que tentar de novo agora não adianta.
+ */
+function passwordResetErrorMessage(error) {
+  const status = Number(error?.status) || 0;
+  if (status === 429) {
+    return 'Muitos pedidos de recuperação. Aguarde alguns minutos e tente novamente.';
+  }
+  if (status >= 500) {
+    return 'Não foi possível enviar o e-mail de recuperação agora. Tente novamente mais tarde.';
+  }
+  return 'Não foi possível enviar o link de recuperação. Confira o e-mail e tente novamente.';
 }
 
 function useCustomerAuthHandlers({
@@ -42,6 +78,13 @@ function useCustomerAuthHandlers({
   // texto inline para o erro ficar visível enquanto o usuário corrige.
   const [loginError, setLoginError] = useState('');
   const [registerError, setRegisterError] = useState('');
+
+  // Trocar de aba começa limpo: o erro de login antigo continuava na tela ao
+  // ir para "Cadastrar" e voltar (LOJA-46).
+  function clearErrors() {
+    setLoginError('');
+    setRegisterError('');
+  }
 
   async function submitLogin(loginForm) {
     setLoginError('');
@@ -154,9 +197,8 @@ function useCustomerAuthHandlers({
 
       const message = 'Enviamos um link de recuperação. Verifique sua caixa de entrada.';
       pushToast(message, 'success');
-    } catch {
-      const message = 'Não foi possível enviar o link de recuperação.';
-      pushToast(message, 'error');
+    } catch (error) {
+      pushToast(passwordResetErrorMessage(error), 'error');
     } finally {
       setLoading(false);
     }
@@ -166,6 +208,7 @@ function useCustomerAuthHandlers({
     loading,
     loginError,
     registerError,
+    clearErrors,
     submitLogin,
     submitGoogleLogin,
     submitRegister,
@@ -176,12 +219,26 @@ function useCustomerAuthHandlers({
 export function CustomerAuthPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { customerSession, loginCustomer, loginCustomerGoogle, registerCustomer, logoutCustomer } =
-    useAuth();
+  const {
+    authReady,
+    customerSession,
+    loginCustomer,
+    loginCustomerGoogle,
+    registerCustomer,
+    logoutCustomer,
+    setCustomerSession,
+  } = useAuth();
   const { pushToast } = useToast();
 
   // Sanitizado: o valor vai para navigate() e para o redirect_to do OAuth.
-  const redirectTo = sanitizeRedirectPath(new URLSearchParams(location.search).get('redirect'));
+  const rawRedirect = new URLSearchParams(location.search).get('redirect');
+  const redirectTo = sanitizeRedirectPath(rawRedirect);
+  // Veio um destino válido na URL? Logado, ele é o caminho oferecido (LOJA-47).
+  const hasExplicitRedirect = Boolean(rawRedirect) && redirectTo === String(rawRedirect).trim();
+  const isAdminRole = ['admin', 'master'].includes(
+    String(customerSession?.role || '').toLowerCase(),
+  );
+  const [oauthError] = useState(() => readOAuthError(location));
   const deleteToken = new URLSearchParams(location.search).get('delete_token') || '';
   const [deleting, setDeleting] = useState(false);
   const [deleteRequested, setDeleteRequested] = useState(false);
@@ -244,7 +301,9 @@ export function CustomerAuthPage() {
       try {
         await logoutCustomer();
       } catch {
-        /* sessão já encerrada no backend */
+        // O backend já apagou o cookie na exclusão; a conta nem existe mais.
+        // Se o logout falhar, a sessão local sai do mesmo jeito.
+        setCustomerSession(null);
       }
       navigate(ROUTES.home);
     } catch (error) {
@@ -263,10 +322,26 @@ export function CustomerAuthPage() {
     setMode(getMode(location.search));
   }, [location.search]);
 
+  // O erro do OAuth já foi lido para o estado; tira `error`/`error_description`
+  // da URL para um F5 ou um link copiado não repetirem a mensagem.
+  useEffect(() => {
+    if (!oauthError) return;
+    const params = new URLSearchParams(location.search);
+    ['error', 'error_code', 'error_description'].forEach((key) => params.delete(key));
+    const search = params.toString();
+    navigate(
+      { pathname: location.pathname, search: search ? `?${search}` : '' },
+      { replace: true },
+    );
+    // Só na montagem: depois disso a URL já está limpa.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const {
     loading,
     loginError,
     registerError,
+    clearErrors,
     submitLogin,
     submitGoogleLogin,
     submitRegister,
@@ -285,6 +360,7 @@ export function CustomerAuthPage() {
   const [recoveryForm, setRecoveryForm] = useState({ email: '' });
 
   function changeMode(nextMode) {
+    clearErrors();
     setMode(nextMode);
     if (nextMode === 'forgot') {
       setRecoveryForm((prev) => ({
@@ -343,6 +419,15 @@ export function CustomerAuthPage() {
           ou
           <span className="h-px flex-1 bg-slate-200" />
         </div>
+
+        {oauthError && !loginError ? (
+          <p
+            role="alert"
+            className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 ring-1 ring-rose-200"
+          >
+            {oauthError}
+          </p>
+        ) : null}
 
         <form onSubmit={submitLoginForm} noValidate className="flex flex-col gap-3">
           <div>
@@ -543,9 +628,13 @@ export function CustomerAuthPage() {
       <article className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-xl backdrop-blur sm:p-8">
         <header className="mb-5">
           <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Conta</p>
-          <h1 className="font-display text-2xl font-extrabold text-slate-900">Acesso do cliente</h1>
+          <h1 className="font-display text-2xl font-extrabold text-slate-900">
+            {customerSession?.email && !deleteToken ? 'Sua conta' : 'Acesso do cliente'}
+          </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Entre ou crie sua conta para continuar sua compra.
+            {customerSession?.email && !deleteToken
+              ? 'Seus dados e o acesso aos seus pedidos.'
+              : 'Entre ou crie sua conta para continuar sua compra.'}
           </p>
           <Link
             to={ROUTES.home}
@@ -563,14 +652,34 @@ export function CustomerAuthPage() {
               <strong>permanente e irreversível</strong>. Seus pedidos são mantidos anonimizados
               apenas para fins fiscais.
             </p>
-            <button
-              type="button"
-              onClick={handleConfirmDeletion}
-              disabled={deleting}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:bg-rose-300"
-            >
-              <i className="bi bi-trash" /> {deleting ? 'Excluindo…' : 'Excluir permanentemente'}
-            </button>
+            {/* O backend exige a sessão do DONO da conta além do token (um link
+                encaminhado não basta). Deslogado, o botão só daria erro — então
+                a tela oferece o login e volta para este mesmo link (LOJA-51). */}
+            {authReady && !customerSession?.email ? (
+              <>
+                <p className="mt-2 text-sm text-rose-800">
+                  Para confirmar, entre na conta que você quer excluir.
+                </p>
+                <Link
+                  to={`${ROUTES.login}?mode=login&redirect=${encodeURIComponent(
+                    `${ROUTES.conta}?delete_token=${encodeURIComponent(deleteToken)}`,
+                  )}`}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
+                >
+                  <i className="bi bi-box-arrow-in-right" aria-hidden="true" /> Entrar para
+                  confirmar
+                </Link>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleConfirmDeletion}
+                disabled={deleting || !authReady}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:bg-rose-300"
+              >
+                <i className="bi bi-trash" /> {deleting ? 'Excluindo…' : 'Excluir permanentemente'}
+              </button>
+            )}
           </div>
         ) : customerSession?.email ? (
           <div className="flex flex-col gap-4">
@@ -579,11 +688,18 @@ export function CustomerAuthPage() {
               <p className="mt-1 text-sm text-emerald-800">
                 Sessão ativa para <strong>{customerSession.email}</strong>.
               </p>
+              {/* Respeita o ?redirect= de quem mandou para cá (LOJA-47): quem veio
+                  de /downloads não quer ir para o checkout. */}
               <Link
-                to={ROUTES.checkout}
+                to={hasExplicitRedirect ? redirectTo : ROUTES.checkout}
                 className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
               >
-                Ir para checkout <i className="bi bi-arrow-right" />
+                {!hasExplicitRedirect || redirectTo.startsWith(ROUTES.checkout)
+                  ? 'Ir para checkout'
+                  : redirectTo.startsWith(ROUTES.downloads)
+                    ? 'Ir para Meus produtos'
+                    : 'Continuar'}{' '}
+                <i className="bi bi-arrow-right" />
               </Link>
             </div>
 
@@ -606,58 +722,39 @@ export function CustomerAuthPage() {
               </button>
             </div>
 
-            <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4">
-              <h3 className="text-sm font-bold text-rose-900">Excluir minha conta</h3>
-              <p className="mt-1 text-xs text-rose-700">
-                Remove seus dados pessoais (LGPD). Pedidos são mantidos de forma anonimizada para
-                fins fiscais. Ação irreversível.
-              </p>
-              <button
-                type="button"
-                onClick={handleRequestDeletion}
-                disabled={deleting || deleteRequested}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
-              >
-                <i className="bi bi-trash" /> {deleting ? 'Enviando…' : 'Excluir minha conta'}
-              </button>
-              {deleteRequested ? (
-                <p className="mt-2 text-xs font-semibold text-rose-700">
-                  Verifique seu e-mail para confirmar a exclusão.
+            {/* CROSS-16: a conta de administração não se exclui pela loja —
+                com um admin só, isso trancaria o painel. O backend recusa
+                também (handlers/me-delete-account.js). */}
+            {isAdminRole ? null : (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4">
+                <h3 className="text-sm font-bold text-rose-900">Excluir minha conta</h3>
+                <p className="mt-1 text-xs text-rose-700">
+                  Remove seus dados pessoais (LGPD). Pedidos são mantidos de forma anonimizada para
+                  fins fiscais. Ação irreversível.
                 </p>
-              ) : null}
-            </div>
+                <button
+                  type="button"
+                  onClick={handleRequestDeletion}
+                  disabled={deleting || deleteRequested}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+                >
+                  <i className="bi bi-trash" /> {deleting ? 'Enviando…' : 'Excluir minha conta'}
+                </button>
+                {deleteRequested ? (
+                  <p className="mt-2 text-xs font-semibold text-rose-700">
+                    Verifique seu e-mail para confirmar a exclusão.
+                  </p>
+                ) : null}
+              </div>
+            )}
           </div>
         ) : (
           <>
-            {/* Duas escolhas em sequência, e a ordem importa: primeiro QUEM
-                está entrando, depois o que vai fazer. O professor sai desta
-                tela — o login dele ainda é o antigo painel, com 2FA e sessão
-                próprios —, então a segunda escolha (Entrar/Cadastrar) só faz
-                sentido para o cliente e fica embaixo. */}
-            <div className="mb-4">
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Entrar como
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <span
-                  aria-current="page"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-brand-500 bg-brand-50 px-3 py-2.5 text-sm font-semibold text-brand-700"
-                >
-                  <i className="bi bi-person" aria-hidden="true" /> Cliente
-                </span>
-                <Link
-                  to={PROFESSOR_LOGIN_PATH}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
-                >
-                  <i className="bi bi-mortarboard" aria-hidden="true" /> Professor
-                </Link>
-              </div>
-            </div>
-
             {mode !== 'forgot' ? (
               <div className="mb-4 flex gap-1 rounded-lg bg-slate-100 p-1">
                 <button
                   type="button"
+                  aria-pressed={mode === 'login'}
                   onClick={() => changeMode('login')}
                   className={`flex-1 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
                     mode === 'login'
@@ -669,6 +766,7 @@ export function CustomerAuthPage() {
                 </button>
                 <button
                   type="button"
+                  aria-pressed={mode === 'register'}
                   onClick={() => changeMode('register')}
                   className={`flex-1 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
                     mode === 'register'

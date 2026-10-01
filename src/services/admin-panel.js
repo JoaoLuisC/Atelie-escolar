@@ -4,6 +4,12 @@ import { ERROR_CODES } from '../constants/error-codes';
 async function request(path, options = {}) {
   const { response, data } = await apiRequest(path, {
     credentials: 'include',
+    // Nada do painel passa pelo cache HTTP do navegador (ADM-01/ADM-24/CROSS-13
+    // da validação de 2026-10-01). O servidor já responde `no-store`, mas
+    // respostas antigas com `max-age=3600` podem continuar no cache de quem
+    // abriu o painel antes do deploy — e eram elas que reapareciam depois de
+    // salvar e depois do logout. O pedido `no-store` ignora o que estiver lá.
+    cache: 'no-store',
     ...options,
   });
 
@@ -125,11 +131,16 @@ export async function fetchAdminSetting(key) {
   return request(`/admin/settings?key=${encodeURIComponent(key)}`);
 }
 
-export async function saveAdminSetting({ key, value }) {
+/**
+ * `extra` leva campos que acompanham a escrita sem serem gravados — hoje,
+ * `confirmationCode` (código do 2FA vigente) e `totpVerificationCode` (código
+ * gerado a partir de um segredo TOTP novo). Ver handlers/admin/settings.js.
+ */
+export async function saveAdminSetting({ key, value, ...extra }) {
   return request('/admin/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key, value }),
+    body: JSON.stringify({ ...extra, key, value }),
   });
 }
 
@@ -166,6 +177,7 @@ export async function fetchAdminKpis({ window = 12 } = {}) {
 // 2. Faz PUT do arquivo direto pro Storage — bypassa limite de body
 //    do Express (1MB) e libera arquivos até o limite do bucket (10MB
 //    imagens / 50MB vídeos e downloads).
+// 3. Pede ao backend que confira o objeto gravado (action: 'confirm').
 // kind: 'image' | 'video' | 'download'
 // Retorna { url, bucket, path } — url é o que deve ser salvo em
 // products.image_url / videos[] / download_url.
@@ -214,6 +226,19 @@ export async function uploadProductAsset({ kind, file, onProgress }) {
     xhr.addEventListener('abort', () => reject(new Error('Upload cancelado.')));
     xhr.send(file);
   });
+
+  // 3. Confirmação pós-upload (ADM-29): o servidor lê o objeto REAL gravado e
+  // apaga o que violar a política do bucket. Sem esta chamada a camada 3 de
+  // handlers/admin/upload-url.js nunca rodava, embora o sign pedisse
+  // `confirmRequired`. Só a URL confirmada vai para o produto.
+  if (sign.confirmRequired) {
+    const confirmed = await request('/admin/upload-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'confirm', kind, path }),
+    });
+    return { url: confirmed.finalUrl || finalUrl, bucket, path };
+  }
 
   return { url: finalUrl, bucket, path };
 }

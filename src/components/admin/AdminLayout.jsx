@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { formatToday } from '../../utils/date';
@@ -107,12 +107,15 @@ NavItem.propTypes = {
 function NavGroup({ section, activeTab, onSelect }) {
   const containsActive = section.items.some((item) => item.id === activeTab);
   const [open, setOpen] = useState(containsActive);
+  const panelId = `admin-nav-${section.id}`;
 
   return (
     <div className="space-y-1">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={panelId}
         className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
       >
         <span className="flex items-center gap-3">
@@ -122,7 +125,7 @@ function NavGroup({ section, activeTab, onSelect }) {
         <i className={`bi bi-chevron-down text-xs transition ${open ? 'rotate-180' : ''}`} />
       </button>
       {open ? (
-        <div className="ml-2 flex flex-col gap-1 border-l border-slate-200 pl-3">
+        <div id={panelId} className="ml-2 flex flex-col gap-1 border-l border-slate-200 pl-3">
           {section.items.map((item) => (
             <NavItem
               key={item.id}
@@ -140,6 +143,7 @@ function NavGroup({ section, activeTab, onSelect }) {
 
 NavGroup.propTypes = {
   section: PropTypes.shape({
+    id: PropTypes.string.isRequired,
     items: PropTypes.arrayOf(PropTypes.shape({ id: PropTypes.string.isRequired })).isRequired,
     icon: PropTypes.string.isRequired,
     label: PropTypes.string.isRequired,
@@ -150,12 +154,26 @@ NavGroup.propTypes = {
 
 export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLogout, children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuButtonRef = useRef(null);
   const today = formatToday();
 
   function handleSelect(tabId) {
     onTabChange(tabId);
     setMobileMenuOpen(false);
   }
+
+  // Esc fecha o menu mobile e devolve o foco ao botão que o abriu (ADM-12).
+  useEffect(() => {
+    const doc = globalThis.document;
+    if (!mobileMenuOpen || !doc) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      setMobileMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    doc.addEventListener('keydown', onKeyDown);
+    return () => doc.removeEventListener('keydown', onKeyDown);
+  }, [mobileMenuOpen]);
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900">
@@ -168,9 +186,14 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
         />
       ) : null}
 
+      {/* Fechado no celular, o menu fica `invisible` (fora da ordem de Tab e da
+          árvore de acessibilidade): antes o Tab percorria "Ver loja" e os itens
+          em x=-276, fora da tela (ADM-12). No desktop, `lg:visible` o mantém. */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:sticky lg:top-0 lg:translate-x-0 ${
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        id="admin-sidebar"
+        aria-label="Menu do painel"
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:visible lg:sticky lg:top-0 lg:translate-x-0 ${
+          mobileMenuOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'
         } lg:flex`}
       >
         <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-5">
@@ -221,7 +244,9 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
           <div className="mb-3 flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2">
             <i className="bi bi-person-circle text-xl text-slate-400" />
             <div className="min-w-0">
-              <div className="truncate text-xs font-semibold text-slate-700">{userLabel}</div>
+              <div className="truncate text-xs font-semibold text-slate-700" title={userLabel}>
+                {userLabel}
+              </div>
               <div className="truncate text-[10px] uppercase tracking-wide text-slate-500">
                 Sessão admin
               </div>
@@ -242,10 +267,13 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
         <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
+              ref={menuButtonRef}
               type="button"
-              aria-label="Abrir menu"
-              onClick={() => setMobileMenuOpen(true)}
-              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+              aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="admin-sidebar"
+              onClick={() => setMobileMenuOpen((value) => !value)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
             >
               <i className="bi bi-list text-xl" />
             </button>

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { PROFESSOR_LOGIN_PATH, ROUTES } from '../constants/routes';
+import { ROUTES } from '../constants/routes';
+import { SEO } from '../components/SEO';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { AdminLayout } from '../components/admin/AdminLayout';
@@ -21,8 +21,11 @@ import {
 import {
   createAdminProduct,
   deleteAdminProduct,
+  fetchAdminProduct,
   updateAdminProduct,
 } from '../services/admin-products';
+import { getAdminSession } from '../services/admin-auth';
+import { friendlyAdminError } from '../components/admin/utils/errors';
 import {
   deriveAbcCurve,
   deriveApprovedOrders,
@@ -116,7 +119,6 @@ const EMPTY_DASHBOARD = {
 };
 
 export function AdminPage() {
-  const navigate = useNavigate();
   const { logoutAdmin, setAdminAuthenticated, adminAuthenticated } = useAuth();
   const { pushToast } = useToast();
   // Só em DEV: em produção a flag é inerte (ver ProtectedRoute).
@@ -133,9 +135,14 @@ export function AdminPage() {
   const [vitrineSaving, setVitrineSaving] = useState(false);
   const [adminConfig, setAdminConfig] = useState({});
   const [securitySaving, setSecuritySaving] = useState(false);
-  const [tabLoading, setTabLoading] = useState(false);
+  // Começa em `true`: com `false`, o 1º render montava a aba (que já dispara
+  // as próprias consultas, como /admin/kpis) e o efeito de carga a desmontava
+  // em seguida — KPIs pedidos 3–4 vezes por visita ao Dashboard (ADM-17).
+  const [tabLoading, setTabLoading] = useState(true);
   const [tabError, setTabError] = useState('');
+  const [tabReloadKey, setTabReloadKey] = useState(0);
   const [usersUpdatingId, setUsersUpdatingId] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
 
   const [orderDetail, setOrderDetail] = useState(null);
   const [productWizardOpen, setProductWizardOpen] = useState(false);
@@ -156,10 +163,45 @@ export function AdminPage() {
       if (isSessionError(error)) {
         onAuthExpired();
       }
-      pushToast(error?.message || fallback, 'error');
+      pushToast(friendlyAdminError(error, fallback), 'error');
     },
     [onAuthExpired, pushToast],
   );
+
+  // ── A sessão do servidor é a verdade, não o estado em memória ──────────
+  // O painel podia aparecer com sessão já encerrada: aba da loja aberta antes
+  // do logout ("Painel admin" sem F5, CROSS-13) e o botão Voltar restaurando a
+  // página do bfcache (ADM-41). Confere ao montar e a cada `pageshow`
+  // restaurado. Erro de rede aqui é ignorado: as consultas da aba tratam.
+  useEffect(() => {
+    if (allowAdminBypass) return undefined;
+    let cancelled = false;
+
+    async function verifySession() {
+      try {
+        const session = await getAdminSession();
+        if (cancelled) return;
+        if (!session.authenticated) {
+          onAuthExpired();
+          return;
+        }
+        setAdminEmail(session.email || '');
+      } catch {
+        /* sem rede: a carga da aba mostra o erro */
+      }
+    }
+
+    function onPageShow(event) {
+      if (event.persisted) verifySession();
+    }
+
+    verifySession();
+    globalThis.addEventListener?.('pageshow', onPageShow);
+    return () => {
+      cancelled = true;
+      globalThis.removeEventListener?.('pageshow', onPageShow);
+    };
+  }, [allowAdminBypass, onAuthExpired]);
 
   useEffect(() => {
     let cancelled = false;
@@ -203,7 +245,7 @@ export function AdminPage() {
           return;
         }
         if (isSessionError(error)) onAuthExpired();
-        setTabError(error?.message || 'Erro ao carregar dados da aba.');
+        setTabError(friendlyAdminError(error, 'Erro ao carregar dados da aba.'));
       } finally {
         if (!cancelled) setTabLoading(false);
       }
@@ -213,7 +255,7 @@ export function AdminPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, ordersFilter, allowAdminBypass, onAuthExpired]);
+  }, [activeTab, ordersFilter, allowAdminBypass, onAuthExpired, tabReloadKey]);
 
   // ── As 12 derivações só rodam para as abas que as consomem (§1.3) ──
   // Elas percorrem TODOS os pedidos aprovados e TODOS os produtos, e rodavam a
@@ -285,14 +327,22 @@ export function AdminPage() {
     }
   }
 
+  // Sem redirect: com a sessão encerrada, o ProtectedRoute mostra o login na própria /admin.
   async function onLogout() {
     try {
       await logoutAdmin();
       pushToast('Sessão administrativa encerrada.', 'info');
     } catch (error) {
-      pushToast(error?.message || 'Erro ao encerrar sessão.', 'error');
-    } finally {
-      navigate(ROUTES.login, { replace: true });
+      // O painel continua na tela porque a sessão CONTINUA aberta — e isso
+      // precisa ser dito. Antes saía só "Failed to fetch" (ADM-06), e num
+      // computador compartilhado a pessoa ia embora achando que tinha saído.
+      pushToast(
+        `Não foi possível encerrar a sessão: ela continua ATIVA neste navegador. ${friendlyAdminError(
+          error,
+          'Tente de novo.',
+        )}`,
+        'error',
+      );
     }
   }
 
@@ -301,9 +351,18 @@ export function AdminPage() {
     setProductWizardOpen(true);
   }
 
-  function openEditProduct(product) {
-    setEditingProduct(product);
-    setProductWizardOpen(true);
+  // Edição parte do produto COMPLETO (ADM-23 / CROSS-02). A linha da lista
+  // vem do /admin/dashboard, resumida: sem galeria, preço original, tipo, FAQ,
+  // benefícios e depoimentos — e o PUT regravava tudo isso vazio. Sem o
+  // produto completo o wizard não abre: abrir com dado parcial é o que apagava.
+  async function openEditProduct(product) {
+    try {
+      const fullProduct = await fetchAdminProduct(product.id);
+      setEditingProduct(fullProduct);
+      setProductWizardOpen(true);
+    } catch (error) {
+      handleAdminError(error, 'Erro ao carregar o produto para edição.');
+    }
   }
 
   function closeProductWizard() {
@@ -316,6 +375,7 @@ export function AdminPage() {
       const images = (product.images || []).map((url) => String(url || '').trim()).filter(Boolean);
       const videos = (product.videos || []).map((url) => String(url || '').trim()).filter(Boolean);
 
+      const productType = product.productType || 'individual';
       const payload = {
         id: product.id || undefined,
         name: product.name,
@@ -327,13 +387,17 @@ export function AdminPage() {
         videos,
         downloadUrl: product.downloadUrl,
         categoryId: product.category,
-        productType: product.productType || 'individual',
-        active: product.active !== false,
+        productType,
+        isKit: productType === 'kit',
         featured: product.featured === true,
         faq: Array.isArray(product.faq) ? product.faq : [],
         reviews: Array.isArray(product.reviews) ? product.reviews : [],
         benefits: Array.isArray(product.benefits) ? product.benefits : [],
       };
+      // `active` só na criação. Na edição ele fica de fora e o servidor
+      // preserva o gravado: mandar `true` aqui REATIVAVA o produto pausado a
+      // cada "Salvar" (ADM-23). Pausar/ativar é o botão da lista.
+      if (!payload.id) payload.active = true;
 
       if (payload.id) {
         await updateAdminProduct(payload);
@@ -409,9 +473,28 @@ export function AdminPage() {
   }
 
   async function handleDeleteCategory(category) {
+    // A confirmação diz o que acontece depois (ADM-31): os produtos ficam sem
+    // categoria e a seção da página inicial ligada a ela some.
+    const id = String(category.id);
+    const productCount = (dashboardData.products || []).filter(
+      (product) => String(product.categoryId || '') === id,
+    ).length;
+    const sectionCount = (dashboardData.settings?.homeSections?.sections || []).filter(
+      (section) => section?.type === 'category' && String(section?.categoryId || '') === id,
+    ).length;
+    const consequencias = [
+      productCount > 0
+        ? `${productCount} ${productCount === 1 ? 'produto ficará' : 'produtos ficarão'} "Sem categoria".`
+        : 'Nenhum produto usa esta categoria.',
+      sectionCount > 0
+        ? `A página inicial perde ${sectionCount === 1 ? 'a seção ligada' : `${sectionCount} seções ligadas`} a ela.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
     if (
       typeof globalThis.window !== 'undefined' &&
-      !globalThis.window.confirm?.(`Excluir a categoria "${category.name}"?`)
+      !globalThis.window.confirm?.(`Excluir a categoria "${category.name}"?\n\n${consequencias}`)
     ) {
       return;
     }
@@ -465,17 +548,22 @@ export function AdminPage() {
     }
   }
 
-  async function handleSecuritySave(nextConfig) {
+  // `extras` = códigos que acompanham a escrita sem serem gravados
+  // (`confirmationCode`, `totpVerificationCode`). Devolve se salvou, para a aba
+  // só limpar os campos digitados no sucesso.
+  async function handleSecuritySave(nextConfig, extras = {}) {
     try {
       setSecuritySaving(true);
-      await saveAdminSetting({ key: 'adminConfig', value: nextConfig });
+      await saveAdminSetting({ key: 'adminConfig', value: nextConfig, ...extras });
       // Re-busca para refletir as flags redigidas (has2FA/hasPin) sem manter
       // segredos no estado do cliente.
       const fresh = await fetchAdminSetting('adminConfig');
       setAdminConfig(fresh?.value || {});
       pushToast('Configurações de segurança salvas.', 'success');
+      return true;
     } catch (error) {
       handleAdminError(error, 'Erro ao salvar configurações.');
+      return false;
     } finally {
       setSecuritySaving(false);
     }
@@ -484,9 +572,19 @@ export function AdminPage() {
   function renderActiveTab() {
     if (tabError) {
       return (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-10 text-center text-sm text-rose-700">
+        <div
+          role="alert"
+          className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-10 text-center text-sm text-rose-700"
+        >
           <i className="bi bi-exclamation-triangle text-2xl" />
           <p className="font-semibold">{tabError}</p>
+          <button
+            type="button"
+            onClick={() => setTabReloadKey((n) => n + 1)}
+            className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+          >
+            <i className="bi bi-arrow-clockwise" /> Tentar de novo
+          </button>
         </div>
       );
     }
@@ -590,11 +688,13 @@ export function AdminPage() {
 
   return (
     <>
+      {/* Título próprio e noindex/nofollow: o painel não é página para buscador (LOJA-26). */}
+      <SEO title="Painel administrativo" pathname={ROUTES.admin} noindex />
       <AdminLayout
         activeTab={activeTab}
         onTabChange={setActiveTab}
         pageTitle={pageTitle}
-        userLabel="Administrador"
+        userLabel={adminEmail || 'Administrador'}
         onLogout={onLogout}
       >
         {showBypassBanner ? (
@@ -607,7 +707,7 @@ export function AdminPage() {
               <p className="mt-0.5 text-amber-800">
                 O painel abre sem login, mas as APIs exigem sessão: por isso o Dashboard fica vazio
                 e abas como Segmentos, Cupons e Usuários mostram “sessão expirada”.{' '}
-                <a href={PROFESSOR_LOGIN_PATH} className="font-semibold underline">
+                <a href={`${ROUTES.admin}?login`} className="font-semibold underline">
                   Faça login
                 </a>{' '}
                 para carregar os dados.

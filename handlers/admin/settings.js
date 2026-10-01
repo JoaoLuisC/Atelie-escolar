@@ -9,6 +9,7 @@ const {
   ok,
   guardMethod,
   setAdminCorsHeaders,
+  setCachePolicy,
 } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 
@@ -30,6 +31,7 @@ const {
   hashPin,
   decryptSecret,
   isHashedPin,
+  matchTotpCounter,
   verifyPin,
 } = require('../../lib/admin-2fa');
 
@@ -546,11 +548,52 @@ async function prepareAdminConfigWrite(req, res, incoming) {
     }
   }
 
+  // ── Trava contra trancar o admin fora (ADM-38) ────────────────────────
+  // Ligar o 2FA sem nenhum método utilizável gravava uma config em que o login
+  // responde 500 ("2FA ativado sem método configurado") — e a única saída era
+  // SQL. A aba Segurança chegou a abrir com "Exigir 2FA" marcado e adminConfig
+  // vazio, a um clique disso. Vale para qualquer cliente, não só o painel.
+  if (
+    isSecondFactorRequired(sanitized.value) &&
+    extractSecondFactorMethods(sanitized.value).length === 0
+  ) {
+    return {
+      error: {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_FAILED,
+        message:
+          'Não é possível exigir 2FA sem um método configurado: cadastre o segredo TOTP (ou o PIN de recuperação) antes de ativar.',
+      },
+    };
+  }
+
+  // ── Segredo TOTP novo só entra provado ─────────────────────────────────
+  // Um segredo digitado com um caractere trocado é Base32 válido, passa no
+  // coercer e só falha na hora do login — com o 2FA já exigido. Exigir um
+  // código gerado pelo app A PARTIR DO SEGREDO NOVO prova que app e servidor
+  // estão em acordo antes de o segredo valer. É outro código, distinto do
+  // `confirmationCode` (que prova posse do fator VIGENTE).
+  const newTotp = sanitized.value.totpSecret;
+  if (newTotp && !sameSecret('totpSecret', existingConfig.totpSecret, newTotp)) {
+    if (matchTotpCounter(newTotp, req.body?.totpVerificationCode) === null) {
+      return {
+        error: {
+          status: 400,
+          code: ERROR_CODES.VALIDATION_FAILED,
+          message:
+            'Confirme o novo segredo TOTP: informe em "totpVerificationCode" o código de 6 dígitos que o app autenticador gerou com ele.',
+        },
+      };
+    }
+  }
+
   return { value: sanitized.value, ignored: sanitized.ignored };
 }
 
 module.exports = async function adminSettingsHandler(req, res) {
   setAdminCorsHeaders(req, res);
+  // Nenhuma resposta admin vai para o cache do navegador (ADM-01/ADM-41).
+  setCachePolicy(res, 'adminReport');
   if (guardMethod(req, res, ['GET', 'PUT'])) return;
   if (!ensureAdminSession(req, res)) return;
 
