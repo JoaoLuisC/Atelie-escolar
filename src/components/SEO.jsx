@@ -5,11 +5,10 @@ const DEFAULT_SITE_NAME = 'Ateliê da Escola';
 const DEFAULT_DESCRIPTION =
   'Materiais educativos digitais para professores: banners, painéis e atividades pedagógicas em PDF, com download imediato após pagamento aprovado.';
 // LOJA-24: o padrão era `/favicon.svg`, e as redes sociais não aceitam SVG em
-// og:image — o card saía sem imagem do mesmo jeito, só que declarando uma.
-// Sem um PNG/JPG próprio (1200×630) versionado em public/, páginas sem imagem
-// não emitem og:image (o Twitter Card cai para `summary`). Páginas com imagem
-// própria (ex.: produto) continuam passando a delas via prop.
-const DEFAULT_IMAGE = null;
+// og:image. Agora há um PNG 1200×630 versionado em public/ (gerado em
+// 08/10/2026: marca + mascote + tagline). Páginas com imagem própria (ex.:
+// produto) continuam passando a delas via prop.
+const DEFAULT_IMAGE = '/og-default.png';
 
 function readBaseUrl() {
   try {
@@ -73,7 +72,13 @@ export function SEO({
 
   return (
     <>
-      <Helmet>
+      {/* `defer={false}`: por padrão o Helmet aplica as tags dentro de um
+          requestAnimationFrame, que o navegador NÃO roda em aba oculta — a
+          página ficava com o <title> do index.html e sem meta description até
+          a aba voltar ao primeiro plano (ACH-05 de 05/10; o mesmo artefato já
+          tinha aparecido no relatório 1A de 01/10). Aplicar no commit custa
+          nada aqui: são uma dúzia de tags por navegação. */}
+      <Helmet defer={false}>
         <title>{fullTitle}</title>
         <meta name="description" content={description} />
         <link rel="canonical" href={canonical} />

@@ -70,9 +70,11 @@ O detalhe de cada verificação está em
 
 Setar nos dois lugares: `.env.local` (dev) + Vercel Environment Variables (prod, Production env).
 
-### 2.2 `og-default.png` (1200×630)
+### 2.2 `og-default.png` (1200×630) — ✅ ENTREGUE (08/10/2026)
 
-[`src/components/SEO.jsx`](../../src/components/SEO.jsx) **não referencia mais** o `og-default.png` inexistente — a referência quebrada foi corrigida e o fallback atual (`DEFAULT_IMAGE`) é `/favicon.svg`, que existe em `public/`. Pendência de polimento: criar imagem OG real com marca + logo + tagline, salvar em `public/og-default.png`, apontar `DEFAULT_IMAGE` para ela (SVG não renderiza como preview na maioria das redes) e validar em [opengraph.xyz](https://www.opengraph.xyz/) após deploy.
+`public/og-default.png` existe (marca + mascote + tagline, 59 kB) e `DEFAULT_IMAGE` em
+[`src/components/SEO.jsx`](../../src/components/SEO.jsx) aponta para ela. Resta só validar o
+preview em [opengraph.xyz](https://www.opengraph.xyz/) após o deploy (§6).
 
 ### 2.3 APP_URL canônica no Vercel
 
@@ -321,15 +323,52 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 
 ---
 
-## Próximo passo concreto
+## Próximo passo concreto — checklist de fechamento (08/10/2026)
 
-**Fases 0-4 estão com código pronto.** Bloqueio agora é operacional:
+**Fases 0-4 estão com código pronto, migrations aplicadas (§1) e os fluxos de escrita validados
+ponta a ponta** (`docs/validacao/RELATORIO-FLUXOS-2026-10-05.md`, achados corrigidos em 08/10).
+O que falta é operacional. Marque aqui mesmo:
 
-1. ⏳ Aplicar as 18 migrations no Supabase — 15 min (§1; aplicação em prod não confirmada)
-2. ⏳ Plugar credenciais grátis (GA4 ID, Pixel ID, `CRON_SECRET`, Resend já está) — 1-2h
-3. ⏳ Autenticar domínio no Resend (DNS — propagação até 24h)
-4. ⏳ Criar `public/og-default.png` 1200×630 — 30 min
-5. ⏳ Validar Lighthouse no preview Vercel (se SEO < 95, decidir sobre prerender)
-6. ⏳ Submeter sitemap no Search Console
+### A. Fechar a rodada de 05/10 (≈1h)
 
-**Próximo trabalho de produto:** Fase 5 (mídia paga) — 💵 só quando dados justificarem (gatilho: 30+ dias de funil rastreado + 50+ pedidos + ROAS orgânico ≥ 3x).
+- [ ] Conferir `check_valid_role` em produção
+      (`select pg_get_constraintdef(oid) from pg_constraint where conname = 'check_valid_role';`)
+      e ajustar `20261008000001_profiles_role_check.sql` se houver papéis além de
+      CUSTOMER/SELLER/ADMIN/MASTER
+- [ ] `npm run supabase:db:push` — aplica `20261008000000_coupon_usage_release` (ACH-03) e
+      `20261008000001_profiles_role_check` (ACH-02); confirmar no SQL Editor
+      `select jobname from cron.job where jobname = 'release-stale-coupon-reservations';`
+- [ ] Revalidar no navegador, com a aba visível: título da página de produto (ACH-05) e
+      trocar papel para "Vendedor" (ACH-02)
+- [ ] Decidir o produto "teste" de R$ 123,00 (ACH-09) e apagar/anonimizar os 3 pedidos de teste
+      que somam na receita do painel (`teste-qa@example.com`, `teste-qa-pago@example.com`)
+
+### B. Credenciais (≈1-2h, custo zero)
+
+- [ ] `CRON_SECRET` no Vercel **e** no GitHub + `APP_URL` no GitHub → rodar o workflow "Email
+      cron" à mão e ver 200 (§2.5)
+- [ ] `VITE_GA4_ID` e `VITE_META_PIXEL_ID` no `.env.local` e no Vercel (§2.1)
+- [ ] `APP_URL=https://profamarciarcardoso.com.br` no Vercel (§2.3)
+- [ ] Cupom `VOLTEI15` criado pela aba Cupons (§2.6)
+- [ ] URL de produção no `uri_allow_list` do Supabase Auth para o Google OAuth do cliente
+      (`scripts/configure-auth.js`, §3.5)
+
+### C. Domínio no Resend — **o único item que bloqueia funcionalidade real** (DNS até 24h)
+
+- [ ] SPF + DKIM + DMARC criados no DNS (§2.4) — começar cedo por causa da propagação
+- [ ] `SMTP_FROM` trocado no `.env.local`, no Vercel e no SMTP do Supabase Auth
+- [ ] mail-tester.com ≥ 9/10
+
+### D. Validação final em produção (§6)
+
+- [ ] Checklist das Fases 0-4 em §6 marcado
+- [ ] Preview OG em opengraph.xyz (§2.2)
+- [ ] Sitemap submetido no Search Console (§2.7)
+- [ ] Lighthouse mobile: Performance ≥ 90, SEO ≥ 95 — **se SEO < 95, e só então**, reabrir §3.1
+      (prerender)
+
+### Fora do escopo de "finalizar" (evolução)
+
+§3.7 (login admin com Google), §3.10 (cards de região/funil no Dashboard), §3.3 (Lighthouse CI
+App), Fase 5 (mídia paga — gatilho: 30+ dias de funil + 50+ pedidos + ROAS orgânico ≥ 3x) e
+Fase 6.

@@ -47,6 +47,14 @@ function TrendBadge({ trend, pct }) {
       </span>
     );
   }
+  if (trend === 'new') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+        <i className="bi bi-stars" />
+        Novo
+      </span>
+    );
+  }
   const isUp = trend === 'up';
   return (
     <span
@@ -61,7 +69,7 @@ function TrendBadge({ trend, pct }) {
 }
 
 TrendBadge.propTypes = {
-  trend: PropTypes.oneOf(['up', 'down', 'stable']),
+  trend: PropTypes.oneOf(['up', 'down', 'stable', 'new']),
   pct: PropTypes.number,
 };
 

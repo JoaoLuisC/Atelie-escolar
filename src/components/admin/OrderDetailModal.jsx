@@ -157,6 +157,19 @@ export function OrderDetailModal({ order, onClose }) {
                   </span>
                 </li>
               ))}
+              {/* Os itens guardam o preço CHEIO (create-payment.js grava o
+                  original, para a Curva ABC); sem esta linha, "1 × R$ 12,90"
+                  com total R$ 11,61 parecia erro de soma (ACH-06 de 05/10). */}
+              {order.discountAmount > 0 ? (
+                <li className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <span className="truncate text-emerald-700">
+                    Desconto{order.couponCode ? ` (cupom ${order.couponCode})` : ''}
+                  </span>
+                  <span className="shrink-0 font-medium text-emerald-700">
+                    − {formatPrice(order.discountAmount)}
+                  </span>
+                </li>
+              ) : null}
             </ul>
           )}
         </div>
@@ -173,6 +186,8 @@ OrderDetailModal.propTypes = {
     customerEmail: PropTypes.string,
     paymentStatus: PropTypes.string,
     totalAmount: PropTypes.number,
+    couponCode: PropTypes.string,
+    discountAmount: PropTypes.number,
     createdAt: PropTypes.string,
     items: PropTypes.array,
   }),

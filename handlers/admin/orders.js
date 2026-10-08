@@ -33,7 +33,7 @@ async function listOrders(statusFilter) {
   const [ordersRows, itemRows] = await Promise.all([
     listTableRows('orders', {
       select:
-        'id,order_code,customer_name,customer_email,total_amount,status,payment_status,created_at,completed_at',
+        'id,order_code,customer_name,customer_email,total_amount,coupon_code,discount_amount,status,payment_status,created_at,completed_at',
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -63,6 +63,8 @@ async function listOrders(statusFilter) {
     customerName: row.customer_name,
     customerEmail: row.customer_email,
     totalAmount: Number(row.total_amount || 0),
+    couponCode: row.coupon_code || null,
+    discountAmount: Number(row.discount_amount || 0),
     status: row.status,
     paymentStatus: row.payment_status,
     createdAt: row.created_at,

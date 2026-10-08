@@ -99,7 +99,12 @@ function pagamentoAprovado(overrides = {}) {
   };
 }
 
-function arrange({ order = pedidoPendente(), tokens = [], items = ORDER_ITEMS } = {}) {
+function arrange({
+  order = pedidoPendente(),
+  tokens = [],
+  items = ORDER_ITEMS,
+  searchResults = [pagamentoAprovado()],
+} = {}) {
   const store = createSupabaseStore({
     orders: [order],
     order_items: items,
@@ -118,7 +123,7 @@ function arrange({ order = pedidoPendente(), tokens = [], items = ORDER_ITEMS } 
     validateWebhookSignature: vi.fn(() => true),
     inspectWebhookSignature: vi.fn(() => ({ valid: true, reason: null })),
   });
-  installMercadoPagoSdkMock({ searchResults: [pagamentoAprovado()] });
+  installMercadoPagoSdkMock({ searchResults });
 
   return { store, handler: loadHandler('../verify-payment.js') };
 }
@@ -190,8 +195,8 @@ describe('createTokensForOrder — lote com ignore-duplicates (§2.3.a)', () => 
           order_id: ORDER_ID,
           product_id: 'p1',
           product_name: 'Kit de Atividades',
-          used: true,
-          used_at: '2026-08-12T10:10:00.000Z',
+          used: false,
+          used_at: null,
           expires_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
           created_at: '2026-08-12T10:05:00.000Z',
         },
@@ -205,8 +210,9 @@ describe('createTokensForOrder — lote com ignore-duplicates (§2.3.a)', () => 
 
     const [linha] = store.rows('download_tokens');
     expect(linha.token).toBe(TOKEN_DO_WEBHOOK);
-    expect(linha.used).toBe(true);
+    expect(linha.used).toBe(false);
     expect(res.body.order.downloadTokens[0].token).toBe(TOKEN_DO_WEBHOOK);
+    expect(res.body.order.downloadTokens[0].available).toBe(true);
   });
 
   it('devolve o conjunto PERSISTIDO, não o que acabou de ser gerado', async () => {
@@ -221,6 +227,125 @@ describe('createTokensForOrder — lote com ignore-duplicates (§2.3.a)', () => 
     const persistidos = store.rows('download_tokens').map((linha) => linha.token);
     const respondidos = res.body.order.downloadTokens.map((t) => t.token);
     expect(respondidos.sort()).toEqual(persistidos.sort());
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// ACH-01 (validação de 05/10) — "Atualizar" gera link novo para o gasto.
+//
+// A tela promete: "se o link já tiver sido usado, clique em Atualizar para
+// gerar novos links". Antes, o token usado voltava igual e o botão "Baixar"
+// levava a 401. Agora, para pedido APROVADO, o token usado ou expirado é
+// trocado por outro — até o teto de downloads por item, contado em
+// `download_logs`.
+// ════════════════════════════════════════════════════════════════════
+describe('reemissão de link gasto (ACH-01)', () => {
+  const ambienteOriginal = {};
+
+  beforeEach(() => {
+    for (const key of ['APP_ENV', 'NODE_ENV', 'MERCADOPAGO_ACCESS_TOKEN']) {
+      ambienteOriginal[key] = process.env[key];
+    }
+    process.env.APP_ENV = 'test';
+    process.env.NODE_ENV = 'test';
+    process.env.MERCADOPAGO_ACCESS_TOKEN = 'TEST-access-token';
+    resetModuleRegistry();
+  });
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(ambienteOriginal)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    resetModuleRegistry();
+    vi.restoreAllMocks();
+  });
+
+  function tokenGasto(overrides = {}) {
+    return {
+      token: TOKEN_DO_WEBHOOK,
+      order_id: ORDER_ID,
+      product_id: 'p1',
+      product_name: 'Kit de Atividades',
+      used: true,
+      used_at: '2026-08-12T10:10:00.000Z',
+      expires_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
+      created_at: '2026-08-12T10:05:00.000Z',
+      ...overrides,
+    };
+  }
+
+  function pedidoAprovado() {
+    return pedidoPendente({ status: 'completed', payment_status: 'approved' });
+  }
+
+  function downloads(n) {
+    return Array.from({ length: n }, (_, i) => ({
+      id: `log-${i}`,
+      order_id: ORDER_ID,
+      product_id: 'p1',
+    }));
+  }
+
+  it('token USADO de pedido aprovado vira link novo, válido e de uso único', async () => {
+    const { store, handler } = arrange({ order: pedidoAprovado(), tokens: [tokenGasto()] });
+    store.state.download_logs.push(...downloads(1));
+
+    const res = createMockRes();
+    await handler(verifyRequest(), res);
+
+    const [linha] = store.rows('download_tokens');
+    expect(linha.token).not.toBe(TOKEN_DO_WEBHOOK);
+    expect(linha.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(linha.used).toBe(false);
+    expect(new Date(linha.expires_at).getTime()).toBeGreaterThan(Date.now());
+
+    const [respondido] = res.body.order.downloadTokens;
+    expect(respondido.token).toBe(linha.token);
+    expect(respondido.available).toBe(true);
+  });
+
+  it('token EXPIRADO também é reemitido', async () => {
+    const { store, handler } = arrange({
+      order: pedidoAprovado(),
+      tokens: [
+        tokenGasto({
+          used: false,
+          used_at: null,
+          expires_at: new Date(Date.now() - 3600_000).toISOString(),
+        }),
+      ],
+    });
+
+    const res = createMockRes();
+    await handler(verifyRequest(), res);
+
+    expect(store.rows('download_tokens')[0].token).not.toBe(TOKEN_DO_WEBHOOK);
+    expect(res.body.order.downloadTokens[0].available).toBe(true);
+  });
+
+  it('no teto de downloads do item, NÃO reemite e marca o link como indisponível', async () => {
+    const { store, handler } = arrange({ order: pedidoAprovado(), tokens: [tokenGasto()] });
+    store.state.download_logs.push(...downloads(5));
+
+    const res = createMockRes();
+    await handler(verifyRequest(), res);
+
+    const [linha] = store.rows('download_tokens');
+    expect(linha.token).toBe(TOKEN_DO_WEBHOOK);
+    expect(linha.used).toBe(true);
+    expect(res.body.order.downloadTokens[0].available).toBe(false);
+  });
+
+  it('pedido NÃO aprovado nunca ganha link novo', async () => {
+    // Sem pagamento aprovado no MP: o pedido continua pendente.
+    const { store, handler } = arrange({ tokens: [tokenGasto()], searchResults: [] });
+
+    const res = createMockRes();
+    await handler(verifyRequest(), res);
+
+    expect(res.body.order.paymentStatus).toBe('pending');
+    expect(store.rows('download_tokens')[0].token).toBe(TOKEN_DO_WEBHOOK);
   });
 });
 

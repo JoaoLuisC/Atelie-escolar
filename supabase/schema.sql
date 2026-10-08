@@ -94,6 +94,7 @@ create table if not exists public.orders (
   attribution_data jsonb not null default '{}'::jsonb,  -- migration phase0
   coupon_code text,                                     -- migration phase2_conversion
   discount_amount numeric(12,2) not null default 0,     -- migration phase2_conversion
+  coupon_released_at timestamptz,                       -- migration 20261008000000_coupon_usage_release
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   completed_at timestamptz
@@ -115,7 +116,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
   display_name text not null default '',
-  role text not null default 'CUSTOMER',                -- CUSTOMER | ADMIN | MASTER
+  role text not null default 'CUSTOMER',                -- CUSTOMER | SELLER | ADMIN | MASTER (check_valid_role)
   provider text not null default 'email',               -- email | google | etc.
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

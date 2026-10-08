@@ -289,8 +289,10 @@ module.exports = async function createPaymentHandler(req, res) {
         // Antes esta chamada acontecia DEPOIS de criar o pedido e o retorno era
         // descartado num catch — então um cupom esgotado seguia concedendo
         // desconto indefinidamente (max_uses era decorativo sob concorrência).
-        // Se o pedido falhar mais adiante, perdemos um uso do cupom: erramos
-        // para o lado de contar demais, nunca de conceder de graça.
+        // Se o pedido não virar pagamento, o uso volta sozinho depois de 2h
+        // (release_stale_coupon_reservations, migration 20261008000000) — e é
+        // recontado se o pagamento chegar tarde. Até lá erramos para o lado de
+        // contar demais, nunca de conceder de graça.
         if (!restricted || eligibleSubtotalCents > 0) {
           const usageClaimed = await claimCouponUsage(coupon.id);
           if (usageClaimed) {

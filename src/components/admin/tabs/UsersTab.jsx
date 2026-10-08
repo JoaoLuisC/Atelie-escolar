@@ -60,7 +60,8 @@ function ConfirmRevokeDialog({ user, onCancel, onConfirm, busy }) {
           Revogar acesso?
         </h3>
         <p className="mt-2 text-sm text-slate-600">
-          Isto removerá <strong>{nome}</strong> da tabela de perfis.
+          <strong>{nome}</strong> não conseguirá mais entrar na conta e sai desta lista. Os pedidos
+          e downloads já comprados continuam registrados.
         </p>
         <div className="mt-5 flex items-center justify-end gap-2">
           <Button variant="secondary" onClick={onCancel}>

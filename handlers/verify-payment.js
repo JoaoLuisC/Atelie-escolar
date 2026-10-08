@@ -177,7 +177,7 @@ async function createTokensForOrder(order, items) {
         product_id: item.product_id,
         product_name: item.product_name,
         used: false,
-        expires_at: new Date(agora + 72 * 60 * 60 * 1000).toISOString(),
+        expires_at: new Date(agora + TOKEN_TTL_MS).toISOString(),
         created_at: new Date(agora).toISOString(),
       })),
       'order_id,product_id',
@@ -188,14 +188,90 @@ async function createTokensForOrder(order, items) {
   // Devolve o conjunto canônico efetivamente persistido (cobre a corrida): com
   // `ignore-duplicates` o token que vale pode ser o do webhook, não o que
   // acabamos de gerar.
-  return mapTokenRows(await loadDownloadTokens(order.id));
+  return loadDownloadTokens(order.id);
 }
 
+// ════════════════════════════════════════════════════════════════════
+// REEMISSÃO DE LINK GASTO (ACH-01 do relatório de 05/10).
+//
+// A tela de downloads promete "se o link já tiver sido usado, clique em
+// Atualizar para gerar novos links", mas nada reemitia: o token usado voltava
+// igual, com o botão "Baixar" ativo para um link morto. Quem pagou baixava UMA
+// vez — e um download interrompido no navegador virava chamado de suporte.
+//
+// Agora, para pedido APROVADO, quem prova a posse (order_code + e-mail, mesma
+// prova que já dá acesso aos tokens nesta resposta) recebe link novo no lugar
+// do usado ou expirado. O uso único continua valendo por link: o token vazado
+// em log segue queimado, porque a linha passa a ter OUTRO token.
+//
+// O teto por item é o que impede o par order_code + e-mail de virar link
+// permanente de distribuição. Conta em `download_logs`, que é best-effort (ver
+// handlers/download.js) — então o teto é frouxo para cima, nunca para baixo:
+// uma linha de log perdida dá ao comprador um download a mais, não a menos.
+// ════════════════════════════════════════════════════════════════════
+const MAX_DOWNLOADS_PER_ITEM = 5;
+const TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
+
+function isTokenSpent(row, now) {
+  if (row.used === true) return true;
+  return Boolean(row.expires_at) && new Date(row.expires_at).getTime() < now;
+}
+
+async function countDownloadsByProduct(orderInternalId) {
+  const logs = await listTableRows('download_logs', {
+    select: 'product_id',
+    filters: [{ column: 'order_id', value: orderInternalId }],
+  });
+  const counts = new Map();
+  for (const entry of logs || []) {
+    const key = String(entry.product_id);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
+}
+
+async function reissueSpentTokens(order, rows) {
+  const now = Date.now();
+  const spent = rows.filter((row) => isTokenSpent(row, now));
+  if (!spent.length) return rows;
+
+  const downloads = await countDownloadsByProduct(order.id);
+  const reissuable = spent.filter(
+    (row) => (downloads.get(String(row.product_id)) || 0) < MAX_DOWNLOADS_PER_ITEM,
+  );
+  if (!reissuable.length) return rows;
+
+  // Condicionado no token ANTIGO: dois "Atualizar" simultâneos não geram dois
+  // links válidos — o segundo UPDATE não acha mais a linha e afeta 0 linhas.
+  await Promise.all(
+    reissuable.map((row) =>
+      updateTable(
+        'download_tokens',
+        { token: `eq.${row.token}` },
+        {
+          token: crypto.randomBytes(32).toString('hex'),
+          used: false,
+          used_at: null,
+          expires_at: new Date(now + TOKEN_TTL_MS).toISOString(),
+        },
+      ),
+    ),
+  );
+
+  return loadDownloadTokens(order.id);
+}
+
+// `available: false` só sobra quando o item bateu no teto de downloads (ou a
+// reemissão falhou): a tela troca o "Baixar" por um aviso em vez de oferecer
+// um link que vai dar 401.
 function mapTokenRows(rows) {
+  const now = Date.now();
   return rows.map((token) => ({
     productId: String(token.product_id),
     productName: token.product_name,
     token: token.token,
+    expiresAt: token.expires_at || null,
+    available: !isTokenSpent(token, now),
   }));
 }
 
@@ -293,8 +369,8 @@ async function refreshApprovedOrderData(order, orderId, req) {
     //    pode ter vencido a corrida). Emitir de novo seria credencial extra.
     const orderItems = await loadOrderItems(order.id);
     const existingTokens = await loadDownloadTokens(order.id);
-    const downloadTokens = existingTokens.length
-      ? mapTokenRows(existingTokens)
+    const downloadTokenRows = existingTokens.length
+      ? existingTokens
       : await createTokensForOrder(order, orderItems);
 
     // 3. PROVISIONAMENTO — só na primeira aprovação, igual ao webhook. Antes
@@ -322,7 +398,7 @@ async function refreshApprovedOrderData(order, orderId, req) {
     return {
       ...order,
       ...persisted,
-      downloadTokens,
+      downloadTokenRows,
       // Reaproveitado no handler para não recarregar order_items na mesma chamada.
       orderItems,
     };
@@ -416,8 +492,12 @@ module.exports = async function verifyPaymentHandler(req, res) {
     }
 
     const orderData = await refreshApprovedOrderData(order, orderId, req);
-    const downloadTokens =
-      orderData.downloadTokens || mapTokenRows(await loadDownloadTokens(order.id));
+    const tokenRows = orderData.downloadTokenRows || (await loadDownloadTokens(order.id));
+    const downloadTokens = mapTokenRows(
+      orderData.payment_status === 'approved'
+        ? await reissueSpentTokens(order, tokenRows)
+        : tokenRows,
+    );
 
     // Reaproveita os itens já carregados no refresh (quando houve); só recarrega
     // se a chamada não passou pelo caminho que os buscou.

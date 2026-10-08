@@ -4,6 +4,14 @@ import { formatPercent } from '../../../utils/number';
 import { Card } from '../ui/Card';
 
 function DeltaBadge({ trend, pct }) {
+  if (trend === 'new') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-bold text-emerald-700 ring-1 ring-emerald-200">
+        <i className="bi bi-stars" />
+        Novo
+      </span>
+    );
+  }
   if (trend === 'up') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-bold text-emerald-700 ring-1 ring-emerald-200">

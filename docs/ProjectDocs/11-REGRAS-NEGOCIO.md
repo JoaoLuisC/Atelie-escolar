@@ -326,9 +326,11 @@ Polling em `CheckoutPage.jsx` e `DownloadsPage.jsx` existe para cobrir webhook q
 
 Nunca expor URL direta do arquivo. Sempre token de **uso único** com TTL e validação (claim atômico `used=false→true`); arquivo entregue via signed URL do Supabase Storage (5 min) ou redirect legado. Tabelas `download_tokens` e `download_logs`.
 
+Link gasto (usado ou expirado) de pedido **aprovado** é reemitido pelo `verify-payment` quando o comprador clica em "Atualizar" em /downloads (prova de posse: `order_code` + e-mail). Teto de **5 downloads por item**, contado em `download_logs` (`MAX_DOWNLOADS_PER_ITEM` em `handlers/verify-payment.js`); no teto, a tela troca "Baixar" por "fale conosco".
+
 #### G6. Cupom validado no backend
 
-Frontend pode pré-validar para UX (`POST /api/validate-coupon`), mas a validação real é server-side no `create-payment` (`lib/coupons.js`), com incremento atômico de uso via RPC `increment_coupon_usage`. **Nunca** confiar no cliente.
+Frontend pode pré-validar para UX (`POST /api/validate-coupon`), mas a validação real é server-side no `create-payment` (`lib/coupons.js`), com incremento atômico de uso via RPC `increment_coupon_usage`. **Nunca** confiar no cliente. O uso reservado por pedido que não foi pago volta ao cupom depois de **2h** (`release_stale_coupon_reservations`, pg_cron a cada 15 min) e é recontado se o pagamento chegar depois (trigger `orders_reclaim_coupon_on_approval`).
 
 #### G7. Suporte a múltiplos meios de pagamento
 

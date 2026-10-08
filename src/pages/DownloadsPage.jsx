@@ -551,14 +551,22 @@ export function DownloadsPage() {
                             Token vinculado ao pedido aprovado.
                           </p>
                         </div>
-                        <a
-                          href={buildDownloadUrl(item.token)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
-                        >
-                          <i className="bi bi-download" /> Baixar
-                        </a>
+                        {/* `available === false` = o servidor não reemitiu o link
+                            (teto de downloads do item). Um "Baixar" aqui daria 401. */}
+                        {item.available === false ? (
+                          <span className="text-xs font-semibold text-slate-500">
+                            Limite de downloads atingido — fale conosco
+                          </span>
+                        ) : (
+                          <a
+                            href={buildDownloadUrl(item.token)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                          >
+                            <i className="bi bi-download" /> Baixar
+                          </a>
+                        )}
                       </li>
                     ))}
                   </ul>

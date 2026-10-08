@@ -296,7 +296,25 @@ async function deleteProduct(rawId) {
   const parsed = parse(uuidId, rawId);
   if (!parsed.ok) return invalid('id é obrigatório');
 
-  await deleteFromTable('products', { id: `eq.${parsed.data}` });
+  try {
+    await deleteFromTable('products', { id: `eq.${parsed.data}` });
+  } catch (error) {
+    // 23503 = foreign_key_violation: `order_items` aponta para o produto. Barrar
+    // está CERTO (o histórico de vendas não pode perder o item), mas é escolha
+    // da operadora, não falha do servidor — e qualquer checkout aberto, mesmo
+    // abandonado, já cria esse vínculo (ACH-04 de 05/10).
+    if (error?.details?.code === '23503') {
+      return {
+        error: {
+          status: 409,
+          code: ERROR_CODES.CONFLICT,
+          message:
+            'Este produto já aparece em pedidos e não pode ser excluído. Pause o produto para tirá-lo da loja.',
+        },
+      };
+    }
+    throw error;
+  }
   return { status: 200, body: {} };
 }
 

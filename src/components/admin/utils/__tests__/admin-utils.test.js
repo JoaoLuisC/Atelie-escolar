@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { categoryLabel, ORPHAN_CATEGORY_LABEL } from '../category-label';
-import { deriveFaturamentoSeries, deriveMonthlyComparison } from '../derive';
+import {
+  deriveComparisonDelta,
+  deriveFaturamentoSeries,
+  deriveMonthlyComparison,
+  deriveTicketMedio,
+} from '../derive';
 import { friendlyAdminError, NETWORK_ERROR_MESSAGE } from '../errors';
 
 describe('categoryLabel (ADM-04/ADM-35)', () => {
@@ -40,5 +45,21 @@ describe('derive · barras e rótulos (ADM-15/ADM-20)', () => {
   it('nome do mês só com a 1ª letra maiúscula ("Setembro de 2026")', () => {
     const [anterior] = deriveMonthlyComparison([]);
     expect(anterior.label).toMatch(/^[A-ZÀ-Ú][a-zà-ú]+ de \d{4}$/);
+  });
+});
+
+describe('derive · variação a partir de zero (ACH-08 de 05/10)', () => {
+  const setembroZerado = { label: 'set', gross: 0, qty: 0, avg: 0 };
+  const outubro = { label: 'out', gross: 12.9, qty: 1, avg: 12.9 };
+
+  it('mês anterior zerado é "novo", não "+100%"', () => {
+    expect(deriveComparisonDelta([setembroZerado, outubro])).toEqual({ pct: 0, trend: 'new' });
+    expect(deriveTicketMedio([setembroZerado, outubro])).toMatchObject({ pct: 0, trend: 'new' });
+  });
+
+  it('com base diferente de zero, o percentual continua calculado', () => {
+    const agosto = { label: 'ago', gross: 10, qty: 1, avg: 10 };
+    expect(deriveComparisonDelta([agosto, outubro])).toMatchObject({ trend: 'up' });
+    expect(deriveComparisonDelta([agosto, outubro]).pct).toBeCloseTo(29, 0);
   });
 });

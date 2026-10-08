@@ -10,7 +10,8 @@ const { SEO } = await vi.importActual('../SEO');
 // LOJA-24 — SEO técnico.
 //   • O JSON-LD da home ficava no <head> depois de navegar para outra página:
 //     agora ele é renderizado no CORPO, junto da página que o declara.
-//   • og:image padrão era /favicon.svg, que as redes sociais recusam.
+//   • og:image padrão era /favicon.svg, que as redes sociais recusam; hoje é
+//     o PNG public/og-default.png.
 // ════════════════════════════════════════════════════════════════════
 
 function renderSeo(props) {
@@ -36,14 +37,16 @@ describe('SEO', () => {
     expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
   });
 
-  it('sem imagem própria, não declara og:image (nada de SVG)', async () => {
+  it('sem imagem própria, usa o og-default.png (nunca SVG)', async () => {
     renderSeo({});
     // O Helmet aplica as tags no <head> de forma assíncrona.
     await waitFor(() => expect(document.title).toBe('Teste · Ateliê da Escola'));
-    expect(document.head.querySelector('meta[property="og:image"]')).toBeNull();
+    const ogImage = document.head.querySelector('meta[property="og:image"]');
+    expect(ogImage.getAttribute('content')).toMatch(/\/og-default\.png$/);
+    expect(ogImage.getAttribute('content')).not.toMatch(/\.svg$/);
     expect(document.head.querySelector('meta[name="twitter:card"]')).toHaveAttribute(
       'content',
-      'summary',
+      'summary_large_image',
     );
   });
 });

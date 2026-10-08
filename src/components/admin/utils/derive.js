@@ -59,7 +59,9 @@ export function deriveComparisonDelta(monthlyComparison) {
   const current = monthlyComparison[1].gross;
 
   if (!prev && !current) return { pct: 0, trend: 'stable' };
-  if (!prev && current) return { pct: 100, trend: 'up' };
+  // Variação a partir de zero é indefinida: "+100%" de R$ 0 para R$ 12,90
+  // inventava um número (ACH-08 de 05/10). A tela mostra "Novo".
+  if (!prev && current) return { pct: 0, trend: 'new' };
 
   const pct = ((current - prev) / prev) * 100;
   if (pct > 0.01) return { pct, trend: 'up' };
@@ -177,8 +179,8 @@ export function deriveTicketMedio(monthlyComparison) {
   let pct = 0;
   let trend = 'stable';
   if (!prevAvg && currentAvg) {
-    pct = 100;
-    trend = 'up';
+    // Mesma regra de deriveComparisonDelta: a partir de zero não há percentual.
+    trend = 'new';
   } else if (prevAvg) {
     pct = ((currentAvg - prevAvg) / prevAvg) * 100;
     if (pct > 0.5) trend = 'up';
