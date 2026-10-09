@@ -353,10 +353,23 @@ O que falta é operacional. Marque aqui mesmo:
 - [ ] URL de produção no `uri_allow_list` do Supabase Auth para o Google OAuth do cliente
       (`scripts/configure-auth.js`, §3.5)
 
-### C. Domínio no Resend — **o único item que bloqueia funcionalidade real** (DNS até 24h)
+### C. Domínio + Resend — **o único bloco que bloqueia funcionalidade real** (DNS até 24h)
 
-- [ ] SPF + DKIM + DMARC criados no DNS (§2.4) — começar cedo por causa da propagação
-- [ ] `SMTP_FROM` trocado no `.env.local`, no Vercel e no SMTP do Supabase Auth
+> ⚠️ `profamarciarcardoso.com.br`, que o código e a doc citam, **não está registrado** (registro.br
+> 404 em 09/10/2026). O e-mail de contato do rodapé (`src/components/Shell.jsx`) hoje volta. Sugestão:
+> `ateliedaescola.com.br`, que também serve à futura plataforma
+> ([docs/ecommerce-atelie-da-escola](../ecommerce-atelie-da-escola/README.md)).
+
+- [ ] Registrar o domínio no registro.br (≈ R$ 40/ano) e decidir o titular
+- [ ] DNS na Vercel: adicionar o domínio (raiz + `www`) no projeto e trocar os nameservers no
+      registro.br para `ns1.vercel-dns.com` / `ns2.vercel-dns.com`
+- [ ] Resend → Add Domain (região São Paulo) → criar na Vercel os registros MX/TXT de `send` e o
+      TXT `resend._domainkey`, mais o DMARC (`_dmarc`, `v=DMARC1; p=none; rua=mailto:…`) → Verify
+- [ ] (opcional) Caixa para `contato@` via ImprovMX ou similar (MX/SPF na raiz; não conflita com o
+      Resend, que fica em `send`)
+- [ ] Conferir a permissão da chave do Resend (`SMTP_PASS`); `SMTP_FROM` trocado no `.env.local`,
+      no Vercel e no SMTP do Supabase Auth (host `smtp.resend.com`, porta 465, usuário `resend`)
+- [ ] Trocar no código/doc o domínio antigo pelo novo (rodapé, JSON-LD, docs) — **pedir ao Claude**
 - [ ] mail-tester.com ≥ 9/10
 
 ### D. Validação final em produção (§6)
@@ -370,5 +383,6 @@ O que falta é operacional. Marque aqui mesmo:
 ### Fora do escopo de "finalizar" (evolução)
 
 §3.7 (login admin com Google), §3.10 (cards de região/funil no Dashboard), §3.3 (Lighthouse CI
-App), Fase 5 (mídia paga — gatilho: 30+ dias de funil + 50+ pedidos + ROAS orgânico ≥ 3x) e
-Fase 6.
+App), Fase 5 (mídia paga — gatilho: 30+ dias de funil + 50+ pedidos + ROAS orgânico ≥ 3x),
+Fase 6 e a **v2 — plataforma** (marketplace + white label com split de pagamentos), planejada em
+[docs/ecommerce-atelie-da-escola](../ecommerce-atelie-da-escola/README.md).

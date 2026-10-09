@@ -54,6 +54,12 @@ que alguém "consertaria" de volta para o estado errado sem o contexto. Por que 
 backend e ESM no front, por que um handler serve Vercel e Express, por que um mecanismo de
 rate limit e não dois.
 
+## A plataforma — v2 adiada (`ecommerce-atelie-da-escola/`)
+
+[Marketplace + white label](./ecommerce-atelie-da-escola/README.md) — modelo de negócio, split de
+pagamentos (Mercado Pago × Asaas × Stripe, com custos) e o plano multi-tenant. **Não é o estado
+atual:** a v1 é a loja da Profa. Márcia; isto é para retomar depois dela no ar.
+
 ## Padrões de código
 
 [CONTRIBUTING.md](../CONTRIBUTING.md) — 29 regras de convenção, cada uma com a divergência
