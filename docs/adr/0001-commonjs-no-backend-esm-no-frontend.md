@@ -50,3 +50,18 @@ o harness de teste usa para interceptar módulos via `require.cache` (ver
 mudança de sintaxe; é uma mudança de estratégia de teste junto.
 
 **Tudo CommonJS.** Impossível no `src/`: o Vite e o React 19 assumem ESM.
+
+---
+
+## Emenda — 2026-10-16: os handlers mudaram de pasta
+
+A decisão não muda; muda o mapa de pastas que ela governa. Desde a emenda de 26/08 do
+[ADR 0002](./0002-handler-unico-para-vercel-e-express.md), os handlers moram em `handlers/`
+(45 arquivos) e `api/` só tem `index.js`, a única função serverless. Onde este ADR diz
+"handler de `api/`", leia `handlers/`.
+
+- A fronteira Node passou a incluir `handlers/` e `scripts/` — é o que `NODE_FILES` lista em
+  `eslint.config.js`.
+- Os arquivos CommonJS de runtime passaram de ~70 para ~86 (`api/` 1, `handlers/` 45, `lib/`
+  30, `routes/` 2, `middleware/` 1, `services/` 1, `utils/` 1, `validation/` 4 e `server.js`,
+  sem contar testes e `scripts/`). Adotar `"type": "module"` custaria renomear esses ~86.

@@ -18,8 +18,12 @@
 Sem isso o backend consulta colunas que não existem e quebra.
 
 ```bash
-npm run supabase:db:push     # aplica as 19 migrations de supabase/migrations/
+npm run supabase:db:push     # aplica as migrations pendentes de supabase/migrations/
 ```
+
+> Desde a verificação de 02/09 entraram duas migrations (08/10), **escritas e ainda não
+> aplicadas**: `20261008000000_coupon_usage_release` e `20261008000001_profiles_role_check`. Hoje
+> são 21 no total. Aplicar é o item A do checklist de fechamento, no fim deste documento.
 
 A lista completa, com o que cada uma faz, é mantida em
 [04-BANCO-DE-DADOS §migrations](./04-BANCO-DE-DADOS.md) — e mora **só lá**. As queries de
@@ -176,7 +180,7 @@ Hoje o painel só aceita e-mail + senha + 2FA opcional (`handlers/admin/login.js
 **Para implementar:**
 
 1. Botão "Entrar com Google" em `AdminLoginPage.jsx` reusando `signInWithOAuth({ provider: 'google' })` de `src/services/customer-auth.js`
-2. Novo callback `/api/auth/admin/google/callback` (função em `api/`, espelhada em dev via `routes/api-compat.routes.js`) que:
+2. Novo callback `/api/auth/admin/google/callback` (handler em `handlers/auth/admin/google/callback.js`, montado em `routes/auth.routes.js` com `mountHandler` — o teste de paridade de rotas cobre a montagem) que:
    - Valida o `access_token` Google via Supabase
    - Exige `profile.role ∈ {ADMIN, MASTER}` (mesma checagem de hoje em `admin-login.js`)
    - **Manter 2FA (TOTP/PIN) obrigatório** mesmo no fluxo Google — senão um Gmail comprometido entra direto no painel
@@ -188,9 +192,11 @@ Hoje o painel só aceita e-mail + senha + 2FA opcional (`handlers/admin/login.js
 ### 3.8 LGPD self-service: direito ao esquecimento — ✅ IMPLEMENTADO
 
 > **Entregue.** Fluxo ponta a ponta em `handlers/me-delete-account.js` (anonimização,
-> limpeza de tokens, unsubscribe, confirmação por e-mail em 2 passos), rota com
-> rate-limit em `routes/api-compat.routes.js`, UI em `src/pages/CustomerAuthPage.jsx`
-> e client em `src/services/customer-auth.js`. Mantido abaixo como registro histórico.
+> limpeza de tokens, unsubscribe, confirmação por e-mail em 2 passos), montado em
+> `routes/api-compat.routes.js` com o rate limit no próprio handler (`meDeleteAccount`), UI em
+> `src/pages/CustomerAuthPage.jsx` e client em `src/services/customer-auth.js`. O par de acesso e
+> portabilidade (art. 18, V) também existe: `handlers/me-export-data.js`. Mantido abaixo como
+> registro histórico.
 
 Hoje a exclusão de conta é feita via admin (regra H7). Implementar endpoint público:
 
@@ -216,6 +222,34 @@ Dois cards `PendingDataCard` em `DashboardTab.jsx` aguardam instrumentação de 
 
 - **Vendas por região** — exige coluna `orders.shipping_state` + captura do UF no checkout
 - **Funil de conversão (card interno do Dashboard)** — exige rastreamento de eventos (`analytics_events`/`page_views`); distinto da aba Funil, que já existe
+
+### 3.11 Validar o esquema das URLs de produto — ⚠️ pendência de segurança (16/10/2026)
+
+O histórico de 24/05 registra "Zod do produto bloqueia `javascript:`/`data:`". **Isso não vale
+mais:** o schema morava em `validation/product.schemas.js`, que só rodava numa rota de dev e foi
+removido junto com ela. Hoje `productCreateSchema` (`validation/admin.schemas.js`) confere só
+`name` e `price`, e `images`, `videos` e `download_url` passam por `handlers/admin/products.js`
+como texto aparado, sem checar o esquema.
+
+O risco prático é baixo: só um admin autenticado grava produto, o download recusa URL fora do
+Storage, e na página pública as URLs viram `<img src>`, `<video src>` ou um embed do YouTube cujo
+host é fixado pelo código — contextos em que o navegador não executa `javascript:`. É defesa em
+profundidade e higiene de dado, e o registro de 24/05 afirmava uma proteção que não existe.
+Fazer: exigir `https://` (e o host do Supabase Storage ou do YouTube) no schema de produto, com
+teste.
+
+### 3.12 E-mail de confirmação do pedido não é disparado — ⚠️ pendência funcional (16/10/2026)
+
+O template `orderConfirmation` (`lib/email-templates.js`) e o endpoint
+`POST /api/send-confirmation-email` existem, com rate limit e testes, mas **nenhum fluxo os
+chama**: nem o webhook, nem o `verify-payment`, nem o front. Hoje a compradora recebe só o e-mail
+de definição de senha, quando a conta é criada no checkout. A regra D4 (D+0) de
+[11-REGRAS-NEGOCIO](./11-REGRAS-NEGOCIO.md) fica sem cumprir.
+
+Fazer: disparar o envio na primeira aprovação (o ponto natural é o ramo `isFirstApproval` do
+webhook e o equivalente no `verify-payment`, com idempotência para não mandar duas vezes), e
+cobrir com teste. Depende do domínio autenticado no Resend (§2.4) para chegar a quem não é dona
+da conta.
 
 ---
 
@@ -251,14 +285,14 @@ Stack gratuito: Microsoft Clarity (heatmap) + GrowthBook self-hosted (A/B). Hotj
 
 Auditoria fechada em código (A1–A16, ver histórico). Resta o **recorrente humano**:
 
-| Item                                                                                                                                                                                          | Cadência                                | Onde                                    |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------- |
-| 🔁 Rotação de segredos (`ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `WEBHOOK_SECRET`, `DOWNLOAD_TOKEN_SECRET`, `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `MERCADOPAGO_ACCESS_TOKEN`) | Trimestral                              | [08-SEGURANCA §11.2](./08-SEGURANCA.md) |
-| 🎯 Pen-test focado                                                                                                                                                                            | Anual                                   | [08-SEGURANCA §11.3](./08-SEGURANCA.md) |
-| 📧 DKIM/SPF/DMARC no Resend                                                                                                                                                                   | Único — §2.4 acima                      | —                                       |
-| 🔔 `SECURITY_ALERT_WEBHOOK_URL` (Slack/Discord/Sentry)                                                                                                                                        | Opcional                                | env var                                 |
-| 📋 Checklist pré-produção (17 itens)                                                                                                                                                          | Cada release maior                      | [08-SEGURANCA §12](./08-SEGURANCA.md)   |
-| 🛒 Vigiar R8 (carrinho localStorage)                                                                                                                                                          | Quando mexer em desconto/frete no front | —                                       |
+| Item                                                                                                                                                                                                                                                                                        | Cadência                                | Onde                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------- |
+| 🔁 Rotação de segredos (`ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `ADMIN_2FA_ENC_KEY` — rotacionar invalida o 2FA cadastrado, `WEBHOOK_SECRET`, `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `MERCADOPAGO_ACCESS_TOKEN`). `DOWNLOAD_TOKEN_SECRET` saiu da lista: nenhum código a lê | Trimestral                              | [08-SEGURANCA §11.2](./08-SEGURANCA.md) |
+| 🎯 Pen-test focado                                                                                                                                                                                                                                                                          | Anual                                   | [08-SEGURANCA §11.3](./08-SEGURANCA.md) |
+| 📧 DKIM/SPF/DMARC no Resend                                                                                                                                                                                                                                                                 | Único — §2.4 acima                      | —                                       |
+| 🔔 `SECURITY_ALERT_WEBHOOK_URL` (Slack/Discord/Sentry)                                                                                                                                                                                                                                      | Opcional                                | env var                                 |
+| 📋 Checklist pré-produção (17 itens)                                                                                                                                                                                                                                                        | Cada release maior                      | [08-SEGURANCA §12](./08-SEGURANCA.md)   |
+| 🛒 Vigiar R8 (carrinho localStorage)                                                                                                                                                                                                                                                        | Quando mexer em desconto/frete no front | —                                       |
 
 ---
 
@@ -379,6 +413,12 @@ O que falta é operacional. Marque aqui mesmo:
 - [ ] Sitemap submetido no Search Console (§2.7)
 - [ ] Lighthouse mobile: Performance ≥ 90, SEO ≥ 95 — **se SEO < 95, e só então**, reabrir §3.1
       (prerender)
+
+### E. Código — achados da revisão de documentação de 16/10/2026
+
+- [ ] Disparar o e-mail de confirmação do pedido na aprovação (§3.12) — a compradora hoje não
+      recebe confirmação
+- [ ] Validar o esquema das URLs de produto no schema do admin (§3.11)
 
 ### Fora do escopo de "finalizar" (evolução)
 

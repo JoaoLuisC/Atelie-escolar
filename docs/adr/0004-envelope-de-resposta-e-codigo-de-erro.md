@@ -65,3 +65,22 @@ frontend e ~100 asserções de teste, no caminho do checkout inclusive. O ganho 
 [ADR 0002](./0002-handler-unico-para-vercel-e-express.md): o middleware do Express não roda
 na Vercel, então `throw new AppError(..., 400)` daria 400 em desenvolvimento e 500 genérico
 em produção — exatamente a divergência dev/prod que mais custou caro neste projeto.
+
+---
+
+## Emenda — 2026-10-16: o shim saiu e o middleware passou a rodar em produção
+
+**O shim de `parseJson` foi removido.** Foi o marco do fim da migração A1, registrado no
+cabeçalho de `src/utils/api.js`. O "Boas" acima ficou desatualizado nesse ponto: `parseJson`
+devolve o corpo como o backend o emitiu, sem achatar `error` e sem `errorCode`. A tela lê
+`data.error?.message` e ramifica por `data.error?.code`; `apiError` preserva o `code` no `Error`
+lançado, e `isSessionError` compara `error.code`.
+
+**O middleware de erro do Express roda também na Vercel**, desde que `api/index.js` passou a
+servir o app compartilhado com `app.use(errorHandler)` (ver a emenda do
+[ADR 0002](./0002-handler-unico-para-vercel-e-express.md)). O argumento "o middleware não roda
+na Vercel" da alternativa `AppError` caducou, mas a alternativa continua descartada: as suítes
+de `handlers/__tests__/` chamam o handler direto, sem middleware, e ali um
+`throw new AppError(..., 400)` escaparia como exceção em vez de virar 400 — o mesmo argumento do
+corolário 1 da emenda do ADR 0002. O middleware segue como rede de segurança (corolário 3 do
+ADR 0002), não como mecanismo de erro dos handlers.

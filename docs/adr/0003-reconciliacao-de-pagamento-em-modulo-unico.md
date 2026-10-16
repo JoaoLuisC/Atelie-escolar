@@ -59,3 +59,20 @@ que vão divergir na próxima edição. Já divergiram uma vez, na própria corr
 `handlers/__tests__/payment-integrity.test.js` continuam existindo e valendo — mas eles pegam
 divergência no **encaixe** (uma porta que chame a função no lugar errado do fluxo, ou ignore
 o `reason`), que é a classe de bug que sobra depois da extração. Não substituem a extração.
+
+---
+
+## Emenda — 2026-10-16: a tolerância perdeu a causa original, não a função
+
+A regra E3 (13/08/2026) passou o rateio de cupom para centavos inteiros (`lib/money.js`), e
+`orders.total_amount` virou a soma exata dos itens cobrados. O drift interno que justificava a
+tolerância de 1 centavo acabou — o "Ruins" acima não descreve mais a causa.
+
+A folga **não** foi zerada, por outro motivo: assimetria de custo do lado do gateway. Se sobrar
+qualquer diferença de 1 centavo vinda do Mercado Pago, tolerância zero recusa quem pagou certo,
+e um pedido recusado no webhook não é reprocessado. Com a folga, o pior caso é entregar por 1
+centavo a menos (comentário antes de `AMOUNT_TOLERANCE` em `lib/payment-integrity.js`).
+
+Critério para zerar: observar `payment_amount_mismatch` em produção por um período com volume
+real; se nenhum evento tiver diferença de exatamente 1 centavo, baixar para 0 e manter os testes
+de borda.

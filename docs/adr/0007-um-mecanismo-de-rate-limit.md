@@ -130,3 +130,13 @@ uniforme que estava certa para a maioria dos baldes e errada exatamente para os 
 
 Nos dois modos o evento `rate_limit_unavailable` continua sendo emitido: recusar não pode ser mais
 silencioso do que passar.
+
+---
+
+## Emenda — 2026-10-16: sem Supabase, os baldes `closed` recusam
+
+O "Ruins" sobre desenvolvimento sem Supabase é anterior ao adendo de 01/09. Hoje, sem Supabase
+configurado, `enforceRateLimit` continua fail-open nos baldes default, mas os marcados
+`failMode: 'closed'` (`customerLogin`, `customerRegister`, `adminLoginSecondFactor`) respondem
+503: o caminho `supabase_not_configured` usa a mesma política de indisponibilidade do balde
+(`lib/rate-limit.js`).

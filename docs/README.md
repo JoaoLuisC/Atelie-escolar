@@ -5,11 +5,11 @@
 
 Três tipos de documento, e a diferença importa:
 
-| Tipo           | Onde                                 | Regra                                                                  |
-| -------------- | ------------------------------------ | ---------------------------------------------------------------------- |
-| **Vivo**       | `ProjectDocs/`, `adr/`, este arquivo | Descreve o estado atual. Muda no mesmo PR que muda o comportamento     |
-| **Retrato**    | `reviews/`                           | Datado e amarrado a um commit. **Nunca se edita** — o commit é a prova |
-| **Ferramenta** | `REVIEW-PROMPTS.md`                  | Não descreve o projeto; serve para operar sobre ele                    |
+| Tipo           | Onde                                                               | Regra                                                                  |
+| -------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| **Vivo**       | `ProjectDocs/`, `adr/`, este arquivo                               | Descreve o estado atual. Muda no mesmo PR que muda o comportamento     |
+| **Retrato**    | `reviews/`, relatórios de `validacao/`                             | Datado e amarrado a um commit. **Nunca se edita** — o commit é a prova |
+| **Ferramenta** | `REVIEW-PROMPTS.md`, `PROMPTS-CORRECAO-*`, prompts de `validacao/` | Não descreve o projeto; serve para operar sobre ele                    |
 
 ---
 
@@ -81,8 +81,11 @@ continuava sendo lido como estado atual.
 
 | Documento                                                                                 | Sobre                                                                                                  |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [CORRECOES-2026-09-02](./reviews/CORRECOES-2026-09-02.md)                                 | Fechamento dos pendentes de 01/09: migrations e schema conferidos em produção                          |
+| [CORRECOES-2026-09-01](./reviews/CORRECOES-2026-09-01.md)                                 | Rodada verificar-e-corrigir dos oito blocos de `PROMPTS-CORRECAO-2026-09-01`                           |
 | [REVIEW-AUTH-2026-09-01](./reviews/REVIEW-AUTH-2026-09-01.md)                             | Fluxo de login de ponta a ponta: guardas fora do caminho de produção, 2FA em repouso, cobertura        |
 | [OTIMIZACAO-CODIGO-2026-08-18](./reviews/OTIMIZACAO-CODIGO-2026-08-18.md)                 | Desempenho: caminho crítico do bundle (−35% medido), tetos de escala do backend, código sem consumidor |
+| [CONTINUACAO-2026-08-13](./reviews/CONTINUACAO-2026-08-13.md)                             | Ponto de parada da rodada de padronização de 13/08, para retomar em outra máquina                      |
 | [REVIEW-GERAL-2026-08-12](./reviews/REVIEW-GERAL-2026-08-12.md)                           | Arquitetura, segurança e processos — originou as 29 regras                                             |
 | [REVIEW-RESULTS-2026-08-12](./reviews/REVIEW-RESULTS-2026-08-12.md)                       | Consolidação dos resultados por área                                                                   |
 | [AREA-08-qualidade-codigo-arquitetura](./reviews/AREA-08-qualidade-codigo-arquitetura.md) | Qualidade de código e arquitetura                                                                      |
@@ -91,6 +94,24 @@ continuava sendo lido como estado atual.
 
 **Ferramenta, não relatório:** [REVIEW-PROMPTS.md](./REVIEW-PROMPTS.md) traz os prompts de
 review profundo, um por área. É o que gera os documentos da tabela acima.
+[PROMPTS-CORRECAO-2026-09-01.md](./PROMPTS-CORRECAO-2026-09-01.md) é o par dele no modo
+verificar → corrigir, e gerou as duas rodadas de correção de setembro.
+
+## Validação no navegador (`validacao/`)
+
+Validação do sistema rodando, feita pelo Claude Code com a extensão Claude in Chrome. Os
+relatórios são retratos datados, como os de `reviews/`; os achados viraram commits (`0994018` e
+`d336177`).
+
+| Documento                                                                       | Sobre                                                                                                   |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [MAPA-DE-TELAS](./validacao/MAPA-DE-TELAS.md)                                   | Todas as telas e estados, mapeados no código em 28/09 — base dos prompts                                |
+| [PROMPT-VALIDACAO-CLAUDE-CHROME](./validacao/PROMPT-VALIDACAO-CLAUDE-CHROME.md) | Ferramenta: os sete blocos para colar na extensão                                                       |
+| `RELATORIO-{1A,1B,2A,2B,2C,3A,3B}-2026-10-01`                                   | Um por bloco: loja pública (1A), área do cliente e compra (1B), admin (2A–2C) e testes cruzados (3A–3B) |
+| [RELATORIO-FLUXOS-2026-10-05](./validacao/RELATORIO-FLUXOS-2026-10-05.md)       | Fluxos de escrita ponta a ponta, com compra paga no sandbox do Mercado Pago                             |
+
+> ⚠️ A validação local grava no banco de **produção** (o `.env.local` aponta para ele). Ver o
+> cabeçalho do relatório de 05/10.
 
 ---
 

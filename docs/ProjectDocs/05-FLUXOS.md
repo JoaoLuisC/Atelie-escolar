@@ -125,17 +125,18 @@ flowchart TD
     E -->|não| F[Emite cookie admin_session HMAC<br/>TTL 8h SameSite=Strict]
     F --> Z["/admin passa a mostrar o painel"]
 
-    E -->|sim| G[Retorna requiresSecondFactor=true<br/>+ methods + challengeToken - TTL 5 min<br/>frontend pede código]
+    E -->|sim| G[Retorna requiresSecondFactor=true<br/>+ methods + challengeToken - TTL 120s, uso único, preso ao IP<br/>frontend pede código]
     G --> H[POST /api/admin/login<br/>email + password + challengeToken + factorCode]
     H -->|factorCode bate TOTP OU PIN de fallback| F
     H -->|código inválido| I1[401 'Código de verificação inválido']
-    H -->|challengeToken inválido/expirado| I2[401 'Desafio de 2FA inválido ou expirado']
+    H -->|challengeToken expirado/inválido| G
+    H -->|challengeToken já utilizado| I2[401 'Desafio de 2FA já utilizado']
 ```
 
 **Notas:**
 
-- Rate-limit em `/admin-login`: **5 tentativas falhas / 10 min** (`skipSuccessfulRequests: true`) — aplicado pelo Express em dev; na Vercel serverless não há store compartilhado (pendência API-03).
-- `totpSecret` e `fallbackPin` ficam em `settings.adminConfig` (RLS service-only); as comparações de código/PIN são timing-safe (`safeCompare`).
+- Rate-limit em `/api/admin/login`: **5 tentativas / 10 min por IP** (sucesso também conta), mais um balde separado de 5 / 10 min por IP+e-mail para o 2º fator (fail-closed). Vale em dev e produção (`enforceRateLimit`, contador no Postgres).
+- `totpSecret` (cifrado) e `fallbackPin` (hash scrypt com sal) ficam em `settings.adminConfig` (RLS service-only); a conferência é em tempo constante (`verifyPin` / `timingSafeEqual`).
 - O mesmo campo `factorCode` serve para TOTP **ou** PIN de fallback — vale se bater com qualquer um dos métodos habilitados.
 - TOTP usa janelas de ±1 (30s antes/depois) para tolerar drift de clock.
 - Senha inválida ou conta sem role admin/master geram `security_events.admin_login_failed` com IP + UA + hash do e-mail; a resposta HTTP é idêntica nos dois casos (anti-enumeração).
@@ -160,7 +161,7 @@ flowchart TD
     D5 --> E[Frontend abre Mercado Pago<br/>em nova aba via window.open<br/>fallback: botão com o link se o popup for bloqueado]
     D5 --> F[Salva pendingOrderId no state<br/>+ lastOrderId/lastOrderEmail no localStorage<br/>useEffect inicia polling]
 
-    F --> F1[A cada 4s: GET /api/verify-payment?orderId=X&email=Y]
+    F --> F1[A cada 4s: POST /api/verify-payment<br/>body: orderId + email]
     F1 --> F2{paymentStatus?}
     F2 -->|approved| G[Limpa carrinho<br/>navega para /downloads?order=X&email=Y]
     F2 -->|rejected/cancelled| H[Toast erro + polling para]
@@ -168,14 +169,14 @@ flowchart TD
     F2 -->|150 tentativas| I[Timeout 10min<br/>usuário pode verificar em Downloads depois]
 
     G --> J[/downloads?order=X&email=Y/]
-    J --> J1[GET /api/verify-payment?orderId=X&email=Y]
+    J --> J1[POST /api/verify-payment<br/>body: orderId + email]
     J1 --> J2{Status approved?}
     J2 -->|Sim| K[Lista download_tokens - expiram em 72h<br/>dispara purchase event - trackPurchaseOnce]
     J2 -->|Não| L[Continua polling a cada 10s<br/>até max 12 tentativas]
 
     K --> M[Para cada arquivo:<br/>href = /api/download?token=Y]
     M --> N[Backend valida token<br/>claim ATÔMICO used=false→true<br/>uso único mesmo sob concorrência]
-    N --> O[INSERT INTO download_logs<br/>302 redirect: signed URL do Storage - 5 min<br/>ou URL externa - Referrer-Policy: no-referrer]
+    N --> O[INSERT INTO download_logs<br/>302 redirect: signed URL do Storage - 5 min<br/>Referrer-Policy: no-referrer<br/>download_url fora do Storage → 500, token preservado]
 
     G -.->|paralelo, na 1ª aprovação| P[Webhook/verify-payment provisionam<br/>conta Supabase p/ comprador convidado]
     P --> Q[Email de definição de senha<br/>resetPasswordForEmail]
@@ -205,13 +206,18 @@ sequenceDiagram
     API->>MP: GET /v1/payments/PAY-123<br/>Authorization: Bearer access_token
     MP-->>API: { status, external_reference, transaction_amount }
     API->>DB: SELECT FROM orders WHERE order_code = external_reference
-    alt Aprovado e order existe
+    alt Aprovado mas valor/moeda não reconcilia
+        API->>DB: INSERT security_events<br/>payment_amount_mismatch
+        API-->>MP: 200 sem aprovar o pedido
+    end
+    alt Aprovado, reconciliado e order existe
+        API->>API: checkPaymentIntegrity ok
         API->>DB: UPDATE orders SET<br/>payment_status='approved', status='completed',<br/>completed_at=now, payment_id<br/>(atômico: só quem transiciona !approved→approved)
         API->>DB: INSERT INTO download_tokens em lote<br/>(token 32 bytes hex, order_id, product_id,<br/>expires_at=+72h) para cada item
         API->>API: Se 1ª aprovação:<br/>provisiona conta Supabase p/ convidado<br/>(ensureCustomerAccountFromCheckout, best-effort)<br/>+ registra evento payment_approved
     end
     alt Rejeitado/cancelado
-        API->>DB: UPDATE orders SET<br/>payment_status=rejected|cancelled, status='failed'
+        API->>DB: UPDATE orders SET<br/>payment_status=rejected|cancelled, status='failed'<br/>(só se payment_status ≠ approved)
         API->>API: Registra evento payment_rejected/cancelled
     end
     API-->>MP: 200 OK
@@ -260,7 +266,7 @@ flowchart TD
     B --> C[Upsert em abandoned_carts<br/>por email + session_id<br/>total recalculado no backend<br/>atualização reseta reminder_sent_at]
 
     D[GitHub Actions email-cron.yml<br/>de hora em hora] --> E[POST /api/cron-email-jobs<br/>header X-Cron-Secret: CRON_SECRET]
-    E --> F[1º lembrete: abandoned_carts<br/>updated_at entre 1h e 2h atrás<br/>recovered_at IS NULL<br/>reminder_sent_at IS NULL<br/>pula desinscritos]
+    E --> F[1º lembrete: abandoned_carts<br/>updated_at entre 1h e 2h atrás<br/>recovered_at IS NULL<br/>reminder_sent_at IS NULL<br/>só envia com opt-in confirmado ou pedido aprovado<br/>nunca para descadastrados]
     F --> G[Para cada cart:<br/>email 'esqueceu algo?' - kind abandoned_cart_1h<br/>com link de retorno ao checkout]
     G --> H[UPDATE reminder_sent_at = now<br/>INSERT email_sent_log]
     H --> H2[2º lembrete 24h depois<br/>por reminder_sent_at<br/>kind abandoned_cart_24h]
@@ -301,9 +307,11 @@ flowchart TD
     G -->|Sim| H[UPDATE confirmed=true<br/>confirmed_at=now<br/>confirmation_token=null - uso único]
     G -->|Não/expirado| I[Página de erro<br/>'link expirado, peça novo']
 
-    J[Cliente clica 'descadastrar' em qualquer email<br/>link /desinscrever?token=XYZ] --> K[GET ou POST /api/unsubscribe?token=XYZ<br/>RFC 8058 One-Click<br/>fallback: POST { email }]
+    J[Cliente clica 'descadastrar' em qualquer email<br/>link /desinscrever?token=XYZ] --> K[GET ou POST /api/unsubscribe?token=XYZ<br/>RFC 8058 One-Click]
     K --> L[UPDATE unsubscribed_at=now<br/>+ email de confirmação de descadastro]
-    L --> M[Resposta sempre neutra<br/>'se o email estava cadastrado, foi removido']
+    L --> M[Resposta sempre neutra<br/>não revela se o email existe]
+    N[Página /desinscrever sem token<br/>fallback: POST { email }] --> O[Envia email com o link<br/>/desinscrever?token=...<br/>nada muda sem o clique]
+    O --> M
 ```
 
 **Idempotência:** mesmo email enviado várias vezes não cria duplicatas. Mesmo token de unsubscribe pode ser clicado múltiplas vezes sem erro, e a resposta nunca revela se o e-mail existe (anti-enumeração).
@@ -322,9 +330,9 @@ graph TB
         E[Supabase JS Client<br/>auth only]
     end
 
-    subgraph "Express :3000"
-        F[Routes: auth, products, payment, api-compat]
-        G[Middleware: helmet, cors, rate-limit, auth]
+    subgraph "API: api/index.js na Vercel / server.js :3000 em dev"
+        F[Routes: auth, api-compat → handlers/]
+        G[Middleware: helmet, cors, body parser<br/>guardas de rate limit e auth ficam nos handlers]
         H[lib: supabase, customer-session,<br/>admin-session, mercadopago]
     end
 

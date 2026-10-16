@@ -26,7 +26,7 @@
 1. [vercel.com](https://vercel.com) → New Project → Import do GitHub
 2. Selecionar repo `Atelie-escolar`
 3. Framework Preset: `Other` (Vercel detecta `vercel.json`)
-4. Build Command: `npm run build` (default)
+4. Build Command: definido no `vercel.json` (`npm run check:env && npm run build`), que tem precedência sobre o campo do painel. O `check:env` derruba o deploy se faltar segredo obrigatório
 5. Output Directory: `dist`
 6. Install Command: `npm install`
 
@@ -34,38 +34,40 @@
 
 Settings → Environment Variables. Adicionar **todas** as do `.env.local`, exceto as VITE_ que precisam estar com prefixo certo. Por ambiente:
 
-| Variável                    | Production                                                    | Preview                         | Development             |
-| --------------------------- | ------------------------------------------------------------- | ------------------------------- | ----------------------- |
-| `SUPABASE_URL`              | ✅                                                            | ✅                              | ✅                      |
-| `SUPABASE_ANON_KEY`         | ✅                                                            | ✅                              | ✅                      |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅                                                            | ❌ (não em Preview)             | ❌                      |
-| `SUPABASE_STORAGE_BUCKET`   | `product-files`                                               | idem                            | idem                    |
-| `MERCADOPAGO_ACCESS_TOKEN`  | `APP_USR-*`                                                   | `TEST-*`                        | `TEST-*`                |
-| `MERCADOPAGO_PUBLIC_KEY`    | `APP_USR-*`                                                   | `TEST-*`                        | `TEST-*`                |
-| `WEBHOOK_SECRET`            | ✅                                                            | ✅                              | ✅                      |
-| `ADMIN_SESSION_SECRET`      | ✅ (gerar novo)                                               | ✅                              | ✅                      |
-| `CUSTOMER_SESSION_SECRET`   | ✅ (gerar novo)                                               | ✅                              | ✅                      |
-| `DOWNLOAD_TOKEN_SECRET`     | ✅                                                            | ✅                              | ✅                      |
-| `CRON_SECRET`               | ✅                                                            | ✅                              | ✅                      |
-| `APP_URL`                   | `https://<dominio-final>.com.br`                              | URL do preview                  | `http://localhost:3000` |
-| `APP_ENV`                   | `production`                                                  | `preview`                       | `development`           |
-| `NODE_ENV`                  | `production`                                                  | `production`                    | `development`           |
-| `CORS_ORIGINS`              | `https://<dominio-final>.com.br,https://www.<dominio>.com.br` | URL do preview                  | (vazio)                 |
-| `SMTP_HOST`                 | `smtp.resend.com`                                             | idem                            | idem                    |
-| `SMTP_PORT`                 | `465`                                                         | idem                            | idem                    |
-| `SMTP_USER`                 | `resend`                                                      | idem                            | idem                    |
-| `SMTP_PASS`                 | `re_*` (Resend API key)                                       | idem                            | idem                    |
-| `SMTP_FROM`                 | `Ateliê da Escola <pedidos@dominio.com.br>`                   | idem ou `onboarding@resend.dev` | sandbox                 |
-| `VITE_SUPABASE_URL`         | ✅                                                            | ✅                              | ✅                      |
-| `VITE_SUPABASE_ANON_KEY`    | ✅                                                            | ✅                              | ✅                      |
-| `VITE_GA4_ID`               | `G-XXXXXXXXXX`                                                | (vazio)                         | (vazio)                 |
-| `VITE_META_PIXEL_ID`        | `123…`                                                        | (vazio)                         | (vazio)                 |
+| Variável                    | Production                                                             | Preview                                                                                                               | Development             |
+| --------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `SUPABASE_URL`              | ✅                                                                     | ✅                                                                                                                    | ✅                      |
+| `SUPABASE_ANON_KEY`         | ✅                                                                     | ✅                                                                                                                    | ✅                      |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅                                                                     | opcional: chave de um projeto Supabase de staging (sem ela as APIs do preview respondem "Supabase is not configured") | ❌                      |
+| `SUPABASE_STORAGE_BUCKET`   | `product-files`                                                        | idem                                                                                                                  | idem                    |
+| `MERCADOPAGO_ACCESS_TOKEN`  | `APP_USR-*`                                                            | `TEST-*`                                                                                                              | `TEST-*`                |
+| `MERCADOPAGO_PUBLIC_KEY`    | opcional — não lida pelo código (o Checkout Pro só usa o access token) | idem                                                                                                                  | idem                    |
+| `WEBHOOK_SECRET`            | ✅                                                                     | ✅                                                                                                                    | ✅                      |
+| `ADMIN_SESSION_SECRET`      | ✅ (gerar novo)                                                        | ✅                                                                                                                    | ✅                      |
+| `CUSTOMER_SESSION_SECRET`   | ✅ (gerar novo)                                                        | ✅                                                                                                                    | ✅                      |
+| `ADMIN_2FA_ENC_KEY`         | ✅ (gerar novo; trocar invalida o 2FA já cadastrado)                   | ✅                                                                                                                    | ✅                      |
+| `CRON_SECRET`               | ✅                                                                     | ✅                                                                                                                    | ✅                      |
+| `APP_URL`                   | `https://<dominio-final>.com.br`                                       | URL do preview                                                                                                        | `http://localhost:3000` |
+| `APP_ENV`                   | `production`                                                           | `preview`                                                                                                             | `development`           |
+| `NODE_ENV`                  | `production`                                                           | `production`                                                                                                          | `development`           |
+| `CORS_ORIGINS`              | `https://<dominio-final>.com.br,https://www.<dominio>.com.br`          | URL do preview                                                                                                        | (vazio)                 |
+| `SMTP_HOST`                 | `smtp.resend.com`                                                      | idem                                                                                                                  | idem                    |
+| `SMTP_PORT`                 | `465`                                                                  | idem                                                                                                                  | idem                    |
+| `SMTP_USER`                 | `resend`                                                               | idem                                                                                                                  | idem                    |
+| `SMTP_PASS`                 | `re_*` (Resend API key)                                                | idem                                                                                                                  | idem                    |
+| `SMTP_FROM`                 | `Ateliê da Escola <pedidos@dominio.com.br>`                            | idem ou `onboarding@resend.dev`                                                                                       | sandbox                 |
+| `VITE_SUPABASE_URL`         | ✅                                                                     | ✅                                                                                                                    | ✅                      |
+| `VITE_SUPABASE_ANON_KEY`    | ✅                                                                     | ✅                                                                                                                    | ✅                      |
+| `VITE_GA4_ID`               | `G-XXXXXXXXXX`                                                         | (vazio)                                                                                                               | (vazio)                 |
+| `VITE_META_PIXEL_ID`        | `123…`                                                                 | (vazio)                                                                                                               | (vazio)                 |
 
 > ⚠️ **`SERVICE_ROLE_KEY` em Preview deve ser DIFERENTE** (idealmente um projeto Supabase separado de staging). Vazamento em Preview compromete prod.
 
+> `DOWNLOAD_TOKEN_SECRET` é legado e inerte: nenhum código lê essa variável (os tokens de download são valores opacos gerados e conferidos em `download_tokens`). Não cadastrar; se existir num projeto antigo, pode apagar.
+
 > O `vercel.json` **não** declara bloco `env`. Todas as variáveis vivem em Settings → Environment Variables, que as expõe ao build **e** ao runtime. O bloco antigo mapeava para _Secrets_ legados da Vercel (`@supabase_url`, `@mercadopago_access_token` etc.); num projeto novo esses secrets não existem e o build morre com `references Secret ... which does not exist`. Removido em 26/08/2026, junto com uma chave `"//"` que estava dentro de um objeto de `routes` — o schema da Vercel rejeita propriedade desconhecida em rota. A rota A6 (`/api/admin-*` → `/api/admin/*`) continua lá: é compatibilidade da janela de deploy dos 18 handlers renomeados, e pode sair depois do primeiro ciclo de deploy, já que não há consumidor externo dessas URLs.
 
-Opcionais (defaults no código): `SECURITY_ALERT_WEBHOOK_URL`, `ABANDONED_CART_FIRST_HOURS` (1), `ABANDONED_CART_SECOND_HOURS` (24), `REACTIVATION_DAYS_MIN`/`MAX` (90/180), `REACTIVATION_COUPON_CODE`/`PCT` (`VOLTEI15`/15), `VIP_LTV_THRESHOLD` (300), `RATE_LIMIT_MAX` (250) — esta última só vale no limitador de borda do Express local; a política real (`enforceRateLimit`) não usa variável de ambiente, os perfis estão em `lib/rate-limit.js`.
+Opcionais (defaults no código): `SECURITY_ALERT_WEBHOOK_URL`, `ABANDONED_CART_FIRST_HOURS` (1), `ABANDONED_CART_SECOND_HOURS` (24), `REACTIVATION_DAYS_MIN`/`MAX` (90/180), `REACTIVATION_COUPON_CODE`/`PCT` (`VOLTEI15`/15), `VIP_LTV_THRESHOLD` (300), `EMAIL_SEND_CONCURRENCY` (5), `SMTP_MAX_CONNECTIONS` (3), `LOG_LEVEL` (`info`), `SUPABASE_REQUEST_TIMEOUT_MS` (10000), `BEST_SELLERS_WINDOW_MONTHS` (12), `BEST_SELLERS_SCAN_LIMIT` (2000), `CUSTOMER_PASSWORD_SETUP_REDIRECT` (`APP_URL` + `/login?mode=login`), `WEBHOOK_TOLERANCE_SECONDS` (172800 = 48h; teto de 7 dias), `WEBHOOK_FUTURE_SKEW_SECONDS` (120), `RATE_LIMIT_TIMEOUT_MS` (2500), `RATE_LIMIT_ALERT_INTERVAL_MS` (60000) e `RATE_LIMIT_MAX` (250). Esta última só vale no limitador de borda do Express local. A política real (`enforceRateLimit`) tem os perfis (limite e janela) fixos em `lib/rate-limit.js`; do ambiente ela só lê quanto o gate espera o Postgres (`RATE_LIMIT_TIMEOUT_MS`) e o intervalo entre alertas (`RATE_LIMIT_ALERT_INTERVAL_MS`).
 
 ### 1.3 Domínio customizado
 
@@ -74,7 +76,7 @@ Opcionais (defaults no código): `SECURITY_ALERT_WEBHOOK_URL`, `ABANDONED_CART_F
 3. Aguardar SSL Vercel auto-provision
 4. Atualizar `APP_URL` para o domínio final
 5. Atualizar `CORS_ORIGINS`
-6. Atualizar `notification_url` no painel do Mercado Pago
+6. Atualizar a URL de Webhooks no painel do Mercado Pago (§2.2). A `notification_url` de cada preferência já sai de `APP_URL` (`lib/mercadopago-config.js`)
 
 ---
 
@@ -137,6 +139,7 @@ Arquivo: `.github/workflows/email-cron.yml` — faz `POST $APP_URL/api/cron-emai
 2. Adicione:
    - `APP_URL=https://profamarciarcardoso.com.br` (domínio de produção)
    - `CRON_SECRET=<o-mesmo-que-no-Vercel>`
+   - (Opcional, só para o `lighthouse.yml`) `LHCI_GITHUB_APP_TOKEN` — token do GitHub App do Lighthouse CI, que publica o status no PR; sem ele o job roda igual, só não publica o status
 3. Após primeiro deploy: Actions → "Email cron" → Run workflow → validar status 200
 
 ### Frequência
@@ -180,7 +183,7 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 
 ### 5.4 Build e testes
 
-- [ ] `npm run check` (test + build) passou localmente
+- [ ] `npm run check` (check:env + format:check + lint + test + coverage + build) passou localmente
 - [ ] Build sem warnings críticos
 - [ ] Lighthouse CI: Performance ≥ 80, Acessibilidade ≥ 90, SEO ≥ 90 (asserts do `lighthouserc.json`, preset desktop sobre o build estático)
 - [ ] CI verde no GitHub
@@ -256,7 +259,7 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 ```
 ✓ /admin carrega o login admin
 ✓ Login admin com 2FA funciona
-✓ 5 tentativas falhas em 10min retorna 429 (vale em produção — contador no Postgres)
+✓ 6ª tentativa de login em 10min (com sucesso ou não) retorna 429 (vale em produção — contador no Postgres)
 ✓ Sessão de 8h ainda vale
 ✓ Todas as 14 abas renderizam
 ✓ Criar produto via wizard funciona
@@ -283,7 +286,7 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 
 **Diagnóstico:**
 
-1. Vercel → Functions → `/api/create-payment` → ver logs
+1. Vercel → Logs (função única `api/index`) → filtrar pelo caminho `/api/create-payment`
 2. Procurar erro de MP SDK
 3. Causas comuns:
    - `MERCADOPAGO_ACCESS_TOKEN` ainda é `TEST-*` em prod → trocar para `APP_USR-*`
@@ -343,7 +346,7 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 
 1. Supabase Dashboard → Database → Insights → ver queries lentas
 2. Adicionar índice se uma coluna está em WHERE/JOIN sem índice
-3. Para análise complexa (Curva ABC), o cache 1h já existe — verificar se está populado
+3. A Curva ABC não tem cache (`Cache-Control: no-store`, recalcula a cada abertura da aba). Se estiver lenta, conferir índices em `orders`/`order_items` e reduzir o período
 
 ### 7.7 Tráfego anômalo (possível ataque)
 
@@ -366,7 +369,7 @@ Antes de toda release maior (não toda commit; reservar para releases significat
 
 1. GitHub → Actions → email-cron → último run
 2. Se 401: `CRON_SECRET` desincronizado entre GitHub e Vercel
-3. Se 500: ver função `/api/cron-email-jobs` no Vercel
+3. Se 500: Vercel → Logs (função `api/index`) → filtrar pelo caminho `/api/cron-email-jobs`
 4. Manual: `gh workflow run email-cron.yml`
 
 ---

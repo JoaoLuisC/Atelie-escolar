@@ -20,11 +20,11 @@
 
 ```bash
 git clone <repo>
-cd Atelie-escolar
+cd <pasta-do-repo>
 npm install
 ```
 
-> O repo versiona um `.npmrc` com `legacy-peer-deps=true` (React 19 vs peer deps do `react-helmet-async`) — o `npm install` funciona sem flags extras.
+> O conflito de peer do `react-helmet-async` com o React 19 é resolvido por um `overrides` pontual no `package.json`, então o `npm install` funciona sem flags extras. O `.npmrc` **não** usa mais `legacy-peer-deps`.
 
 ---
 
@@ -36,11 +36,11 @@ Crie `.env.local` a partir do template (não commitar nunca):
 cp .env.example .env.local
 ```
 
-A cascata de carregamento usada pelo `server.js`:
+A cascata de carregamento usada pelo `server.js` (e pelo `scripts/check-env.js`), onde o ambiente é `APP_ENV`, senão `NODE_ENV`, senão `development`:
 
-1. `.env.{NODE_ENV}.local` (ex: `.env.development.local`)
-2. `.env.local`
-3. `.env.{NODE_ENV}` (ex: `.env.development`)
+1. `.env.{ambiente}.local` (ex: `.env.development.local`)
+2. `.env.local` — pulado quando o ambiente é `test`
+3. `.env.{ambiente}` (ex: `.env.development`)
 4. `.env`
 
 Variáveis com prefixo `VITE_` são expostas ao bundle do frontend pelo Vite. Variáveis sem prefixo ficam só no servidor.
@@ -51,10 +51,10 @@ Variáveis com prefixo `VITE_` são expostas ao bundle do frontend pelo Vite. Va
 SUPABASE_URL=https://<seu-ref>.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_xxxxxxxxxxx
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxxxxxxxxxx    # ⚠️ NUNCA expor no front
-SUPABASE_DB_URL=postgresql://postgres:...           # connection string direta (só tooling; app não usa)
-SUPABASE_STORAGE_BUCKET=product-files               # presente no template; os buckets reais são fixos no código (ver §3.5)
+SUPABASE_DB_URL=postgresql://postgres:...           # connection string direta, para uso manual (psql/pg_dump); nenhum script lê
+SUPABASE_STORAGE_BUCKET=                            # opcional: bucket EXTRA aceito em download_url, além dos 3 fixos (§3.5). Deixe vazio
 
-# Idem expostas ao browser (devem espelhar; NÃO estão no .env.example — acrescente à mão)
+# Idem expostas ao browser (devem espelhar; já estão no .env.example)
 VITE_SUPABASE_URL=<igual ao SUPABASE_URL>
 VITE_SUPABASE_ANON_KEY=<igual ao SUPABASE_ANON_KEY>
 ```
@@ -71,12 +71,13 @@ VITE_SUPABASE_ANON_KEY=<igual ao SUPABASE_ANON_KEY>
 ```env
 # Desenvolvimento — use credenciais de TESTE
 MERCADOPAGO_ACCESS_TOKEN=TEST-xxxx-xxxx-xxxx
-MERCADOPAGO_PUBLIC_KEY=TEST-xxxx-xxxx-xxxx
 
 # Produção
 # MERCADOPAGO_ACCESS_TOKEN=APP_USR-xxxx
-# MERCADOPAGO_PUBLIC_KEY=APP_USR-xxxx
 ```
+
+> Só o access token é usado: o Checkout Pro funciona por redirect, sem SDK no browser. A
+> `MERCADOPAGO_PUBLIC_KEY` que aparece no `.env.example` não é lida por nenhum código.
 
 **Onde obter:**
 
@@ -90,7 +91,7 @@ MERCADOPAGO_PUBLIC_KEY=TEST-xxxx-xxxx-xxxx
 # Gerar cada um com: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ADMIN_SESSION_SECRET=<64 chars hex>
 CUSTOMER_SESSION_SECRET=<64 chars hex>
-DOWNLOAD_TOKEN_SECRET=<64 chars hex>
+ADMIN_2FA_ENC_KEY=<64 chars hex>     # protege o segredo TOTP do 2FA em repouso; trocar invalida o 2FA já cadastrado
 
 # Você cria no painel do Mercado Pago e copia (assinatura secreta do webhook)
 WEBHOOK_SECRET=<copie do dashboard MP>
@@ -100,19 +101,26 @@ WEBHOOK_SECRET=<copie do dashboard MP>
 CRON_SECRET=<64 chars hex>
 ```
 
+> `DOWNLOAD_TOKEN_SECRET` é **legado e inerte**: nenhum código a lê (os tokens de download são
+> valores opacos guardados em `download_tokens`). Pode apagar do seu `.env.local`.
+
 ### 2.4 Servidor + URLs + CORS
 
 ```env
 APP_URL=http://localhost:3000                     # base usada em webhook MP, back_urls e links de e-mail; em prod: URL pública https do site
-APP_ENV=development                                # development | test | production
+APP_ENV=development                                # development | test | preview | production
 NODE_ENV=development
 
-# CORS — em prod, lista explícita; em dev, deixa vazio para permitir qualquer localhost
+# CORS — em prod, lista explícita (obrigatória: sem ela o boot falha); em dev, deixa vazio para permitir qualquer localhost
 CORS_ORIGINS=                                      # ex prod: https://atelie.com.br,https://www.atelie.com.br
 
-# Rate limits (defaults conservadores)
+# Limitador de borda SÓ do Express local (não roda na Vercel); a política real está em lib/rate-limit.js
 RATE_LIMIT_MAX=250
 ```
+
+> ⚠️ Em dev, `APP_URL` serve ao webhook (a API, na porta 3000), mas as `back_urls` do Mercado
+> Pago e os links de e-mail apontam para o mesmo host, que não serve o front: o retorno do MP cai
+> num 404. O fluxo segue pelo polling na aba do checkout.
 
 ### 2.5 E-mail (Resend) — obrigatório para reset de senha e confirmação de compra
 
@@ -158,6 +166,9 @@ ABANDONED_CART_SECOND_HOURS=24    # janela do 2º lembrete
 REACTIVATION_DAYS_MIN=90          # mínimo de dias de inatividade p/ e-mail de reativação
 REACTIVATION_DAYS_MAX=180         # máximo de dias p/ reativação
 VIP_LTV_THRESHOLD=300             # limiar de LTV (R$) p/ marcar cliente VIP na segmentação
+REACTIVATION_COUPON_CODE=VOLTEI15 # cupom enviado na reativação — precisa existir em coupons
+REACTIVATION_COUPON_PCT=15        # percentual citado no e-mail de reativação
+EMAIL_SEND_CONCURRENCY=5          # envios simultâneos por job
 ```
 
 Usadas por `handlers/cron-email-jobs.js` e `lib/customer-segmentation.js`.
@@ -172,26 +183,20 @@ Usadas por `handlers/cron-email-jobs.js` e `lib/customer-segmentation.js`.
 2. Anote `Project URL`, `anon key` e `service role key`
 3. Region recomendada: `sa-east-1` (São Paulo) para latência menor
 
-### 3.2 Aplicar schema (uma das opções)
+### 3.2 Aplicar schema base (SQL Editor)
 
-**Opção A — Manual via SQL Editor:**
+Os dois passos (§3.2 e §3.3) são **obrigatórios e nessa ordem**: as migrations não criam as tabelas base.
 
 1. Dashboard → SQL Editor → cole `supabase/schema.sql` → Run
 2. Cole `supabase/security-hardening.sql` → Run (RLS + policies + funções)
 3. (Opcional) Cole `supabase/seed-sample-data.sql` para popular dados de exemplo
 
-**Opção B — Via Supabase CLI:**
+### 3.3 Aplicar as migrations (Supabase CLI)
 
 ```bash
 npm run supabase:login
 npm run supabase:link -- --project-ref <seu-ref>
-npm run supabase:db:push           # aplica todas as migrations em ordem
-```
-
-### 3.3 Aplicar migrations pendentes
-
-```bash
-npm run supabase:db:push     # aplica as 18 migrations em ordem
+npm run supabase:db:push     # aplica as 21 migrations em ordem
 ```
 
 A lista, com o que cada uma faz e as queries de validação, está em
@@ -219,7 +224,7 @@ curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
   -d '{"email":"admin@example.com","password":"SenhaForte123!","email_confirm":true}'
 ```
 
-> ⚠️ **Nunca insira direto em `auth.users` via SQL.** Sem passar pelo signup ou pela Admin API, campos gerenciados pelo GoTrue (ex: `instance_id`) ficam NULL e o usuário é ignorado. Ver [08-SEGURANCA §4c](./08-SEGURANCA.md).
+> ⚠️ **Nunca insira direto em `auth.users` via SQL.** Sem passar pelo signup ou pela Admin API, campos gerenciados pelo GoTrue (ex: `instance_id`) ficam NULL e o usuário é ignorado. Ver [08-SEGURANCA §2.7](./08-SEGURANCA.md).
 
 ### 3.5 Storage para uploads e downloads
 
@@ -235,7 +240,7 @@ O upload do painel admin (`POST /api/admin/upload-url`, usado pelo wizard de pro
 2. Faça upload das mídias e arquivos pelo próprio painel admin (wizard de produto) — ou manualmente pelo Dashboard
 3. Em cada produto, `download_url` aceita `product_files/<path>` (formato curto), URL completa do Storage ou URL externa (ex: Google Drive — redirect direto, sem signed URL)
 
-Para arquivos no Storage, a URL real entregue ao cliente é sempre signed e expira em 5 min (ver [08-SEGURANCA §8](./08-SEGURANCA.md)).
+Para arquivos no Storage, a URL real entregue ao cliente é sempre signed e expira em 5 min (ver [08-SEGURANCA §6](./08-SEGURANCA.md)).
 
 ---
 
@@ -347,7 +352,7 @@ npm run dev:all          # ambos com concurrently (recomendado)
 npm run build            # produção
 npm run preview          # preview do build
 npm run test             # vitest run
-npm run check            # test + build (usado em CI)
+npm run check            # check:env + format:check + lint + test + coverage + build (a CI roda os mesmos passos)
 ```
 
 ### Verificar tudo funcionando
@@ -413,14 +418,18 @@ Sem ngrok, o polling de pagamento cobre o gap. Webhook nunca chega, mas a UX con
 
 ## 9. Scripts utilitários
 
-| Script                             | Uso                                                     | Variáveis necessárias                                            |
-| ---------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
-| `node scripts/check-advisor.js`    | Lê Security Advisor do Supabase                         | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                           |
-| `node scripts/configure-auth.js`   | Atualiza URLs OAuth permitidas                          | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                           |
-| `node scripts/db-inspect.js`       | Inventário de tabelas via REST                          | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
-| `node scripts/check-utf8.js`       | Audita encoding de textos no banco (Management API)     | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                           |
-| `node scripts/fix-utf8.js`         | Corrige encoding corrompido                             | idem                                                             |
-| `pwsh scripts/fix-dns.ps1` (admin) | Conserta DNS Windows quando `*.supabase.co` não resolve | —                                                                |
+| Script                               | Uso                                                                                 | Variáveis necessárias                                                             |
+| ------------------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `npm run check:env`                  | Valida o ambiente (roda no `npm run check` e no build da Vercel)                    | —                                                                                 |
+| `npm run icons:subset`               | Regera o subset da fonte de ícones (`scripts/build-icon-subset.js`)                 | —                                                                                 |
+| `node scripts/check-rls.js`          | O que a chave anon consegue ler em produção (só leitura)                            | `SUPABASE_URL`, `SUPABASE_ANON_KEY` (+ `SERVICE_ROLE_KEY` opcional)               |
+| `node scripts/check-schema-drift.js` | Compara migrations local × remoto: funções, triggers, policies, grants (só leitura) | `supabase link` já feito + Docker rodando (o `db dump` sobe a imagem do Postgres) |
+| `node scripts/check-advisor.js`      | Lê Security Advisor do Supabase                                                     | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                                            |
+| `node scripts/configure-auth.js`     | Atualiza URLs OAuth permitidas                                                      | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                                            |
+| `node scripts/db-inspect.js`         | Inventário de tabelas via REST                                                      | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`                  |
+| `node scripts/check-utf8.js`         | Audita encoding de textos no banco (Management API)                                 | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                                            |
+| `node scripts/fix-utf8.js`           | Corrige encoding corrompido                                                         | idem                                                                              |
+| `pwsh scripts/fix-dns.ps1` (admin)   | Conserta DNS Windows quando `*.supabase.co` não resolve                             | —                                                                                 |
 
 ---
 
@@ -445,16 +454,19 @@ taskkill /F /PID <pid>
 
 ### CORS bloqueia chamada da API
 
-- **Em dev**: qualquer `localhost:*` é liberado (configurado em `server.js`)
-- **Em prod**: adicione sua origem em `CORS_ORIGINS=https://seu-dominio.com.br`
+- **Em dev**: o `cors` libera qualquer `localhost:*` (configurado em `lib/express-app.js`)
+- **Em prod**: liste as origens em `CORS_ORIGINS=https://seu-dominio.com.br`
+- ⚠️ As escritas do admin passam por uma checagem anti-CSRF que **não** usa `CORS_ORIGINS`: exige
+  `Origin` igual a `APP_URL` (mais `localhost:5173`/`127.0.0.1:5173` em dev). Se o site responde
+  com e sem `www.`, o painel precisa ser acessado pelo host de `APP_URL`
 
-### `Authentication required` ao chamar `/api/admin/*`
+### `ADMIN_SESSION_INVALID` ("Sessão admin inválida ou expirada.") ao chamar `/api/admin/*`
 
 - Cookie `admin_session` ausente ou inválido
 - Sessão expirada (TTL 8h)
 - `ADMIN_SESSION_SECRET` mudou entre boot e request — reset session refazendo login
 
-### `Webhook signature invalid` no MP
+### `Invalid signature` (401) no webhook do MP
 
 - `WEBHOOK_SECRET` no `.env.local` precisa bater com o configurado no painel do Mercado Pago
 - Em dev sem ngrok, o webhook não chega — não é erro, é esperado
@@ -472,6 +484,5 @@ taskkill /F /PID <pid>
 - Configurar GA4 ID + Meta Pixel ID em `.env.local` (e Vercel)
 - Submeter sitemap no Search Console pós-deploy
 - Autenticar domínio no Resend (DKIM + SPF + DMARC) para liberar e-mail marketing
-- Criar uma imagem OG dedicada (1200×630) — hoje o `SEO.jsx` usa `/favicon.svg` como imagem default
 
 Lista completa de itens operacionais pendentes: [13-ROADMAP-PENDENCIAS](./13-ROADMAP-PENDENCIAS.md).

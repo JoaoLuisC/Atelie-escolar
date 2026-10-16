@@ -3,8 +3,8 @@
 Loja de materiais educativos digitais (banners, painéis, atividades pedagógicas) com download
 liberado assim que o pagamento é aprovado.
 
-**Stack**: React 19 + Vite 8 + Tailwind no front · Express 5 e funções serverless na Vercel ·
-Supabase (Postgres 17 + Auth + Storage) · Mercado Pago · Resend.
+**Stack**: React 19 + Vite 8 + Tailwind no front · Express 5 servido por uma única função
+serverless na Vercel · Supabase (Postgres 17 + Auth + Storage) · Mercado Pago · Resend.
 
 ---
 
@@ -12,7 +12,7 @@ Supabase (Postgres 17 + Auth + Storage) · Mercado Pago · Resend.
 
 ```bash
 git clone <repo>
-cd Atelie-escolar
+cd <pasta-do-repo>
 npm install
 cp .env.example .env.local   # editar com suas credenciais
 npm run dev:all              # frontend :5173 + API :3000
@@ -52,7 +52,8 @@ segredos obrigatórios e como aplicar o schema no Supabase.
   (1h/24h), pós-compra (D+3/D+15/D+45) e reativação (90 dias)
 - Auth Supabase (e-mail/senha + Google OAuth) com recuperação por e-mail
 - Admin com 2FA opcional (TOTP + PIN de recuperação) e audit log append-only das escritas
-- LGPD: banner de consentimento, exclusão de conta em dois passos, purga automática de logs
+- LGPD: banner de consentimento, exportação dos próprios dados, exclusão de conta em dois
+  passos, purga automática de logs
 
 ---
 
@@ -67,7 +68,7 @@ segredos obrigatórios e como aplicar o schema no Supabase.
 | `npm run preview`          | Serve o build localmente                                                        |
 | `npm test`                 | Vitest                                                                          |
 | `npm run test:coverage`    | Vitest com relatório de cobertura                                               |
-| `npm run lint`             | ESLint (catraca em `--max-warnings=17`)                                         |
+| `npm run lint`             | ESLint (catraca em `--max-warnings=12`)                                         |
 | `npm run format`           | Prettier — escreve                                                              |
 | **`npm run check`**        | **O gate: env + format + lint + testes + cobertura + build.** Mesma ordem do CI |
 | `npm run supabase:db:push` | Aplica as migrations no Supabase remoto                                         |
@@ -76,16 +77,18 @@ Também há `supabase:login`, `supabase:link`, `supabase:db:pull` e `supabase:mi
 
 ### Utilitários (`scripts/`)
 
-| Script                 | Uso                                                | Precisa de                                       |
-| ---------------------- | -------------------------------------------------- | ------------------------------------------------ |
-| `check-env.js`         | Valida o ambiente — roda dentro do `npm run check` | —                                                |
-| `build-icon-subset.js` | Gera o subset da fonte de ícones                   | —                                                |
-| `check-advisor.js`     | Lê o Security Advisor do Supabase                  | `SUPABASE_PAT` + `SUPABASE_PROJECT_REF`          |
-| `configure-auth.js`    | Atualiza as URLs OAuth permitidas no Supabase      | `SUPABASE_PAT` + `SUPABASE_PROJECT_REF`          |
-| `check-utf8.js`        | Audita encoding nos textos do banco (não altera)   | `SUPABASE_PAT` + `SUPABASE_PROJECT_REF`          |
-| `fix-utf8.js`          | Conserta encoding corrompido no banco              | `SUPABASE_PAT` + `SUPABASE_PROJECT_REF`          |
-| `db-inspect.js`        | Inventário de tabelas via REST                     | `SUPABASE_URL` + `ANON_KEY` + `SERVICE_ROLE_KEY` |
-| `fix-dns.ps1`          | Conserta DNS local no Windows                      | admin                                            |
+| Script                  | Uso                                                | Precisa de                                       |
+| ----------------------- | -------------------------------------------------- | ------------------------------------------------ |
+| `check-env.js`          | Valida o ambiente — roda dentro do `npm run check` | —                                                |
+| `build-icon-subset.js`  | Gera o subset da fonte de ícones                   | —                                                |
+| `check-rls.js`          | O que a chave anon consegue ler em produção        | `SUPABASE_URL` + `ANON_KEY`                      |
+| `check-schema-drift.js` | Migrations local × remoto (funções, policies…)     | `supabase link` feito + Docker                   |
+| `check-advisor.js`      | Lê o Security Advisor do Supabase                  | `SUPABASE_PAT` + `SUPABASE_PROJECT_REF`          |
+| `configure-auth.js`     | Atualiza as URLs OAuth permitidas no Supabase      | `SUPABASE_PAT` + `SUPABASE_PROJECT_REF`          |
+| `check-utf8.js`         | Audita encoding nos textos do banco (não altera)   | `SUPABASE_PAT` + `SUPABASE_PROJECT_REF`          |
+| `fix-utf8.js`           | Conserta encoding corrompido no banco              | `SUPABASE_PAT` + `SUPABASE_PROJECT_REF`          |
+| `db-inspect.js`         | Inventário de tabelas via REST                     | `SUPABASE_URL` + `ANON_KEY` + `SERVICE_ROLE_KEY` |
+| `fix-dns.ps1`           | Conserta DNS local no Windows                      | admin                                            |
 
 ---
 

@@ -213,7 +213,7 @@ Toda compra aprovada inicia sequência mínima:
 - D+15: cross-sell baseado em categoria comprada
 - D+45: novidades da mesma categoria
 
-Implementada em `handlers/cron-email-jobs.js` (roda de hora em hora via GitHub Actions), idempotente via `email_sent_log`.
+D+3, D+15 e D+45 implementados em `handlers/cron-email-jobs.js` (roda de hora em hora via GitHub Actions), idempotente via `email_sent_log`. ⚠️ D+0: o endpoint `POST /api/send-confirmation-email` existe, mas nenhum fluxo o dispara hoje — regra pendente ([13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md)).
 
 #### D5. Segmentação por categoria, não por individualização
 
@@ -296,7 +296,7 @@ WebP/AVIF, lazy load fora da dobra, srcset responsivo. CDN se volume crescer.
 
 #### F5. Cache de API
 
-Endpoints públicos (catálogo, home) com cache HTTP de pelo menos 60s. Curva ABC e dashboards: cache de 1h server-side.
+Endpoints públicos (catálogo, home) com cache HTTP de pelo menos 60s (`CACHE_POLICIES.catalog`). Relatórios do admin (Curva ABC, funil, KPIs, segmentos): `no-store`, recalculados a cada abertura — dado de cliente não fica no navegador após o logout (ADM-01), e cache em memória de processo não funciona em serverless.
 
 #### F6. Sem chamadas síncronas no caminho crítico
 
@@ -354,7 +354,7 @@ Sessões via cookie assinado HMAC. JS não acessa.
 
 #### H4. Rate limit em endpoints públicos
 
-Helmet + express-rate-limit já configurados. Reforçar para endpoints novos sensíveis. ⚠️ O rate limit roda no Express (dev); nas funções serverless da Vercel depende de store compartilhado — pendência **API-03**, registrada em comentário de `routes/auth.routes.js` (detalhes em [08-SEGURANCA](./08-SEGURANCA.md)).
+Rate limit é `enforceRateLimit(req, res, RATE_LIMITS.<perfil>)` dentro do handler, com contador no Postgres — vale em dev e produção ([ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md)). Endpoint público novo precisa de perfil em `RATE_LIMITS` (o `express-rate-limit` do `server.js` é só rede contra loop no Express local). Detalhes em [08-SEGURANCA](./08-SEGURANCA.md).
 
 #### H5. Senhas seguindo política
 
@@ -368,6 +368,8 @@ Coletar apenas o necessário (nome, email para compra). Endereço só se for pro
 
 Endpoint para usuário solicitar exclusão de conta + dados associados. Implementado self-service: `POST /api/me-delete-account` em 2 passos (solicitação → confirmação por token enviado por e-mail), anonimiza pedidos e limpa a sessão.
 
+O direito de acesso/portabilidade (art. 18, V) também é self-service: `GET /api/me-export-data` (botão "Baixar meus dados" em `/conta`), escopado por `customer_id`.
+
 #### H8. Backup automatizado
 
 Supabase Pro tem 30 dias. Free, 7 dias. Manter no mínimo Pro em produção.
@@ -378,7 +380,7 @@ Supabase Pro tem 30 dias. Free, 7 dias. Manter no mínimo Pro em produção.
 
 #### I1. Tudo que admin faz é auditado
 
-Implementado: tabela `admin_audit_log` (`admin_id, action, target_type, target_id, before, after, ip, created_at`), preenchida por `lib/admin-audit.js` em toda escrita do painel (produtos, categorias, cupons, pedidos, usuários, settings). Append-only (triggers bloqueiam UPDATE/DELETE), campos sensíveis redigidos, retenção de 18 meses.
+Implementado: tabela `admin_audit_log` (`admin_id, action, target_type, target_id, before, after, ip, created_at`), preenchida por `lib/admin-audit.js` em toda escrita do painel (produtos, categorias, cupons, pedidos, usuários, settings, upload de mídia e limpeza de eventos). Append-only (triggers bloqueiam UPDATE/DELETE), campos sensíveis redigidos, retenção de 18 meses.
 
 #### I2. 2FA opcional, mas recomendado
 

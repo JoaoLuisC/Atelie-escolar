@@ -15,10 +15,10 @@
 
 Arquivos:
 
-- [`supabase/schema.sql`](../../supabase/schema.sql) — DDL canônico (14 tabelas; as 3 restantes nascem em migrations)
+- [`supabase/schema.sql`](../../supabase/schema.sql) — DDL canônico (14 tabelas; as 4 restantes — `email_subscribers`, `email_sent_log`, `admin_audit_log` e `rate_limit_hit` — nascem em migrations)
 - [`supabase/security-hardening.sql`](../../supabase/security-hardening.sql) — RLS + policies + funções + grants (espelho fora da sequência de migrations)
 - [`supabase/seed-sample-data.sql`](../../supabase/seed-sample-data.sql) — dados de exemplo
-- [`supabase/migrations/`](../../supabase/migrations/) — 19 migrations versionadas
+- [`supabase/migrations/`](../../supabase/migrations/) — 21 migrations versionadas
 - [`supabase/config.toml`](../../supabase/config.toml) — config do Supabase CLI/local
 
 ---
@@ -46,64 +46,65 @@ Categorização de produtos. Acesso público read-only quando `active=true`.
 
 Catálogo. Núcleo do app. Acesso público read-only quando `active=true`.
 
-| Coluna           | Tipo                   | Notas                                                                               |
-| ---------------- | ---------------------- | ----------------------------------------------------------------------------------- |
-| `id`             | uuid PK                |                                                                                     |
-| `name`           | text                   |                                                                                     |
-| `slug`           | text uniq              | URL canônica + trigger auto-gerador (`products_ensure_slug`)                        |
-| `category_id`    | uuid FK → `categories` | ON DELETE SET NULL                                                                  |
-| `description`    | text                   | Markdown / texto rico                                                               |
-| `price`          | numeric(12,2)          | Preço atual                                                                         |
-| `original_price` | numeric(12,2)          | Preço "de" — opcional para mostrar desconto                                         |
-| `image_url`      | text                   | Imagem primária (compat)                                                            |
-| `images`         | jsonb                  | Array de URLs (galeria)                                                             |
-| `videos`         | jsonb                  | Array de URLs (YouTube/Vimeo embed)                                                 |
-| `download_url`   | text                   | Path no Supabase Storage (vira signed URL de 5 min) ou URL externa (Drive — legado) |
-| `tags`           | jsonb                  | Para busca / filtros futuros                                                        |
-| `product_type`   | text                   | `individual` \| `kit`                                                               |
-| `is_kit`         | boolean                | Flag de kit                                                                         |
-| `kit_items`      | jsonb                  | Itens que compõem o kit                                                             |
-| `panel_sizes`    | jsonb                  | Tamanhos de painel disponíveis                                                      |
-| `page_size`      | text                   | `A4`, `A3`, etc                                                                     |
-| `paper_type`     | text                   | Sugestão de impressão                                                               |
-| `active`         | boolean                | Falso esconde do catálogo                                                           |
-| `featured`       | boolean                | Destaque na home                                                                    |
-| `faq`            | jsonb                  | `[{ question, answer }]`                                                            |
-| `reviews`        | jsonb                  | `[{ author, rating, text, date }]`                                                  |
-| `benefits`       | jsonb                  | `[{ icon, title, description }]`                                                    |
-| `created_at`     | timestamptz            |                                                                                     |
-| `updated_at`     | timestamptz            | Trigger `set_updated_at`                                                            |
+| Coluna           | Tipo                   | Notas                                                                                                                                                                                                                         |
+| ---------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | uuid PK                |                                                                                                                                                                                                                               |
+| `name`           | text                   |                                                                                                                                                                                                                               |
+| `slug`           | text uniq              | URL canônica + trigger auto-gerador (`products_ensure_slug`)                                                                                                                                                                  |
+| `category_id`    | uuid FK → `categories` | ON DELETE SET NULL                                                                                                                                                                                                            |
+| `description`    | text                   | Markdown / texto rico                                                                                                                                                                                                         |
+| `price`          | numeric(12,2)          | Preço atual                                                                                                                                                                                                                   |
+| `original_price` | numeric(12,2)          | Preço "de" — opcional para mostrar desconto                                                                                                                                                                                   |
+| `image_url`      | text                   | Imagem primária (compat)                                                                                                                                                                                                      |
+| `images`         | jsonb                  | Array de URLs (galeria)                                                                                                                                                                                                       |
+| `videos`         | jsonb                  | Array de URLs (YouTube/Vimeo embed)                                                                                                                                                                                           |
+| `download_url`   | text                   | Path no Supabase Storage (`<bucket>/<path>` ou URL `…/storage/v1/object/…`, bucket na allowlist), que vira signed URL de 5 min. URL externa (Drive) é recusada: 500 + evento `download_url_not_storage`, sem consumir o token |
+| `tags`           | jsonb                  | Para busca / filtros futuros                                                                                                                                                                                                  |
+| `product_type`   | text                   | `individual` \| `kit`                                                                                                                                                                                                         |
+| `is_kit`         | boolean                | Flag de kit                                                                                                                                                                                                                   |
+| `kit_items`      | jsonb                  | Itens que compõem o kit                                                                                                                                                                                                       |
+| `panel_sizes`    | jsonb                  | Tamanhos de painel disponíveis                                                                                                                                                                                                |
+| `page_size`      | text                   | `A4`, `A3`, etc                                                                                                                                                                                                               |
+| `paper_type`     | text                   | Sugestão de impressão                                                                                                                                                                                                         |
+| `active`         | boolean                | Falso esconde do catálogo                                                                                                                                                                                                     |
+| `featured`       | boolean                | Destaque na home                                                                                                                                                                                                              |
+| `faq`            | jsonb                  | `[{ question, answer }]`                                                                                                                                                                                                      |
+| `reviews`        | jsonb                  | `[{ author, role, location, text, rating }]`                                                                                                                                                                                  |
+| `benefits`       | jsonb                  | `[{ icon, label }]`                                                                                                                                                                                                           |
+| `created_at`     | timestamptz            |                                                                                                                                                                                                                               |
+| `updated_at`     | timestamptz            | Trigger `set_updated_at`                                                                                                                                                                                                      |
 
 > `faq`, `reviews` e `benefits` são editáveis pelo admin via `ProductWizard` (aba Produtos) — ver [07-DASHBOARD-ADMIN](./07-DASHBOARD-ADMIN.md).
 
 ### `orders`
 
-Pedidos. Acesso restrito ao próprio cliente (via `auth.uid()` ou e-mail do JWT) ou admin (via service_role).
+Pedidos. Acesso restrito ao próprio cliente (via `customer_id = auth.uid()`; o claim `email` do JWT foi removido na wave1) ou admin (via service_role).
 
-| Coluna                                                                      | Tipo                            | Notas                                                                                                                               |
-| --------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                                                                        | uuid PK                         |                                                                                                                                     |
-| `order_code`                                                                | text uniq                       | `ORD-<timestamp>-<hex>` com 128 bits de entropia (`crypto.randomBytes(16).toString('hex')`) — usado como `external_reference` no MP |
-| `customer_id`                                                               | uuid FK → `auth.users` nullable | ON DELETE SET NULL; pode ser convidado (anônimo + email)                                                                            |
-| `customer_email`                                                            | text                            | Sempre presente                                                                                                                     |
-| `customer_name`                                                             | text                            |                                                                                                                                     |
-| `customer_cpf`                                                              | text nullable                   | Para emissão de nota futuramente                                                                                                    |
-| `customer_phone`                                                            | text nullable                   |                                                                                                                                     |
-| `total_amount`                                                              | numeric(12,2)                   |                                                                                                                                     |
-| `status`                                                                    | text                            | `pending` → `completed` (setado por webhook/verify-payment); admin pode ajustar via painel                                          |
-| `payment_status`                                                            | text                            | `pending` \| `approved` (demais estados do MP — `rejected`, `refunded`, etc — via admin)                                            |
-| `payment_provider`                                                          | text                            | `mercadopago` (default)                                                                                                             |
-| `payment_id`                                                                | text                            | ID do pagamento no MP                                                                                                               |
-| `preference_id`                                                             | text                            | ID da preference no MP                                                                                                              |
-| `mercadopago_preference_id` / `mercadopago_payment_id` / `mercadopago_data` | text / text / jsonb             | Colunas legadas — código atual usa `preference_id`/`payment_id`                                                                     |
-| `download_tokens`                                                           | jsonb                           | Legado — tokens vivem na tabela `download_tokens`                                                                                   |
-| `metadata`                                                                  | jsonb                           | Legado                                                                                                                              |
-| `coupon_code`                                                               | text nullable                   |                                                                                                                                     |
-| `discount_amount`                                                           | numeric(12,2)                   |                                                                                                                                     |
-| `attribution_data`                                                          | jsonb                           | UTM + referrer + sessão                                                                                                             |
-| `created_at`                                                                | timestamptz                     |                                                                                                                                     |
-| `updated_at`                                                                | timestamptz                     | Trigger `set_updated_at`                                                                                                            |
-| `completed_at`                                                              | timestamptz nullable            | Setado quando `approved`                                                                                                            |
+| Coluna                                                                      | Tipo                            | Notas                                                                                                                                           |
+| --------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                                        | uuid PK                         |                                                                                                                                                 |
+| `order_code`                                                                | text uniq                       | `ORD-<timestamp>-<hex>` com 128 bits de entropia (`crypto.randomBytes(16).toString('hex')`) — usado como `external_reference` no MP             |
+| `customer_id`                                                               | uuid FK → `auth.users` nullable | ON DELETE SET NULL; pode ser convidado (anônimo + email)                                                                                        |
+| `customer_email`                                                            | text                            | Sempre presente                                                                                                                                 |
+| `customer_name`                                                             | text                            |                                                                                                                                                 |
+| `customer_cpf`                                                              | text nullable                   | Para emissão de nota futuramente                                                                                                                |
+| `customer_phone`                                                            | text nullable                   |                                                                                                                                                 |
+| `total_amount`                                                              | numeric(12,2)                   |                                                                                                                                                 |
+| `status`                                                                    | text                            | `pending` → `completed` (aprovado) ou `failed` (rejeitado/cancelado), setado por webhook/verify-payment; admin pode ajustar via painel          |
+| `payment_status`                                                            | text                            | `pending` \| `approved` \| `rejected` \| `cancelled` (gravados pelo webhook); demais estados do MP (`refunded` etc.) via admin                  |
+| `payment_provider`                                                          | text                            | `mercadopago` (default)                                                                                                                         |
+| `payment_id`                                                                | text                            | ID do pagamento no MP                                                                                                                           |
+| `preference_id`                                                             | text                            | ID da preference no MP                                                                                                                          |
+| `mercadopago_preference_id` / `mercadopago_payment_id` / `mercadopago_data` | text / text / jsonb             | Colunas legadas — código atual usa `preference_id`/`payment_id`                                                                                 |
+| `download_tokens`                                                           | jsonb                           | Legado — tokens vivem na tabela `download_tokens`                                                                                               |
+| `metadata`                                                                  | jsonb                           | Legado                                                                                                                                          |
+| `coupon_code`                                                               | text nullable                   |                                                                                                                                                 |
+| `discount_amount`                                                           | numeric(12,2)                   |                                                                                                                                                 |
+| `coupon_released_at`                                                        | timestamptz nullable            | Quando o uso do cupom reservado foi devolvido (pedido não pago); NULL = uso ainda contado. Migration `20261008000000` (⚠️ pendente em produção) |
+| `attribution_data`                                                          | jsonb                           | UTM + referrer + sessão                                                                                                                         |
+| `created_at`                                                                | timestamptz                     |                                                                                                                                                 |
+| `updated_at`                                                                | timestamptz                     | Trigger `set_updated_at`                                                                                                                        |
+| `completed_at`                                                              | timestamptz nullable            | Setado quando `approved`                                                                                                                        |
 
 ### `order_items`
 
@@ -124,15 +125,15 @@ Itens do pedido.
 
 Perfil de usuário Supabase Auth. Criado por trigger `handle_new_user` quando alguém se registra.
 
-| Coluna         | Tipo                      | Notas                                                                 |
-| -------------- | ------------------------- | --------------------------------------------------------------------- |
-| `id`           | uuid PK FK → `auth.users` | ON DELETE CASCADE                                                     |
-| `email`        | text uniq                 | Espelho de `auth.users.email`                                         |
-| `display_name` | text                      | Editável pelo cliente (única coluna que ele consegue alterar de fato) |
-| `role`         | text                      | `CUSTOMER` \| `ADMIN` \| `MASTER`                                     |
-| `provider`     | text                      | `email` \| `google`                                                   |
-| `created_at`   | timestamptz               |                                                                       |
-| `updated_at`   | timestamptz               |                                                                       |
+| Coluna         | Tipo                      | Notas                                                                                                                                                                       |
+| -------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | uuid PK FK → `auth.users` | ON DELETE CASCADE                                                                                                                                                           |
+| `email`        | text uniq                 | Espelho de `auth.users.email`                                                                                                                                               |
+| `display_name` | text                      | Editável pelo cliente (única coluna que ele consegue alterar de fato)                                                                                                       |
+| `role`         | text                      | `CUSTOMER` \| `SELLER` \| `ADMIN` \| `MASTER` (CHECK `check_valid_role`, versionada na `20261008000001` — ⚠️ pendente em produção). O painel só atribui `CUSTOMER`/`SELLER` |
+| `provider`     | text                      | `email` \| `google`                                                                                                                                                         |
+| `created_at`   | timestamptz               |                                                                                                                                                                             |
+| `updated_at`   | timestamptz               |                                                                                                                                                                             |
 
 > 🔒 **Privilege escalation bloqueado:** o trigger `profiles_guard_privileged_cols` preserva `id/email/role/provider` do valor antigo quando quem grava não é service_role — impede cliente de fazer `UPDATE profiles SET role='ADMIN'`. Ver [08-SEGURANCA §2.6](./08-SEGURANCA.md).
 
@@ -152,16 +153,16 @@ Vinculação usuário ↔ produto comprado. 1 row por (usuário, produto, pedido
 
 Tokens efêmeros de download. Acesso apenas via service_role.
 
-| Coluna         | Tipo                 | Notas                                                                                   |
-| -------------- | -------------------- | --------------------------------------------------------------------------------------- |
-| `token`        | text PK              | 256 bits hex (`crypto.randomBytes(32)`)                                                 |
-| `order_id`     | uuid FK → `orders`   | ON DELETE CASCADE; UNIQUE `(order_id, product_id)` — idempotente a webhooks reentregues |
-| `product_id`   | uuid FK → `products` | ON DELETE CASCADE                                                                       |
-| `product_name` | text                 | Snapshot                                                                                |
-| `used`         | boolean              | `true` após primeiro download (claim atômico via UPDATE condicional)                    |
-| `used_at`      | timestamptz nullable |                                                                                         |
-| `expires_at`   | timestamptz          | TTL de 72h a partir da aprovação do pagamento                                           |
-| `created_at`   | timestamptz          |                                                                                         |
+| Coluna         | Tipo                 | Notas                                                                                                                                             |
+| -------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `token`        | text PK              | 256 bits hex (`crypto.randomBytes(32)`)                                                                                                           |
+| `order_id`     | uuid FK → `orders`   | ON DELETE CASCADE; UNIQUE `(order_id, product_id)` — idempotente a webhooks reentregues                                                           |
+| `product_id`   | uuid FK → `products` | ON DELETE CASCADE                                                                                                                                 |
+| `product_name` | text                 | Snapshot                                                                                                                                          |
+| `used`         | boolean              | `true` após o download (claim atômico via UPDATE condicional). O `verify-payment` pode reemitir a linha com token novo (até 5 downloads por item) |
+| `used_at`      | timestamptz nullable |                                                                                                                                                   |
+| `expires_at`   | timestamptz          | TTL de 72h a partir da emissão (aprovação ou reemissão)                                                                                           |
+| `created_at`   | timestamptz          |                                                                                                                                                   |
 
 ### `download_logs`
 
@@ -179,38 +180,38 @@ Auditoria de downloads. Retenção 12 meses (LGPD).
 
 ### `analytics_events`
 
-Eventos do funil. **RLS permite INSERT público** (anon+auth) com whitelist de `event_name` e sem PII. Retenção 180 dias.
+Eventos do funil. RLS sem policies (service-only): o INSERT público foi removido na wave1 (W1-04). O front posta em `/api/track-event`, que valida a whitelist de [`lib/analytics-events.js`](../../lib/analytics-events.js) e grava com service role. Retenção 180 dias.
 
-| Coluna           | Tipo               | Notas                                                                                                                                                           |
-| ---------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | bigint identity PK |                                                                                                                                                                 |
-| `event_name`     | text               | Client só insere da whitelist: `view_item`, `add_to_cart`, `begin_checkout`, `remove_from_cart`, `view_cart`, `view_catalog`; `purchase` e afins só via backend |
-| `session_id`     | text               | UUID gerado client-side                                                                                                                                         |
-| `customer_email` | text nullable      | Preenchido só por inserts do backend (service_role); a policy pública exige `customer_email is null`                                                            |
-| `order_id`       | uuid nullable FK   | ON DELETE SET NULL; policy pública exige `order_id is null`                                                                                                     |
-| `product_id`     | uuid nullable FK   | ON DELETE SET NULL                                                                                                                                              |
-| `properties`     | jsonb              | UTM, referrer, valor, etc (sanitizado, sem PII)                                                                                                                 |
-| `source`         | text               | `web` \| `server` \| `webhook`                                                                                                                                  |
-| `created_at`     | timestamptz        |                                                                                                                                                                 |
+| Coluna           | Tipo               | Notas                                                                                                                                                                                                                                                           |
+| ---------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | bigint identity PK |                                                                                                                                                                                                                                                                 |
+| `event_name`     | text               | Cliente (via `/api/track-event`): `view_item`, `add_to_cart`, `remove_from_cart`, `view_cart`, `view_catalog`, `begin_checkout`, `client_error`; backend: `checkout_initiated`, `payment_approved`, `payment_rejected`, `payment_cancelled`, `webhook_received` |
+| `session_id`     | text               | UUID gerado client-side                                                                                                                                                                                                                                         |
+| `customer_email` | text nullable      | Legado — nenhum código grava mais (`recordEvent` não recebe e-mail); linhas antigas são zeradas na exclusão de conta                                                                                                                                            |
+| `order_id`       | uuid nullable FK   | ON DELETE SET NULL                                                                                                                                                                                                                                              |
+| `product_id`     | uuid nullable FK   | ON DELETE SET NULL                                                                                                                                                                                                                                              |
+| `properties`     | jsonb              | UTM, referrer, valor, etc (sanitizado, sem PII)                                                                                                                                                                                                                 |
+| `source`         | text               | `web` \| `server` \| `webhook`                                                                                                                                                                                                                                  |
+| `created_at`     | timestamptz        |                                                                                                                                                                                                                                                                 |
 
 ### `security_events`
 
 Eventos de segurança. RLS service-only (cliente não consegue ler nem escrever). Retenção 6 meses.
 
-| Coluna       | Tipo               | Notas                                                                              |
-| ------------ | ------------------ | ---------------------------------------------------------------------------------- |
-| `id`         | bigint identity PK |                                                                                    |
-| `event_name` | text               | `webhook_invalid_signature`, `admin_login_failed`, `verify_payment_email_mismatch` |
-| `severity`   | text               | `info` \| `warn` \| `error` (default `warn`)                                       |
-| `ip`         | text               |                                                                                    |
-| `user_agent` | text               |                                                                                    |
-| `request_id` | text               |                                                                                    |
-| `properties` | jsonb              |                                                                                    |
-| `created_at` | timestamptz        |                                                                                    |
+| Coluna       | Tipo               | Notas                                                                                                                                   |
+| ------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`         | bigint identity PK |                                                                                                                                         |
+| `event_name` | text               | Ex.: `webhook_invalid_signature`, `admin_login_failed`, `rate_limit_exceeded`… — lista completa em [08-SEGURANCA §9](./08-SEGURANCA.md) |
+| `severity`   | text               | `info` \| `warn` \| `error` (default `warn`)                                                                                            |
+| `ip`         | text               |                                                                                                                                         |
+| `user_agent` | text               |                                                                                                                                         |
+| `request_id` | text               |                                                                                                                                         |
+| `properties` | jsonb              |                                                                                                                                         |
+| `created_at` | timestamptz        |                                                                                                                                         |
 
 ### `page_views`
 
-Page views via tracker básico. RLS sem policies — o INSERT público foi removido no hardening (RLS-04); só o backend escreve. Retenção 6 meses.
+Page views via tracker básico. RLS sem policies — o INSERT público foi removido no hardening (RLS-04) e hoje nenhum código grava nela. Retenção 6 meses.
 
 | Coluna       | Tipo        | Notas |
 | ------------ | ----------- | ----- |
@@ -225,21 +226,21 @@ Page views via tracker básico. RLS sem policies — o INSERT público foi remov
 
 Cupons. RLS service-only.
 
-| Coluna             | Tipo                   | Notas                                                             |
-| ------------------ | ---------------------- | ----------------------------------------------------------------- |
-| `id`               | bigint identity PK     |                                                                   |
-| `code`             | text uniq              | Case-insensitive na validação                                     |
-| `discount_type`    | text                   | `percent` \| `fixed` (CHECK)                                      |
-| `discount_value`   | numeric(12,2)          | 15 = 15% ou R$ 15 (CHECK > 0)                                     |
-| `valid_from`       | timestamptz nullable   |                                                                   |
-| `valid_until`      | timestamptz nullable   |                                                                   |
-| `max_uses`         | int nullable           | NULL = ilimitado                                                  |
-| `used_count`       | int                    | Incrementado server-side via `increment_coupon_usage()` (atômico) |
-| `applies_to`       | jsonb                  | `{ category_ids: [...], product_ids: [...] }` — vazio = qualquer  |
-| `min_order_amount` | numeric(12,2) nullable |                                                                   |
-| `active`           | boolean                |                                                                   |
-| `created_at`       | timestamptz            |                                                                   |
-| `updated_at`       | timestamptz            | Trigger `set_updated_at`                                          |
+| Coluna             | Tipo                   | Notas                                                                                                                                                                                                                               |
+| ------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`               | bigint identity PK     |                                                                                                                                                                                                                                     |
+| `code`             | text uniq              | Case-insensitive na validação                                                                                                                                                                                                       |
+| `discount_type`    | text                   | `percent` \| `fixed` (CHECK)                                                                                                                                                                                                        |
+| `discount_value`   | numeric(12,2)          | 15 = 15% ou R$ 15 (CHECK > 0)                                                                                                                                                                                                       |
+| `valid_from`       | timestamptz nullable   |                                                                                                                                                                                                                                     |
+| `valid_until`      | timestamptz nullable   |                                                                                                                                                                                                                                     |
+| `max_uses`         | int nullable           | NULL = ilimitado                                                                                                                                                                                                                    |
+| `used_count`       | int                    | Reservado no checkout via `increment_coupon_usage()` (atômico); devolvido por `release_stale_coupon_reservations()` após 2h sem pagamento e recontado pelo trigger se o pagamento chegar depois (⚠️ devolução pendente em produção) |
+| `applies_to`       | jsonb                  | `{ category_ids: [...], product_ids: [...] }` — vazio = qualquer                                                                                                                                                                    |
+| `min_order_amount` | numeric(12,2) nullable |                                                                                                                                                                                                                                     |
+| `active`           | boolean                |                                                                                                                                                                                                                                     |
+| `created_at`       | timestamptz            |                                                                                                                                                                                                                                     |
+| `updated_at`       | timestamptz            | Trigger `set_updated_at`                                                                                                                                                                                                            |
 
 > CRUD de cupons no admin: aba **Cupons** (`CouponWizard` + `/api/admin/coupons`). Validação no checkout via `/api/validate-coupon` (prévia) e revalidação no `create-payment`.
 
@@ -299,16 +300,16 @@ Newsletter com double opt-in, 1-click unsubscribe e log de envios (criadas pela 
 
 Auditoria de escrita do painel admin (criada pela migration phase4). **Append-only**: UPDATE/DELETE bloqueados por REVOKE + triggers, inclusive para service_role. Retenção 18 meses.
 
-| Coluna             | Tipo               | Notas                                                                 |
-| ------------------ | ------------------ | --------------------------------------------------------------------- |
-| `id`               | bigint identity PK |                                                                       |
-| `admin_id`         | text               | default `'admin'`                                                     |
-| `action`           | text               | `create` \| `update` \| `patch` \| `delete`                           |
-| `target_type`      | text               | `product` \| `category` \| `coupon` \| `order` \| `user` \| `setting` |
-| `target_id`        | text nullable      |                                                                       |
-| `before` / `after` | jsonb              | Snapshot (settings sensíveis passam por redação)                      |
-| `ip`               | text nullable      |                                                                       |
-| `created_at`       | timestamptz        |                                                                       |
+| Coluna             | Tipo               | Notas                                                                                                           |
+| ------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `id`               | bigint identity PK |                                                                                                                 |
+| `admin_id`         | text               | E-mail do admin da sessão (fallback e default `'admin'`)                                                        |
+| `action`           | text               | `create` \| `update` \| `patch` \| `delete`                                                                     |
+| `target_type`      | text               | `product` \| `category` \| `coupon` \| `order` \| `user` \| `setting` \| `analytics_events` \| `storage_object` |
+| `target_id`        | text nullable      |                                                                                                                 |
+| `before` / `after` | jsonb              | Snapshot (settings sensíveis passam por redação)                                                                |
+| `ip`               | text nullable      |                                                                                                                 |
+| `created_at`       | timestamptz        |                                                                                                                 |
 
 ### `settings`
 
@@ -320,7 +321,7 @@ Configurações chave-valor JSON. Service-only.
 | `setting_value` | jsonb       |                               |
 | `updated_at`    | timestamptz |                               |
 
-`adminConfig` guarda `totpSecret` e `fallbackPin` (armazenados em texto claro; a API nunca os devolve no GET e a comparação do PIN é timing-safe), além de preferências do admin. `homeSections` guarda as seções da vitrine da home.
+`adminConfig` guarda `totpSecret` (cifrado com AES-256-GCM, chave `ADMIN_2FA_ENC_KEY`) e `fallbackPin` (hash scrypt com sal) — a API nunca os devolve no GET, a conferência é timing-safe e valores legados em texto claro migram no próximo salvamento —, além de preferências do admin. `homeSections` guarda as seções da vitrine da home.
 
 ### `rate_limit_hit`
 
@@ -328,19 +329,21 @@ Contador de rate limit. É o que faz a regra E1 valer **em produção**: as fun�
 Vercel não compartilham memória, então o contador mora no único estado que todas enxergam — o
 Postgres. Janela fixa, uma linha por `(bucket, identificador, janela)`. Service-only.
 
-| Coluna         | Tipo            | Notas                                                            |
-| -------------- | --------------- | ---------------------------------------------------------------- |
-| `bucket`       | text PK¹        | Nome do limite: `admin-login`, `validate-coupon`, `download`, …  |
-| `identifier`   | text PK¹        | IP resolvido na borda, ou escopo (e-mail de login, `order_code`) |
-| `window_start` | timestamptz PK¹ | Início da janela                                                 |
-| `count`        | integer         | Acessos na janela                                                |
-| `updated_at`   | timestamptz     |                                                                  |
+| Coluna         | Tipo            | Notas                                                                                                                                   |
+| -------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `bucket`       | text PK¹        | Nome do limite: `admin-login`, `validate-coupon`, `download`, …                                                                         |
+| `identifier`   | text PK¹        | IP resolvido na borda, ou `IP\|hash` do escopo (sha256 truncado do e-mail de login, `order_code` ou token de download — nunca em claro) |
+| `window_start` | timestamptz PK¹ | Início da janela                                                                                                                        |
+| `count`        | integer         | Acessos na janela                                                                                                                       |
+| `updated_at`   | timestamptz     |                                                                                                                                         |
 
 ¹ PK composta `(bucket, identifier, window_start)`.
 
 Escrita só pela função `rate_limit_hit()` (`SECURITY DEFINER`, `EXECUTE` só para `service_role`),
 que faz `insert … on conflict do update` atômico. Chamada por `enforceRateLimit` em
 [`lib/rate-limit.js`](../../lib/rate-limit.js). Ver [ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md).
+
+Retenção 24h via `purge_old_rate_limit_hits()` (pg_cron de hora em hora, `20 * * * *`).
 
 ---
 
@@ -363,31 +366,32 @@ orders     (1) ─── (0..n) download_logs
 orders     (1) ─── (0..n) user_products
 ```
 
-`coupons`, `abandoned_carts`, `email_subscribers`, `email_sent_log`, `admin_audit_log`, `analytics_events`, `security_events`, `page_views`, `settings` não têm FKs duras entre si — vivem isoladas (`analytics_events` tem FKs opcionais para `orders`/`products` com SET NULL).
+`coupons`, `abandoned_carts`, `email_subscribers`, `email_sent_log`, `admin_audit_log`, `analytics_events`, `security_events`, `page_views`, `settings`, `rate_limit_hit` não têm FKs duras entre si — vivem isoladas (`analytics_events` tem FKs opcionais para `orders`/`products` com SET NULL).
 
 ---
 
 ## Resumo de policies (RLS)
 
-| Tabela              | Quem lê (SELECT)                                                                   | Quem escreve (INSERT/UPDATE)                                                            |
-| ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `categories`        | anon + auth (active=true)                                                          | service_role                                                                            |
-| `products`          | anon + auth (active=true)                                                          | service_role                                                                            |
-| `orders`            | auth (próprios via `customer_id = auth.uid()` OU `customer_email` = e-mail do JWT) | service_role                                                                            |
-| `order_items`       | auth (via FK ao parent order)                                                      | service_role                                                                            |
-| `profiles`          | auth (próprio via `id = auth.uid()`)                                               | auth (UPDATE próprio; `id/email/role/provider` travados por trigger) + service_role     |
-| `user_products`     | auth (próprios)                                                                    | service_role                                                                            |
-| `download_tokens`   | —                                                                                  | service_role                                                                            |
-| `download_logs`     | —                                                                                  | service_role                                                                            |
-| `analytics_events`  | —                                                                                  | anon + auth (INSERT com whitelist de `event_name`, sem `order_id` nem `customer_email`) |
-| `security_events`   | —                                                                                  | service_role                                                                            |
-| `page_views`        | —                                                                                  | service_role (INSERT público removido no hardening)                                     |
-| `coupons`           | —                                                                                  | service_role                                                                            |
-| `abandoned_carts`   | —                                                                                  | service_role (INSERT/UPDATE públicos removidos no hardening)                            |
-| `email_subscribers` | —                                                                                  | service_role                                                                            |
-| `email_sent_log`    | —                                                                                  | service_role                                                                            |
-| `admin_audit_log`   | —                                                                                  | service_role (só INSERT; UPDATE/DELETE bloqueados até para service_role)                |
-| `settings`          | —                                                                                  | service_role                                                                            |
+| Tabela              | Quem lê (SELECT)                                                                     | Quem escreve (INSERT/UPDATE)                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `categories`        | anon + auth (active=true)                                                            | service_role                                                                                  |
+| `products`          | anon + auth (active=true)                                                            | service_role                                                                                  |
+| `orders`            | auth (próprios via `customer_id = auth.uid()`; o claim `email` do JWT saiu na wave1) | service_role                                                                                  |
+| `order_items`       | auth (via FK ao parent order)                                                        | service_role                                                                                  |
+| `profiles`          | auth (próprio via `id = auth.uid()`)                                                 | auth (UPDATE próprio; `id/email/role/provider` travados por trigger) + service_role           |
+| `user_products`     | auth (próprios)                                                                      | service_role                                                                                  |
+| `download_tokens`   | —                                                                                    | service_role                                                                                  |
+| `download_logs`     | —                                                                                    | service_role                                                                                  |
+| `analytics_events`  | —                                                                                    | service_role (INSERT público removido na wave1, W1-04 — o front grava via `/api/track-event`) |
+| `security_events`   | —                                                                                    | service_role                                                                                  |
+| `page_views`        | —                                                                                    | service_role (INSERT público removido no hardening)                                           |
+| `coupons`           | —                                                                                    | service_role                                                                                  |
+| `abandoned_carts`   | —                                                                                    | service_role (INSERT/UPDATE públicos removidos no hardening)                                  |
+| `email_subscribers` | —                                                                                    | service_role                                                                                  |
+| `email_sent_log`    | —                                                                                    | service_role                                                                                  |
+| `admin_audit_log`   | —                                                                                    | service_role (só INSERT; UPDATE/DELETE bloqueados até para service_role)                      |
+| `settings`          | —                                                                                    | service_role                                                                                  |
+| `rate_limit_hit`    | —                                                                                    | service_role (só via função `rate_limit_hit()`)                                               |
 
 **Princípio**: o backend (com service_role) pode tudo. O browser (com anon key) só vê o que está liberado em policy. Quando uma tabela é "service-role only", clientes nunca acessam direto — só via API que valida e age em nome deles.
 
@@ -418,6 +422,10 @@ Trigger BEFORE INSERT/UPDATE em `products` que gera slug a partir do nome quando
 
 Trigger BEFORE UPDATE em `profiles`: se quem grava não é `service_role`/`postgres`, preserva `id/email/role/provider` do valor antigo. Complementa a RLS (que não filtra colunas).
 
+### `reclaim_coupon_on_approval()` (SECURITY DEFINER, migration `20261008000000` — ⚠️ pendente em produção)
+
+Trigger `orders_reclaim_coupon_on_approval`, BEFORE UPDATE OF `payment_status` em `orders`: quando um pedido cujo uso de cupom já foi devolvido (`coupon_released_at` preenchido) vira `approved`, volta a contar o uso em `coupons.used_count` e limpa a marca. Cobre o pagamento que chega depois da devolução (Pix pago tarde). Não respeita `max_uses`, de propósito — o pagamento com desconto já foi capturado.
+
 ### `purge_old_logs()` (SECURITY DEFINER)
 
 Função idempotente (versão final na phase6) que deleta:
@@ -431,41 +439,49 @@ Função idempotente (versão final na phase6) que deleta:
 
 ### Demais funções (as de cleanup são SECURITY DEFINER com EXECUTE revogado de public/anon/authenticated)
 
-| Função                            | O que faz                                                                                        | Agendamento           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------- |
-| `cleanup_old_analytics_events()`  | Apaga `analytics_events` > 180 dias                                                              | mensal (`0 3 1 * *`)  |
-| `cleanup_old_email_logs()`        | Apaga `email_sent_log` > 90 dias                                                                 | mensal (`15 3 1 * *`) |
-| `purge_stale_email_subscribers()` | Apaga subscribers não confirmados > 30d ou descadastrados > 90d                                  | mensal (`30 3 1 * *`) |
-| `prevent_admin_audit_mutation()`  | Trigger fn comum (sem SECURITY DEFINER): `raise exception` em UPDATE/DELETE de `admin_audit_log` | —                     |
-| `increment_coupon_usage(bigint)`  | UPDATE atômico de `coupons.used_count` respeitando `max_uses`; EXECUTE só para service_role      | —                     |
+| Função                                  | O que faz                                                                                                                                          | Agendamento                    |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `cleanup_old_analytics_events()`        | Apaga `analytics_events` > 180 dias                                                                                                                | mensal (`0 3 1 * *`)           |
+| `cleanup_old_email_logs()`              | Apaga `email_sent_log` > 90 dias                                                                                                                   | mensal (`15 3 1 * *`)          |
+| `purge_stale_email_subscribers()`       | Apaga subscribers não confirmados > 30d ou descadastrados > 90d                                                                                    | mensal (`30 3 1 * *`)          |
+| `prevent_admin_audit_mutation()`        | Trigger fn comum (sem SECURITY DEFINER): `raise exception` em UPDATE/DELETE de `admin_audit_log`                                                   | —                              |
+| `increment_coupon_usage(bigint)`        | UPDATE atômico de `coupons.used_count` respeitando `max_uses`; EXECUTE só para service_role                                                        | —                              |
+| `cleanup_old_abandoned_carts()`         | Apaga `abandoned_carts` não recuperados com `updated_at` > 90 dias                                                                                 | mensal (`20 3 1 * *`)          |
+| `rate_limit_hit(text,text,int,int)`     | Incremento atômico do contador de rate limit (janela fixa); EXECUTE só para service_role                                                           | —                              |
+| `purge_old_rate_limit_hits()`           | Apaga janelas de `rate_limit_hit` com mais de 24h; EXECUTE só para service_role                                                                    | de hora em hora (`20 * * * *`) |
+| `product_sales_counts(timestamptz,int)` | Soma vendida por produto em pedidos aprovados ("mais vendidos"); EXECUTE só para service_role                                                      | —                              |
+| `find_profile_id_by_email(text)`        | Busca `profiles.id` por `lower(email)` (usa `profiles_lower_email_idx`); EXECUTE só para service_role                                              | —                              |
+| `release_stale_coupon_reservations()`   | Devolve o uso de cupom de pedidos não aprovados com mais de 2h (marca `coupon_released_at`); EXECUTE só para service_role. ⚠️ Pendente em produção | a cada 15 min (`*/15 * * * *`) |
 
 ---
 
-## Migrations (18 arquivos)
+## Migrations (21 arquivos)
 
 Aplicar em ordem. Pode-se rodar tudo de uma vez via `npm run supabase:db:push`.
 
-| Arquivo                                                                                                                    | Conteúdo                                                                                                                                                                                                                                 |
-| -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`20260524000000_phase0_analytics.sql`](../../supabase/migrations/20260524000000_phase0_analytics.sql)                     | Cria `analytics_events` (com INSERT público restrito a whitelist) + adiciona `orders.attribution_data`                                                                                                                                   |
-| [`20260525000000_phase1_product_slugs.sql`](../../supabase/migrations/20260525000000_phase1_product_slugs.sql)             | Extensão `unaccent`, função `slugify()`, `products.slug` com backfill + triggers `products_ensure_slug_*`                                                                                                                                |
-| [`20260526000000_phase2_conversion.sql`](../../supabase/migrations/20260526000000_phase2_conversion.sql)                   | Cria `coupons` + `abandoned_carts` + adiciona `products.{faq,reviews,benefits}` + `orders.{coupon_code,discount_amount}`                                                                                                                 |
-| [`20260526100000_phase2_log_retention.sql`](../../supabase/migrations/20260526100000_phase2_log_retention.sql)             | Cria função `purge_old_logs()` (v1)                                                                                                                                                                                                      |
-| [`20260526110000_phase2_security_events.sql`](../../supabase/migrations/20260526110000_phase2_security_events.sql)         | Cria `security_events` (RLS service-only) + `purge_old_logs()` v2                                                                                                                                                                        |
-| [`20260526120000_phase2_enable_pg_cron.sql`](../../supabase/migrations/20260526120000_phase2_enable_pg_cron.sql)           | Habilita extension `pg_cron` + agenda `purge_old_logs_daily` (03:00 UTC)                                                                                                                                                                 |
-| [`20260527000000_phase0_analytics_retention.sql`](../../supabase/migrations/20260527000000_phase0_analytics_retention.sql) | Cria `cleanup_old_analytics_events()` (180 dias) + job mensal                                                                                                                                                                            |
-| [`20260528000000_phase3_email_marketing.sql`](../../supabase/migrations/20260528000000_phase3_email_marketing.sql)         | Cria `email_subscribers` + `email_sent_log` + `cleanup_old_email_logs()`                                                                                                                                                                 |
-| [`20260530000000_phase4_admin_audit_log.sql`](../../supabase/migrations/20260530000000_phase4_admin_audit_log.sql)         | Cria `admin_audit_log` (RLS service-only)                                                                                                                                                                                                |
-| [`20260701000000_phase5_audit_immutability.sql`](../../supabase/migrations/20260701000000_phase5_audit_immutability.sql)   | Torna `admin_audit_log` append-only (REVOKE + triggers)                                                                                                                                                                                  |
-| [`20260701000001_phase5_payment_hardening.sql`](../../supabase/migrations/20260701000001_phase5_payment_hardening.sql)     | Dedup + UNIQUE `(order_id, product_id)` em `download_tokens` + `increment_coupon_usage()`                                                                                                                                                |
-| [`20260702000000_phase6_db_rls_hardening.sql`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql)       | Baseline RLS nas 17 tabelas, trigger guard de `profiles`, remove escrita pública de `abandoned_carts`/`page_views`, versiona `handle_new_user()`, índices de FK, `purge_old_logs()` v3, `purge_stale_email_subscribers()` + jobs mensais |
-| [`20260703000000_perf_indexes.sql`](../../supabase/migrations/20260703000000_perf_indexes.sql)                             | 5 índices de performance para painel/cron (`orders`, `email_sent_log`, `abandoned_carts`)                                                                                                                                                |
-| [`20260812000000_security_hardening_wave1.sql`](../../supabase/migrations/20260812000000_security_hardening_wave1.sql)     | Wave 1 do hardening de 12/08: revoga `products.download_url` do `anon` (RLS filtra linha, não coluna), reancora as policies de `orders`/`order_items` em `customer_id = auth.uid()` no lugar do claim `email`                            |
-| [`20260813000000_rate_limit.sql`](../../supabase/migrations/20260813000000_rate_limit.sql)                                 | Cria `rate_limit_hit` + função `rate_limit_hit()` — o rate limit que vale em produção ([ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md))                                                                                            |
-| [`20260813000001_best_sellers_aggregate.sql`](../../supabase/migrations/20260813000001_best_sellers_aggregate.sql)         | Função de agregação de mais-vendidos no banco: `/api/products`, `/home-sections` e `/cross-sell` deixam de baixar `orders`+`order_items` inteiras a cada hit                                                                             |
-| [`20260813000002_orders_customer_id_index.sql`](../../supabase/migrations/20260813000002_orders_customer_id_index.sql)     | Índice em `orders(customer_id)` — a âncora nova da RLS estava sem índice e fazia seq scan                                                                                                                                                |
-| [`20260818000000_profiles_lower_email_index.sql`](../../supabase/migrations/20260818000000_profiles_lower_email_index.sql) | Índice funcional em `profiles(lower(email))` — substitui a paginação da Admin API no webhook de pagamento, que tinha teto de 2.000 usuários                                                                                              |
-| [`20260902000000_abandoned_carts_retention.sql`](../../supabase/migrations/20260902000000_abandoned_carts_retention.sql)   | `cleanup_old_abandoned_carts()` (90 dias, só carrinho não recuperado) + job mensal. **⚠️ AINDA NÃO APLICADA em produção** — a tabela era a única de PII sem prazo, apesar de a migration que a criou prometer limpeza "após 7 dias"      |
+| Arquivo                                                                                                                    | Conteúdo                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`20260524000000_phase0_analytics.sql`](../../supabase/migrations/20260524000000_phase0_analytics.sql)                     | Cria `analytics_events` (com INSERT público restrito a whitelist) + adiciona `orders.attribution_data`                                                                                                                                                                                                                                                                                                                                      |
+| [`20260525000000_phase1_product_slugs.sql`](../../supabase/migrations/20260525000000_phase1_product_slugs.sql)             | Extensão `unaccent`, função `slugify()`, `products.slug` com backfill + triggers `products_ensure_slug_*`                                                                                                                                                                                                                                                                                                                                   |
+| [`20260526000000_phase2_conversion.sql`](../../supabase/migrations/20260526000000_phase2_conversion.sql)                   | Cria `coupons` + `abandoned_carts` + adiciona `products.{faq,reviews,benefits}` + `orders.{coupon_code,discount_amount}`                                                                                                                                                                                                                                                                                                                    |
+| [`20260526100000_phase2_log_retention.sql`](../../supabase/migrations/20260526100000_phase2_log_retention.sql)             | Cria função `purge_old_logs()` (v1)                                                                                                                                                                                                                                                                                                                                                                                                         |
+| [`20260526110000_phase2_security_events.sql`](../../supabase/migrations/20260526110000_phase2_security_events.sql)         | Cria `security_events` (RLS service-only) + `purge_old_logs()` v2                                                                                                                                                                                                                                                                                                                                                                           |
+| [`20260526120000_phase2_enable_pg_cron.sql`](../../supabase/migrations/20260526120000_phase2_enable_pg_cron.sql)           | Habilita extension `pg_cron` + agenda `purge_old_logs_daily` (03:00 UTC)                                                                                                                                                                                                                                                                                                                                                                    |
+| [`20260527000000_phase0_analytics_retention.sql`](../../supabase/migrations/20260527000000_phase0_analytics_retention.sql) | Cria `cleanup_old_analytics_events()` (180 dias) + job mensal                                                                                                                                                                                                                                                                                                                                                                               |
+| [`20260528000000_phase3_email_marketing.sql`](../../supabase/migrations/20260528000000_phase3_email_marketing.sql)         | Cria `email_subscribers` + `email_sent_log` + `cleanup_old_email_logs()`                                                                                                                                                                                                                                                                                                                                                                    |
+| [`20260530000000_phase4_admin_audit_log.sql`](../../supabase/migrations/20260530000000_phase4_admin_audit_log.sql)         | Cria `admin_audit_log` (RLS service-only)                                                                                                                                                                                                                                                                                                                                                                                                   |
+| [`20260701000000_phase5_audit_immutability.sql`](../../supabase/migrations/20260701000000_phase5_audit_immutability.sql)   | Torna `admin_audit_log` append-only (REVOKE + triggers)                                                                                                                                                                                                                                                                                                                                                                                     |
+| [`20260701000001_phase5_payment_hardening.sql`](../../supabase/migrations/20260701000001_phase5_payment_hardening.sql)     | Dedup + UNIQUE `(order_id, product_id)` em `download_tokens` + `increment_coupon_usage()`                                                                                                                                                                                                                                                                                                                                                   |
+| [`20260702000000_phase6_db_rls_hardening.sql`](../../supabase/migrations/20260702000000_phase6_db_rls_hardening.sql)       | Baseline RLS nas 17 tabelas, trigger guard de `profiles`, remove escrita pública de `abandoned_carts`/`page_views`, versiona `handle_new_user()`, índices de FK, `purge_old_logs()` v3, `purge_stale_email_subscribers()` + jobs mensais                                                                                                                                                                                                    |
+| [`20260703000000_perf_indexes.sql`](../../supabase/migrations/20260703000000_perf_indexes.sql)                             | 5 índices de performance para painel/cron (`orders`, `email_sent_log`, `abandoned_carts`)                                                                                                                                                                                                                                                                                                                                                   |
+| [`20260812000000_security_hardening_wave1.sql`](../../supabase/migrations/20260812000000_security_hardening_wave1.sql)     | Wave 1 do hardening de 12/08: revoga `products.download_url` do `anon` (RLS filtra linha, não coluna), reancora as policies de `orders`/`order_items` em `customer_id = auth.uid()` no lugar do claim `email`; normaliza `orders.customer_email` para minúsculas (W1-03); remove o INSERT anônimo em `analytics_events` (W1-04 — o front grava só via `/api/track-event`); fixa o `search_path` de `prevent_admin_audit_mutation()` (W1-05) |
+| [`20260813000000_rate_limit.sql`](../../supabase/migrations/20260813000000_rate_limit.sql)                                 | Cria `rate_limit_hit` + função `rate_limit_hit()` — o rate limit que vale em produção ([ADR 0007](../adr/0007-um-mecanismo-de-rate-limit.md))                                                                                                                                                                                                                                                                                               |
+| [`20260813000001_best_sellers_aggregate.sql`](../../supabase/migrations/20260813000001_best_sellers_aggregate.sql)         | Função de agregação de mais-vendidos no banco: `/api/products`, `/home-sections` e `/cross-sell` deixam de baixar `orders`+`order_items` inteiras a cada hit                                                                                                                                                                                                                                                                                |
+| [`20260813000002_orders_customer_id_index.sql`](../../supabase/migrations/20260813000002_orders_customer_id_index.sql)     | Índice em `orders(customer_id)` — a âncora nova da RLS estava sem índice e fazia seq scan                                                                                                                                                                                                                                                                                                                                                   |
+| [`20260818000000_profiles_lower_email_index.sql`](../../supabase/migrations/20260818000000_profiles_lower_email_index.sql) | Índice funcional em `profiles(lower(email))` + RPC `find_profile_id_by_email()` — substitui a paginação da Admin API no webhook de pagamento, que tinha teto de 2.000 usuários                                                                                                                                                                                                                                                              |
+| [`20260902000000_abandoned_carts_retention.sql`](../../supabase/migrations/20260902000000_abandoned_carts_retention.sql)   | `cleanup_old_abandoned_carts()` (90 dias, só carrinho não recuperado) + job mensal `cleanup-abandoned-carts-monthly`. Aplicada em 02/09/2026 ([13-ROADMAP §1](./13-ROADMAP-PENDENCIAS.md)) — a tabela era a única de PII sem prazo, apesar de a migration que a criou prometer limpeza "após 7 dias"                                                                                                                                        |
+| [`20261008000000_coupon_usage_release.sql`](../../supabase/migrations/20261008000000_coupon_usage_release.sql)             | Coluna `orders.coupon_released_at`, função `release_stale_coupon_reservations()` (devolve o uso de cupom de pedido não aprovado com mais de 2h; pg_cron `*/15 * * * *`) e trigger `orders_reclaim_coupon_on_approval` (volta a contar o uso se o pagamento chegar depois). **⚠️ Pendente em produção** ([13-ROADMAP, checklist A](./13-ROADMAP-PENDENCIAS.md))                                                                              |
+| [`20261008000001_profiles_role_check.sql`](../../supabase/migrations/20261008000001_profiles_role_check.sql)               | Recria a `check_valid_role` em `profiles`: `upper(role) in ('CUSTOMER','SELLER','ADMIN','MASTER')`, `not valid`. **⚠️ Pendente em produção** — conferir antes a definição atual da constraint ([13-ROADMAP, checklist A](./13-ROADMAP-PENDENCIAS.md))                                                                                                                                                                                       |
 
 ### Como aplicar
 
@@ -544,8 +560,9 @@ Padrão a seguir:
 
 Coisas que já custaram tempo de depuração:
 
-- **`profiles.role` é MAIÚSCULO** — `CUSTOMER` | `ADMIN` | `MASTER`, default `CUSTOMER`. O login
-  do admin aceita `ADMIN` ou `MASTER`. Comparar com `'admin'` minúsculo falha em silêncio.
+- **`profiles.role` é MAIÚSCULO** — `CUSTOMER` | `SELLER` | `ADMIN` | `MASTER`, default `CUSTOMER`
+  (CHECK `check_valid_role`). O painel só atribui `CUSTOMER`/`SELLER`; o login do admin aceita
+  `ADMIN` ou `MASTER`. Comparar com `'admin'` minúsculo falha em silêncio.
 - **Nunca inserir em `profiles` direto.** A linha nasce do trigger `handle_new_user` sobre
   `auth.users`; um `insert` sem o usuário correspondente estoura erro de FK. Crie o usuário pela
   Admin API e deixe o trigger criar o perfil.

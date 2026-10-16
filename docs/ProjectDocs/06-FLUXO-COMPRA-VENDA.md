@@ -108,8 +108,8 @@ Diagrama detalhado de cada fluxo em [05-FLUXOS](./05-FLUXOS.md).
 3. Backend:
    - Re-valida produtos no banco (preço, disponibilidade; máx. 100 itens, quantidade 1–99)
    - Re-calcula total + aplica cupom server-side (cliente não pode forjar)
+   - Reserva o uso do cupom de forma atômica (RPC `increment_coupon_usage`, respeita `max_uses`); se não reservar, segue sem desconto. Pedido não pago em 2h devolve o uso (`release_stale_coupon_reservations`)
    - Cria `orders` + `order_items` com `order_code` de 128 bits
-   - Incrementa o uso do cupom de forma atômica (RPC `increment_coupon_usage`, respeita `max_uses`)
    - Cria preferência no Mercado Pago com `back_urls` + `notification_url`
    - Salva `preference_id`
    - Retorna `initPoint` (e `sandboxInitPoint`)
@@ -127,12 +127,12 @@ Diagrama detalhado de cada fluxo em [05-FLUXOS](./05-FLUXOS.md).
 
 **Caminho A (webhook funciona):**
 
-- Webhook valida a assinatura (`x-signature`, HMAC com `WEBHOOK_SECRET`), atualiza `orders.payment_status='approved'` (transição atômica `!approved→approved`), cria `download_tokens` (INSERT em lote idempotente) e provisiona a conta Supabase do cliente (primeira compra)
+- Webhook valida a assinatura (`x-signature`, HMAC com `WEBHOOK_SECRET`), confere valor e moeda contra o pedido (`checkPaymentIntegrity` — se não bater, não aprova e registra `payment_amount_mismatch`), atualiza `orders.payment_status='approved'` (transição atômica `!approved→approved`), cria `download_tokens` (INSERT em lote idempotente) e provisiona a conta Supabase do cliente (primeira compra)
 - Polling do frontend pega o update na próxima iteração (≤ 4s)
 
 **Caminho B (polling cobre):**
 
-- A cada 4s o frontend chama `GET /api/verify-payment?orderId=X&email=Y` (o par `order_code`+`email` precisa bater — comparação timing-safe; mismatch → 404 + security event)
+- A cada 4s o frontend chama `POST /api/verify-payment` com `{ orderId, email }` no corpo (o par `order_code`+`email` precisa bater — comparação timing-safe; mismatch → 404 + security event)
 - Backend consulta MP via `payment.search({ external_reference })` se necessário
 - Quando status = `approved`, retorna lista de `download_tokens`
 - Limpa carrinho + redireciona para `/downloads?order=X&email=Y&success=1`
@@ -158,15 +158,15 @@ Diagrama detalhado de cada fluxo em [05-FLUXOS](./05-FLUXOS.md).
 
 **O que o sistema faz**
 
-- `DownloadsPage.jsx` chama `GET /api/verify-payment?orderId=X&email=Y` (faz polling se ainda `pending`: 12 tentativas × 10s)
-- Cliente logado também vê o histórico via `GET /api/customer-orders` (e-mail vem só do cookie de sessão — anti-IDOR)
+- `DownloadsPage.jsx` chama `POST /api/verify-payment` com `{ orderId, email }` no corpo (faz polling se ainda `pending`: 12 tentativas × 10s)
+- Cliente logado também vê o histórico via `GET /api/customer-orders` (escopo por `customer_id` = uid do cookie — anti-IDOR; pedidos de convidado com o mesmo e-mail confirmado são adotados pela conta)
 - Renderiza lista de `download_tokens` válidos
 - Cada link aponta para `/api/download?token=Y`
 - Backend (`handlers/download.js`):
   - Valida token: existe + não usado + não expirou
   - Consome o token com claim atômico (`used=false → true`) ANTES de gerar a URL — requisições concorrentes com o mesmo token são barradas
   - Gera signed URL do Supabase Storage com TTL de 5 min
-  - Redireciona (redirect temporário: 302 no Express local, 307 na Vercel) para a signed URL — ou direto para a URL externa (Google Drive etc., legado), sinalizada no header `X-Download-Mode`
+  - Redireciona (302) para a signed URL (`X-Download-Mode: signed-storage`). `download_url` fora do Storage → 500 `DOWNLOAD_UNAVAILABLE`, sem consumir o token
   - Insere `download_logs` (IP + UA + timestamp)
   - Adiciona headers `Referrer-Policy: no-referrer` + `Cache-Control: no-store` para evitar vazamento
 
@@ -175,13 +175,14 @@ Diagrama detalhado de cada fluxo em [05-FLUXOS](./05-FLUXOS.md).
 - Token tem 256 bits de entropia (`crypto.randomBytes(32).toString('hex')`)
 - TTL: 72 horas (fixo no código)
 - Token é de **uso único**: após `used=true`, nova tentativa retorna 401 "Token já utilizado"
+- Em pedido aprovado, o `verify-payment` (botão "Atualizar" em `/downloads`) reemite link usado/expirado (novo token, +72h) até 5 downloads por item; acima disso o item aparece sem botão "Baixar"
 - Constraint `UNIQUE(order_id, product_id)` garante 1 token por par pedido/produto (idempotência entre webhook e verify-payment)
-- Arquivo no Supabase Storage nunca tem URL pública direta — sempre signed URL com expiração; URLs externas (legado) são redirect direto
+- Arquivo sempre servido por signed URL do Storage com expiração; `download_url` externo (Drive etc.) não é entregue (erro + security event `download_url_not_storage`)
 
 **O que o vendedor precisa garantir**
 
-- Cada produto com `download_url` apontando para path válido no Supabase Storage (ou URL externa, legado)
-- Buckets do Storage criados e arquivos uploadados — o upload do admin usa nomes fixos em `handlers/admin/upload-url.js` (`product_files` privado para arquivos de download; `product_images` público; `product_videos` privado). A env `SUPABASE_STORAGE_BUCKET` existe no `.env.example`, mas não é usada no fluxo de download (o bucket vem do próprio `download_url`)
+- Cada produto com `download_url` apontando para path válido no Supabase Storage (URL externa não funciona mais)
+- Buckets do Storage criados e arquivos uploadados — o upload do admin usa nomes fixos em `handlers/admin/upload-url.js` (`product_files` privado para arquivos de download; `product_images` público; `product_videos` privado). A env `SUPABASE_STORAGE_BUCKET` só acrescenta um bucket extra à allowlist do download (`lib/storage-signed-url.js`); o bucket efetivo vem do próprio `download_url`
 - Testar download de cada produto após upload
 
 ---
@@ -197,7 +198,7 @@ Diagrama detalhado de cada fluxo em [05-FLUXOS](./05-FLUXOS.md).
 
 ### 5.2 Sequência automatizada (cron via GitHub Actions)
 
-- **~1h / ~24h**: lembretes de carrinho abandonado (se não recuperado)
+- **~1h / ~24h**: lembretes de carrinho abandonado (se não recuperado e se o e-mail tiver opt-in confirmado ou compra aprovada)
 - **D+3**: pedido de avaliação / review
 - **D+15**: cross-sell (sugestões complementares) baseado em categoria comprada
 - **D+45**: novidades da mesma categoria
@@ -261,7 +262,7 @@ Cron rodando: workflow `email-cron.yml` (GitHub Actions) chama `POST /api/cron-e
 
 1. Verificar em **Pedidos** se `payment_status='approved'` e `download_tokens` foram criados
 2. Se sim: pedir para acessar `/downloads?order=X` ou enviar link direto
-3. Se não: forçar verificação manual via `GET /api/verify-payment?orderId=X&email=Y`
+3. Se não: forçar verificação manual via `POST /api/verify-payment` com `{ orderId, email }`
 4. Se MP confirma mas DB não: investigar webhook em `security_events` ou logs do Vercel
 
 ### Cliente quer reembolso

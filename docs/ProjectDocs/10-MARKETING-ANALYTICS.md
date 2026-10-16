@@ -50,7 +50,7 @@ export function trackEvent(name, params = {}) {
 
 ### Whitelist no backend
 
-`handlers/track-event.js` valida o `event_name` via `isClientEventAllowed` (`lib/analytics-events.js`). Eventos de cliente permitidos: `view_item`, `add_to_cart`, `remove_from_cart`, `view_cart`, `view_catalog`, `begin_checkout`, `client_error`. Eventos fora da lista são **descartados em silêncio** (o endpoint sempre responde 204 — tracking nunca quebra a UX).
+`handlers/track-event.js` valida o `event_name` via `isClientEventAllowed` (`lib/analytics-events.js`). Eventos de cliente permitidos: `view_item`, `add_to_cart`, `remove_from_cart`, `view_cart`, `view_catalog`, `begin_checkout`, `client_error`. Eventos fora da lista são **descartados em silêncio** (o endpoint responde 204, ou 429 se o rate limit `RATE_LIMITS.trackEvent` bloquear; o front ignora ambos — tracking nunca quebra a UX).
 
 `purchase` do cliente **não** entra no `analytics_events`: as compras entram server-side pela allowlist de servidor — `checkout_initiated` (gravado em `create-payment`) e `payment_approved` / `payment_rejected` / `payment_cancelled` (gravados no `webhook`). A allowlist de servidor também inclui `webhook_received`, mas nenhum handler grava esse evento hoje.
 
@@ -93,7 +93,7 @@ O mesmo payload sanitizado também é persistido em `abandoned_carts.attribution
 - **Aceitar todos** — habilita GA4 + Meta Pixel
 - **Apenas essenciais** — bloqueia os trackers de marketing
 
-Estado em `localStorage` (chave `lgpd_consent`) via `utils/consent.js` (`CONSENT_POLICY_VERSION = '2026-05-24'`). Eventos essenciais (todos os canônicos, exceto `purchase`) rodam como "first-party only" sem consent — não vão para Google/Meta, mas vão para `analytics_events`. O `purchase` do cliente só dispara com consentimento (GA4/Pixel); no `analytics_events`, a compra entra server-side como `payment_approved` via webhook, independente de consent.
+Estado em `localStorage` (chave `lgpd_consent`) via `utils/consent.js` (`CONSENT_POLICY_VERSION = '2026-10-01'`). Eventos essenciais (todos os canônicos, exceto `purchase`) rodam como "first-party only" sem consent — não vão para Google/Meta, mas vão para `analytics_events`. O `purchase` do cliente só dispara com consentimento (GA4/Pixel); no `analytics_events`, a compra entra server-side como `payment_approved` via webhook, independente de consent.
 
 ---
 
@@ -109,7 +109,7 @@ Resumo do que está implementado:
 - **Sitemap dinâmico** em `/sitemap.xml` (gerado por `handlers/sitemap.xml.js`)
 - **robots.txt** em `public/robots.txt` com `Sitemap:` declarado
 - **Canonical URLs** em todas as páginas
-- **OG tags** com fallback `/favicon.svg` como imagem default (`SEO.jsx` só emite `og:image`/`twitter:image` para asset que existe; o antigo `og-default.png` nunca foi versionado) — páginas de produto sobrescrevem com a imagem do produto
+- **OG tags** com `/og-default.png` (1200×630, versionado em `public/`) como imagem default de `SEO.jsx` — páginas de produto sobrescrevem com a imagem do produto
 
 ### Submeter sitemap (pós-deploy)
 
@@ -117,7 +117,7 @@ Resumo do que está implementado:
 2. Verificar propriedade (TXT no DNS ou meta tag)
 3. Sitemaps → Adicionar → `sitemap.xml`
 
-### Lighthouse alvo (regra F1)
+### Lighthouse alvo (meta aspiracional, acima do gate da regra F1)
 
 - Performance ≥ 90 (mobile) / 95 (desktop)
 - Accessibility ≥ 90
@@ -130,7 +130,7 @@ O que a CI efetivamente cobra hoje (`lighthouse.yml` + `lighthouserc.json`, LHCI
 
 ## 5. Curva ABC
 
-A Curva ABC é central para tomada de decisão (regra I3). Implementação em `lib/abc-classification.js` (compartilhada entre os endpoints server-side e o widget do Dashboard via `derive.js`). Classificação por receita acumulada (`classifyByCumulative`): **A** = itens até 80% da receita acumulada, **B** = até 95%, **C** = o restante. Todos os endpoints abaixo têm cache in-memory de 1h (regra F5) e aceitam `?nocache=1`.
+A Curva ABC é central para tomada de decisão (regra I3). Implementação em `lib/abc-classification.js` (endpoints) com espelho em `src/utils/abc.js` para o widget do Dashboard (via `derive.js`), guardado pelo teste de paridade `src/utils/__tests__/abc-parity.test.js`. Classificação por receita acumulada (`classifyByCumulative`): **A** = itens até 80% da receita acumulada (o 1º colocado é sempre A), **B** = até 95%, **C** = o restante. Nenhum dos endpoints abaixo tem cache: são recalculados a cada abertura (`Cache-Control: no-store`, ADM-01).
 
 ### Produtos
 
@@ -180,7 +180,7 @@ Implementação em `lib/customer-segmentation.js`: tags calculadas a partir dos 
 
 Carrinho abandonado não é tag: é tratado direto pelo cron sobre `abandoned_carts` (`recovered_at IS NULL`), com lembretes ~1h e ~24h.
 
-Acessível na aba **Segmentos** do admin via `GET /api/admin/segments` (cache 30 min): relatório **agregado** (totais de confirmados/pendentes/desinscritos + contagem por tag), sem lista bruta de e-mails. O export CSV para envio externo (regra I4) ainda não existe — o código prevê endpoint dedicado com confirmação.
+Acessível na aba **Segmentos** do admin via `GET /api/admin/segments` (sem cache, recalculado a cada abertura): relatório **agregado** (totais de confirmados/pendentes/desinscritos + contagem por tag), sem lista bruta de e-mails. O export CSV para envio externo (regra I4) ainda não existe — o código prevê endpoint dedicado com confirmação.
 
 ---
 
@@ -192,7 +192,7 @@ Detalhes em [05-FLUXOS §8-9](./05-FLUXOS.md) (carrinho abandonado/reativação 
 
 8 templates HTML mobile-friendly:
 
-1. `orderConfirmation` — D+0, transacional (após pagamento; inclui bloco "conta criada para você" quando a conta é provisionada)
+1. `orderConfirmation` — D+0, transacional (inclui bloco "conta criada para você" quando a conta é provisionada). **Não é disparado automaticamente hoje:** só o endpoint `POST /api/send-confirmation-email` o usa, e nenhum fluxo o chama — ver [13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md)
 2. `optInConfirmation` — double opt-in da newsletter (`/confirmar-inscricao?token=`, regra D1)
 3. `postPurchaseD3` — D+3, pedido de avaliação
 4. `postPurchaseD15` — D+15, cross-sell por categoria comprada
@@ -211,7 +211,7 @@ O footer com **link de descadastro 1-clique** (regra D2) é auto-appendado por `
 Compra aprovada
    │
    ▼ D+0
-[orderConfirmation] ─── enviada inline (webhook)
+[orderConfirmation] ─── endpoint existe, mas hoje nenhum fluxo o dispara (13-ROADMAP §3.12)
    │
    ▼ D+3
 [postPurchaseD3] ─── pedido de avaliação / review
@@ -248,7 +248,7 @@ Setup em [03-SETUP §2.5 e §5](./03-SETUP.md).
 
 ## 8. Funil de conversão
 
-`GET /api/admin/funnel?days=30` (1-180; a aba oferece 7/30/90 dias; cache 1h, `?nocache=1` invalida)
+`GET /api/admin/funnel?days=30` (1-180; a aba oferece 7/30/90 dias; sem cache, recalculado a cada abertura)
 
 Conta **sessões únicas** por etapa em `analytics_events`; a etapa `purchase` vem da contagem de pedidos aprovados do período (não de evento de cliente). Retorna:
 
@@ -289,7 +289,7 @@ Conta **sessões únicas** por etapa em `analytics_events`; a etapa `purchase` v
 }
 ```
 
-Aba **Funil** renderiza com drop-off por etapa + tabela de atribuição por origem (pedidos, receita, share) + compras diárias.
+Aba **Funil** renderiza com drop-off por etapa + totais + tabela de atribuição por origem (pedidos, receita, share). `dailyPurchases` vem na API, mas a aba ainda não o exibe.
 
 ---
 
@@ -302,7 +302,7 @@ Aba **Funil** renderiza com drop-off por etapa + tabela de atribuição por orig
 | **Retenção**  | Recompra · LTV 12m · Frequência · Tempo entre compras        | Recompra > 20%    |
 | **Saúde**     | ROAS por canal · **LTV/CAC ≥ 3** · Aprovação MP · NPS        | LTV/CAC ≥ 3       |
 
-Parte disso já é servido por `GET /api/admin/kpis?window=12` (1-36 meses, cache 1h): receita MTD vs mês anterior, ticket médio, pedidos, LTV médio e taxa de recompra — `CAC` retorna `null` até existir mídia paga (Fase 5). Consumido pela aba **Dashboard**.
+Parte disso já é servido por `GET /api/admin/kpis?window=12` (1-36 meses, sem cache): receita MTD vs mês anterior, ticket médio, pedidos, LTV médio e taxa de recompra — `CAC` retorna `null` até existir mídia paga (Fase 5). Consumido pela aba **Dashboard**.
 
 Glossário em [11-REGRAS-NEGOCIO §glossário](./11-REGRAS-NEGOCIO.md).
 
@@ -376,7 +376,7 @@ Hotjar / GrowthBook Cloud só se Clarity ficar pequeno.
 | Função               | Ferramenta                                 | Tier free                                  |
 | -------------------- | ------------------------------------------ | ------------------------------------------ |
 | Analytics            | GA4                                        | 10M events/mês                             |
-| Pixel                | Meta Pixel + Conversions API               | ilimitado                                  |
+| Pixel                | Meta Pixel (browser; sem Conversions API)  | ilimitado                                  |
 | Email                | Resend SMTP                                | 3.000/mês                                  |
 | Cron horário         | GitHub Actions                             | 2.000 min/mês                              |
 | Hospedagem           | Vercel Hobby                               | 100GB bandwidth                            |

@@ -295,7 +295,6 @@ module.exports = async function webhookHandler(req, res) {
 
       await recordEvent({
         eventName: payment.status === 'cancelled' ? 'payment_cancelled' : 'payment_rejected',
-        customerEmail: order.customer_email,
         orderId: order.id,
         properties: {
           order_code: order.order_code,

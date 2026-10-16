@@ -14,18 +14,18 @@ Não há logística física: depois do pagamento aprovado, o cliente baixa os ar
 
 ## Personas
 
-| Persona               | Quem                           | O que faz no sistema                                                                                                             |
-| --------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Visitante anônimo** | Professor procurando material  | Navega catálogo, filtra e ordena, lê depoimentos, vê preço                                                                       |
-| **Cliente**           | Visitante que decidiu comprar  | Adiciona ao carrinho, faz checkout, paga, baixa arquivos, vê histórico de pedidos, exclui a própria conta (LGPD)                 |
-| **Inscrito**          | Cliente que aceitou newsletter | Recebe sequência pós-compra, cross-sell, e-mails sazonais                                                                        |
-| **Admin**             | Profa. Marciar (dona)          | Cria/edita produtos, vê pedidos, analisa Curva ABC, configura vitrine, gerencia cupons                                           |
-| **Master**            | Time interno técnico           | Role já aceito no login admin (`profiles.role = MASTER`), hoje com as mesmas capacidades do admin; toda escrita cai no audit log |
+| Persona               | Quem                           | O que faz no sistema                                                                                                                                                                  |
+| --------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Visitante anônimo** | Professor procurando material  | Navega catálogo, filtra e ordena, lê depoimentos, vê preço                                                                                                                            |
+| **Cliente**           | Visitante que decidiu comprar  | Adiciona ao carrinho, faz checkout, paga, baixa arquivos, vê histórico de pedidos, exclui a própria conta e baixa os próprios dados (LGPD)                                            |
+| **Inscrito**          | Cliente que aceitou newsletter | Recebe a newsletter (envio manual). A sequência pós-compra e a reativação não dependem de inscrição: vão para todo comprador com pedido aprovado (base contratual), salvo descadastro |
+| **Admin**             | Profa. Marciar (dona)          | Cria/edita produtos, vê pedidos, analisa Curva ABC, configura vitrine, gerencia cupons                                                                                                |
+| **Master**            | Time interno técnico           | Role já aceito no login admin (`profiles.role = MASTER`), hoje com as mesmas capacidades do admin; toda escrita cai no audit log                                                      |
 
 Personas não-humanas (atores técnicos):
 
 - **Mercado Pago** — processa pagamento e envia webhook quando aprovado.
-- **Resend** — entrega e-mails transacionais (confirmação, reset de senha) e de marketing (newsletter, cross-sell).
+- **Resend** — entrega e-mails transacionais (definição/reset de senha, exclusão de conta) e de marketing (newsletter, cross-sell). O e-mail de confirmação do pedido ainda não é disparado automaticamente — ver [13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md).
 - **GA4 + Meta Pixel** — recebem eventos do funil para análise comportamental e attribution.
 - **GitHub Actions** — dispara cron horário de envio de e-mails (abandoned cart 1h/24h, pós-compra D+3/D+15/D+45, reativação 90d) que chama `/api/cron-email-jobs`.
 
@@ -35,10 +35,10 @@ Personas não-humanas (atores técnicos):
 
 ### Catálogo e descoberta
 
-- Página inicial com seções configuráveis (vitrine, destaques, mais vendidos)
-- Listagem `/produtos` com filtro por categoria e faixa de preço, presets (`mais-vendidos`, `novidades`), ordenação (preço, novidade, vendas, nome) — não há busca textual na loja
+- Página inicial com seções configuráveis: por categoria, Mais vendidos e Novidades
+- Listagem `/produtos` com filtro por categoria e faixa de preço, presets (`mais-vendidos`, `novidades`), ordenação (preço, novidade, vendas, nome) — há filtro textual por `?q=` (usado pela SearchAction do JSON-LD da home), mas a loja não tem campo de busca visível
 - Página de produto `/produtos/:slug` com galeria de imagens, vídeos, descrição rica, FAQ, depoimentos, benefícios, cross-sell automático
-- Schema.org `Product` + `Offer` em produto, sitemap dinâmico, meta tags por página
+- Schema.org `Product` + `Offer` em produto, sitemap dinâmico, meta tags por página, imagem OG padrão `og-default.png` (1200×630)
 - Cards com line-clamp, lazy loading, skeleton, badge de categoria e selo de oferta
 
 ### Compra
@@ -48,7 +48,7 @@ Personas não-humanas (atores técnicos):
 - Integração com Mercado Pago Checkout Pro (cartão, Pix, boleto)
 - Polling de pagamento como fallback se webhook não chegar (4s em CheckoutPage, 10s em DownloadsPage)
 - Validação de cupons server-side (`coupons` table com `discount_type`, `discount_value`, `valid_from`/`valid_until`, `max_uses`, `min_order_amount`, `applies_to`)
-- Confirmação por e-mail logo após aprovação
+- E-mail de confirmação do pedido: o endpoint `POST /api/send-confirmation-email` (template `orderConfirmation`) existe, mas nenhum fluxo o dispara automaticamente hoje — pendência em [13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md); a conta provisionada recebe o e-mail de definição de senha
 - Conta Supabase provisionada automaticamente para comprador convidado (e-mail para definir senha)
 - Carrinho abandonado salvo automaticamente e lembrado via cron
 
@@ -70,13 +70,14 @@ Personas não-humanas (atores técnicos):
 - Admin com 2FA opcional (TOTP + PIN de recuperação)
 - Login admin em `/admin`: sem sessão admin a própria rota mostra só o formulário de login; com sessão, o painel. A proteção é a sessão, não a URL. O link "Painel admin" no header continua só para sessão com role admin/master
 - Exclusão de conta LGPD em 2 passos (solicitação → confirmação por e-mail), com anonimização dos pedidos
+- Exportação dos próprios dados em JSON (LGPD art. 18, V) pelo botão "Baixar meus dados" em `/conta` (`GET /api/me-export-data`, escopado por `customer_id`)
 
 ### Painel admin (14 abas)
 
 1. **Dashboard** — KPIs gerais (receita mês/total, pedidos, ticket médio, LTV, taxa de recompra), receita diária e por categoria, curva ABC, sparkline 14 dias
 2. **Produtos** — wizard de criação/edição com galeria, vídeos, arquivo de download, FAQ, reviews e benefícios; pausar/ativar e excluir
 3. **Desempenho** — desempenho de vendas por produto (pedidos aprovados)
-4. **Categorias** — wizard com cor, badge, featured, sort_order
+4. **Categorias** — wizard com nome, cor, destaque (featured) e ativa; slug gerado pelo endpoint
 5. **Pedidos** — listagem, filtro por status, modal de detalhe
 6. **Cupons** — CRUD de cupons via wizard (`/api/admin/coupons`)
 7. **Faturamento** — série de faturamento de pedidos aprovados
@@ -85,7 +86,7 @@ Personas não-humanas (atores técnicos):
 10. **Análise** — Curva ABC de produtos + clientes + coorte 12 meses + export CSV
 11. **Segmentos** — segmentação de subscribers por tags de lifecycle (ativo, recorrente, VIP, inativo 30/90/180d, categoria comprada)
 12. **Usuários** — lista usuários, troca de papel (role) e revogação de acesso
-13. **Vitrine** — configuração das seções da home (destaques, novidades, etc.)
+13. **Vitrine** — configuração das seções da home (por categoria, Mais vendidos e Novidades)
 14. **Segurança** — configuração do 2FA do admin (segredo TOTP + PIN de recuperação; backend só devolve flags, nunca os segredos)
 
 ### Marketing & retenção
@@ -100,7 +101,7 @@ Personas não-humanas (atores técnicos):
 
 ### Conformidade
 
-- LGPD: banner de consentimento, double opt-in, descadastro 1-clique, exclusão de conta em 2 passos, retenção limitada (`download_logs` 12m, `analytics_events` 180d, `security_events` e `page_views` 6m, `email_sent_log` 90d, `admin_audit_log` 18m), email-mask em logs (`sha256.slice(0,16)`)
+- LGPD: banner de consentimento, double opt-in, descadastro 1-clique, exclusão de conta em 2 passos, exportação dos próprios dados em JSON (art. 18, V — `/api/me-export-data`), retenção limitada (`download_logs` 12m, `analytics_events` 180d, `security_events` e `page_views` 6m, `email_sent_log` 90d, `admin_audit_log` 18m), email-mask em logs (`sha256.slice(0,16)`)
 - WCAG: contraste AA validado em CI, fontes ≥ 16px em mobile, áreas de toque parcialmente ≥ 44px
 - SEO: gate Lighthouse no CI (preset desktop) — Performance ≥ 80, Acessibilidade ≥ 90, SEO ≥ 90
 - Acessibilidade: `aria-busy`, skeleton, mensagens de erro humanas
@@ -120,7 +121,7 @@ Lista resumida — detalhes em [13-ROADMAP-PENDENCIAS](./13-ROADMAP-PENDENCIAS.m
 - ❌ **Autenticação de domínio no Resend** (DKIM + SPF + DMARC) — pendente DNS
 - ❌ **Pipeline WebP/AVIF** — adiada (catálogo < 200 produtos não justifica)
 - ❌ **Backup automatizado de produção** — Supabase Free dá 7 dias; produção requer Pro
-- ❌ **Imagem OG dedicada** (1200×630) — hoje o fallback de OG image em `SEO.jsx` é o `favicon.svg`
+- ❌ **E-mail de confirmação do pedido** — o endpoint existe, mas nenhum fluxo o dispara na aprovação ([13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md))
 
 ---
 
@@ -152,7 +153,7 @@ Lista resumida — detalhes em [13-ROADMAP-PENDENCIAS](./13-ROADMAP-PENDENCIAS.m
 | Backend   | Express                                         | 5      | API REST como BFF                     |
 | Banco     | Supabase (Postgres 17)                          | —      | DB + Auth + Storage                   |
 | Pagamento | Mercado Pago SDK                                | 2      | Checkout Pro                          |
-| Segurança | helmet + cors + express-rate-limit              | —      | Headers, CORS, throttle               |
+| Segurança | helmet + cors + `enforceRateLimit` (Postgres)   | —      | Headers, CORS, throttle por endpoint  |
 | E-mail    | Resend (SMTP + Supabase Auth SMTP) + nodemailer | 9      | Free 3.000/mês                        |
 | Testes    | Vitest + Testing Library                        | 4 / 16 | Unit + componente                     |
 | Deploy    | Vercel                                          | —      | Serverless functions + estático       |

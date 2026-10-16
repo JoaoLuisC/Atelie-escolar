@@ -15,27 +15,33 @@ Toda regra traz a evidência que a motivou, para que dê para discordar com dado
 As 29 regras estão **aplicadas**. Duas rodadas de padronização (13/08 e 18/08 de 2026), ambas
 medidas no código e não estimadas, fecharam a dívida:
 
-| Medida                                   |      Antes |                   Hoje |
-| ---------------------------------------- | ---------: | ---------------------: |
-| Arquivos que reprovam `prettier --check` |        189 |                  **0** |
-| Sites que devolvem `error` como string   |         58 |                  **0** |
-| Endpoints públicos sem rate limit        |          5 |                  **0** |
-| Chamadas de `console.*` no backend       |         79 |                  **0** |
-| Caminhos de rota literais no JSX         |         50 |                  **0** |
-| Mecanismos de rate limit concorrentes    |          2 |                  **1** |
-| Módulos de `lib/` sem suíte              | 13 (de 21) |          **0** (de 26) |
-| Testes                                   |        274 |                **691** |
-| Cobertura (statements)                   | não rodava | **39,8%** (piso no CI) |
-| Avisos de lint                           |         30 |       **13** (catraca) |
-| Caminho crítico do bundle (gzip)         |   157,8 KB |           **100,5 KB** |
+| Medida                                   |      Antes |                  Hoje |
+| ---------------------------------------- | ---------: | --------------------: |
+| Arquivos que reprovam `prettier --check` |        189 |                 **0** |
+| Sites que devolvem `error` como string   |         58 |                 **0** |
+| Endpoints públicos sem rate limit        |          5 |                 **0** |
+| Chamadas de `console.*` no backend       |         79 |                 **0** |
+| Caminhos de rota literais no JSX         |         50 |                 **0** |
+| Mecanismos de rate limit concorrentes    |          2 |                 **1** |
+| Módulos de `lib/` sem suíte              | 13 (de 21) |         **0** (de 30) |
+| Testes                                   |        274 |              **1128** |
+| Cobertura (statements)                   | não rodava | **61,97%** (piso 48%) |
+| Avisos de lint                           |         30 |      **12** (catraca) |
+| Caminho crítico do bundle (gzip)         |   157,8 KB |          **100,5 KB** |
+
+Remedido em 16/10/2026: testes, cobertura, avisos de lint e módulos de `lib/`. As demais linhas
+são as de 18/08 e seguem guardadas por gate executável (abaixo) ou pela catraca.
 
 Duas coisas dessa tabela valem para quem chega:
 
-**`D5` está em catraca, não em zero.** Sobram **13** avisos, todos diagnósticos do React Compiler:
-12 de `setState` dentro de efeito (que exigem repensar o carregamento de dados componente a
+**`D5` está em catraca, não em zero.** Sobram **12** avisos, todos diagnósticos do React Compiler:
+11 de `setState` dentro de efeito (que exigem repensar o carregamento de dados componente a
 componente) e 1 de biblioteca incompatível em `CheckoutPage.jsx`, que é o `react-hook-form` e não
-tem conserto do nosso lado. `npm run lint` roda com `--max-warnings=13`, então o número não pode
+tem conserto do nosso lado. `npm run lint` roda com `--max-warnings=12`, então o número não pode
 crescer — e ao corrigir um aviso, **baixe o teto no `package.json` no mesmo commit**.
+
+> Em 16/10/2026 a medição achou 12 avisos com o teto ainda em 13: um `setState` saiu sem que o
+> teto descesse junto. O teto foi baixado para 12 na revisão de documentação dessa data.
 
 > Os 4 que saíram em 01/09/2026 eram os baratos, e ficam registrados porque a diferença entre eles
 > e os 12 restantes é o que explica por que a catraca não fecha em zero de uma vez: `resetForm`
@@ -192,6 +198,10 @@ dois estilos de API.
 > URLs planas seguem atendidas por um rewrite em [`vercel.json`](./vercel.json), que existe só
 > para a janela de deploy — um painel já aberto no navegador continua chamando a URL antiga por
 > alguns minutos. Sem consumidor externo, pode ser removido após um ciclo de deploy.
+>
+> **Depois (660fe74).** Os handlers saíram de `api/` para `handlers/` quando tudo passou a ser
+> servido por uma função só; os do painel moram em `handlers/admin/<recurso>.js`. A convenção de
+> URL não mudou, e o rewrite `/api/admin-(.*)` continua no `vercel.json`.
 
 ---
 
@@ -313,14 +323,17 @@ específico mora junto do componente; utilitário genérico não.
 
 `src/components/admin/utils/format.js` tem `formatDateTime`, que não é específico do admin.
 
-> **Exceção NOMEADA (18/08/2026, item `P5.3`).** `src/components/admin/utils/` continua
-> existindo, com exatamente dois arquivos, e isso É a regra sendo cumprida — não um desvio
-> tolerado:
+> **Exceção NOMEADA (18/08/2026, item `P5.3`; atualizada em 16/10/2026).** `src/components/admin/utils/`
+> continua existindo, com os quatro arquivos abaixo, e isso É a regra sendo cumprida — não um
+> desvio tolerado. Todos têm consumidor só dentro do painel (abas do admin, `AdminPage` e o
+> `ProductWizard`, que é do admin):
 >
-> | Arquivo     | Por que fica                                                                               |
-> | ----------- | ------------------------------------------------------------------------------------------ |
-> | `derive.js` | Derivações do painel (curva ABC, séries de faturamento, coorte). Zero consumidor fora dele |
-> | `tabs.js`   | Rótulos e o conjunto `TABS_NEEDING_DASHBOARD`. Descreve a navegação do painel e nada mais  |
+> | Arquivo             | Por que fica                                                                               |
+> | ------------------- | ------------------------------------------------------------------------------------------ |
+> | `derive.js`         | Derivações do painel (curva ABC, séries de faturamento, coorte). Zero consumidor fora dele |
+> | `tabs.js`           | Rótulos e o conjunto `TABS_NEEDING_DASHBOARD`. Descreve a navegação do painel e nada mais  |
+> | `category-label.js` | Rótulo seguro de categoria no painel (esconde as categorias-fantasma com nome = UUID)      |
+> | `errors.js`         | `friendlyAdminError`: traduz erro de rede ("Failed to fetch") para a dona da loja          |
 >
 > A regra diz "utilitário de um componente específico mora junto do componente", e os dois são
 > exatamente isso. O que saiu foi o que **não** era: `formatDateTime` foi para `src/utils/date.js`

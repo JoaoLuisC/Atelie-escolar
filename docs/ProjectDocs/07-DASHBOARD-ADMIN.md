@@ -7,10 +7,10 @@
 ## Acesso
 
 - URL: `/admin` (`ROUTES.admin` em `src/constants/routes.js`) — sem sessão admin, a rota mostra só o formulário de login; com sessão, o painel. Sair do painel volta ao formulário na mesma URL
-- Login com e-mail + senha + (opcional) 2FA TOTP ou PIN de recuperação — a 2ª etapa usa `challengeToken` HMAC com TTL de 5 min
+- Login com e-mail + senha + (opcional) 2FA TOTP ou PIN de recuperação — a 2ª etapa usa `challengeToken` HMAC de uso único, vinculado ao IP, com TTL de 2 min (expirado, o login reemite um novo)
 - Cookie `admin_session` HttpOnly assinado com HMAC-SHA256, TTL 8h, SameSite=Strict
 - Apenas usuários com `profiles.role IN ('ADMIN', 'MASTER')` conseguem logar (resposta idêntica para senha errada e conta não-admin)
-- Rate-limit: 5 tentativas falhas / 10 min (aplicado pelo Express em dev; na Vercel serverless ainda não há limiter — pendência API-03)
+- Rate-limit: 5 tentativas / 10 min (`RATE_LIMITS.adminLogin`, contador no Postgres, vale em dev e produção; o sucesso também conta) + balde separado de 5 / 10 min para o 2º fator (fail-closed: contador fora do ar → 503)
 
 Fluxo detalhado: [05-FLUXOS §4](./05-FLUXOS.md).
 
@@ -41,11 +41,14 @@ src/components/admin/
 │   ├── StatusChip.jsx
 │   ├── Card.jsx
 │   ├── Button.jsx
-│   └── EmptyState.jsx
-├── utils/                       # Helpers admin (derive.js, format.js, tabs.js)
+│   ├── EmptyState.jsx
+│   └── useModalBehavior.js
+├── utils/                       # Helpers admin (category-label.js, derive.js, errors.js, tabs.js)
 ├── AdminLayout.jsx              # Sidebar + header sticky + logout
 └── OrderDetailModal.jsx         # Modal de detalhe de pedido (focus trap, Esc fecha)
 ```
+
+Datas ficam em `src/utils/date.js` e os códigos de erro em `src/constants/error-codes.js` (o antigo `utils/format.js` foi removido).
 
 Container: `src/pages/AdminPage.jsx` orquestra as abas (SPA interna por estado `activeTab`, sem sub-rotas) e gerencia o state global do admin. A sidebar (`AdminLayout.jsx`) agrupa três abas sob "Produtos" (Lista de produtos, Desempenho, Categorias) e duas sob "Financeiro" (Faturamento, Comparativo).
 
@@ -63,13 +66,13 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 - KPIs principais (hero cards): faturamento do mês (com delta vs mês anterior + sparkline de 14 dias), ticket médio do mês, pedidos aprovados (+ pendentes), clientes recorrentes
 - Mini stats: receita total, produtos ativos, pedidos pendentes, clientes cadastrados
-- KPIs avançados (Fase 4): LTV médio 12m, taxa de recompra, ticket médio 12m, LTV/CAC (mostra "Fase 5" enquanto CAC não existir — o endpoint retorna `cac: null`)
+- KPIs avançados (Fase 4): LTV médio 12m, taxa de recompra, ticket médio 12m, LTV/CAC (mostra "—" enquanto CAC não existir — o endpoint retorna `cac: null`)
 - Gráfico de linha da receita dos últimos 7 dias
 - Donut de receita por categoria (top 5)
 - Curva ABC resumida (top 8 produtos por receita, classes A/B/C)
 - Mix de clientes (novos vs recorrentes)
 - Pedidos recentes (últimos 8, com botão "Detalhes" que abre `OrderDetailModal`)
-- Cards-placeholder "Vendas por região" e "Funil de conversão" (instrumentação pendente — o funil real está na aba Funil)
+- Card-placeholder "Vendas por região" (depende de o checkout pedir a UF; o funil de conversão está na aba Funil)
 
 **Fonte.** `GET /api/admin/dashboard` (agregações client-side em `components/admin/utils/derive.js`) + `GET /api/admin/kpis?window=12`.
 
@@ -88,7 +91,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 **Ações.**
 
-- **Novo produto** → abre `ProductWizard` (4 steps: Básico → Mídia → Preço & Variações → Conversão; o step Conversão edita `benefits`, `faq` e `reviews`)
+- **Novo produto** → abre `ProductWizard` (4 steps: Básico → Mídia → Preço e tipo → Conversão; o step Conversão edita `benefits`, `faq` e `reviews`)
 - **Editar** → mesmo wizard pré-preenchido
 - **Pausar/Ativar** (soft toggle via `PATCH /api/admin/products`)
 - **Excluir** (hard delete com `confirm` — usar com cautela, prefira pausar)
@@ -201,7 +204,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 - Tabela de atribuição por UTM source (pedidos, receita, share; `direct` = sem UTM)
 - Seletor de período: 7 / 30 / 90 dias
 
-**Fonte.** `GET /api/admin/funnel?days=` agrega `analytics_events` + `orders`. Cache server-side de 1h (`?nocache=1` invalida).
+**Fonte.** `GET /api/admin/funnel?days=` agrega `analytics_events` + `orders`. Sem cache: recalculado a cada abertura (`Cache-Control: no-store`, ADM-01).
 
 ---
 
@@ -239,7 +242,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 **Fonte.** `GET /api/admin/abc-products?period&categoryId` + `/api/admin/abc-customers?period` + `/api/admin/cohort?months=12`.
 
-**Performance.** Cache server-side de 1h em todos os endpoints (regra F5); `?nocache=1` força recálculo.
+**Performance.** Sem cache: os três endpoints são recalculados a cada abertura (`Cache-Control: no-store`, ADM-01).
 
 ---
 
@@ -254,12 +257,12 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
   - `cliente_ativo` (compra ≤ 90 dias)
   - `cliente_recorrente` (≥ 2 pedidos aprovados)
   - `cliente_vip` (5+ pedidos OU LTV alto)
-  - `inativo_30d` (30–89 dias sem comprar)
+  - `inativo_30d` (31–89 dias sem comprar)
   - `inativo_90d` (90–179 dias — alvo de reativação)
   - `inativo_180d` (≥ 180 dias — não enviar mais, regra D7)
   - `categoria:<slug>` (uma tag por categoria já comprada)
 
-**Fonte.** `GET /api/admin/segments` aplicando lógica de `lib/customer-segmentation.js`. Retorna relatório agregado (contagens, sem lista bruta de e-mails). Cache de 30 min; `?nocache=1` invalida.
+**Fonte.** `GET /api/admin/segments` aplicando lógica de `lib/customer-segmentation.js`. Retorna relatório agregado (contagens, sem lista bruta de e-mails). Sem cache: recalculado a cada abertura (`Cache-Control: no-store`, ADM-01).
 
 ---
 
@@ -269,13 +272,13 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 **Mostra.**
 
-- Lista de `profiles` com: nome, e-mail, papel (badge), qtd de compras e total gasto (agregados de `orders` aprovados por e-mail)
+- Lista de `profiles` não privilegiados (admin/master e a conta da dona ficam fora) com: nome, e-mail, papel (badge), qtd de compras e total gasto (agregados de `orders` aprovados por e-mail)
 - Busca por nome ou e-mail
 
 **Ações.**
 
-- **Trocar papel** (select Admin / Suporte / Cliente → `PUT /api/admin/users`)
-- **Revogar acesso** (modal de confirmação → `DELETE /api/admin/users`; remove a linha de `profiles`)
+- **Trocar papel** (select Cliente / Vendedor → `PUT /api/admin/users`, gravado como `CUSTOMER`/`SELLER`; admin/master não são editáveis por aqui — 403)
+- **Revogar acesso** (modal de confirmação → `DELETE /api/admin/users`; bane a conta no Supabase Auth e depois remove a linha de `profiles` — os pedidos ficam)
 
 **Fonte.** `GET/PUT/DELETE /api/admin/users` (escritas auditadas).
 
@@ -310,9 +313,10 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 **Mostra.**
 
-- Checkbox "Exigir 2FA no login admin" (`twoFactorEnabled`)
-- Campo TOTP secret (Base32, colado manualmente de um app autenticador — Google Authenticator, 1Password, Authy; não há geração de QR code)
+- Checkbox "Exigir 2FA no login admin" (`twoFactorEnabled`) — só liga com TOTP ou PIN cadastrado
+- Campo TOTP secret (Base32), com botão "Gerar" que cria o segredo no navegador para cadastrar no app autenticador (Google Authenticator, 1Password, Authy); o segredo novo só é salvo junto com o código de 6 dígitos que o app gerar a partir dele (`totpVerificationCode`). Não há QR code
 - Campo PIN de recuperação (numérico, 6+ dígitos, uso emergencial)
+- Com o 2FA em vigor, campo "Código atual (TOTP ou PIN)": qualquer mudança exige o fator vigente (`confirmationCode`; sem ele o backend responde 403)
 - Card de boas práticas
 
 **Comportamento seguro.**
@@ -344,7 +348,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 ### Cache
 
-Endpoints das abas Análise, Funil e KPIs têm **cache server-side de 1h** (regra F5); Segmentos, 30 min. Refresh forçado via query `?nocache=1`.
+Os relatórios do admin (Análise, Funil, KPIs, Segmentos) **não têm cache**: `CACHE_POLICIES.adminReport` = `private, no-store`, e cada abertura de aba recalcula (ADM-01 — com cache, o relatório continuava visível depois do logout). O cache em memória de processo foi removido por não funcionar em serverless.
 
 ### Export CSV
 
@@ -373,4 +377,4 @@ Todo componente que carrega dados deve mostrar:
 
 ## Auditoria do admin
 
-Toda escrita do painel (products, categories, coupons, orders, users, settings) é registrada na tabela `admin_audit_log` via `lib/admin-audit.js` (regra I1): `admin_id` = e-mail do admin logado, `action` (create/update/patch/delete), `target_type`/`target_id`, `before`/`after` com campos sensíveis redigidos, e IP. A tabela é **append-only** (triggers bloqueiam UPDATE/DELETE) com retenção de 18 meses. Leituras (qual admin acessou qual aba quando) não são logadas.
+Toda escrita do painel (products, categories, coupons, orders, users, settings, upload de mídia e limpeza de eventos) é registrada na tabela `admin_audit_log` via `lib/admin-audit.js` (regra I1): `admin_id` = e-mail do admin logado, `action` (create/update/patch/delete), `target_type`/`target_id`, `before`/`after` com campos sensíveis redigidos (nos cinco CRUDs da factory só o `after`, que é o corpo enviado), e IP. A tabela é **append-only** (triggers bloqueiam UPDATE/DELETE) com retenção de 18 meses. Leituras (qual admin acessou qual aba quando) não são logadas.

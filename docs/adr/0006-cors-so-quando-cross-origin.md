@@ -82,3 +82,19 @@ olhos: um bloco de CORS inerte em 26 arquivos é ruído que treina o olho a pula
 uma regra que ninguém segue e cuja violação não quebra nada é a que desmoraliza as outras. O
 `CONTRIBUTING.md` já traz duas correções do mesmo tipo (A1 e C3, ambas de 13/08/2026), e o
 mecanismo é o mesmo: quando a medição mostra que a regra está errada, **a regra muda**.
+
+---
+
+## Emenda — 2026-10-16: o middleware `cors` passou a rodar em produção
+
+Desde a emenda de 26/08 do [ADR 0002](./0002-handler-unico-para-vercel-e-express.md), o
+middleware `cors` mora em `lib/express-app.js` (`app.use(cors(buildCorsConfig(...)))`) e roda
+também na Vercel, com `CORS_ORIGINS` obrigatório fora de dev/test — sem a variável, o boot falha.
+O contexto acima ("não existe em produção") descreve o estado de 18/08.
+
+A decisão continua de pé: em produção o front e a API seguem na mesma origem, e os
+administrativos continuam emitindo `setAdminCorsHeaders`. Muda a consequência ruim: se a API for
+para um domínio próprio, o middleware compartilhado já emite CORS (preflight incluso) para as
+origens de `CORS_ORIGINS`. Basta incluir a origem do site na variável; os 26 handlers públicos
+não precisam ser tocados. (Os cookies de sessão `SameSite=Strict` seriam outro ponto a
+revisitar nesse cenário, mas isso não é CORS.)

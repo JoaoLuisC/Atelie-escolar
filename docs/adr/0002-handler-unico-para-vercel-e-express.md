@@ -22,8 +22,8 @@ de `server.js` nunca roda lá.
 ## Decisão
 
 Todo endpoint servido pelo Express é **o mesmo módulo** que a função da Vercel publica.
-`routes/api-compat.routes.js` e `routes/auth.routes.js` apenas montam os handlers de `api/`;
-não implementam comportamento.
+`routes/api-compat.routes.js` e `routes/auth.routes.js` apenas montam os handlers de `api/`
+(hoje em `handlers/`, ver emenda); não implementam comportamento.
 
 Corolários que não são negociáveis:
 
