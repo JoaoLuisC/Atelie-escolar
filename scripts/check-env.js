@@ -225,6 +225,10 @@ const VARS = [
 const PLACEHOLDER_SUBSTRINGS = ['seu_', 'sua_', 'your_', 'change-me', 'changeme', 'xxxxxxxx'];
 const PLACEHOLDER_PREFIXES = ['dev-', 'your-project', 'my-project'];
 
+// O que `vercel pull` grava no lugar do valor de uma variável marcada como
+// Sensitive no painel da Vercel.
+const VERCEL_SENSITIVE_MARKER = '[SENSITIVE]';
+
 function isPlaceholder(value) {
   const lowered = value.toLowerCase();
   if (PLACEHOLDER_SUBSTRINGS.some((marker) => lowered.includes(marker))) return true;
@@ -326,6 +330,18 @@ function main() {
   for (const spec of VARS) {
     const value = String(process.env[spec.name] || '').trim();
 
+    // Variável "Sensitive" da Vercel baixada por `vercel pull` (o build do
+    // workflow de release no GitHub Actions): a Vercel NUNCA entrega o valor,
+    // só este marcador. O valor real existe — é injetado nas funções em tempo
+    // de execução —, mas não há como validá-lo neste build. Builds feitos pela
+    // própria Vercel recebem os valores reais e seguem validados por inteiro.
+    if (value === VERCEL_SENSITIVE_MARKER) {
+      warnings.push(
+        `${spec.name} — protegida pela Vercel (Sensitive): o valor só existe em execução e não pode ser validado neste build`,
+      );
+      continue;
+    }
+
     const required =
       spec.scope === 'core'
         ? env === 'preview' || env === 'production'
@@ -366,7 +382,12 @@ function main() {
   const vercelEnv = String(process.env.VERCEL_ENV || '')
     .trim()
     .toLowerCase();
-  if (vercelEnv === 'production' && appEnv && appEnv !== 'production') {
+  if (
+    vercelEnv === 'production' &&
+    appEnv &&
+    appEnv !== VERCEL_SENSITIVE_MARKER.toLowerCase() &&
+    appEnv !== 'production'
+  ) {
     errors.push('APP_ENV — deploy de produção da Vercel com APP_ENV diferente de "production"');
   }
 
