@@ -6,18 +6,31 @@
 
 ## Stack de deploy
 
-| Componente               | Onde                             | Como atualiza                                   |
-| ------------------------ | -------------------------------- | ----------------------------------------------- |
-| Frontend                 | Vercel (static)                  | `git push` → build automático                   |
-| API                      | Vercel (UMA serverless function) | idem; `api/index.js` serve todos os handlers    |
-| Banco                    | Supabase (managed)               | `supabase db push` ou Dashboard                 |
-| Storage (arquivos)       | Supabase Storage                 | Upload manual ou via API                        |
-| Cron de e-mails          | GitHub Actions                   | `.github/workflows/email-cron.yml`              |
-| CI (testes + Lighthouse) | GitHub Actions                   | `.github/workflows/test.yml` + `lighthouse.yml` |
-| DNS                      | Provedor do domínio              | manual                                          |
-| E-mail                   | Resend                           | gerenciado, sem deploy                          |
+| Componente               | Onde                             | Como atualiza                                       |
+| ------------------------ | -------------------------------- | --------------------------------------------------- |
+| Frontend                 | Vercel (static)                  | push na `main` → workflow `release-production.yml`  |
+| API                      | Vercel (UMA serverless function) | idem; `api/index.js` serve todos os handlers        |
+| Banco                    | Supabase (managed)               | mesmo workflow (`supabase db push` antes do deploy) |
+| Storage (arquivos)       | Supabase Storage                 | Upload manual ou via API                            |
+| Cron de e-mails          | GitHub Actions                   | `.github/workflows/email-cron.yml`                  |
+| CI (testes + Lighthouse) | GitHub Actions                   | `.github/workflows/test.yml` + `lighthouse.yml`     |
+| DNS                      | Provedor do domínio              | manual                                              |
+| E-mail                   | Resend                           | gerenciado, sem deploy                              |
 
 ---
+
+### Release de produção (GitHub Actions, desde 26/10/2026)
+
+Todo push na `main` dispara `.github/workflows/release-production.yml`:
+
+1. **Validate** — `npm run check` (env, formatação, lint, testes, cobertura, build)
+2. **Migrate** — `supabase db push --db-url` pelo session pooler (IPv4). Migration nova vai para
+   produção **no mesmo push** — revisar o SQL antes do merge
+3. **Deploy** — `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`
+
+A integração direta GitHub → Vercel foi desligada: o deploy só sai depois da migration. No
+`vercel pull`, variável marcada como **Sensitive** chega como o texto `[SENSITIVE]`;
+`scripts/check-env.js` avisa em vez de barrar (o valor real só existe em execução).
 
 ## 1. Configuração no Vercel
 

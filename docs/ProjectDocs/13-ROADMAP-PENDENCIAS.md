@@ -92,7 +92,11 @@ CORS_ORIGINS=https://professoramarcia.ateliedaescola.com.br
 Em Production. `ateliedaescola.com.br` e `www` redirecionam (308) para o subdomínio pelo
 `vercel.json`, até a plataforma (v2) ocupar a raiz.
 
-### 2.4 Autenticar domínio no Resend (DKIM + SPF + DMARC) — regra D6
+### 2.4 Autenticar domínio no Resend (DKIM + SPF + DMARC) — regra D6 — ✅ FEITO (26/10/2026)
+
+> Domínio `ateliedaescola.com.br` verificado no Resend, remetente
+> `pedidos@ateliedaescola.com.br` no Vercel e no SMTP do Supabase Auth. Falta só o
+> mail-tester (passo 5). Passo a passo original abaixo.
 
 **Bloqueia entrega real de emails de marketing.** Sandbox só entrega para o dono da conta Resend.
 
@@ -102,7 +106,9 @@ Em Production. `ateliedaescola.com.br` e `www` redirecionam (308) para o subdom�
 4. Atualizar `smtp_admin_email` no Supabase Auth (Dashboard → Authentication → SMTP) para o mesmo domínio
 5. Validar entregabilidade em [mail-tester.com](https://mail-tester.com) → alvo 10/10
 
-### 2.5 CRON_SECRET para o cron de email
+### 2.5 CRON_SECRET para o cron de email — ✅ FEITO (26/10/2026)
+
+> `CRON_SECRET` no Vercel e no GitHub, `APP_URL` no GitHub; o workflow "Email cron" rodou verde.
 
 Sem isso o workflow `email-cron.yml` falha 401.
 
@@ -165,7 +171,10 @@ Workflow já roda. Sem token, relatórios vão para `temporary-public-storage`. 
 - ✅ **Editar `faq`/`reviews`/`benefits`** — aba "Conversão" no `ProductWizard.jsx` com editores de benefícios, FAQ e depoimentos; gravado por `handlers/admin/products.js`.
 - ✅ **CRUD de cupons** — aba "Cupons" no painel (`CouponsTab` + `CouponWizard`) com endpoint `handlers/admin/coupons.js` (GET/POST/PUT/DELETE). Validação no checkout segue em `validate-coupon.js`.
 
-### 3.5 Validar Google OAuth em produção
+### 3.5 Validar Google OAuth em produção — ✅ CONFIGURADO (26/10/2026)
+
+> URL de produção no `uri_allow_list` via `scripts/configure-auth.js`; o login com Google abre a
+> janela do Google e volta para o carrinho. Falta só o teste da dona com uma conta real.
 
 > ℹ️ **O código está completo de ponta a ponta** — botão "Continuar com Google" + `signInWithOAuth` + callback `/api/auth/customer/google/callback` (`handlers/auth/customer/google/callback.js`) que valida o token no Supabase e crava cookie HttpOnly. Não é "só wirado".
 
@@ -228,7 +237,13 @@ Dois cards `PendingDataCard` em `DashboardTab.jsx` aguardam instrumentação de 
 - **Vendas por região** — exige coluna `orders.shipping_state` + captura do UF no checkout
 - **Funil de conversão (card interno do Dashboard)** — exige rastreamento de eventos (`analytics_events`/`page_views`); distinto da aba Funil, que já existe
 
-### 3.11 Validar o esquema das URLs de produto — ⚠️ pendência de segurança (16/10/2026)
+### 3.11 Validar o esquema das URLs de produto — ✅ ENTREGUE (26/10/2026)
+
+> `lib/product-media.js` (com suíte própria) roda na gravação do admin (`handlers/admin/products.js`,
+> criar e editar) e do professor (`handlers/teacher/products.js`): imagem e vídeo só `https://` com
+> host; arquivo de download só referência que a entrega aceita (`parseStorageRef` — bucket da
+> allowlist, sem `..`). Link do Drive passa a ser recusado no cadastro, e não mais na hora do
+> "Baixar". O produto real em produção passa nas regras novas. Registro original abaixo.
 
 O histórico de 24/05 registra "Zod do produto bloqueia `javascript:`/`data:`". **Isso não vale
 mais:** o schema morava em `validation/product.schemas.js`, que só rodava numa rota de dev e foi
@@ -333,8 +348,9 @@ Checklist para marcar cada fase como ✅ "funcionando em produção":
 
 ### Fase 3 — Email
 
-- [ ] Domínio autenticado no Resend (regra D6) — §2.4
-- [ ] Cron rodando — primeiros envios em `email_sent_log`
+- [x] Domínio autenticado no Resend (regra D6) — §2.4
+- [ ] Cron rodando — primeiros envios em `email_sent_log` (workflow verde em 26/10; falta ver
+      linha gravada depois da primeira compra real)
 - [ ] Mail-tester.com aprovou ≥ 9/10
 
 ### Fase 4 — Análise
@@ -388,12 +404,12 @@ O que falta é operacional. Marque aqui mesmo:
 
 ### B. Credenciais (≈1-2h, custo zero)
 
-- [ ] `CRON_SECRET` no Vercel **e** no GitHub + `APP_URL` no GitHub → rodar o workflow "Email
+- [x] `CRON_SECRET` no Vercel **e** no GitHub + `APP_URL` no GitHub → rodar o workflow "Email
       cron" à mão e ver 200 (§2.5)
 - [ ] `VITE_GA4_ID` e `VITE_META_PIXEL_ID` no `.env.local` e no Vercel (§2.1)
 - [x] `APP_URL=https://professoramarcia.ateliedaescola.com.br` no Vercel (§2.3)
 - [ ] Cupom `VOLTEI15` criado pela aba Cupons (§2.6)
-- [ ] URL de produção no `uri_allow_list` do Supabase Auth para o Google OAuth do cliente
+- [x] URL de produção no `uri_allow_list` do Supabase Auth para o Google OAuth do cliente
       (`scripts/configure-auth.js`, §3.5)
 
 ### C. Domínio + Resend — **o único bloco que bloqueia funcionalidade real** (DNS até 24h)
@@ -405,11 +421,11 @@ O que falta é operacional. Marque aqui mesmo:
 - [x] Registrar o domínio no registro.br (≈ R$ 40/ano) e decidir o titular
 - [x] DNS na Vercel: adicionar o domínio (raiz + `www`) no projeto e trocar os nameservers no
       registro.br para `ns1.vercel-dns.com` / `ns2.vercel-dns.com`
-- [ ] Resend → Add Domain (região São Paulo) → criar na Vercel os registros MX/TXT de `send` e o
+- [x] Resend → Add Domain (região São Paulo) → criar na Vercel os registros MX/TXT de `send` e o
       TXT `resend._domainkey`, mais o DMARC (`_dmarc`, `v=DMARC1; p=none; rua=mailto:…`) → Verify
 - [ ] (opcional) Caixa para `contato@` via ImprovMX ou similar (MX/SPF na raiz; não conflita com o
       Resend, que fica em `send`)
-- [ ] Conferir a permissão da chave do Resend (`SMTP_PASS`); `SMTP_FROM` trocado no `.env.local`,
+- [x] Conferir a permissão da chave do Resend (`SMTP_PASS`); `SMTP_FROM` trocado no `.env.local`,
       no Vercel e no SMTP do Supabase Auth (host `smtp.resend.com`, porta 465, usuário `resend`)
 - [x] Trocar no código/doc o domínio antigo pelo novo (rodapé, JSON-LD, docs)
 - [ ] mail-tester.com ≥ 9/10
@@ -425,7 +441,31 @@ O que falta é operacional. Marque aqui mesmo:
 ### E. Código — achados da revisão de documentação de 16/10/2026
 
 - [x] Disparar o e-mail de confirmação do pedido na aprovação (§3.12)
-- [ ] Validar o esquema das URLs de produto no schema do admin (§3.11)
+- [x] Validar o esquema das URLs de produto no schema do admin (§3.11)
+
+### F. Plataforma de professores — pendências antes de abrir para outra professora (26/10/2026)
+
+O commit `a2c7d40` criou o papel de professor (`profiles.role = SELLER`), a área `/professores`
+e a visão `/admin/plataforma` (ver [07-DASHBOARD-ADMIN](./07-DASHBOARD-ADMIN.md#plataforma-de-professores)). Hoje só
+a loja da professora Márcia vende. **Nada abaixo é problema enquanto não houver outro professor
+com login**; vira bloqueante no dia em que houver.
+
+- [x] `/admin` voltou a abrir o painel da loja — o commit tinha trocado a rota pela
+      `PlatformAdminPage` e o painel completo ficou sem rota (corrigido em 26/10, com teste
+      `src/__tests__/App.admin-routes.test.jsx`)
+- [ ] **Arquivo de outro professor:** `download_url` do professor aceita qualquer caminho do bucket
+      `product_files`. Um professor pode apontar o produto dele (barato) para o PDF de outro, comprar
+      e baixar. Fazer: prefixo por vendedor (`product_files/<seller_id>/…`) no upload e exigir o
+      prefixo em `handlers/teacher/products.js`
+- [ ] **Moderação:** produto de professor nasce `active: true` e entra direto na loja. Fazer: nascer
+      inativo e o admin aprovar em `/admin/plataforma`
+- [ ] **Dinheiro:** todo pagamento cai na conta Mercado Pago do João; não há split, comissão nem
+      repasse. Fazer: split do Mercado Pago (Marketplace) ou repasse manual registrado — decisão
+      de negócio e fiscal ([docs/ecommerce-atelie-da-escola](../ecommerce-atelie-da-escola/README.md))
+- [ ] **Termos do professor:** `/termos` cobre só a loja atual. Falta o contrato de quem vende
+      (licença do material, comissão, repasse, retirada)
+- [ ] `products.seller_id` ainda é nullable — atribuir os produtos legados em `/admin/plataforma`
+      e tornar a coluna obrigatória numa migração nova
 
 ### Fora do escopo de "finalizar" (evolução)
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { ROUTES } from '../constants/routes';
 import { useAuth } from '../hooks/useAuth';
@@ -93,7 +94,7 @@ export function PlatformAdminPage() {
   const summary = dashboard.summary || {};
   return (
     <main className="min-h-screen bg-slate-50 p-4 sm:p-8">
-      <SEO title="Administração da plataforma" pathname={ROUTES.admin} noindex />
+      <SEO title="Administração da plataforma" pathname={ROUTES.adminPlataforma} noindex />
       <div className="mx-auto max-w-6xl">
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -101,13 +102,21 @@ export function PlatformAdminPage() {
             <h1 className="text-3xl font-bold text-slate-900">Administração da plataforma</h1>
             <p className="mt-1 text-slate-600">Professores, alunos e visão geral de faturamento.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => logoutAdmin()}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-          >
-            Sair
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to={ROUTES.admin}
+              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Painel da loja
+            </Link>
+            <button
+              type="button"
+              onClick={() => logoutAdmin()}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              Sair
+            </button>
+          </div>
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

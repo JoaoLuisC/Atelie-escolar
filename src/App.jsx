@@ -39,7 +39,8 @@ const UnsubscribePage = lazy(() =>
 const AdminLoginPage = lazy(() =>
   import('./pages/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })),
 );
-const AdminPage = lazy(() =>
+const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+const PlatformAdminPage = lazy(() =>
   import('./pages/PlatformAdminPage').then((m) => ({ default: m.PlatformAdminPage })),
 );
 const TeachersPage = lazy(() =>
@@ -79,6 +80,14 @@ export default function App() {
             element={
               <ProtectedRoute fallback={<AdminLoginPage />} allowedRoles={['admin', 'master']}>
                 <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={ROUTES.adminPlataforma}
+            element={
+              <ProtectedRoute fallback={<AdminLoginPage />} allowedRoles={['admin', 'master']}>
+                <PlatformAdminPage />
               </ProtectedRoute>
             }
           />

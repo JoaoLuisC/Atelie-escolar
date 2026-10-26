@@ -10,6 +10,7 @@ const {
   productPatchSchema,
   uuidId,
 } = require('../../validation/admin.schemas');
+const { validateProductMedia } = require('../../lib/product-media');
 
 /** Erro de validação no formato que a factory despacha por `fail()`. */
 function invalid(message) {
@@ -20,6 +21,16 @@ function invalid(message) {
 // morava aqui e em handlers/admin/categories.js era duas verdades sobre a mesma
 // regra (F2), e slug divergente entre criar produto e criar categoria produz
 // categoria duplicada no menu da loja.
+
+/** Links de imagem/vídeo/arquivo do payload já montado (13-ROADMAP §3.11). */
+function mediaProblem(payload) {
+  return validateProductMedia({
+    images: payload.images,
+    imageUrl: payload.image_url,
+    videos: payload.videos,
+    downloadUrl: payload.download_url,
+  });
+}
 
 function resolveArray(input, fallback) {
   if (Array.isArray(input)) return input;
@@ -237,6 +248,8 @@ async function createProduct(body) {
   const category = await resolveCategoryId(body.categoryId ?? body.category);
   if (category.error) return category.error;
   const payload = toProductPayload({ ...body, category_id: category.id });
+  const mediaError = mediaProblem(payload);
+  if (mediaError) return invalid(mediaError);
   const [created] = await insertIntoTable('products', payload);
   return { status: 201, body: { id: String(created.id) } };
 }
@@ -270,6 +283,8 @@ async function updateProduct(body) {
     categoryId = category.id;
   }
   const payload = toProductPayload({ ...body, category_id: categoryId }, existing);
+  const mediaError = mediaProblem(payload);
+  if (mediaError) return invalid(mediaError);
   await updateTable('products', { id: `eq.${id}` }, payload);
   return { status: 200, body: {} };
 }

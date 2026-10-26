@@ -9,10 +9,28 @@
 - URL: `/admin` (`ROUTES.admin` em `src/constants/routes.js`) — sem sessão admin, a rota mostra só o formulário de login; com sessão, o painel. Sair do painel volta ao formulário na mesma URL
 - Login com e-mail + senha + (opcional) 2FA TOTP ou PIN de recuperação — a 2ª etapa usa `challengeToken` HMAC de uso único, vinculado ao IP, com TTL de 2 min (expirado, o login reemite um novo)
 - Cookie `admin_session` HttpOnly assinado com HMAC-SHA256, TTL 8h, SameSite=Strict
-- Apenas usuários com `profiles.role IN ('ADMIN', 'MASTER')` conseguem logar (resposta idêntica para senha errada e conta não-admin)
+- O login aceita `profiles.role IN ('ADMIN', 'MASTER', 'SELLER')` (resposta idêntica para senha errada e conta de outro papel). Admin/master vão para o painel; professor (`SELLER`) vai para `/professores` e recebe 401/403 nas APIs `/api/admin/*`. O 2º fator só é cobrado de admin/master
 - Rate-limit: 5 tentativas / 10 min (`RATE_LIMITS.adminLogin`, contador no Postgres, vale em dev e produção; o sucesso também conta) + balde separado de 5 / 10 min para o 2º fator (fail-closed: contador fora do ar → 503)
 
 Fluxo detalhado: [05-FLUXOS §4](./05-FLUXOS.md).
+
+### Plataforma de professores
+
+Criada no commit `a2c7d40` (26/10/2026), primeira peça da v2
+([docs/ecommerce-atelie-da-escola](../ecommerce-atelie-da-escola/README.md)).
+
+| Rota                | Quem         | Página                            | O que mostra                                                                                                                                |
+| ------------------- | ------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/admin`            | admin/master | `AdminPage` (as 14 abas abaixo)   | O painel da loja                                                                                                                            |
+| `/admin/plataforma` | admin/master | `src/pages/PlatformAdminPage.jsx` | Professores e alunos (troca de papel), faturamento total/mês e **produtos sem professor**, com atribuição (`PUT /api/admin/product-seller`) |
+| `/professores`      | professor    | `src/pages/TeachersPage.jsx`      | Meus produtos com vendas e receita (só pedidos aprovados), novo material e ativar/desativar                                                 |
+
+O link "Professores e alunos" fica no rodapé do menu lateral do painel. Cada produto tem dono em
+`products.seller_id` (nullable enquanto houver catálogo legado sem atribuição). O professor só
+enxerga e altera linhas com o próprio `seller_id` — o filtro é feito no handler, com service role.
+
+> Pendências antes de abrir para outra professora (moderação, isolamento do arquivo de download,
+> split de pagamento, termos de quem vende): [13-ROADMAP, checklist F](./13-ROADMAP-PENDENCIAS.md).
 
 ---
 

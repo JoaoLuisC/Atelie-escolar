@@ -247,6 +247,13 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
               </div>
             </div>
           </div>
+          <Link
+            to={ROUTES.adminPlataforma}
+            className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
+          >
+            <i className="bi bi-people-fill" />
+            Professores e alunos
+          </Link>
           <button
             type="button"
             onClick={onLogout}

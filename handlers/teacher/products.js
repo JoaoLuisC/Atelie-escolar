@@ -18,6 +18,7 @@ const {
   setCachePolicy,
 } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
+const { validateProductMedia } = require('../../lib/product-media');
 
 const log = createLogger('teacher-products');
 
@@ -63,6 +64,8 @@ module.exports = async function teacherProductsHandler(req, res) {
       if (!parsed.ok) return fail(res, invalid(parsed.message));
       const categoryId = req.body?.categoryId ? parse(uuidId, req.body.categoryId) : null;
       if (categoryId && !categoryId.ok) return fail(res, invalid('Categoria inválida.'));
+      const mediaError = validateProductMedia({ downloadUrl: req.body?.downloadUrl });
+      if (mediaError) return fail(res, invalid(mediaError));
       if (categoryId?.data && !(await categoryExists(categoryId.data))) {
         return fail(res, invalid('Categoria não encontrada.'));
       }
