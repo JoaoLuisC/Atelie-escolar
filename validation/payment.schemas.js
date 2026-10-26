@@ -22,6 +22,13 @@ const {
   uuid,
 } = require('./common.schemas');
 
+// Cada entrada representa a licença de um arquivo digital. Cobrar duas ou
+// mais unidades do mesmo PDF não cria novos downloads e só induz pagamento
+// indevido; o servidor aceita exatamente uma unidade.
+const digitalQuantity = quantity.refine((value) => value === 1, {
+  error: 'Produtos digitais só podem ter quantidade 1.',
+});
+
 // Teto de itens do carrinho. Sem ele, um array gigante vira N consultas
 // sequenciais (DoS barato) e uma preferência absurda no Mercado Pago.
 // handlers/validate-coupon.js usa o MESMO número de propósito: um carrinho que a
@@ -83,13 +90,16 @@ const cartItemSchema = z.object({
   // productId é obrigatório: sem ele o filtro por id seria omitido e a consulta
   // devolveria um produto arbitrário (buildTableQuery ignora value undefined).
   productId: productIdSchema,
-  quantity,
+  quantity: digitalQuantity,
 });
 
 const cartItemsSchema = z
   .array(cartItemSchema, { error: 'Items são obrigatórios' })
   .min(1, { error: 'Items são obrigatórios' })
-  .max(MAX_ITEMS, { error: 'Quantidade de itens inválida.' });
+  .max(MAX_ITEMS, { error: 'Quantidade de itens inválida.' })
+  .refine((items) => new Set(items.map((item) => item.productId)).size === items.length, {
+    error: 'Um produto só pode aparecer uma vez no carrinho.',
+  });
 
 /**
  * POST /api/create-payment
@@ -130,11 +140,21 @@ const validateCouponSchema = z.object({
         id: z.unknown().optional(),
         categoryId: z.unknown().optional(),
         price: clientPrice,
-        quantity,
+        quantity: digitalQuantity,
       }),
       { error: 'Itens inválidos.' },
     )
     .max(MAX_ITEMS, { error: 'Quantidade de itens inválida.' })
+    .refine(
+      (items) => {
+        const productIds = items
+          .map((item) => item.productId ?? item.id)
+          .filter((productId) => productId !== undefined && productId !== null)
+          .map((productId) => String(productId));
+        return new Set(productIds).size === productIds.length;
+      },
+      { error: 'Um produto só pode aparecer uma vez no carrinho.' },
+    )
     .default([]),
 });
 

@@ -105,20 +105,6 @@ export async function fetchAdminOrders(status = '') {
   return request(`/admin/orders${query}`);
 }
 
-export async function updateAdminOrder(payload) {
-  return request('/admin/orders', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function deleteAdminOrder(id) {
-  return request(`/admin/orders?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
-}
-
 export async function patchAdminProduct(payload) {
   return request('/admin/products', {
     method: 'PATCH',

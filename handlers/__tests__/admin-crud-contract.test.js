@@ -18,7 +18,7 @@ const RECURSOS = [
   { arquivo: 'products', handler: 'adminProductsHandler', allow: 'GET, POST, PUT, PATCH, DELETE' },
   { arquivo: 'categories', handler: 'adminCategoriesHandler', allow: 'GET, POST, PUT, DELETE' },
   { arquivo: 'coupons', handler: 'adminCouponsHandler', allow: 'GET, POST, PUT, DELETE' },
-  { arquivo: 'orders', handler: 'adminOrdersHandler', allow: 'GET, PUT, DELETE' },
+  { arquivo: 'orders', handler: 'adminOrdersHandler', allow: 'GET' },
   { arquivo: 'users', handler: 'adminUsersHandler', allow: 'GET, PUT, DELETE' },
 ];
 

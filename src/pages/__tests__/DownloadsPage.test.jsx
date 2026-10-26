@@ -49,9 +49,10 @@ describe('DownloadsPage', () => {
         error: { code: 'DOWNLOAD_TOKEN_INVALID', message: 'Token invalido' },
       }),
     });
+    localStorage.setItem('lastOrderEmail', 'cliente@teste.com');
 
     render(
-      <MemoryRouter initialEntries={['/downloads?order=ORD-ERRO&email=cliente%40teste.com']}>
+      <MemoryRouter initialEntries={['/downloads?order=ORD-ERRO']}>
         <DownloadsPage />
       </MemoryRouter>,
     );
@@ -113,16 +114,15 @@ describe('DownloadsPage', () => {
     expect(JSON.parse(options.body)).toEqual({ orderId: 'ORD-X', email: 'compradora@escola.com' });
   });
 
-  it('e-mail inválido na URL não vai ao servidor nem vira "email é obrigatório" (LOJA-43)', async () => {
+  it('não lê e-mail da URL; pede o segundo fator na própria tela', async () => {
     globalThis.fetch = vi.fn();
     render(
-      <MemoryRouter initialEntries={['/downloads?order=ORD-X&email=abc']}>
+      <MemoryRouter initialEntries={['/downloads?order=ORD-X&email=cliente%40teste.com']}>
         <DownloadsPage />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText(/O e-mail informado não é válido/)).toBeInTheDocument();
-    expect(screen.queryByText(/email é obrigatório/)).toBeNull();
+    expect(await screen.findByText(/informe abaixo o e-mail usado na compra/i)).toBeInTheDocument();
     expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(screen.getByLabelText('E-mail usado na compra')).toBeInTheDocument();
   });

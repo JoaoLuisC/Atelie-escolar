@@ -25,7 +25,7 @@ const log = createLogger('create-payment');
 // do tamanho que a Vercel aceitasse no corpo da requisição.
 //
 // Os tetos (nome 120, e-mail 254 do RFC 5321, telefone 8..15 dígitos, CPF 11,
-// quantidade 1..99, 100 itens) e as defesas de forma (UUID antes de interpolar
+// quantidade exatamente 1, 100 itens) e as defesas de forma (UUID antes de interpolar
 // em `id=in.(…)` — achado B1; remoção de caracteres de controle antes de
 // persistir — CSV/log injection) NÃO sumiram: viraram schema declarativo em
 // validation/payment.schemas.js, aplicado no topo do handler (regra B1).
@@ -57,6 +57,44 @@ async function claimCouponUsage(couponId) {
     return Number.isFinite(Number(value));
   } catch (err) {
     log.warn('falha_ao_reservar_uso_do_cupom', { reason: err.message });
+    return false;
+  }
+}
+
+/**
+ * Devolve a reserva que falhou ANTES de qualquer preferência ser solicitada ao
+ * Mercado Pago. Sem pedido persistido não há como o cron de 2h encontrá-la,
+ * portanto este rollback imediato evita esgotar um cupom por erro interno.
+ */
+async function releaseUnattachedCouponUsage(couponId) {
+  try {
+    await supabaseRequest('rpc/decrement_coupon_usage', {
+      method: 'POST',
+      useServiceRole: true,
+      body: JSON.stringify({ p_coupon_id: couponId }),
+    });
+    return true;
+  } catch (err) {
+    log.error('falha_ao_devolver_reserva_de_cupom_sem_pedido', { reason: err.message });
+    return false;
+  }
+}
+
+/**
+ * A ordem já existe, mas nenhuma preferência chegou a ser solicitada. A RPC
+ * marca `coupon_released_at` e decrementa o contador na mesma transação; assim
+ * o cron não devolve uma segunda vez a mesma reserva.
+ */
+async function releaseCouponReservationForOrder(orderId) {
+  try {
+    await supabaseRequest('rpc/release_coupon_reservation', {
+      method: 'POST',
+      useServiceRole: true,
+      body: JSON.stringify({ p_order_id: orderId }),
+    });
+    return true;
+  } catch (err) {
+    log.error('falha_ao_devolver_reserva_de_cupom_do_pedido', { reason: err.message });
     return false;
   }
 }
@@ -152,6 +190,14 @@ function applyDiscountToItems(items, discountCents, eligibleItemIds = null) {
 module.exports = async function createPaymentHandler(req, res) {
   if (guardMethod(req, res, ['POST'])) return;
 
+  // Estado mínimo para compensar uma reserva de cupom se a falha ocorrer antes
+  // de existir qualquer cobrança no Mercado Pago. Depois da tentativa de criar
+  // a preferência, mantemos a reserva: uma resposta de rede pode esconder uma
+  // preferência válida, e o cron/trigger já tratam esse caso com segurança.
+  let claimedCouponId = null;
+  let createdOrder = null;
+  let paymentPreferenceAttempted = false;
+
   // Rate limit ANTES de qualquer trabalho (achado P1-3). Este handler grava em
   // duas tabelas e cria uma preferência no Mercado Pago — é a requisição mais
   // cara e mais suja que um anônimo consegue disparar aqui. Os limiters de
@@ -166,7 +212,7 @@ module.exports = async function createPaymentHandler(req, res) {
     // ── VALIDAÇÃO NA BORDA (regra B1) ─────────────────────────────────
     // Um schema no lugar de ~45 linhas de checagem manual. Os limites são os
     // MESMOS de antes (e-mail 254 do RFC 5321, nome 120, CPF 11 dígitos,
-    // telefone 8..15, quantidade 1..99, 100 itens) — só mudaram de lugar, para
+    // telefone 8..15, quantidade exatamente 1, 100 itens) — só mudaram de lugar, para
     // validation/payment.schemas.js. O que muda de verdade:
     //
     //   • o antigo `validation/payment.schemas.js` existia mas NUNCA rodava
@@ -296,6 +342,7 @@ module.exports = async function createPaymentHandler(req, res) {
         if (!restricted || eligibleSubtotalCents > 0) {
           const usageClaimed = await claimCouponUsage(coupon.id);
           if (usageClaimed) {
+            claimedCouponId = coupon.id;
             discountAmount = couponHelpers.computeDiscount(
               coupon,
               toReais(subtotalCents),
@@ -323,7 +370,7 @@ module.exports = async function createPaymentHandler(req, res) {
 
     // 128 bits de entropia (16 bytes) — torna enumeração inviável.
     const orderCode = `ORD-${Date.now()}-${crypto.randomBytes(16).toString('hex')}`;
-    const [createdOrder] = await insertIntoTable('orders', {
+    [createdOrder] = await insertIntoTable('orders', {
       order_code: orderCode,
       // Todos já validados/normalizados por normalizeCustomer (achado M5):
       // sem caracteres de controle e dentro dos tetos de tamanho.
@@ -358,6 +405,7 @@ module.exports = async function createPaymentHandler(req, res) {
     // O uso do cupom já foi reservado atomicamente antes de o desconto ser
     // aplicado (ver claimCouponUsage acima) — não há incremento aqui.
 
+    paymentPreferenceAttempted = true;
     const preference = await createPaymentPreference(itemsForMP, orderCode, customerData.email);
 
     await updateTable(
@@ -402,6 +450,17 @@ module.exports = async function createPaymentHandler(req, res) {
       couponApplied: appliedCouponCode,
     });
   } catch (error) {
+    // Se a preferência nem chegou a ser tentada, é impossível haver uma
+    // cobrança futura. Compensar já. Depois da tentativa, deixamos a reserva
+    // para o mecanismo de 2h: um timeout não prova que o Mercado Pago não
+    // criou a preferência, e liberar agora poderia exceder `max_uses`.
+    if (claimedCouponId && !paymentPreferenceAttempted) {
+      if (createdOrder?.id) {
+        await releaseCouponReservationForOrder(createdOrder.id);
+      } else {
+        await releaseUnattachedCouponUsage(claimedCouponId);
+      }
+    }
     log.error('handler_failed', { reason: error?.message || String(error) });
     // Item P1.3: este era o ÚNICO dos quatro sites deste arquivo que não
     // passava por `fail()` — e é o `catch` do endpoint que cria o pagamento,

@@ -17,14 +17,15 @@ function sanitizeItem(raw) {
   const id = raw.id;
   if ((typeof id !== 'string' && typeof id !== 'number') || String(id).trim() === '') return null;
   const price = Number(raw.price);
-  const quantity = Math.trunc(Number(raw.quantity));
   return {
     ...raw,
     id,
     name: typeof raw.name === 'string' ? raw.name : String(raw.name ?? ''),
     price: Number.isFinite(price) && price >= 0 ? price : 0,
     image: typeof raw.image === 'string' ? raw.image : '',
-    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+    // Produtos digitais liberam um download por produto; quantidade maior não
+    // cria outra licença e agora é recusada também pelo checkout.
+    quantity: 1,
   };
 }
 

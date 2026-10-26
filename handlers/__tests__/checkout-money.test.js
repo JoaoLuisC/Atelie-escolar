@@ -118,37 +118,35 @@ describe('checkout — invariante de dinheiro (regra E3)', () => {
     resetModuleRegistry();
   });
 
-  // Casos escolhidos por serem os que produzem sobra na divisão: preço com
-  // centavo ímpar, quantidade que não divide o desconto, e percentual que gera
-  // dízima (33% de 19,99).
+  // Casos escolhidos por preço com centavo ímpar, carrinho misto e percentual
+  // que gera dízima (33% de 19,99). Cada produto digital tem uma única unidade.
   const casos = [
     { nome: 'item único, sem cupom', itens: [[uuid(1), 19.99, 1]], desconto: null },
-    { nome: 'quantidade > 1', itens: [[uuid(1), 19.99, 3]], desconto: null },
     {
       nome: 'três itens de preço ímpar',
       itens: [
         [uuid(1), 19.99, 1],
-        [uuid(2), 33.33, 2],
-        [uuid(3), 0.07, 5],
+        [uuid(2), 33.33, 1],
+        [uuid(3), 0.07, 1],
       ],
       desconto: null,
     },
     {
       nome: 'cupom percentual com dízima',
-      itens: [[uuid(1), 19.99, 3]],
+      itens: [[uuid(1), 19.99, 1]],
       desconto: { discount_type: 'percent', discount_value: 33 },
     },
     {
       nome: 'cupom percentual sobre carrinho misto',
       itens: [
         [uuid(1), 19.99, 1],
-        [uuid(2), 33.33, 2],
+        [uuid(2), 33.33, 1],
       ],
       desconto: { discount_type: 'percent', discount_value: 15 },
     },
     {
       nome: 'cupom de valor fixo',
-      itens: [[uuid(1), 50.0, 2]],
+      itens: [[uuid(1), 50.0, 1]],
       desconto: { discount_type: 'fixed', discount_value: 10.01 },
     },
     {
@@ -247,6 +245,60 @@ describe('checkout — invariante de dinheiro (regra E3)', () => {
     const orders = store.rows('orders');
     if (orders.length === 0) return;
     expect(Number(orders[0].total_amount)).toBeGreaterThanOrEqual(0);
+  });
+
+  it.each([
+    [[{ productId: uuid(1), quantity: 2 }], 'quantidade maior que um'],
+    [
+      [
+        { productId: uuid(1), quantity: 1 },
+        { productId: uuid(1), quantity: 1 },
+      ],
+      'produto duplicado',
+    ],
+  ])('recusa %s antes de consultar ou reservar cupom', async (items) => {
+    const { store, handler } = arrange({ products: [productRow(uuid(1), 5)] });
+    const res = createMockRes();
+
+    await handler(requestFor(items), res);
+
+    expect(res.statusCode).toBe(400);
+    expect(store.spies.listTableRows).not.toHaveBeenCalled();
+    expect(store.spies.supabaseRequest).not.toHaveBeenCalled();
+  });
+
+  it('devolve a reserva do cupom se falhar antes de criar a preferência', async () => {
+    const coupon = {
+      id: 'c1',
+      code: 'BEM10',
+      active: true,
+      used_count: 0,
+      max_uses: 1,
+      valid_from: null,
+      valid_until: null,
+      applies_to: null,
+      min_order_amount: null,
+      discount_type: 'percent',
+      discount_value: 10,
+    };
+    const { store, handler } = arrange({ products: [productRow(uuid(1), 20)], coupon });
+    const insert = store.spies.insertIntoTable.getMockImplementation();
+    store.spies.insertIntoTable.mockImplementation(async (table, rows) => {
+      if (table === 'order_items') throw new Error('falha ao gravar itens');
+      if (table === 'orders') return insert(table, { ...rows, id: uuid(99) });
+      return insert(table, rows);
+    });
+    const res = createMockRes();
+
+    await handler(requestFor([{ productId: uuid(1), quantity: 1 }], 'BEM10'), res);
+
+    expect(res.statusCode).toBe(500);
+    expect(store.rows('coupons')[0].used_count).toBe(0);
+    expect(store.rows('orders')[0].coupon_released_at).toBeTruthy();
+    expect(store.spies.supabaseRequest).toHaveBeenCalledWith(
+      'rpc/release_coupon_reservation',
+      expect.any(Object),
+    );
   });
 });
 

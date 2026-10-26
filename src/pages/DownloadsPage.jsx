@@ -117,9 +117,12 @@ export function DownloadsPage() {
 
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order') || localStorage.getItem('lastOrderId') || '';
+  // O e-mail é o segundo fator que autoriza a consulta do pedido, mas nunca
+  // pode morar na URL: parâmetros aparecem no histórico, nos logs de acesso e
+  // são lidos por scripts de analytics. Checkouts novos guardam-no localmente;
+  // links recebidos por e-mail pedem a informação nesta tela.
   const orderEmail = (
     manualEmail ||
-    params.get('email') ||
     localStorage.getItem('lastOrderEmail') ||
     customerSession?.email ||
     ''
@@ -285,12 +288,10 @@ export function DownloadsPage() {
     return () => controller.abort();
   }, [customerSession?.email, loadMyOrders]);
 
-  function openOrder(orderCode, internalOrderId, customerEmail) {
+  function openOrder(orderCode, internalOrderId) {
     const id = orderCode || internalOrderId;
     if (!id) return;
-    const email = (customerEmail || orderEmail || '').trim().toLowerCase();
-    const emailParam = email ? `&email=${encodeURIComponent(email)}` : '';
-    navigate(`/downloads?order=${encodeURIComponent(id)}${emailParam}`);
+    navigate(`/downloads?order=${encodeURIComponent(id)}`);
   }
 
   function submitManualEmail(event) {
@@ -508,9 +509,7 @@ export function DownloadsPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() =>
-                        openOrder(entry.orderId, entry.internalOrderId, customerSession?.email)
-                      }
+                      onClick={() => openOrder(entry.orderId, entry.internalOrderId)}
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                     >
                       Abrir pedido

@@ -204,25 +204,6 @@ const productPatchSchema = z
 
 // ── Pedidos ──────────────────────────────────────────────────────────
 
-const orderUpdateSchema = z
-  .object({
-    id: uuidId,
-    status: z.string().trim().optional(),
-    paymentStatus: z.string().trim().optional(),
-    customerName: z.string().trim().optional(),
-    customerEmail: z.string().trim().toLowerCase().optional(),
-    totalAmount: money.optional(),
-  })
-  .refine(
-    (data) =>
-      data.status !== undefined ||
-      data.paymentStatus !== undefined ||
-      data.customerName !== undefined ||
-      data.customerEmail !== undefined ||
-      data.totalAmount !== undefined,
-    { error: 'Nenhum campo válido para atualização.' },
-  );
-
 // ── Usuários ─────────────────────────────────────────────────────────
 
 // Roles que este endpoint pode ATRIBUIR. 'admin'/'master' são deliberadamente
@@ -260,7 +241,6 @@ module.exports = {
   couponCreateSchema,
   money,
   normalizeSlug,
-  orderUpdateSchema,
   productCreateSchema,
   productPatchSchema,
   slug,

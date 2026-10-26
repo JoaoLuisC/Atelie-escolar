@@ -348,6 +348,48 @@ export function createSupabaseStore(initial = {}) {
     return affected.map((row) => ({ ...row }));
   });
 
+  const supabaseRequest = vi.fn(async (path, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : {};
+
+    if (path === 'rpc/increment_coupon_usage') {
+      const coupon = table('coupons').find(
+        (row) =>
+          String(row.id) === String(payload.p_coupon_id) &&
+          (row.max_uses === null ||
+            row.max_uses === undefined ||
+            Number(row.used_count || 0) < Number(row.max_uses)),
+      );
+      if (!coupon) return null;
+      coupon.used_count = Number(coupon.used_count || 0) + 1;
+      return coupon.used_count;
+    }
+
+    if (path === 'rpc/decrement_coupon_usage') {
+      const coupon = table('coupons').find((row) => String(row.id) === String(payload.p_coupon_id));
+      if (!coupon) return null;
+      coupon.used_count = Math.max(0, Number(coupon.used_count || 0) - 1);
+      return coupon.used_count;
+    }
+
+    if (path === 'rpc/release_coupon_reservation') {
+      const order = table('orders').find(
+        (row) =>
+          String(row.id) === String(payload.p_order_id) &&
+          row.coupon_code &&
+          !row.coupon_released_at &&
+          ['pending', 'rejected', 'cancelled'].includes(row.payment_status),
+      );
+      if (!order) return false;
+
+      order.coupon_released_at = '2026-10-26T00:00:00.000Z';
+      const coupon = table('coupons').find((row) => row.code === order.coupon_code);
+      if (coupon) coupon.used_count = Math.max(0, Number(coupon.used_count || 0) - 1);
+      return true;
+    }
+
+    throw new Error('fake supabase: RPC não suportada');
+  });
+
   return {
     state,
     // Formato de `serviceRoleHelpers` — é o namespace que os handlers do
@@ -359,7 +401,14 @@ export function createSupabaseStore(initial = {}) {
       updateTable,
       upsertIntoTable,
     },
-    spies: { getTableRow, listTableRows, insertIntoTable, updateTable, upsertIntoTable },
+    spies: {
+      getTableRow,
+      listTableRows,
+      insertIntoTable,
+      updateTable,
+      upsertIntoTable,
+      supabaseRequest,
+    },
     /** Linhas de uma tabela, cópia — para afirmar sobre o estado final. */
     rows: (name) => table(name).map((row) => ({ ...row })),
     /** Chamadas de um spy restritas a uma tabela. */
@@ -379,6 +428,7 @@ export function installSupabaseMock(store) {
       storageBucket: '',
     }),
     serviceRoleHelpers: store.serviceRoleHelpers,
+    supabaseRequest: store.spies.supabaseRequest,
     ...store.serviceRoleHelpers,
   });
 }
