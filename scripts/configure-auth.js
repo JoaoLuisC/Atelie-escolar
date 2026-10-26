@@ -6,7 +6,8 @@
  * localhost. Agora:
  *   • `site_url` vem de APP_URL (o endereço público da loja) e só muda se ele
  *     estiver definido;
- *   • `uri_allow_list` é a lista atual + localhost de dev + APP_URL/**, sem
+ *   • `uri_allow_list` é a lista atual + APP_URL/** (+ localhost só com
+ *     INCLUDE_LOCALHOST=1), sem
  *     remover nada que já estivesse lá.
  *
  * Uso: SUPABASE_PAT=... SUPABASE_PROJECT_REF=... APP_URL=https://... node scripts/configure-auth.js
@@ -22,10 +23,16 @@ if (!pat || !ref) {
   process.exit(1);
 }
 
-const DEV_URLS = [5173, 5174, 5175, 5176, 3000].flatMap((port) => [
-  `http://localhost:${port}`,
-  `http://localhost:${port}/**`,
-]);
+// localhost só entra a pedido (INCLUDE_LOCALHOST=1): desde 26/10/2026 a lista de
+// produção tem apenas o endereço da loja, e o projeto local usa o MESMO Supabase
+// — reabrir redirect para localhost em produção não pode ser efeito colateral.
+const DEV_URLS =
+  process.env.INCLUDE_LOCALHOST === '1'
+    ? [5173, 5174, 5175, 5176, 3000].flatMap((port) => [
+        `http://localhost:${port}`,
+        `http://localhost:${port}/**`,
+      ])
+    : [];
 
 const endpoint = `https://api.supabase.com/v1/projects/${ref}/config/auth`;
 const headers = {
