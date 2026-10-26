@@ -77,7 +77,7 @@ jobs:
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
 
       - name: Apply database migrations
-        run: supabase db push --linked --password "$SUPABASE_DB_PASSWORD" --yes
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD" --yes
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
