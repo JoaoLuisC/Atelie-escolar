@@ -148,7 +148,7 @@ async function loadDashboard(truncated) {
       'products',
       {
         select:
-          'id,slug,name,description,price,image_url,download_url,category_id,active,featured,created_at,updated_at',
+          'id,slug,name,description,price,image_url,download_url,category_id,seller_id,active,featured,created_at,updated_at',
         orderBy: 'created_at',
         ascending: false,
       },
@@ -228,6 +228,7 @@ async function loadDashboard(truncated) {
     downloadUrl: row.download_url,
     category: row.category_id ? categoryById.get(String(row.category_id)) || null : null,
     categoryId: row.category_id ? String(row.category_id) : null,
+    sellerId: row.seller_id ? String(row.seller_id) : null,
     active: row.active !== false,
     featured: row.featured === true,
     createdAt: row.created_at,

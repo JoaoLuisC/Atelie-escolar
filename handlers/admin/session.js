@@ -1,4 +1,4 @@
-const { getAdminIdentity, hasValidAdminSession } = require('../../lib/admin-session');
+const { getStaffSession } = require('../../lib/admin-session');
 const { guardMethod, ok, setAdminCorsHeaders, setCachePolicy } = require('../../lib/http');
 
 module.exports = async function adminSessionHandler(req, res) {
@@ -8,12 +8,13 @@ module.exports = async function adminSessionHandler(req, res) {
 
   if (guardMethod(req, res, ['GET'])) return;
 
-  const authenticated = hasValidAdminSession(req);
+  const session = getStaffSession(req);
+  const authenticated = Boolean(session);
   return ok(res, {
     success: true,
     authenticated,
     // E-mail da conta logada, para o rodapé do painel dizer QUAL conta está
     // ativa (ADM-19). Só existe com sessão válida — o cookie é do próprio admin.
-    ...(authenticated ? { email: getAdminIdentity(req) } : {}),
+    ...(authenticated ? { email: session.email, role: session.role, userId: session.userId } : {}),
   });
 };

@@ -91,6 +91,7 @@ function temGuarda({ source }) {
   return (
     source.includes('enforceRateLimit') ||
     source.includes('ensureAdminSession') ||
+    source.includes('ensureRoleSession') ||
     // Handler montado pela factory: a sessão admin é imposta LÁ DENTRO, e o
     // teste abaixo ('a factory impõe a sessão admin') é o que impede esta
     // linha de virar um buraco por indireção.

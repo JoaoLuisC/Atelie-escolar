@@ -105,6 +105,14 @@ export async function fetchAdminOrders(status = '') {
   return request(`/admin/orders${query}`);
 }
 
+export async function assignAdminProductSeller(productId, sellerId) {
+  return request('/admin/product-seller', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productId, sellerId }),
+  });
+}
+
 export async function patchAdminProduct(payload) {
   return request('/admin/products', {
     method: 'PATCH',

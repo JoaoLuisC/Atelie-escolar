@@ -7,9 +7,9 @@ import { useAuth } from '../hooks/useAuth';
  * de login) na própria URL em vez de redirecionar — assim `/admin` é a única
  * entrada: deslogado vê o login, logado vê o painel.
  */
-export function ProtectedRoute({ children, fallback }) {
+export function ProtectedRoute({ children, fallback, allowedRoles }) {
   const location = useLocation();
-  const { authReady, adminAuthenticated } = useAuth();
+  const { authReady, adminAuthenticated, adminRole } = useAuth();
   // Bypass do painel só em DEV e quando explicitamente ligado por env.
   // `import.meta.env.DEV` garante que a flag fica INERTE em builds de
   // produção mesmo que VITE_ALLOW_ADMIN_BYPASS=true vaze para o deploy
@@ -33,7 +33,12 @@ export function ProtectedRoute({ children, fallback }) {
     );
   }
 
-  if (!adminAuthenticated && (!allowAdminBypass || wantsLogin)) {
+  const roleAllowed =
+    !Array.isArray(allowedRoles) ||
+    allowedRoles.length === 0 ||
+    allowedRoles.includes(String(adminRole || '').toLowerCase());
+
+  if ((!adminAuthenticated || !roleAllowed) && (!allowAdminBypass || wantsLogin)) {
     return fallback;
   }
 
@@ -43,4 +48,5 @@ export function ProtectedRoute({ children, fallback }) {
 ProtectedRoute.propTypes = {
   children: PropTypes.node.isRequired,
   fallback: PropTypes.node.isRequired,
+  allowedRoles: PropTypes.arrayOf(PropTypes.string),
 };

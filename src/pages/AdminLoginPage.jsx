@@ -103,10 +103,10 @@ export function AdminLoginPage() {
         return;
       }
 
-      pushToast('Login administrativo realizado.', 'success');
+      pushToast('Login realizado.', 'success');
       // Com a sessão marcada, o ProtectedRoute já troca o login pelo painel;
       // o navigate só limpa um eventual `?login` da URL.
-      navigate(ROUTES.admin, { replace: true });
+      navigate(data.user?.role === 'seller' ? ROUTES.professores : ROUTES.admin, { replace: true });
     } catch (error) {
       // "Failed to fetch" é o texto cru do navegador sem rede (ADM-50).
       const message = /failed to fetch|networkerror|load failed/i.test(String(error?.message))
@@ -130,11 +130,11 @@ export function AdminLoginPage() {
           </span>
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-violet-600">
-              Painel administrativo
+              Área da plataforma
             </p>
             <h1 className="mt-1 text-2xl font-bold text-slate-900">Acesso restrito</h1>
             <p className="mt-2 text-sm text-slate-600">
-              Use o e-mail Supabase do perfil master/admin para acessar o painel.
+              Use o e-mail e a senha da sua conta de professor ou administradora.
             </p>
           </div>
         </div>
@@ -151,7 +151,7 @@ export function AdminLoginPage() {
               <input
                 id="admin-login-email"
                 type="email"
-                placeholder="E-mail do admin"
+                placeholder="Seu e-mail"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={loading}

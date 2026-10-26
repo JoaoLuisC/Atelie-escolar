@@ -37,6 +37,7 @@ export const ROUTES = Object.freeze({
   termos: '/termos',
   confirmarInscricao: '/confirmar-inscricao',
   desinscrever: '/desinscrever',
+  professores: '/professores',
   // Entrada única do painel: sem sessão admin mostra o login, com sessão o painel.
   // A proteção é a sessão (`ProtectedRoute` + backend), não a URL.
   admin: '/admin',

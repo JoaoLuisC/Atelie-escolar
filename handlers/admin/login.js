@@ -517,7 +517,7 @@ module.exports = async function adminLoginHandler(req, res) {
     .trim()
     .toLowerCase();
 
-  if (!['admin', 'master'].includes(normalizedRole)) {
+  if (!['admin', 'master', 'seller'].includes(normalizedRole)) {
     await recordSecurityEvent({
       eventName: 'admin_login_failed',
       severity: 'warn',
@@ -540,7 +540,7 @@ module.exports = async function adminLoginHandler(req, res) {
   }
 
   const adminConfig = await readAdminConfig();
-  if (isSecondFactorRequired(adminConfig)) {
+  if (['admin', 'master'].includes(normalizedRole) && isSecondFactorRequired(adminConfig)) {
     const passed = await handleSecondFactor(req, res, {
       adminConfig,
       email,
@@ -553,7 +553,11 @@ module.exports = async function adminLoginHandler(req, res) {
   }
 
   // Grava a identidade individual no cookie de sessão (não-repúdio no audit).
-  setSessionCookie(res, { email: authData.user.email || email, role: normalizedRole });
+  setSessionCookie(res, {
+    email: authData.user.email || email,
+    role: normalizedRole,
+    userId: authData.user.id,
+  });
   return ok(res, { success: true, user: { role: normalizedRole || 'admin', email } });
 };
 

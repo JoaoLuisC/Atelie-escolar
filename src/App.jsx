@@ -39,7 +39,12 @@ const UnsubscribePage = lazy(() =>
 const AdminLoginPage = lazy(() =>
   import('./pages/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })),
 );
-const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+const AdminPage = lazy(() =>
+  import('./pages/PlatformAdminPage').then((m) => ({ default: m.PlatformAdminPage })),
+);
+const TeachersPage = lazy(() =>
+  import('./pages/TeachersPage').then((m) => ({ default: m.TeachersPage })),
+);
 
 function RouteFallback() {
   return (
@@ -72,8 +77,16 @@ export default function App() {
           <Route
             path={ROUTES.admin}
             element={
-              <ProtectedRoute fallback={<AdminLoginPage />}>
+              <ProtectedRoute fallback={<AdminLoginPage />} allowedRoles={['admin', 'master']}>
                 <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={ROUTES.professores}
+            element={
+              <ProtectedRoute fallback={<AdminLoginPage />} allowedRoles={['seller']}>
+                <TeachersPage />
               </ProtectedRoute>
             }
           />

@@ -218,7 +218,7 @@ describe('credenciais', () => {
 });
 
 describe('gate de papel — a resposta não pode vazar que a senha estava certa', () => {
-  it.each([['CUSTOMER'], ['SELLER'], [''], [null]])(
+  it.each([['CUSTOMER'], [''], [null]])(
     'papel %s recebe 401 com a MESMA resposta de senha errada',
     async (papel) => {
       getProfileRoleByEmail.mockResolvedValueOnce(papel);
@@ -247,13 +247,16 @@ describe('gate de papel — a resposta não pode vazar que a senha estava certa'
     );
   });
 
-  it.each([['admin'], ['ADMIN'], ['master'], ['Master']])('papel %s é aceito', async (papel) => {
-    getProfileRoleByEmail.mockResolvedValueOnce(papel);
+  it.each([['admin'], ['ADMIN'], ['master'], ['Master'], ['seller'], ['SELLER']])(
+    'papel %s é aceito',
+    async (papel) => {
+      getProfileRoleByEmail.mockResolvedValueOnce(papel);
 
-    const resposta = await login();
+      const resposta = await login();
 
-    expect(resposta.statusCode).toBe(200);
-  });
+      expect(resposta.statusCode).toBe(200);
+    },
+  );
 });
 
 describe('escolha do balde de rate limit', () => {

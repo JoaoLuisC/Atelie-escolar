@@ -122,6 +122,11 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+alter table public.products
+  add column if not exists seller_id uuid references public.profiles(id) on delete restrict;
+
+create index if not exists products_seller_id_idx on public.products (seller_id);
+
 -- 1 linha por (user, produto comprado). Substitui o user_products legado
 -- que era 1 linha por user com array de produtos — divergência conhecida.
 create table if not exists public.user_products (
