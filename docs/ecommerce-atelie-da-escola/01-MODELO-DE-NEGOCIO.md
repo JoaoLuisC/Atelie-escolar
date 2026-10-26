@@ -26,7 +26,7 @@ parte.
 
 ## Domínio
 
-O `profamarciarcardoso.com.br` que o código cita **não está registrado** (registro.br 404 em
+**Atualização 26/10/2026:** `ateliedaescola.com.br` foi registrado e a loja atual responde em `professoramarcia.ateliedaescola.com.br`. Registro anterior: o `profamarciarcardoso.com.br` que o código citava **não estava registrado** (registro.br 404 em
 09/10/2026). Para a plataforma, a sugestão é **`ateliedaescola.com.br`** (estava livre em
 09/10/2026):
 

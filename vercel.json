@@ -21,6 +21,18 @@
       "continue": true
     },
     {
+      "src": "/(.*)",
+      "has": [{ "type": "host", "value": "ateliedaescola.com.br" }],
+      "status": 308,
+      "headers": { "Location": "https://professoramarcia.ateliedaescola.com.br/$1" }
+    },
+    {
+      "src": "/(.*)",
+      "has": [{ "type": "host", "value": "www.ateliedaescola.com.br" }],
+      "status": 308,
+      "headers": { "Location": "https://professoramarcia.ateliedaescola.com.br/$1" }
+    },
+    {
       "src": "/admin(/.*)?",
       "headers": {
         "Cache-Control": "no-store"

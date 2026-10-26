@@ -137,7 +137,7 @@ Arquivo: `.github/workflows/email-cron.yml` — faz `POST $APP_URL/api/cron-emai
 
 1. Settings → Secrets and variables → Actions → New repository secret
 2. Adicione:
-   - `APP_URL=https://profamarciarcardoso.com.br` (domínio de produção)
+   - `APP_URL=https://professoramarcia.ateliedaescola.com.br` (domínio de produção)
    - `CRON_SECRET=<o-mesmo-que-no-Vercel>`
    - (Opcional, só para o `lighthouse.yml`) `LHCI_GITHUB_APP_TOKEN` — token do GitHub App do Lighthouse CI, que publica o status no PR; sem ele o job roda igual, só não publica o status
 3. Após primeiro deploy: Actions → "Email cron" → Run workflow → validar status 200

@@ -82,20 +82,23 @@ Setar nos dois lugares: `.env.local` (dev) + Vercel Environment Variables (prod,
 [`src/components/SEO.jsx`](../../src/components/SEO.jsx) aponta para ela. Resta só validar o
 preview em [opengraph.xyz](https://www.opengraph.xyz/) após o deploy (§6).
 
-### 2.3 APP_URL canônica no Vercel
+### 2.3 APP_URL canônica no Vercel — ✅ FEITO (26/10/2026)
 
 ```
-APP_URL=https://profamarciarcardoso.com.br
-VITE_PUBLIC_BASE_URL=https://profamarciarcardoso.com.br  (opcional para SSR futuro)
+APP_URL=https://professoramarcia.ateliedaescola.com.br
+CORS_ORIGINS=https://professoramarcia.ateliedaescola.com.br
 ```
+
+Em Production. `ateliedaescola.com.br` e `www` redirecionam (308) para o subdomínio pelo
+`vercel.json`, até a plataforma (v2) ocupar a raiz.
 
 ### 2.4 Autenticar domínio no Resend (DKIM + SPF + DMARC) — regra D6
 
 **Bloqueia entrega real de emails de marketing.** Sandbox só entrega para o dono da conta Resend.
 
-1. [resend.com/domains](https://resend.com/domains) → Add Domain → `profamarciarcardoso.com.br`
+1. [resend.com/domains](https://resend.com/domains) → Add Domain → `ateliedaescola.com.br`
 2. Criar os 3 registros DNS que aparecem (SPF TXT, DKIM TXT, DMARC TXT) no provedor DNS — aguardar até 24h
-3. Trocar `SMTP_FROM="Ateliê da Escola <pedidos@profamarciarcardoso.com.br>"` no `.env.local` + Vercel
+3. Trocar `SMTP_FROM="Ateliê da Escola <pedidos@ateliedaescola.com.br>"` no `.env.local` + Vercel
 4. Atualizar `smtp_admin_email` no Supabase Auth (Dashboard → Authentication → SMTP) para o mesmo domínio
 5. Validar entregabilidade em [mail-tester.com](https://mail-tester.com) → alvo 10/10
 
@@ -145,7 +148,7 @@ Hoje: `loading="lazy"` + `decoding="async"` + Tailwind `aspect-ratio` evitam CLS
 **Quando o CDN entrar:**
 
 1. Escolher entre Cloudflare Images (US$ 5/mês por 100k) ou Imgix (US$ 10/mês por 1k)
-2. Trocar URLs `https://<projeto>.supabase.co/storage/...` por `https://imagens.profamarciarcardoso.com.br/<path>?w=400&fm=webp`
+2. Trocar URLs `https://<projeto>.supabase.co/storage/...` por `https://imagens.ateliedaescola.com.br/<path>?w=400&fm=webp`
 3. Adicionar `srcset` + `sizes` em `ProductGrid.jsx`, `HomePage.jsx`, `ProductDetailsPage.jsx`
 
 **Mitigação imediata:** ✅ **Entregue (2026-05-30)** — guard rail no `ProductWizard.jsx` bloqueando upload > 500kB por imagem.
@@ -384,20 +387,19 @@ O que falta é operacional. Marque aqui mesmo:
 - [ ] `CRON_SECRET` no Vercel **e** no GitHub + `APP_URL` no GitHub → rodar o workflow "Email
       cron" à mão e ver 200 (§2.5)
 - [ ] `VITE_GA4_ID` e `VITE_META_PIXEL_ID` no `.env.local` e no Vercel (§2.1)
-- [ ] `APP_URL=https://profamarciarcardoso.com.br` no Vercel (§2.3)
+- [x] `APP_URL=https://professoramarcia.ateliedaescola.com.br` no Vercel (§2.3)
 - [ ] Cupom `VOLTEI15` criado pela aba Cupons (§2.6)
 - [ ] URL de produção no `uri_allow_list` do Supabase Auth para o Google OAuth do cliente
       (`scripts/configure-auth.js`, §3.5)
 
 ### C. Domínio + Resend — **o único bloco que bloqueia funcionalidade real** (DNS até 24h)
 
-> ⚠️ `profamarciarcardoso.com.br`, que o código e a doc citam, **não está registrado** (registro.br
-> 404 em 09/10/2026). O e-mail de contato do rodapé (`src/components/Shell.jsx`) hoje volta. Sugestão:
-> `ateliedaescola.com.br`, que também serve à futura plataforma
-> ([docs/ecommerce-atelie-da-escola](../ecommerce-atelie-da-escola/README.md)).
+> ✅ `ateliedaescola.com.br` registrado em 26/10/2026 (titular João Luís Cardoso), DNS na Vercel. A
+> loja atual responde em `professoramarcia.ateliedaescola.com.br` (white label da professora); a raiz fica para a plataforma
+> ([docs/ecommerce-atelie-da-escola](../ecommerce-atelie-da-escola/README.md)) e hoje redireciona.
 
-- [ ] Registrar o domínio no registro.br (≈ R$ 40/ano) e decidir o titular
-- [ ] DNS na Vercel: adicionar o domínio (raiz + `www`) no projeto e trocar os nameservers no
+- [x] Registrar o domínio no registro.br (≈ R$ 40/ano) e decidir o titular
+- [x] DNS na Vercel: adicionar o domínio (raiz + `www`) no projeto e trocar os nameservers no
       registro.br para `ns1.vercel-dns.com` / `ns2.vercel-dns.com`
 - [ ] Resend → Add Domain (região São Paulo) → criar na Vercel os registros MX/TXT de `send` e o
       TXT `resend._domainkey`, mais o DMARC (`_dmarc`, `v=DMARC1; p=none; rua=mailto:…`) → Verify
@@ -405,7 +407,7 @@ O que falta é operacional. Marque aqui mesmo:
       Resend, que fica em `send`)
 - [ ] Conferir a permissão da chave do Resend (`SMTP_PASS`); `SMTP_FROM` trocado no `.env.local`,
       no Vercel e no SMTP do Supabase Auth (host `smtp.resend.com`, porta 465, usuário `resend`)
-- [ ] Trocar no código/doc o domínio antigo pelo novo (rodapé, JSON-LD, docs) — **pedir ao Claude**
+- [x] Trocar no código/doc o domínio antigo pelo novo (rodapé, JSON-LD, docs)
 - [ ] mail-tester.com ≥ 9/10
 
 ### D. Validação final em produção (§6)

@@ -9,9 +9,6 @@ Disallow: /api/
 Disallow: /confirmar-inscricao
 Disallow: /desinscrever
 
-# LOJA-13/25: a linha "Sitemap:" exige URL ABSOLUTA, e o domínio que estava
-# aqui (profamarciarcardoso.com.br) não resolve DNS. Quando o domínio
-# definitivo existir, descomente e troque o host:
-# Sitemap: https://SEU-DOMINIO/sitemap.xml
-# Enquanto isso, o sitemap continua em /sitemap.xml e pode ser enviado
-# diretamente no Google Search Console.
+# LOJA-13/25: a linha "Sitemap:" exige URL ABSOLUTA. Domínio definitivo desde
+# 26/10/2026 (ateliedaescola.com.br e www redirecionam para este).
+Sitemap: https://professoramarcia.ateliedaescola.com.br/sitemap.xml

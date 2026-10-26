@@ -9,7 +9,7 @@ name: Email cron
 # vezes não duplica envios.
 #
 # Secrets necessários no GitHub:
-# - APP_URL          → https://profamarciarcardoso.com.br
+# - APP_URL          → https://professoramarcia.ateliedaescola.com.br
 # - CRON_SECRET      → mesmo valor que está em produção (Vercel env)
 # Este job só faz um curl autenticado por CRON_SECRET: não lê o repositório,
 # não publica nada, não precisa do GITHUB_TOKEN. Sem este bloco ele herda a

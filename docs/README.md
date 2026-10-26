@@ -129,4 +129,4 @@ relatórios são retratos datados, como os de `reviews/`; os achados viraram com
 ## Contato
 
 - Técnico: `desenvolvimento@oqtem.com`
-- Loja: `contato@profamarciarcardoso.com.br`
+- Loja: `jlcardoso.dev@gmail.com` (o mesmo canal dos Termos e da Política de Privacidade)
