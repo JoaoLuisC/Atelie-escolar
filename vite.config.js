@@ -56,6 +56,11 @@ export default defineConfig({
           // co-loca com o único importador real (CheckoutPage.jsx:3).
           if (pkg.startsWith('react-hook-form/')) return undefined;
 
+          // Mesmo motivo: o gerador de QR code (e a dependência dele) só serve
+          // à aba Segurança do painel, que o importa sob demanda. No `vendor`
+          // ele iria para TODA página da loja — medido no build de 26/10/2026.
+          if (pkg.startsWith('qrcode/') || pkg.startsWith('dijkstrajs/')) return undefined;
+
           return 'vendor';
         },
       },

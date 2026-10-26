@@ -32,6 +32,8 @@ export function isFlagOn(value) {
  * @param {string}  estado.nextPin           PIN novo digitado
  * @param {string}  estado.totpVerificationCode  código do app para o segredo novo
  * @param {string}  estado.confirmationCode  código do fator vigente
+ * @param {boolean} estado.emailEnabled      caixa "código por e-mail" marcada
+ * @param {boolean} estado.emailNow          código por e-mail ligado na config gravada
  * @returns {string|null}
  */
 export function securitySaveProblem({
@@ -45,6 +47,8 @@ export function securitySaveProblem({
   nextPin = '',
   totpVerificationCode = '',
   confirmationCode = '',
+  emailEnabled = false,
+  emailNow = false,
 }) {
   const totpNovo = String(nextTotp || '').trim();
   const pinNovo = String(nextPin || '').trim();
@@ -56,18 +60,46 @@ export function securitySaveProblem({
     return 'Para exigir 2FA, cadastre antes o segredo TOTP ou o PIN de recuperação — sem nenhum dos dois, o login ficaria impossível.';
   }
 
+  // O e-mail pode não chegar e não serve para reautenticar esta aba: sozinho,
+  // trancaria o admin fora. O servidor aplica a mesma trava.
+  if (emailEnabled && !temTotp && !temPin) {
+    return 'O código por e-mail precisa de uma reserva: cadastre o app autenticador ou o PIN de recuperação antes de ativá-lo.';
+  }
+
   if (totpNovo && !/^\d{6}$/.test(String(totpVerificationCode || '').trim())) {
     return 'Digite o código de 6 dígitos que o app autenticador gerou com o novo segredo.';
   }
 
   // Com o 2FA em vigor, o servidor recusa (403) qualquer mudança de segurança
   // sem o código atual. Avisar antes poupa uma tentativa do limite de 5/10 min.
-  const mudouAlgo = enabled !== requiredNow || Boolean(totpNovo) || Boolean(pinNovo);
+  const mudouAlgo =
+    enabled !== requiredNow ||
+    Boolean(emailEnabled) !== Boolean(emailNow) ||
+    Boolean(totpNovo) ||
+    Boolean(pinNovo);
   if (enforcedNow && mudouAlgo && !String(confirmationCode || '').trim()) {
     return 'Com o 2FA em vigor, informe o código atual do app (ou o PIN de recuperação) para confirmar a alteração.';
   }
 
   return null;
+}
+
+/**
+ * Endereço `otpauth://` que o app autenticador lê pelo QR code (formato do
+ * Google Authenticator: emissor no rótulo e no parâmetro `issuer`).
+ */
+export function buildOtpAuthUri({ secret, account = 'admin', issuer = 'Ateliê da Escola' }) {
+  const label = encodeURIComponent(`${issuer}:${account}`);
+  const params = new URLSearchParams({
+    secret: String(secret || '')
+      .replaceAll(/\s+/g, '')
+      .toUpperCase(),
+    issuer,
+    algorithm: 'SHA1',
+    digits: '6',
+    period: '30',
+  });
+  return `otpauth://totp/${label}?${params.toString()}`;
 }
 
 /**

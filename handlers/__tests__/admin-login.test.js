@@ -556,3 +556,161 @@ describe('PIN de emergência', () => {
     expectApiError(resposta, { status: 401, code: 'UNAUTHORIZED' });
   });
 });
+
+describe('código por e-mail', () => {
+  let sendEmail;
+
+  /** Código de 6 dígitos que saiu no último e-mail enviado. */
+  function codigoDoEmail() {
+    const { html } = sendEmail.mock.calls.at(-1)[0];
+    return html.match(/>\s*(\d{6})\s*</)[1];
+  }
+
+  beforeEach(() => {
+    sendEmail = vi.fn(async () => ({ sent: true }));
+    installModuleMock('../../lib/email-sender', { sendEmail });
+    // O handler já foi carregado no beforeEach de cima, sem este duplo.
+    delete requireCjs.cache[requireCjs.resolve('../admin/login.js')];
+    handler = loadHandler('../admin/login.js');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sem app autenticador, o e-mail sai já na 1ª etapa e o código abre a sessão', async () => {
+    adminConfig = { requireSecondFactor: true, fallbackPin: hashPin(PIN), allowEmailCode: true };
+    const primeira = await login();
+
+    expect(primeira.body.methods).toEqual(['pin', 'email']);
+    expect(primeira.body.emailSent).toBe(true);
+    expect(primeira.body.emailHint).toBe('do***@ateliedaescola.com.br');
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: EMAIL, kind: 'admin_login_code' }),
+    );
+
+    const resposta = await login({
+      challengeToken: primeira.body.challengeToken,
+      factorCode: codigoDoEmail(),
+    });
+    expect(resposta.statusCode).toBe(200);
+    expect(String(resposta.headers['Set-Cookie'])).toContain('admin_session=');
+  });
+
+  it('o código nunca vai na resposta nem no desafio em claro', async () => {
+    adminConfig = { requireSecondFactor: true, fallbackPin: hashPin(PIN), allowEmailCode: true };
+    const primeira = await login();
+    const codigo = codigoDoEmail();
+
+    expect(JSON.stringify(primeira.body)).not.toContain(codigo);
+    const payload = Buffer.from(primeira.body.challengeToken.split('.')[0], 'base64url').toString();
+    expect(payload).not.toContain(codigo);
+  });
+
+  it('código errado é recusado e registra admin_2fa_failed', async () => {
+    adminConfig = { requireSecondFactor: true, fallbackPin: hashPin(PIN), allowEmailCode: true };
+    const primeira = await login();
+    const errado = codigoDoEmail() === '000000' ? '111111' : '000000';
+
+    const resposta = await login({
+      challengeToken: primeira.body.challengeToken,
+      factorCode: errado,
+    });
+
+    expectApiError(resposta, { status: 401, code: 'UNAUTHORIZED' });
+    expect(recordSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ eventName: 'admin_2fa_failed' }),
+    );
+  });
+
+  it('com app autenticador, o e-mail só sai quando a admin pede', async () => {
+    adminConfig = {
+      requireSecondFactor: true,
+      totpSecret: encryptSecret(TOTP_SECRET),
+      allowEmailCode: true,
+    };
+    const primeira = await login();
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(primeira.body.methods).toEqual(['totp', 'email']);
+
+    const pedido = await login({
+      challengeToken: primeira.body.challengeToken,
+      sendEmailCode: true,
+    });
+    expect(pedido.body.requiresSecondFactor).toBe(true);
+    expect(pedido.body.emailSent).toBe(true);
+
+    // O código vale só com o desafio NOVO (o que traz o selo).
+    const comDesafioAntigo = await login({
+      challengeToken: primeira.body.challengeToken,
+      factorCode: codigoDoEmail(),
+    });
+    expectApiError(comDesafioAntigo, { status: 401, code: 'UNAUTHORIZED' });
+
+    const comDesafioNovo = await login({
+      challengeToken: pedido.body.challengeToken,
+      factorCode: codigoDoEmail(),
+    });
+    expect(comDesafioNovo.statusCode).toBe(200);
+  });
+
+  it('pedir o e-mail com desafio válido conta no balde do 2º fator (reenvio limitado)', async () => {
+    adminConfig = {
+      requireSecondFactor: true,
+      totpSecret: encryptSecret(TOTP_SECRET),
+      allowEmailCode: true,
+    };
+    const challengeToken = await obterDesafio();
+    enforceRateLimit.mockClear();
+
+    await login({ challengeToken, sendEmailCode: true });
+
+    expect(enforceRateLimit.mock.calls[0][2].bucket).toBe('admin-login-2fa');
+  });
+
+  it('e-mail que não sai: avisa a tela, registra o evento e não sela código nenhum', async () => {
+    sendEmail.mockResolvedValue({ sent: false, reason: 'smtp_not_configured' });
+    adminConfig = { requireSecondFactor: true, fallbackPin: hashPin(PIN), allowEmailCode: true };
+
+    const primeira = await login();
+
+    expect(primeira.body.emailSent).toBe(false);
+    expect(primeira.body.emailHint).toBe('');
+    expect(recordSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ eventName: 'admin_2fa_email_failed' }),
+    );
+    const payload = JSON.parse(
+      Buffer.from(primeira.body.challengeToken.split('.')[0], 'base64url').toString(),
+    );
+    expect(payload.eotp).toBeUndefined();
+
+    // O PIN continua sendo a saída.
+    const comPin = await login({ challengeToken: primeira.body.challengeToken, factorCode: PIN });
+    expect(comPin.statusCode).toBe(200);
+  });
+
+  it('o desafio com código por e-mail vale 10 minutos, não 2', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-26T12:00:00Z'));
+    adminConfig = { requireSecondFactor: true, fallbackPin: hashPin(PIN), allowEmailCode: true };
+    const primeira = await login();
+    const codigo = codigoDoEmail();
+
+    vi.setSystemTime(new Date('2026-10-26T12:09:00Z'));
+    const resposta = await login({
+      challengeToken: primeira.body.challengeToken,
+      factorCode: codigo,
+    });
+
+    expect(resposta.statusCode).toBe(200);
+  });
+
+  it('código por e-mail sozinho não conta como método: falha fechado', async () => {
+    adminConfig = { requireSecondFactor: true, allowEmailCode: true };
+
+    const resposta = await login();
+
+    expect(resposta.statusCode).toBe(500);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+});

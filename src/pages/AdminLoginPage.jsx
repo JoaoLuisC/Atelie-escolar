@@ -5,6 +5,18 @@ import { useToast } from '../hooks/useToast';
 import { ROUTES } from '../constants/routes';
 import { SEO } from '../components/SEO';
 
+// Nome de cada método de 2º fator como a admin o reconhece.
+const METHOD_LABELS = {
+  totp: 'código do app autenticador',
+  email: 'código enviado por e-mail',
+  pin: 'PIN de recuperação',
+};
+
+function describeMethods(methods) {
+  const names = methods.map((method) => METHOD_LABELS[method]).filter(Boolean);
+  return names.length ? names.join(', ') : 'código de verificação';
+}
+
 // Renderizada pelo ProtectedRoute na própria /admin quando não há sessão admin.
 export function AdminLoginPage() {
   const navigate = useNavigate();
@@ -18,6 +30,45 @@ export function AdminLoginPage() {
   const [requiresSecondFactor, setRequiresSecondFactor] = useState(false);
   const [challengeToken, setChallengeToken] = useState('');
   const [factorMethods, setFactorMethods] = useState([]);
+  const [emailNotice, setEmailNotice] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const acceptsEmail = factorMethods.includes('email');
+
+  // Aplica um desafio de 2º fator vindo do servidor (1ª etapa ou reenvio do
+  // código por e-mail). `emailSent` só vem quando houve tentativa de envio.
+  function applyChallenge(data) {
+    setRequiresSecondFactor(true);
+    setChallengeToken(data.challengeToken || '');
+    setFactorMethods(Array.isArray(data.methods) ? data.methods : []);
+    if (data.emailSent === true) {
+      setEmailNotice(
+        `Enviamos um código de 6 dígitos para ${data.emailHint || 'o seu e-mail'}. Ele vale por 10 minutos.`,
+      );
+    } else if (data.emailSent === false) {
+      setEmailNotice(
+        'Não conseguimos enviar o código por e-mail agora. Use o app autenticador ou o PIN de recuperação.',
+      );
+    }
+  }
+
+  async function handleSendEmailCode() {
+    setSendingEmail(true);
+    try {
+      const data = await loginAdmin({
+        username: email.trim(),
+        password,
+        challengeToken,
+        sendEmailCode: true,
+      });
+      if (data.requiresSecondFactor) applyChallenge(data);
+    } catch (error) {
+      const message = error.message || 'Não foi possível enviar o código agora.';
+      setStatus(message);
+      pushToast(message, 'error');
+    } finally {
+      setSendingEmail(false);
+    }
+  }
 
   let submitLabel = 'Entrar';
   if (requiresSecondFactor) submitLabel = 'Validar código';
@@ -47,9 +98,7 @@ export function AdminLoginPage() {
       });
 
       if (data.requiresSecondFactor) {
-        setRequiresSecondFactor(true);
-        setChallengeToken(data.challengeToken || '');
-        setFactorMethods(Array.isArray(data.methods) ? data.methods : []);
+        applyChallenge(data);
         setStatus('Informe o código de verificação para concluir o login.');
         return;
       }
@@ -148,7 +197,7 @@ export function AdminLoginPage() {
                   id="admin-login-factor"
                   type="text"
                   inputMode="numeric"
-                  placeholder="Código TOTP ou PIN"
+                  placeholder="Código de verificação"
                   value={factorCode}
                   onChange={(event) => setFactorCode(event.target.value.replaceAll(/\s+/g, ''))}
                   disabled={loading}
@@ -158,8 +207,28 @@ export function AdminLoginPage() {
                 />
               </div>
               <p className="mt-1.5 text-xs text-slate-500">
-                Métodos aceitos: {factorMethods.join(' / ') || 'código de verificação'}.
+                Aceito: {describeMethods(factorMethods)}.
               </p>
+              {emailNotice ? (
+                <p className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">
+                  {emailNotice}
+                </p>
+              ) : null}
+              {acceptsEmail ? (
+                <button
+                  type="button"
+                  onClick={handleSendEmailCode}
+                  disabled={loading || sendingEmail}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 hover:underline disabled:text-slate-400"
+                >
+                  <i className="bi bi-envelope" />
+                  {sendingEmail
+                    ? 'Enviando…'
+                    : emailNotice
+                      ? 'Reenviar código por e-mail'
+                      : 'Enviar código por e-mail'}
+                </button>
+              ) : null}
             </div>
           ) : null}
 

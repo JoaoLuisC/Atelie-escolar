@@ -102,6 +102,10 @@ const ADMIN_CONFIG_FIELDS = Object.freeze({
   // significa "fallback por PIN LIBERADO". Repetir esse default aqui mantém as
   // duas leituras da mesma config em acordo.
   allowPinFallback: { type: 'boolean', security: true, default: true },
+  // Código de 6 dígitos por e-mail no login. Default FALSE: ligar exige ação
+  // explícita, e só vale com TOTP ou PIN ao lado (ver a trava em
+  // prepareAdminConfigWrite e lib/admin-2fa.js#extractSecondFactorMethods).
+  allowEmailCode: { type: 'boolean', security: true, default: false },
   totpSecret: { type: 'totpSecret', secret: true, security: true, default: '' },
   fallbackPin: { type: 'pin', secret: true, security: true, default: '' },
 });
@@ -575,6 +579,24 @@ async function prepareAdminConfigWrite(req, res, incoming) {
           'Não é possível exigir 2FA sem um método configurado: cadastre o segredo TOTP (ou o PIN de recuperação) antes de ativar.',
       },
     };
+  }
+
+  // ── Código por e-mail nunca sozinho ────────────────────────────────────
+  // O e-mail pode não chegar, e não serve para a reautenticação desta mesma
+  // aba (não há desafio onde o código esteja selado). Ligado sem TOTP nem PIN,
+  // ele seria o único caminho de entrada — e um caminho que pode falhar.
+  if (sanitized.value.allowEmailCode === true) {
+    const offline = extractSecondFactorMethods({ ...sanitized.value, allowEmailCode: false });
+    if (offline.length === 0) {
+      return {
+        error: {
+          status: 400,
+          code: ERROR_CODES.VALIDATION_FAILED,
+          message:
+            'O código por e-mail precisa de uma reserva: cadastre o app autenticador (TOTP) ou o PIN de recuperação antes de ativá-lo.',
+        },
+      };
+    }
   }
 
   // ── Segredo TOTP novo só entra provado ─────────────────────────────────

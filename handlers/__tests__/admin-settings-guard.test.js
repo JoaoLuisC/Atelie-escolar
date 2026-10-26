@@ -573,3 +573,52 @@ describe('conteúdo da loja (homeContent / productDefaults)', () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe('código por e-mail no 2º fator (allowEmailCode)', () => {
+  it('ligar o e-mail sem app nem PIN é recusado — seria o único caminho, e pode falhar', async () => {
+    installSettingsStore([]);
+    const res = await runHandler({
+      method: 'PUT',
+      query: { key: 'adminConfig' },
+      headers: {},
+      body: { key: 'adminConfig', value: { allowEmailCode: true } },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.message).toMatch(/reserva/);
+  });
+
+  it('com PIN de reserva, o e-mail é gravado', async () => {
+    const store = installSettingsStore([]);
+    const res = await runHandler({
+      method: 'PUT',
+      query: { key: 'adminConfig' },
+      headers: {},
+      body: { key: 'adminConfig', value: { fallbackPin: FALLBACK_PIN, allowEmailCode: true } },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(store.stored('adminConfig').allowEmailCode).toBe(true);
+  });
+
+  it('com 2FA em vigor, ligar o e-mail exige o código atual (campo de segurança)', async () => {
+    installSettingsStore([
+      {
+        setting_key: 'adminConfig',
+        setting_value: { requireSecondFactor: true, fallbackPin: FALLBACK_PIN },
+      },
+    ]);
+    const res = await runHandler({
+      method: 'PUT',
+      query: { key: 'adminConfig' },
+      headers: {},
+      body: {
+        key: 'adminConfig',
+        value: { requireSecondFactor: true, allowEmailCode: true },
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error.code).toBe('SECOND_FACTOR_REQUIRED');
+  });
+});

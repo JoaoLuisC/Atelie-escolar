@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SecurityTab } from '../SecurityTab';
-import { generateTotpSecret, securitySaveProblem } from '../security-rules';
+import { buildOtpAuthUri, generateTotpSecret, securitySaveProblem } from '../security-rules';
 
 // ════════════════════════════════════════════════════════════════════
 // ADM-38/ADM-49 da validação de 2026-10-01 — a aba que podia trancar o admin
@@ -124,5 +124,63 @@ describe('<SecurityTab />', () => {
       require2FA: false,
     });
     expect(extras).toEqual({ confirmationCode: '918273' });
+  });
+});
+
+describe('código por e-mail e QR code', () => {
+  it('e-mail sem app nem PIN de reserva é bloqueado', () => {
+    expect(securitySaveProblem({ enabled: false, emailEnabled: true })).toMatch(/reserva/);
+  });
+
+  it('e-mail com PIN de reserva é permitido', () => {
+    expect(securitySaveProblem({ enabled: true, hasPin: true, emailEnabled: true })).toBeNull();
+  });
+
+  it('com 2FA em vigor, ligar o e-mail também exige o código atual', () => {
+    expect(
+      securitySaveProblem({
+        enabled: true,
+        requiredNow: true,
+        enforcedNow: true,
+        hasPin: true,
+        emailEnabled: true,
+        emailNow: false,
+      }),
+    ).toMatch(/código atual/);
+  });
+
+  it('buildOtpAuthUri monta o endereço que o Google Authenticator lê', () => {
+    const uri = buildOtpAuthUri({ secret: 'jbsw y3dp ehpk 3pxp', account: 'painel' });
+
+    expect(uri.startsWith('otpauth://totp/')).toBe(true);
+    const params = new URL(uri).searchParams;
+    expect(params.get('secret')).toBe('JBSWY3DPEHPK3PXP');
+    expect(params.get('issuer')).toBe('Ateliê da Escola');
+    expect(params.get('digits')).toBe('6');
+    expect(params.get('period')).toBe('30');
+  });
+
+  it('a caixa do e-mail reflete a config e segue como allowEmailCode ao salvar', async () => {
+    const onSave = vi.fn(async () => {});
+    render(<SecurityTab config={{ hasPin: true, allowEmailCode: false }} onSave={onSave} />);
+
+    const caixa = screen.getByRole('checkbox', { name: /Aceitar código por e-mail/ });
+    expect(caixa).not.toBeChecked();
+    fireEvent.click(caixa);
+    fireEvent.click(screen.getByRole('button', { name: /Salvar configurações/ }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].allowEmailCode).toBe(true);
+  });
+
+  it('segredo gerado mostra o espaço do QR code', () => {
+    render(<SecurityTab config={{}} onSave={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Gerar/ }));
+
+    expect(
+      screen.queryByAltText('QR code para o app autenticador') ||
+        screen.getByText(/Gerando QR code/),
+    ).toBeTruthy();
   });
 });

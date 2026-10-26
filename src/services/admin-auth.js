@@ -1,11 +1,25 @@
 import { apiRequest, apiError } from '../utils/api';
 
-export async function loginAdmin({ username, password, factorCode, challengeToken }) {
+// `sendEmailCode: true` pede ao servidor um código por e-mail para o desafio
+// atual (2º fator); a resposta traz um desafio novo, com o código selado.
+export async function loginAdmin({
+  username,
+  password,
+  factorCode,
+  challengeToken,
+  sendEmailCode,
+}) {
   const { response, data } = await apiRequest('/admin/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ email: username, password, factorCode, challengeToken }),
+    body: JSON.stringify({
+      email: username,
+      password,
+      factorCode,
+      challengeToken,
+      ...(sendEmailCode ? { sendEmailCode: true } : {}),
+    }),
   });
 
   if (response.ok && data.requiresSecondFactor === true) {

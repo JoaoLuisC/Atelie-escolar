@@ -2,7 +2,65 @@ import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { securitySaveProblem, generateTotpSecret, isFlagOn } from './security-rules';
+import {
+  securitySaveProblem,
+  generateTotpSecret,
+  isFlagOn,
+  buildOtpAuthUri,
+} from './security-rules';
+
+/**
+ * QR code do segredo TOTP para o app autenticador ler pela câmera. A
+ * biblioteca é carregada sob demanda: só quem abre esta aba e gera um segredo
+ * paga o download. O segredo nunca sai do navegador para gerar a imagem.
+ */
+function TotpQrCode({ uri }) {
+  const [image, setImage] = useState({ uri: '', src: '' });
+
+  useEffect(() => {
+    let cancelled = false;
+    import('qrcode')
+      .then((qrcode) => qrcode.toDataURL(uri, { margin: 1, width: 200 }))
+      .then((src) => {
+        if (!cancelled) setImage({ uri, src });
+      })
+      .catch(() => {
+        if (!cancelled) setImage({ uri, src: '' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uri]);
+
+  // Enquanto a imagem do segredo ATUAL não fica pronta, não mostra a anterior.
+  const src = image.uri === uri ? image.src : '';
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-start">
+      {src ? (
+        <img
+          src={src}
+          alt="QR code para o app autenticador"
+          width={160}
+          height={160}
+          className="h-40 w-40 shrink-0 rounded-lg ring-1 ring-slate-200"
+        />
+      ) : (
+        <div className="flex h-40 w-40 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-xs text-slate-400">
+          Gerando QR code…
+        </div>
+      )}
+      <p className="text-sm text-slate-600">
+        Abra o <strong>Google Authenticator</strong> (ou outro app autenticador), toque em{' '}
+        <strong>+</strong> → <strong>Ler código QR</strong> e aponte a câmera para esta imagem.
+        Depois digite abaixo o código de 6 dígitos que o app mostrar.
+      </p>
+    </div>
+  );
+}
+
+TotpQrCode.propTypes = {
+  uri: PropTypes.string.isRequired,
+};
 
 function SecretField({ id, label, value, onChange, placeholder, hint, action = null }) {
   const [revealed, setRevealed] = useState(false);
@@ -93,6 +151,7 @@ export function SecurityTab({ config, onSave, saving = false }) {
   const [totpSecret, setTotpSecret] = useState('');
   const [fallbackPin, setFallbackPin] = useState('');
   const [enabled, setEnabled] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(false);
   const [totpVerificationCode, setTotpVerificationCode] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
   const [problem, setProblem] = useState('');
@@ -106,6 +165,7 @@ export function SecurityTab({ config, onSave, saving = false }) {
     isFlagOn(config?.require2FA);
   const pinAllowed = config?.allowPinFallback !== false;
   const enforcedNow = requiredNow && (has2FA || (hasPin && pinAllowed));
+  const emailNow = config?.allowEmailCode === true;
 
   useEffect(() => {
     // Campos começam vazios: deixar em branco preserva o segredo já guardado;
@@ -121,6 +181,7 @@ export function SecurityTab({ config, onSave, saving = false }) {
         isFlagOn(config?.requireSecondFactor) ||
         isFlagOn(config?.require2FA),
     );
+    setEmailEnabled(config?.allowEmailCode === true);
   }, [config]);
 
   async function handleSave() {
@@ -138,6 +199,8 @@ export function SecurityTab({ config, onSave, saving = false }) {
       nextPin,
       totpVerificationCode,
       confirmationCode,
+      emailEnabled,
+      emailNow,
     });
     setProblem(erro || '');
     if (erro) return;
@@ -151,6 +214,7 @@ export function SecurityTab({ config, onSave, saving = false }) {
     if (nextTotp) payload.totpSecret = nextTotp; // só envia quando há valor novo
     if (nextPin) payload.fallbackPin = nextPin;
     payload.twoFactorEnabled = enabled;
+    payload.allowEmailCode = emailEnabled;
     if (!enabled) {
       // O login considera o 2FA exigido se QUALQUER um dos três nomes herdados
       // estiver ligado: desmarcar só `twoFactorEnabled` não desligava nada.
@@ -186,8 +250,9 @@ export function SecurityTab({ config, onSave, saving = false }) {
                 Exigir 2FA no login admin
               </span>
               <span className="block text-xs text-slate-500">
-                Quando ativado, o login do admin exigirá código TOTP (ou o PIN de recuperação). Só
-                pode ser ativado com pelo menos um dos dois cadastrado.
+                Quando ativado, o login do admin exigirá um código do app autenticador, do e-mail
+                (se ligado abaixo) ou o PIN de recuperação. Só pode ser ativado com o app ou o PIN
+                cadastrado.
               </span>
             </span>
           </label>
@@ -200,7 +265,11 @@ export function SecurityTab({ config, onSave, saving = false }) {
             }`}
           >
             {enforcedNow
-              ? `2FA em vigor (${[has2FA ? 'TOTP' : null, hasPin && pinAllowed ? 'PIN' : null]
+              ? `2FA em vigor (${[
+                  has2FA ? 'app autenticador' : null,
+                  emailNow ? 'e-mail' : null,
+                  hasPin && pinAllowed ? 'PIN' : null,
+                ]
                   .filter(Boolean)
                   .join(' + ')}).`
               : 'O 2FA não está em vigor: hoje o login pede só e-mail e senha.'}
@@ -227,6 +296,10 @@ export function SecurityTab({ config, onSave, saving = false }) {
             }
           />
 
+          {totpSecret.trim().length >= 16 ? (
+            <TotpQrCode uri={buildOtpAuthUri({ secret: totpSecret, account: 'painel' })} />
+          ) : null}
+
           {totpSecret.trim() ? (
             <CodeField
               id="security-totp-verification"
@@ -249,6 +322,25 @@ export function SecurityTab({ config, onSave, saving = false }) {
                 : 'PIN numérico (6+ dígitos) para uso emergencial caso o TOTP não esteja disponível.'
             }
           />
+
+          <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <input
+              type="checkbox"
+              checked={emailEnabled}
+              onChange={(event) => setEmailEnabled(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">
+                Aceitar código por e-mail
+              </span>
+              <span className="block text-xs text-slate-500">
+                No login, um código de 6 dígitos é enviado ao e-mail do admin (vale 10 minutos).
+                Precisa do app autenticador ou do PIN cadastrado como reserva, caso o e-mail não
+                chegue.
+              </span>
+            </span>
+          </label>
 
           {enforcedNow ? (
             <CodeField

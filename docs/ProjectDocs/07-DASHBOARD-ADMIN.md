@@ -325,8 +325,9 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 **Mostra.**
 
 - Checkbox "Exigir 2FA no login admin" (`twoFactorEnabled`) — só liga com TOTP ou PIN cadastrado
-- Campo TOTP secret (Base32), com botão "Gerar" que cria o segredo no navegador para cadastrar no app autenticador (Google Authenticator, 1Password, Authy); o segredo novo só é salvo junto com o código de 6 dígitos que o app gerar a partir dele (`totpVerificationCode`). Não há QR code
+- Campo TOTP secret (Base32), com botão "Gerar" que cria o segredo no navegador para cadastrar no app autenticador (Google Authenticator, 1Password, Authy); o segredo novo só é salvo junto com o código de 6 dígitos que o app gerar a partir dele (`totpVerificationCode`). Com o segredo preenchido, a aba mostra um **QR code** (`otpauth://`, gerado no navegador pela biblioteca `qrcode`, carregada sob demanda) para o app ler pela câmera
 - Campo PIN de recuperação (numérico, 6+ dígitos, uso emergencial)
+- Caixa **"Aceitar código por e-mail"** (`allowEmailCode`): no login, um código de 6 dígitos vai para o e-mail do admin (vale 10 min). Só liga com app autenticador ou PIN cadastrado como reserva — tela e servidor recusam o e-mail sozinho
 - Com o 2FA em vigor, campo "Código atual (TOTP ou PIN)": qualquer mudança exige o fator vigente (`confirmationCode`; sem ele o backend responde 403)
 - Card de boas práticas
 

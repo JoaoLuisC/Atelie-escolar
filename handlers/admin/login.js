@@ -25,9 +25,12 @@ const {
   matchTotpCounter,
   isSecondFactorRequired,
   extractSecondFactorMethods,
+  generateEmailCode,
   verifySecondFactorCode,
   verifyPin,
 } = require('../../lib/admin-2fa');
+const { sendEmail } = require('../../lib/email-sender');
+const { adminLoginCode } = require('../../lib/email-templates');
 
 // TTL do desafio de 2º fator. Era 300s; caiu para 120s porque o desafio é um
 // portador de "a senha já foi conferida" e o único uso legítimo dele é o
@@ -35,6 +38,20 @@ const {
 // indolor porque o handler REEMITE um desafio novo quando o antigo expira
 // (ver handleSecondFactor) — o painel nunca fica preso.
 const FACTOR_CHALLENGE_TTL_SECONDS = 120;
+
+// ─── Código por e-mail ───────────────────────────────────────────────
+// O código NÃO é guardado em lugar nenhum: vai SELADO dentro do próprio
+// desafio, como HMAC(nonce + código) com o segredo de sessão. Só quem recebeu o
+// e-mail sabe o código, e o selo só confere com o desafio daquela tentativa —
+// sem tabela nova, sem migration, e o uso único vem de graça pela marca do
+// desafio (consumeSingleUse) que o login já grava.
+//
+// TTL de 10 min (e não os 120s do desafio comum) porque e-mail demora: dois
+// minutos entre "enviar" e "digitar" reprovaria quem espera a caixa atualizar.
+// Força bruta segue barrada pelo balde adminLoginSecondFactor (5 / 10 min) —
+// 5 chutes num espaço de 1.000.000 —, e cada reenvio também conta nele.
+const EMAIL_CHALLENGE_TTL_SECONDS = 10 * 60;
+const EMAIL_CODE_MINUTES = EMAIL_CHALLENGE_TTL_SECONDS / 60;
 
 // ─── Marcação de uso único (anti-replay) ─────────────────────────────
 // ONDE GUARDAR O "JÁ USADO": reaproveitamos public.rate_limit_hit() — o mesmo
@@ -151,15 +168,32 @@ async function consumeSingleUse(bucket, identifier, context = {}) {
  * marca de uso único gravada no login bem-sucedido, e o `ip` amarra o desafio à
  * tentativa que o gerou (um token capturado não serve noutra origem).
  */
-function createChallengeToken(email, req) {
+/** Selo do código por e-mail: amarrado ao nonce do desafio, nunca o código cru. */
+function sealEmailCode(nonce, code) {
+  return crypto
+    .createHmac('sha256', getChallengeSecret())
+    .update(`admin-2fa-email:${nonce}:${code}`)
+    .digest('base64url');
+}
+
+/** `jo***@gmail.com` — para a tela dizer para onde foi, sem expor o endereço. */
+function maskEmail(email) {
+  const [user, domain] = String(email || '').split('@');
+  if (!user || !domain) return '';
+  return `${user.slice(0, 2)}***@${domain}`;
+}
+
+function createChallengeToken(email, req, { emailCode = null } = {}) {
   const now = Math.floor(Date.now() / 1000);
+  const nonce = crypto.randomBytes(16).toString('hex');
   const payload = {
     sub: 'admin-2fa',
     email,
     ip: fingerprint(extractClientIp(req)),
-    nonce: crypto.randomBytes(16).toString('hex'),
+    nonce,
     iat: now,
-    exp: now + FACTOR_CHALLENGE_TTL_SECONDS,
+    exp: now + (emailCode ? EMAIL_CHALLENGE_TTL_SECONDS : FACTOR_CHALLENGE_TTL_SECONDS),
+    ...(emailCode ? { eotp: sealEmailCode(nonce, emailCode) } : {}),
   };
 
   const encodedPayload = toBase64Url(JSON.stringify(payload));
@@ -251,16 +285,57 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
     return false;
   }
 
+  // Pedido explícito de código por e-mail ("Enviar código por e-mail" na tela).
+  // Com desafio válido ele cai no balde do 2º fator (5 / 10 min), então os
+  // reenvios também são limitados.
+  const wantsEmailCode = methods.includes('email') && req.body?.sendEmailCode === true;
+
   // Sem desafio válido (1ª etapa, desafio expirado, adulterado ou de outro IP):
   // reemitir é seguro porque a senha acabou de ser conferida NESTA requisição.
   // É também o que mantém o TTL curto e o uso único indolores: o painel recebe
   // um desafio novo em vez de travar na tela do código.
-  if (!challenge.valid) {
+  if (!challenge.valid || wantsEmailCode) {
+    // Sem app autenticador, o e-mail sai já na 1ª etapa — senão a admin teria
+    // de pedir o código num segundo clique para chegar ao único fator do dia a
+    // dia. Com o app cadastrado, o e-mail só sai quando ela pedir.
+    const sendNow = wantsEmailCode || (methods.includes('email') && !methods.includes('totp'));
+    let emailCode = null;
+    let emailSent = false;
+
+    if (sendNow) {
+      emailCode = generateEmailCode();
+      const message = adminLoginCode({ code: emailCode, minutes: EMAIL_CODE_MINUTES });
+      const result = await sendEmail({
+        to: email,
+        subject: message.subject,
+        html: message.html,
+        kind: 'admin_login_code',
+        // Único por envio: o sendEmail é idempotente por (e-mail, kind, entityId).
+        entityId: crypto.randomBytes(8).toString('hex'),
+      }).catch((error) => ({ sent: false, reason: error?.message || 'send_failed' }));
+
+      emailSent = result?.sent === true;
+      if (!emailSent) {
+        // Código que não chegou não pode ficar selado: o desafio sai sem ele e
+        // a tela oferece os outros métodos (que sempre existem — ver
+        // extractSecondFactorMethods).
+        emailCode = null;
+        await recordSecurityEvent({
+          eventName: 'admin_2fa_email_failed',
+          severity: 'warn',
+          ip: extractClientIp(req),
+          userAgent: req.headers['user-agent'],
+          properties: { email_hash: emailKey, reason: String(result?.reason || '').slice(0, 60) },
+        });
+      }
+    }
+
     ok(res, {
       success: false,
       requiresSecondFactor: true,
       methods,
-      challengeToken: createChallengeToken(email, req),
+      challengeToken: createChallengeToken(email, req, { emailCode }),
+      ...(sendNow ? { emailSent, emailHint: emailSent ? maskEmail(email) : '' } : {}),
     });
     return false;
   }
@@ -283,8 +358,16 @@ async function handleSecondFactor(req, res, { adminConfig, email, emailKey, chal
   // com sal, e a funcao aceita tambem o formato antigo em claro — sem isso o
   // deploy trancaria a dona para fora ate o primeiro "Salvar" no painel.
   const pinValid = methods.includes('pin') && verifyPin(adminConfig?.fallbackPin, code);
+  // Código por e-mail: confere contra o selo do PRÓPRIO desafio. Sem selo
+  // (desafio emitido sem envio), não há código por e-mail a aceitar.
+  const sealedEmailCode = String(challenge.payload?.eotp || '');
+  const emailValid =
+    methods.includes('email') &&
+    Boolean(sealedEmailCode) &&
+    /^\d{6}$/.test(code) &&
+    safeCompare(sealEmailCode(challenge.payload.nonce, code), sealedEmailCode);
 
-  if (totpCounter === null && !pinValid) {
+  if (totpCounter === null && !pinValid && !emailValid) {
     await recordSecurityEvent({
       eventName: 'admin_2fa_failed',
       severity: 'warn',
