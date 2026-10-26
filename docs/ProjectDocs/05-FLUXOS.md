@@ -184,7 +184,7 @@ flowchart TD
 
 **Webhook paralelo:** ver fluxo #6. Polling cobre o caso de webhook não chegar (dev sem ngrok, lag em prod). O `verify-payment` também consulta o Mercado Pago e cria os tokens se o webhook ainda não criou (corrida resolvida pela UNIQUE `(order_id, product_id)`).
 
-**Email "Pagamento confirmado":** existe o endpoint `POST /api/send-confirmation-email` (nodemailer → Resend; idempotente via `email_sent_log`; o destinatário é **sempre** o e-mail gravado no pedido — o do body é ignorado), mas ele não é disparado automaticamente pelo fluxo hoje. O envio de e-mails é best-effort: sem `SMTP_HOST/USER/PASS` no `.env.local`, registra `skipped` e segue (não falha checkout).
+**Email "Pagamento confirmado":** existe o endpoint `POST /api/send-confirmation-email` (nodemailer → Resend; idempotente via `email_sent_log`; o destinatário é **sempre** o e-mail gravado no pedido — o do body é ignorado), e o mesmo envio (`lib/order-confirmation.js`) sai **automaticamente na primeira aprovação**, no webhook e no `verify-payment`. Estorno ou chargeback (`refunded`/`charged_back`) de pedido aprovado move o pedido para `status=refunded` e queima os links de download. O envio de e-mails é best-effort: sem `SMTP_HOST/USER/PASS` no `.env.local`, registra `skipped` e segue (não falha checkout).
 
 ---
 

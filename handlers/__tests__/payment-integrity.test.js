@@ -106,6 +106,11 @@ function arrangeWebhook({ payment, order = baseOrder(), items = ORDER_ITEMS, tok
   installModuleMock('../../lib/customer-account-provisioning', {
     ensureCustomerAccountFromCheckout,
   });
+  // A confirmação por e-mail grava em email_sent_log; aqui o assunto são os
+  // tokens e a transição do pedido (o envio tem suíte própria).
+  installModuleMock('../../lib/order-confirmation', {
+    sendOrderConfirmation: vi.fn(async () => ({ sent: true })),
+  });
 
   const sdk = installMercadoPagoSdkMock({ payment });
 
@@ -149,6 +154,11 @@ function arrangeVerify({
   const ensureCustomerAccountFromCheckout = vi.fn(async () => {});
   installModuleMock('../../lib/customer-account-provisioning', {
     ensureCustomerAccountFromCheckout,
+  });
+  // A confirmação por e-mail grava em email_sent_log; aqui o assunto são os
+  // tokens e a transição do pedido (o envio tem suíte própria).
+  installModuleMock('../../lib/order-confirmation', {
+    sendOrderConfirmation: vi.fn(async () => ({ sent: true })),
   });
 
   // Aqui o HMAC não participa: o gate é o valor. Basta o cliente do SDK.

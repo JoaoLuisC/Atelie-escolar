@@ -243,7 +243,11 @@ profundidade e higiene de dado, e o registro de 24/05 afirmava uma proteção qu
 Fazer: exigir `https://` (e o host do Supabase Storage ou do YouTube) no schema de produto, com
 teste.
 
-### 3.12 E-mail de confirmação do pedido não é disparado — ⚠️ pendência funcional (16/10/2026)
+### 3.12 E-mail de confirmação do pedido — ✅ ENTREGUE (26/10/2026)
+
+> Agora sai na primeira aprovação, pelo webhook e pelo `verify-payment`, pela porta única
+> `lib/order-confirmation.js` (idempotente via `email_sent_log`). Junto: estorno/chargeback de
+> pedido aprovado move o pedido para `refunded` e queima os links. Registro original abaixo.
 
 O template `orderConfirmation` (`lib/email-templates.js`) e o endpoint
 `POST /api/send-confirmation-email` existem, com rate limit e testes, mas **nenhum fluxo os
@@ -420,8 +424,7 @@ O que falta é operacional. Marque aqui mesmo:
 
 ### E. Código — achados da revisão de documentação de 16/10/2026
 
-- [ ] Disparar o e-mail de confirmação do pedido na aprovação (§3.12) — a compradora hoje não
-      recebe confirmação
+- [x] Disparar o e-mail de confirmação do pedido na aprovação (§3.12)
 - [ ] Validar o esquema das URLs de produto no schema do admin (§3.11)
 
 ### Fora do escopo de "finalizar" (evolução)

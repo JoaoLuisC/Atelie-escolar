@@ -25,7 +25,7 @@ Não há logística física: depois do pagamento aprovado, o cliente baixa os ar
 Personas não-humanas (atores técnicos):
 
 - **Mercado Pago** — processa pagamento e envia webhook quando aprovado.
-- **Resend** — entrega e-mails transacionais (definição/reset de senha, exclusão de conta) e de marketing (newsletter, cross-sell). O e-mail de confirmação do pedido ainda não é disparado automaticamente — ver [13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md).
+- **Resend** — entrega e-mails transacionais (definição/reset de senha, exclusão de conta) e de marketing (newsletter, cross-sell). Inclui o e-mail de confirmação do pedido, enviado na aprovação.
 - **GA4 + Meta Pixel** — recebem eventos do funil para análise comportamental e attribution.
 - **GitHub Actions** — dispara cron horário de envio de e-mails (abandoned cart 1h/24h, pós-compra D+3/D+15/D+45, reativação 90d) que chama `/api/cron-email-jobs`.
 
@@ -48,7 +48,7 @@ Personas não-humanas (atores técnicos):
 - Integração com Mercado Pago Checkout Pro (cartão, Pix, boleto)
 - Polling de pagamento como fallback se webhook não chegar (4s em CheckoutPage, 10s em DownloadsPage)
 - Validação de cupons server-side (`coupons` table com `discount_type`, `discount_value`, `valid_from`/`valid_until`, `max_uses`, `min_order_amount`, `applies_to`)
-- E-mail de confirmação do pedido: o endpoint `POST /api/send-confirmation-email` (template `orderConfirmation`) existe, mas nenhum fluxo o dispara automaticamente hoje — pendência em [13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md); a conta provisionada recebe o e-mail de definição de senha
+- E-mail de confirmação do pedido enviado na primeira aprovação, pelo webhook ou pelo `verify-payment` (`lib/order-confirmation.js`, idempotente); conta nova recebe também o e-mail de definição de senha
 - Conta Supabase provisionada automaticamente para comprador convidado (e-mail para definir senha)
 - Carrinho abandonado salvo automaticamente e lembrado via cron
 
@@ -121,7 +121,6 @@ Lista resumida — detalhes em [13-ROADMAP-PENDENCIAS](./13-ROADMAP-PENDENCIAS.m
 - ❌ **Autenticação de domínio no Resend** (DKIM + SPF + DMARC) — pendente DNS
 - ❌ **Pipeline WebP/AVIF** — adiada (catálogo < 200 produtos não justifica)
 - ❌ **Backup automatizado de produção** — Supabase Free dá 7 dias; produção requer Pro
-- ❌ **E-mail de confirmação do pedido** — o endpoint existe, mas nenhum fluxo o dispara na aprovação ([13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md))
 
 ---
 

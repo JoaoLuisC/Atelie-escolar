@@ -239,6 +239,11 @@ export function CustomerAuthPage() {
     String(customerSession?.role || '').toLowerCase(),
   );
   const [oauthError] = useState(() => readOAuthError(location));
+  // Voltou do Google com sucesso? Lido na montagem: o callback limpa `oauth`
+  // da URL logo em seguida.
+  const [cameFromOAuth] = useState(
+    () => new URLSearchParams(location.search).get('oauth') === 'google' && !oauthError,
+  );
   const deleteToken = new URLSearchParams(location.search).get('delete_token') || '';
   const [deleting, setDeleting] = useState(false);
   const [deleteRequested, setDeleteRequested] = useState(false);
@@ -312,6 +317,16 @@ export function CustomerAuthPage() {
       setDeleting(false);
     }
   }
+
+  // Na volta do Google, a sessão chega pelo AuthProvider (troca do token pelo
+  // cookie). Assim que ela existe, segue direto para o destino — o checkout,
+  // onde está o carrinho, ou o `?redirect=` de quem mandou para o login — em
+  // vez de parar nesta página com "Você já está conectado".
+  useEffect(() => {
+    if (cameFromOAuth && customerSession?.email) {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [cameFromOAuth, customerSession?.email, navigate, redirectTo]);
 
   const [mode, setMode] = useState(() => getMode(location.search));
 

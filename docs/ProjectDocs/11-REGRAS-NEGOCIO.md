@@ -213,7 +213,7 @@ Toda compra aprovada inicia sequência mínima:
 - D+15: cross-sell baseado em categoria comprada
 - D+45: novidades da mesma categoria
 
-D+3, D+15 e D+45 implementados em `handlers/cron-email-jobs.js` (roda de hora em hora via GitHub Actions), idempotente via `email_sent_log`. ⚠️ D+0: o endpoint `POST /api/send-confirmation-email` existe, mas nenhum fluxo o dispara hoje — regra pendente ([13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md)).
+D+3, D+15 e D+45 implementados em `handlers/cron-email-jobs.js` (roda de hora em hora via GitHub Actions), idempotente via `email_sent_log`. D+0 (confirmação do pedido) sai na primeira aprovação, pelo webhook ou pelo `verify-payment` (`lib/order-confirmation.js`).
 
 #### D5. Segmentação por categoria, não por individualização
 

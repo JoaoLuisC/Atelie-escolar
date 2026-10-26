@@ -5,6 +5,7 @@ const {
   serviceRoleHelpers: { getTableRow, insertIntoTable, listTableRows, updateTable },
 } = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
+const { sendOrderConfirmation } = require('../lib/order-confirmation');
 const { recordEvent } = require('../lib/analytics-events');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 // Reconciliação de valor (P0-1) — porta ÚNICA, compartilhada com
@@ -235,14 +236,18 @@ module.exports = async function webhookHandler(req, res) {
       }
 
       if (isFirstApproval) {
+        let provision = null;
         try {
-          await ensureCustomerAccountFromCheckout({
+          provision = await ensureCustomerAccountFromCheckout({
             email: order.customer_email,
             name: order.customer_name,
           });
         } catch (provisionErr) {
           log.error('falha_ao_provisionar_conta_de_cliente', { reason: provisionErr.message });
         }
+
+        // Confirmação do pedido (13-ROADMAP §3.12) — best-effort, nunca lança.
+        await sendOrderConfirmation({ order, isNewAccount: provision?.created === true });
 
         await recordEvent({
           eventName: 'payment_approved',
@@ -271,6 +276,47 @@ module.exports = async function webhookHandler(req, res) {
       // cliente). Nada no frontend lia este campo — DownloadsPage.jsx consome
       // `order.downloadTokens` daqueles dois, não do webhook.
       return ok(res, { message: 'Webhook processed successfully' });
+    }
+
+    // ── Estorno / chargeback: o pagamento JÁ aprovado foi devolvido ─────────
+    // Antes caía no "processado" sem fazer nada: o pedido seguia `approved`, os
+    // links continuavam valendo até expirar e o verify-payment ainda reemitia
+    // link novo (ele reemite para pedido aprovado). Agora o pedido sai de
+    // `approved` — transição atômica, só a partir de `approved` — e os tokens
+    // vivos são queimados. Sem pedido aprovado (já estornado, ou nunca pago),
+    // não há o que revogar. Estorno PARCIAL não chega aqui: o MP mantém o
+    // pagamento `approved` (status_detail `partially_refunded`).
+    if (payment.status === 'refunded' || payment.status === 'charged_back') {
+      const revoked = await updateTable(
+        'orders',
+        { id: `eq.${order.id}`, payment_status: 'eq.approved' },
+        { payment_status: payment.status, status: 'refunded' },
+      );
+
+      if (!Array.isArray(revoked) || revoked.length === 0) {
+        return ok(res, { message: 'Order not approved; nothing to revoke' });
+      }
+
+      await updateTable(
+        'download_tokens',
+        { order_id: `eq.${order.id}` },
+        { used: true, expires_at: new Date().toISOString() },
+      );
+
+      await recordEvent({
+        eventName: 'payment_refunded',
+        orderId: order.id,
+        properties: {
+          order_code: order.order_code,
+          value: Number(order.total_amount || 0),
+          currency: 'BRL',
+          payment_id: payment.id,
+          status: payment.status,
+        },
+        source: 'webhook',
+      });
+
+      return ok(res, { message: 'Refund processed; downloads revoked' });
     }
 
     if (payment.status === 'rejected' || payment.status === 'cancelled') {

@@ -6,6 +6,7 @@ const {
   serviceRoleHelpers: { getTableRow, listTableRows, updateTable, upsertIntoTable },
 } = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
+const { sendOrderConfirmation } = require('../lib/order-confirmation');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 
@@ -378,14 +379,23 @@ async function refreshApprovedOrderData(order, orderId, req) {
     //    diferente: numa corrida em que o webhook aprovou e este poll criou os
     //    tokens, o comprador recebia o convite de senha duas vezes.
     if (isFirstApproval) {
+      let provision = null;
       try {
-        await ensureCustomerAccountFromCheckout({
+        provision = await ensureCustomerAccountFromCheckout({
           email: order.customer_email,
           name: order.customer_name,
         });
       } catch (provisionErr) {
         log.error('falha_ao_provisionar_conta_de_cliente', { reason: provisionErr.message });
       }
+
+      // Confirmação do pedido (13-ROADMAP §3.12): mesma porta do webhook, para
+      // quem foi aprovado pelo polling sem o webhook chegar. Best-effort.
+      await sendOrderConfirmation({
+        order,
+        items: orderItems,
+        isNewAccount: provision?.created === true,
+      });
     }
 
     // A resposta reflete o que foi PERSISTIDO. Quando o UPDATE afetou a linha,

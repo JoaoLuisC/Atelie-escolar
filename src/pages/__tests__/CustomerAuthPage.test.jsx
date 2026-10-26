@@ -1,4 +1,4 @@
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -149,5 +149,52 @@ describe('recoveryErrorMessage (LOJA-45)', () => {
     expect(recoveryErrorMessage(new Error('Something odd'), 'Texto da tela.')).toBe(
       'Texto da tela.',
     );
+  });
+});
+
+describe('CustomerAuthPage · volta do login com Google', () => {
+  function renderComRotas(url) {
+    return render(
+      <MemoryRouter initialEntries={[url]}>
+        <Routes>
+          <Route path="/login" element={<CustomerAuthPage />} />
+          <Route path="/checkout" element={<p>PÁGINA DO CARRINHO</p>} />
+          <Route path="/downloads" element={<p>PÁGINA DE DOWNLOADS</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  beforeEach(() => {
+    Object.assign(authState, {
+      authReady: true,
+      customerSession: { uid: 'u1', email: 'cliente@gmail.com', name: 'Cliente', role: 'customer' },
+      loginCustomer: vi.fn(),
+      loginCustomerGoogle: vi.fn(),
+      registerCustomer: vi.fn(),
+      logoutCustomer: vi.fn(),
+      setCustomerSession: vi.fn(),
+    });
+  });
+
+  it('com a sessão do Google estabelecida, segue direto para o carrinho (checkout)', async () => {
+    renderComRotas('/login?oauth=google&redirect=/checkout');
+    expect(await screen.findByText('PÁGINA DO CARRINHO')).toBeInTheDocument();
+  });
+
+  it('respeita o destino de quem mandou para o login', async () => {
+    renderComRotas('/login?oauth=google&redirect=/downloads');
+    expect(await screen.findByText('PÁGINA DE DOWNLOADS')).toBeInTheDocument();
+  });
+
+  it('erro na volta do Google fica no login, com a mensagem', async () => {
+    authState.customerSession = null;
+    renderComRotas('/login?oauth=google&error=access_denied');
+    expect(screen.queryByText('PÁGINA DO CARRINHO')).toBeNull();
+  });
+
+  it('sem ter vindo do Google, quem já está logado vê o aviso (não é redirecionado)', () => {
+    renderComRotas('/login');
+    expect(screen.getByText('Você já está conectado')).toBeInTheDocument();
   });
 });

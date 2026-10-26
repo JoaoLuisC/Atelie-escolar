@@ -82,6 +82,10 @@ export async function loginCustomerWithGoogle(postLoginRedirect = '/checkout') {
     provider: 'google',
     options: {
       redirectTo: buildOAuthRedirectUrl(postLoginRedirect),
+      // Sempre mostra a escolha de conta do Google. Sem isto, quem já está
+      // logado numa conta Google entrava direto com ela, sem ver a tela — e
+      // sem chance de escolher outra conta.
+      queryParams: { prompt: 'select_account' },
     },
   });
 

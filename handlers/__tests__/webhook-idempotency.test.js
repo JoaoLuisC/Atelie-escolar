@@ -120,6 +120,11 @@ function arrange({ payment = approvedPayment(), order = baseOrder(), items, toke
   installModuleMock('../../lib/customer-account-provisioning', {
     ensureCustomerAccountFromCheckout,
   });
+  // A confirmação por e-mail grava em email_sent_log; aqui o assunto são os
+  // tokens e a transição do pedido (o envio tem suíte própria).
+  installModuleMock('../../lib/order-confirmation', {
+    sendOrderConfirmation: vi.fn(async () => ({ sent: true })),
+  });
 
   const sdk = installMercadoPagoSdkMock({ payment });
 

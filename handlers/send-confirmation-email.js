@@ -1,9 +1,8 @@
 const {
   getSupabaseConfig,
-  serviceRoleHelpers: { getTableRow, listTableRows },
+  serviceRoleHelpers: { getTableRow },
 } = require('../lib/supabase');
-const { sendEmail } = require('../lib/email-sender');
-const { orderConfirmation } = require('../lib/email-templates');
+const { sendOrderConfirmation } = require('../lib/order-confirmation');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
@@ -46,7 +45,7 @@ module.exports = async function sendConfirmationEmailHandler(req, res) {
     }
 
     const order = await getTableRow('orders', {
-      select: 'id,order_code,total_amount,customer_email',
+      select: 'id,order_code,total_amount,customer_email,customer_name',
       filters: [{ column: 'order_code', value: orderId }],
     });
 
@@ -56,30 +55,13 @@ module.exports = async function sendConfirmationEmailHandler(req, res) {
       return ok(res, { success: true, sent: false, reason: 'order_not_found' });
     }
 
-    const orderItems = await listTableRows('order_items', {
-      select: 'order_id,product_name,unit_price,quantity',
-      filters: [{ column: 'order_id', value: order.id }],
-      orderBy: 'id',
-      ascending: true,
-    });
-
-    const { subject, html } = orderConfirmation({
-      orderId,
-      customerName,
-      items: orderItems.map((i) => ({ name: i.product_name, price: i.unit_price })),
-      totalAmount: order.total_amount || 0,
-      isNewAccount: Boolean(isNewAccount),
-    });
-
+    // Mesma porta do webhook e do verify-payment (lib/order-confirmation.js).
     // Destinatário SEMPRE o e-mail do pedido — nunca o do body — para que
     // conhecer um order_code não permita exfiltrar itens/total para um e-mail
     // arbitrário do atacante. (customerEmail do body é ignorado de propósito.)
-    const result = await sendEmail({
-      to: order.customer_email,
-      subject,
-      html,
-      kind: 'order_confirmation',
-      entityId: orderId,
+    const result = await sendOrderConfirmation({
+      order: { ...order, customer_name: order.customer_name || customerName },
+      isNewAccount: Boolean(isNewAccount),
     });
 
     return ok(res, {

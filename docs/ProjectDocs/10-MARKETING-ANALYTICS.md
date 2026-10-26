@@ -192,7 +192,7 @@ Detalhes em [05-FLUXOS §8-9](./05-FLUXOS.md) (carrinho abandonado/reativação 
 
 8 templates HTML mobile-friendly:
 
-1. `orderConfirmation` — D+0, transacional (inclui bloco "conta criada para você" quando a conta é provisionada). **Não é disparado automaticamente hoje:** só o endpoint `POST /api/send-confirmation-email` o usa, e nenhum fluxo o chama — ver [13-ROADMAP §3.12](./13-ROADMAP-PENDENCIAS.md)
+1. `orderConfirmation` — D+0, transacional (inclui bloco "conta criada para você" quando a conta é provisionada). Enviado na primeira aprovação do pedido (webhook ou `verify-payment`, via `lib/order-confirmation.js`)
 2. `optInConfirmation` — double opt-in da newsletter (`/confirmar-inscricao?token=`, regra D1)
 3. `postPurchaseD3` — D+3, pedido de avaliação
 4. `postPurchaseD15` — D+15, cross-sell por categoria comprada
@@ -211,7 +211,7 @@ O footer com **link de descadastro 1-clique** (regra D2) é auto-appendado por `
 Compra aprovada
    │
    ▼ D+0
-[orderConfirmation] ─── endpoint existe, mas hoje nenhum fluxo o dispara (13-ROADMAP §3.12)
+[orderConfirmation] ─── na aprovação do pagamento (webhook / verify-payment)
    │
    ▼ D+3
 [postPurchaseD3] ─── pedido de avaliação / review
