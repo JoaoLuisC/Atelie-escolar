@@ -7,6 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { CartDrawer } from './CartDrawer';
 import { NewsletterSignup } from './NewsletterSignup';
 import { ROUTES } from '../constants/routes';
+import { SELLER } from '../constants/seller';
 
 function navLinkClass({ isActive }) {
   return `inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
@@ -53,7 +54,8 @@ const SOCIAL_LINKS = [
 // Ex.: { href: 'https://wa.me/55DDDNUMERO', label: '(DDD) NÚMERO' }.
 const WHATSAPP_CONTACT = { href: '', label: '' };
 
-const CONTACT_EMAIL = 'contato@profamarciarcardoso.com.br';
+// O mesmo canal dos Termos e da Política de Privacidade (src/constants/seller.js).
+const CONTACT_EMAIL = SELLER.email;
 
 const DESKTOP_MEDIA_QUERY = '(min-width: 1024px)';
 
@@ -480,7 +482,13 @@ export function Shell({ children }) {
           {/* LOJA-36: slate-500 sobre slate-950 dava ~4,2:1 em texto de 12 px
               (abaixo dos 4,5:1 do WCAG AA); slate-400 passa com folga. */}
           <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-slate-800 pt-6 text-xs text-slate-400 sm:flex-row">
-            <p>&copy; 2026 Profa. Marciar Cardoso. Todos os direitos reservados.</p>
+            <div className="text-center sm:text-left">
+              <p>&copy; 2026 Profa. Marciar Cardoso. Todos os direitos reservados.</p>
+              {/* Decreto 7.962/2013: identificação de quem vende, visível em toda página. */}
+              <p className="mt-1">
+                {SELLER.name} · CNPJ {SELLER.cnpj} · {SELLER.city}
+              </p>
+            </div>
             <div className="flex items-center gap-4">
               <Link to={ROUTES.privacidade} className="transition hover:text-white">
                 Privacidade

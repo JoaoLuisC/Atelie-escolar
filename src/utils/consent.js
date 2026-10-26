@@ -6,7 +6,7 @@ const EVENT_NAME = 'lgpd-consent-change';
 // Incrementar quando a política de privacidade mudar — força nova decisão do usuário.
 // 2026-10-01: retenção de analytics corrigida para 180 dias e Vercel incluída
 // em "Com quem compartilhamos" (LOJA-12).
-export const CONSENT_POLICY_VERSION = '2026-10-01';
+export const CONSENT_POLICY_VERSION = '2026-10-26';
 
 export const CONSENT_GRANTED = 'granted';
 export const CONSENT_DENIED = 'denied';
