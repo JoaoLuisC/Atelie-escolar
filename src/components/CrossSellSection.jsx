@@ -83,14 +83,18 @@ export function CrossSellSection({ productId }) {
               to={`/produtos/${item.slug || item.id}`}
               className="group flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:shadow-md"
             >
-              <div className="aspect-square overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
+              <div
+                className={`aspect-square overflow-hidden ${
+                  item.image ? 'bg-slate-50 p-2' : 'bg-gradient-to-br from-brand-100 to-brand-200'
+                }`}
+              >
                 {item.image ? (
                   <img
                     src={item.image}
                     alt={item.name}
                     loading="lazy"
                     decoding="async"
-                    className="h-full w-full object-cover transition group-hover:scale-105"
+                    className="h-full w-full object-contain transition group-hover:scale-105"
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-white/60">

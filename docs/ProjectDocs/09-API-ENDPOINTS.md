@@ -20,7 +20,7 @@
 
 ## 1. Catálogo público
 
-**Rate-limit:** 120 req/min por IP (`catalog`) em todos os endpoints de catálogo (`products`, `product-details`, `home-sections`, `cross-sell`).
+**Rate-limit:** 120 req/min por IP (`catalog`) em todos os endpoints de catálogo (`products`, `product-details`, `home-sections`, `home-content`, `cross-sell`).
 
 ### `GET /api/products`
 
@@ -64,6 +64,14 @@ Detalhes completos de 1 produto ativo.
 **Query:** `slug` **ou** `id` (um dos dois obrigatório; só UUID é tratado como `id`, o resto — inclusive número — é buscado como slug)
 
 **Response 200** (cache público 5 min): `{ success, product }` — o objeto `product` inclui `faq[]`, `reviews[]`, `benefits[]`, `category` (nome), `categorySlug`, `kitItems[]`, `panelSizes[]` etc. **Nunca** expõe `download_url` (o link do arquivo só é resolvido em `/api/download` após validar o token).
+
+O campo `product.sharedDescription` traz a descrição comum a todos os produtos (setting `productDefaults`, aba Produtos do painel): `{ title, text }`, ou `null` quando não há texto. Falha ao ler a configuração não derruba a resposta — o campo vem `null`.
+
+### `GET /api/home-content`
+
+Textos e blocos da página inicial salvos na aba "Página inicial" do painel (setting `homeContent`). Devolve **só o que foi salvo**, limpo de novo na leitura (`lib/store-content.js`); o front completa com os textos padrão de `src/constants/home-content.js` o que estiver ausente.
+
+**Response 200** (mesmo cache de CDN do catálogo): `{ success: true, content: { blocks?, seo?, hero?, marquee?, catalog?, howItWorks?, socialProof? } }` — `content` é `{}` quando nada foi salvo.
 
 ### `GET /api/home-sections`
 
@@ -452,10 +460,10 @@ Disparado pelo workflow `email-cron.yml` (GitHub Actions) de hora em hora (`cron
 
 ### Vitrine, configurações e uploads
 
-| Endpoint                | Métodos  | Descrição                                                                                                                                                                                                             |
-| ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/admin/settings`   | GET, PUT | `?key=` de uma whitelist (`homeSections` — vitrine da home — e `adminConfig` — TOTP, PIN). GET de `adminConfig` nunca devolve `totpSecret`/`fallbackPin` (só `has2FA`/`hasPin`); PUT auditado com redação de segredos |
-| `/api/admin/upload-url` | POST     | Gera signed upload URL do Supabase Storage por `kind` (image/video/download), com whitelist de extensão/MIME e bloqueio de SVG/HTML em bucket público                                                                 |
+| Endpoint                | Métodos  | Descrição                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/api/admin/settings`   | GET, PUT | `?key=` de uma whitelist (`homeSections` — faixas de produtos da home —, `homeContent` — textos e blocos da home —, `productDefaults` — descrição comum dos produtos — e `adminConfig` — TOTP, PIN). `homeContent` e `productDefaults` são limpos no PUT (`lib/store-content.js`: whitelist, tetos, links só https/internos; campos descartados voltam em `ignoredFields`). GET de `adminConfig` nunca devolve `totpSecret`/`fallbackPin` (só `has2FA`/`hasPin`); PUT auditado com redação de segredos |
+| `/api/admin/upload-url` | POST     | Gera signed upload URL do Supabase Storage por `kind` (image/video/download), com whitelist de extensão/MIME e bloqueio de SVG/HTML em bucket público                                                                                                                                                                                                                                                                                                                                                  |
 
 ### Manutenção
 

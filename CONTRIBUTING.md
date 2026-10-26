@@ -23,7 +23,7 @@ medidas no código e não estimadas, fecharam a dívida:
 | Chamadas de `console.*` no backend       |         79 |                 **0** |
 | Caminhos de rota literais no JSX         |         50 |                 **0** |
 | Mecanismos de rate limit concorrentes    |          2 |                 **1** |
-| Módulos de `lib/` sem suíte              | 13 (de 21) |         **0** (de 30) |
+| Módulos de `lib/` sem suíte              | 13 (de 21) |         **0** (de 31) |
 | Testes                                   |        274 |              **1128** |
 | Cobertura (statements)                   | não rodava | **61,97%** (piso 48%) |
 | Avisos de lint                           |         30 |      **12** (catraca) |

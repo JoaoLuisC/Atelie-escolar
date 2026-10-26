@@ -82,6 +82,14 @@ const PerformanceTab = lazyTab(
   () => import('../components/admin/tabs/PerformanceTab'),
 );
 const VitrineTab = lazyTab('VitrineTab', () => import('../components/admin/tabs/VitrineTab'));
+const HomeContentEditor = lazyTab(
+  'HomeContentEditor',
+  () => import('../components/admin/tabs/HomeContentEditor'),
+);
+const ProductDefaultsCard = lazyTab(
+  'ProductDefaultsCard',
+  () => import('../components/admin/tabs/ProductDefaultsCard'),
+);
 const SecurityTab = lazyTab('SecurityTab', () => import('../components/admin/tabs/SecurityTab'));
 const AnalysisTab = lazyTab('AnalysisTab', () => import('../components/admin/tabs/AnalysisTab'));
 const FunnelTab = lazyTab('FunnelTab', () => import('../components/admin/tabs/FunnelTab'));
@@ -615,14 +623,17 @@ export function AdminPage() {
         );
       case 'produtos':
         return (
-          <ProductsTab
-            products={dashboardData.products || []}
-            categories={dashboardData.categories || []}
-            onCreate={openCreateProduct}
-            onEdit={openEditProduct}
-            onToggleActive={handleToggleProductActive}
-            onDelete={handleDeleteProduct}
-          />
+          <>
+            <ProductDefaultsCard />
+            <ProductsTab
+              products={dashboardData.products || []}
+              categories={dashboardData.categories || []}
+              onCreate={openCreateProduct}
+              onEdit={openEditProduct}
+              onToggleActive={handleToggleProductActive}
+              onDelete={handleDeleteProduct}
+            />
+          </>
         );
       case 'categorias':
         return (
@@ -668,14 +679,19 @@ export function AdminPage() {
       case 'prod-saida':
         return <PerformanceTab productPerformance={productPerformance} />;
       case 'vitrine':
+        // Aba "Página inicial": textos e blocos da home em cima, faixas de
+        // produtos (a antiga Vitrine) embaixo.
         return (
-          <VitrineTab
-            sections={vitrineSections}
-            categories={dashboardData.categories || []}
-            onChange={setVitrineSections}
-            onSave={handleVitrineSave}
-            saving={vitrineSaving}
-          />
+          <div className="space-y-4">
+            <HomeContentEditor />
+            <VitrineTab
+              sections={vitrineSections}
+              categories={dashboardData.categories || []}
+              onChange={setVitrineSections}
+              onSave={handleVitrineSave}
+              saving={vitrineSaving}
+            />
+          </div>
         );
       case 'seguranca':
         return (

@@ -50,6 +50,7 @@ const downloadHandler = require('../handlers/download');
 const meDeleteAccountHandler = require('../handlers/me-delete-account');
 const meExportDataHandler = require('../handlers/me-export-data');
 const apiNotFoundHandler = require('../handlers/notfound');
+const homeContentHandler = require('../handlers/home-content');
 const homeSectionsHandler = require('../handlers/home-sections');
 const productDetailsHandler = require('../handlers/product-details');
 const productsHandler = require('../handlers/products');
@@ -102,6 +103,7 @@ router.all('/me-delete-account', wrapCompatHandler(meDeleteAccountHandler));
 // apagar os próprios dados mas não podia vê-los.
 router.all('/me-export-data', wrapCompatHandler(meExportDataHandler));
 router.all('/download', wrapCompatHandler(downloadHandler));
+router.all('/home-content', wrapCompatHandler(homeContentHandler));
 router.all('/home-sections', wrapCompatHandler(homeSectionsHandler));
 router.all('/product-details', wrapCompatHandler(productDetailsHandler));
 router.all('/products', wrapCompatHandler(productsHandler));

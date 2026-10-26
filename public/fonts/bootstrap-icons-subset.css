@@ -1,5 +1,5 @@
 /* GERADO por scripts/build-icon-subset.js — não edite à mão.
- * 113 ícones, extraídos de src/ e index.html (literais + dinâmicos).
+ * 115 ícones, extraídos de src/ e index.html (literais + dinâmicos).
  * Regenerar: npm run icons:subset
  */
 @font-face {
@@ -30,6 +30,7 @@
 }
 
 .bi-arrow-clockwise::before { content: "\f116"; }
+.bi-arrow-counterclockwise::before { content: "\f117"; }
 .bi-arrow-down::before { content: "\f128"; }
 .bi-arrow-down-right::before { content: "\f123"; }
 .bi-arrow-left::before { content: "\f12f"; }
@@ -138,6 +139,7 @@
 .bi-ticket-perforated-fill::before { content: "\f6c9"; }
 .bi-tiktok::before { content: "\f6cc"; }
 .bi-trash::before { content: "\f5de"; }
+.bi-upload::before { content: "\f603"; }
 .bi-whatsapp::before { content: "\f618"; }
 .bi-x-circle::before { content: "\f623"; }
 .bi-x-lg::before { content: "\f659"; }

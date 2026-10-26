@@ -19,6 +19,7 @@ import { HomePage } from '../HomePage';
 // ════════════════════════════════════════════════════════════════════
 
 vi.mock('../../services/products', () => ({
+  fetchHomeContent: vi.fn(async () => ({})),
   fetchHomeSections: vi.fn(async () => []),
   fetchProducts: vi.fn(async () => []),
 }));

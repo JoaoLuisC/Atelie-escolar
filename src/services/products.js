@@ -36,6 +36,20 @@ export async function fetchHomeSections() {
   return data.sections || [];
 }
 
+/**
+ * Textos e blocos da página inicial salvos no painel. Devolve só o que foi
+ * salvo; quem renderiza completa com o padrão (`mergeHomeContent`).
+ */
+export async function fetchHomeContent() {
+  const { response, data } = await catalogRequest('/home-content');
+
+  if (!response.ok) {
+    throw new Error(`Não foi possível carregar a página inicial agora (erro ${response.status}).`);
+  }
+
+  return data.content || {};
+}
+
 // `products.id` é UUID. Só esse formato vai como `id`; todo o resto (inclusive
 // número puro, que a regra antiga mandava como id bigint e a API respondia 500
 // — LOJA-05) é slug.

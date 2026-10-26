@@ -33,7 +33,9 @@ src/components/admin/
 │   ├── FunnelTab.jsx
 │   ├── AnalysisTab.jsx
 │   ├── SegmentsTab.jsx
-│   ├── VitrineTab.jsx
+│   ├── VitrineTab.jsx            # faixas de produtos da home
+│   ├── HomeContentEditor.jsx     # textos, imagem e blocos da home (aba Página inicial)
+│   ├── ProductDefaultsCard.jsx   # descrição comum a todos os produtos (aba Produtos)
 │   └── SecurityTab.jsx
 ├── ui/                          # Componentes UI internos
 │   ├── StatCard.jsx
@@ -86,6 +88,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 **Mostra.**
 
+- No topo, o cartão **Descrição padrão de todos os produtos** (`ProductDefaultsCard`): título opcional + texto (até 4.000 caracteres, quebras de linha preservadas). Aparece na página de **cada** produto, logo abaixo da descrição própria dele; vazio = não aparece. Setting `productDefaults`, via `GET/PUT /api/admin/settings`, servido ao público no campo `sharedDescription` de `GET /api/product-details`
 - Lista completa de produtos com: nome, badge "Destaque" (featured), categoria, preço, status (ativo/inativo)
 - Filtros: busca por nome, categoria, ativo/inativo
 
@@ -286,11 +289,19 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 ---
 
-### 13. Vitrine (`vitrine`)
+### 13. Página inicial (`vitrine`)
 
-**Para que serve.** Configurar o que aparece na home.
+**Para que serve.** Configurar tudo o que aparece na home. A aba se chamava "Vitrine"; o id interno `vitrine` foi mantido.
 
-**Mostra.**
+**Cartão "Página inicial"** (`HomeContentEditor`, setting `homeContent`):
+
+- **Blocos**: Topo (hero), Faixa de palavras, Catálogo e faixas de produtos, Como funciona, Prova social e redes — cada um pode ser ligado/desligado e reordenado
+- **Topo**: título (trecho entre `*asteriscos*` sai colorido), subtítulo, texto e link do botão, **imagem opcional** (upload pelo mesmo fluxo das fotos de produto, até 1 MB, exibida inteira) e texto alternativo
+- **Faixa de palavras**, **Catálogo** (texto pequeno, título, botão), **Como funciona** (títulos, 4 passos, destaque), **Prova social** (títulos, 4 números, até 6 depoimentos, links do Instagram/TikTok) e **Google** (título e descrição da página)
+- Campo vazio é respeitado (some da home); bloco sem conteúdo não aparece. **Restaurar textos padrão** volta o formulário aos textos originais (só grava ao salvar)
+- O servidor limpa o que é gravado (`lib/store-content.js`): whitelist de campos, tetos de tamanho, links só `https://` ou caminho interno. A home pública lê via `GET /api/home-content` (cache de CDN de ~1 min); os textos padrão moram em `src/constants/home-content.js`
+
+**Cartão das faixas de produtos** (a antiga Vitrine) — **Mostra.**
 
 - Lista ordenada das seções da home, de três tipos: **Categoria** (vinculada a uma categoria), **Mais vendidos** e **Novidades** (especiais, no máximo uma de cada)
 - Por seção: título exibido, limite de produtos (4–20) e, no tipo categoria, a categoria vinculada

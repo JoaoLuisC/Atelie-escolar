@@ -11,6 +11,7 @@ const {
   isPresentableCategoryName,
 } = require('../lib/public-catalog');
 const { UUID_RE } = require('../validation/common.schemas');
+const { readSettingValue, toPublicSharedDescription } = require('../lib/store-content');
 
 const log = createLogger('product-details');
 
@@ -77,13 +78,22 @@ module.exports = async function productDetailsHandler(req, res) {
       });
     }
 
-    let category = null;
-    if (product.category_id) {
-      category = await getTableRow('categories', {
-        select: 'name,slug',
-        filters: [{ column: 'id', value: product.category_id }],
-      });
-    }
+    // Descrição comum a todos os produtos (aba Produtos do painel). Best-effort:
+    // falhar ao ler a configuração não pode derrubar a página do produto — no
+    // pior caso o bloco simplesmente não aparece.
+    const [categoryRow, productDefaults] = await Promise.all([
+      product.category_id
+        ? getTableRow('categories', {
+            select: 'name,slug',
+            filters: [{ column: 'id', value: product.category_id }],
+          })
+        : null,
+      readSettingValue('productDefaults').catch((error) => {
+        log.warn('product_defaults_unavailable', { reason: error?.message || String(error) });
+        return null;
+      }),
+    ]);
+    let category = categoryRow;
 
     // LOJA-02: nome vazio ou com cara de UUID não aparece na pílula.
     if (category && !isPresentableCategoryName(category.name)) {
@@ -120,6 +130,7 @@ module.exports = async function productDetailsHandler(req, res) {
         faq: Array.isArray(product.faq) ? product.faq : [],
         reviews: Array.isArray(product.reviews) ? product.reviews : [],
         benefits: Array.isArray(product.benefits) ? product.benefits : [],
+        sharedDescription: toPublicSharedDescription(productDefaults),
       },
     });
   } catch (error) {

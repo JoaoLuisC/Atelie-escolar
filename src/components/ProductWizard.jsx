@@ -715,7 +715,7 @@ function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToa
           <img
             src={value}
             alt={`Preview de ${label}`}
-            className="h-16 w-16 shrink-0 rounded-md object-cover ring-1 ring-slate-200"
+            className="h-16 w-16 shrink-0 rounded-md bg-white object-contain ring-1 ring-slate-200"
             onError={(e) => {
               e.currentTarget.style.opacity = '0.3';
             }}

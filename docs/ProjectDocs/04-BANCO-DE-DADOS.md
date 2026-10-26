@@ -315,11 +315,11 @@ Auditoria de escrita do painel admin (criada pela migration phase4). **Append-on
 
 Configurações chave-valor JSON. Service-only.
 
-| Coluna          | Tipo        | Notas                         |
-| --------------- | ----------- | ----------------------------- |
-| `setting_key`   | text PK     | `adminConfig`, `homeSections` |
-| `setting_value` | jsonb       |                               |
-| `updated_at`    | timestamptz |                               |
+| Coluna          | Tipo        | Notas                                                           |
+| --------------- | ----------- | --------------------------------------------------------------- |
+| `setting_key`   | text PK     | `adminConfig`, `homeSections`, `homeContent`, `productDefaults` |
+| `setting_value` | jsonb       |                                                                 |
+| `updated_at`    | timestamptz |                                                                 |
 
 `adminConfig` guarda `totpSecret` (cifrado com AES-256-GCM, chave `ADMIN_2FA_ENC_KEY`) e `fallbackPin` (hash scrypt com sal) — a API nunca os devolve no GET, a conferência é timing-safe e valores legados em texto claro migram no próximo salvamento —, além de preferências do admin. `homeSections` guarda as seções da vitrine da home.
 

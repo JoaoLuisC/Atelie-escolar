@@ -514,3 +514,62 @@ describe('trava contra trancar o admin fora (ADM-38/ADM-49)', () => {
     expect(decryptSecret(store.stored('adminConfig').totpSecret)).toBe(STORED_TOTP);
   });
 });
+
+describe('conteúdo da loja (homeContent / productDefaults)', () => {
+  it('homeContent é limpo antes de gravar: link perigoso e campo estranho não entram', async () => {
+    const store = installSettingsStore([]);
+    const res = await runHandler({
+      method: 'PUT',
+      query: { key: 'homeContent' },
+      headers: {},
+      body: {
+        key: 'homeContent',
+        value: {
+          hero: {
+            title: 'Bem-vinda',
+            ctaLink: 'javascript:alert(1)',
+            imageUrl: 'https://x.co/a.png',
+          },
+          injetado: { qualquer: true },
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.ignoredFields).toEqual(['injetado']);
+    expect(store.stored('homeContent')).toEqual({
+      hero: { title: 'Bem-vinda', imageUrl: 'https://x.co/a.png' },
+    });
+  });
+
+  it('productDefaults grava título e texto, com quebras de linha', async () => {
+    const store = installSettingsStore([]);
+    const res = await runHandler({
+      method: 'PUT',
+      query: { key: 'productDefaults' },
+      headers: {},
+      body: {
+        key: 'productDefaults',
+        value: { sharedDescriptionTitle: 'Sobre', sharedDescription: 'A\nB' },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(store.stored('productDefaults')).toEqual({
+      sharedDescriptionTitle: 'Sobre',
+      sharedDescription: 'A\nB',
+    });
+  });
+
+  it('chave fora da lista continua recusada', async () => {
+    installSettingsStore([]);
+    const res = await runHandler({
+      method: 'PUT',
+      query: { key: 'qualquerCoisa' },
+      headers: {},
+      body: { key: 'qualquerCoisa', value: {} },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});

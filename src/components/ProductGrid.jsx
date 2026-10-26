@@ -33,14 +33,16 @@ function ProductCard({ onAddToCart, product }) {
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-brand-soft transition duration-300 hover:-translate-y-1 hover:shadow-brand">
       <Link
         to={`/produtos/${product.slug || product.id}`}
-        className="relative block aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200"
+        className={`relative block aspect-[4/3] overflow-hidden ${
+          product.image ? 'bg-slate-50 p-2' : 'bg-gradient-to-br from-brand-100 to-brand-200'
+        }`}
       >
         {product.image ? (
           <img
             src={product.image}
             alt={product.name}
             loading="lazy"
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+            className="h-full w-full object-contain transition duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">

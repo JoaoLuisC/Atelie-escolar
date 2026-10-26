@@ -234,7 +234,13 @@ export function ProductDetailsPage() {
           <article className="grid gap-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 md:p-6">
             {/* GALERIA */}
             <div>
-              <div className="aspect-square overflow-hidden rounded-xl bg-gradient-to-br from-brand-100 to-brand-200">
+              {/* Imagem INTEIRA (object-contain): a foto que a professora sobe
+                  não é cortada para caber no quadro quadrado. */}
+              <div
+                className={`aspect-square overflow-hidden rounded-xl ${
+                  activeMedia ? 'bg-slate-50' : 'bg-gradient-to-br from-brand-100 to-brand-200'
+                }`}
+              >
                 {!activeMedia ? (
                   <div className="flex h-full w-full items-center justify-center text-white/70">
                     <i className="bi bi-image text-5xl" />
@@ -243,7 +249,7 @@ export function ProductDetailsPage() {
                   <img
                     src={activeMedia.url}
                     alt={product.name}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                   />
                 ) : youtubeEmbed ? (
                   <iframe
@@ -254,7 +260,7 @@ export function ProductDetailsPage() {
                     className="h-full w-full"
                   />
                 ) : (
-                  <video src={activeMedia.url} controls className="h-full w-full object-cover" />
+                  <video src={activeMedia.url} controls className="h-full w-full object-contain" />
                 )}
               </div>
 
@@ -279,7 +285,7 @@ export function ProductDetailsPage() {
                             alt={`Mídia ${i + 1}`}
                             loading="lazy"
                             decoding="async"
-                            className="h-full w-full object-cover"
+                            className="h-full w-full bg-slate-50 object-contain"
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-slate-900 text-white">
@@ -317,9 +323,28 @@ export function ProductDetailsPage() {
               <h1 className="mt-3 font-display text-2xl font-bold text-slate-900 sm:text-3xl">
                 {product.name}
               </h1>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600">
+              {/* whitespace-pre-line: as quebras de linha digitadas no painel
+                  (parágrafos, listas) aparecem como a professora escreveu. */}
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">
                 {product.description || 'Sem descrição disponível.'}
               </p>
+
+              {/* Descrição comum a todos os produtos (aba Produtos do painel). */}
+              {product.sharedDescription?.text ? (
+                <section
+                  aria-label={product.sharedDescription.title || 'Sobre os materiais'}
+                  className="mt-4 rounded-xl border border-brand-100 bg-brand-50/50 p-4"
+                >
+                  {product.sharedDescription.title ? (
+                    <h2 className="mb-1 font-heading text-sm font-bold text-slate-800">
+                      {product.sharedDescription.title}
+                    </h2>
+                  ) : null}
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
+                    {product.sharedDescription.text}
+                  </p>
+                </section>
+              ) : null}
 
               <div className="mt-6 rounded-xl bg-slate-50 p-4">
                 <div className="flex items-baseline gap-3">

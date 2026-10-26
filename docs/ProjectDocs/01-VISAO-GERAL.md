@@ -86,7 +86,7 @@ Personas não-humanas (atores técnicos):
 10. **Análise** — Curva ABC de produtos + clientes + coorte 12 meses + export CSV
 11. **Segmentos** — segmentação de subscribers por tags de lifecycle (ativo, recorrente, VIP, inativo 30/90/180d, categoria comprada)
 12. **Usuários** — lista usuários, troca de papel (role) e revogação de acesso
-13. **Vitrine** — configuração das seções da home (por categoria, Mais vendidos e Novidades)
+13. **Página inicial** — home totalmente configurável: textos, imagem do topo, ordem e visibilidade dos blocos, depoimentos, números e redes, além das faixas de produtos (por categoria, Mais vendidos e Novidades)
 14. **Segurança** — configuração do 2FA do admin (segredo TOTP + PIN de recuperação; backend só devolve flags, nunca os segredos)
 
 ### Marketing & retenção

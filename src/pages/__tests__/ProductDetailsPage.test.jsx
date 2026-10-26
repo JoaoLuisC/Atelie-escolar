@@ -41,6 +41,37 @@ afterEach(() => {
 });
 
 describe('ProductDetailsPage', () => {
+  it('mostra a descrição comum abaixo da própria, preservando quebras de linha', async () => {
+    fetchProductByIdentifier.mockResolvedValue({
+      id: 'p1',
+      slug: 'kit',
+      name: 'Kit Volta às Aulas',
+      price: 64.9,
+      description: 'Descrição própria',
+      sharedDescription: { title: 'Sobre os materiais', text: 'Linha 1\nLinha 2' },
+    });
+    renderEm('/produtos/kit');
+
+    const bloco = await screen.findByRole('region', { name: 'Sobre os materiais' });
+    expect(bloco).toHaveTextContent('Linha 1');
+    expect(bloco.querySelector('p')).toHaveClass('whitespace-pre-line');
+    expect(screen.getByText('Descrição própria')).toBeInTheDocument();
+  });
+
+  it('sem descrição comum, nenhum bloco extra aparece', async () => {
+    fetchProductByIdentifier.mockResolvedValue({
+      id: 'p1',
+      slug: 'kit',
+      name: 'Kit Volta às Aulas',
+      price: 64.9,
+      sharedDescription: null,
+    });
+    renderEm('/produtos/kit');
+
+    await screen.findByRole('heading', { level: 1, name: 'Kit Volta às Aulas' });
+    expect(screen.queryByRole('region', { name: /Sobre os materiais/i })).toBeNull();
+  });
+
   it('produto inexistente é "não encontrado", com saída para o catálogo (LOJA-05)', async () => {
     fetchProductByIdentifier.mockResolvedValue(null);
     renderEm('/produtos/123');

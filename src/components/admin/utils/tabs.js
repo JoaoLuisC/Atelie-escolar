@@ -11,7 +11,7 @@ export const TAB_LABELS = {
   analise: 'Análise (Curva ABC + Coorte)',
   segmentos: 'Segmentos de email',
   usuarios: 'Usuários',
-  vitrine: 'Vitrine',
+  vitrine: 'Página inicial',
   seguranca: 'Segurança',
 };
 

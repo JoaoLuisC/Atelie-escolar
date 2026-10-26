@@ -63,7 +63,8 @@ Projeto-mae/
 │   │   └── cleanup-events.js
 │   ├── products.js                       # GET listagem pública
 │   ├── product-details.js                # GET por slug
-│   ├── home-sections.js                  # GET vitrine + destaques + mais vendidos
+│   ├── home-sections.js                  # GET faixas de produtos da home
+│   ├── home-content.js                   # GET textos e blocos da home (configurados no painel)
 │   ├── create-payment.js                 # POST cria o pedido + preferência MP
 │   ├── verify-payment.js                 # GET/POST status + emissão de download tokens (polling)
 │   ├── webhook.js                        # POST webhook MP com HMAC
@@ -89,7 +90,7 @@ Projeto-mae/
 ├── middleware/
 │   └── error.middleware.js               # errorHandler global + notFoundHandler (404 JSON em /api)
 │
-├── lib/                                  # ❹ Camada de serviço backend — 30 módulos, todos com suíte
+├── lib/                                  # ❹ Camada de serviço backend — 31 módulos, todos com suíte
 │   ├── express-app.js                    # App Express de dev E produção: headers, CORS, parsers, rotas
 │   ├── route-mount.js                    # mountHandler: o adaptador único handler → Express
 │   ├── http.js                           # Envelope, códigos de erro, guardMethod, CORS admin, cache (ADR 0004)
@@ -111,6 +112,7 @@ Projeto-mae/
 │   ├── money.js                          # Aritmética de dinheiro em centavos inteiros (regra E3)
 │   ├── coupons.js                        # Validação e cálculo de desconto de cupons
 │   ├── public-catalog.js                 # Regras de vitrine dos endpoints públicos do catálogo
+│   ├── store-content.js                  # Limpeza do conteúdo editável (home, descrição comum dos produtos)
 │   ├── sales-counts.js                   # Contagem de "mais vendidos"
 │   ├── analytics-events.js               # Whitelist de eventos + gravação em analytics_events
 │   ├── attribution-sanitize.js           # Whitelist canônica de atribuição (UTMs/referrer/sessão)
@@ -193,7 +195,7 @@ Projeto-mae/
 │   │   ├── abc.js                        # Curva ABC no browser (paridade com lib/abc-classification.js)
 │   │   └── csv-export.js                 # Export de relatórios admin
 │   │
-│   ├── constants/                        # routes.js (ROUTES) + error-codes.js (códigos da API, isSessionError)
+│   ├── constants/                        # routes.js (ROUTES) + error-codes.js (códigos da API, isSessionError) + home-content.js (textos padrão da home)
 │   └── test/                             # Setup do Vitest (projetos node + browser)
 │
 ├── supabase/
@@ -359,7 +361,7 @@ handlers/webhook.js   (sem contador: a assinatura é a guarda — dispensa regis
 ### D5. Vitrine configurável em `settings` ao invés de coluna em `products`
 
 **Contexto.** Quais produtos aparecem em destaque, mais vendidos, novidades.
-**Decisão.** Tabela `settings` (key-value JSON) guarda a configuração da vitrine. Aba **Vitrine** edita.
+**Decisão.** Tabela `settings` (key-value JSON) guarda a configuração da home (faixas `homeSections`, textos e blocos `homeContent`) e a descrição comum dos produtos (`productDefaults`). A aba **Página inicial** edita a home.
 **Trade-off.** Setup inicial mais complexo, mas dona da loja edita sem dev intermediar.
 
 ### D6. Cron via GitHub Actions ao invés de pg_cron

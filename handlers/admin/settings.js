@@ -35,7 +35,17 @@ const {
   verifyPin,
 } = require('../../lib/admin-2fa');
 
-const ALLOWED_KEYS = new Set(['homeSections', 'adminConfig']);
+const { sanitizeHomeContent, sanitizeProductDefaults } = require('../../lib/store-content');
+
+const ALLOWED_KEYS = new Set(['homeSections', 'adminConfig', 'homeContent', 'productDefaults']);
+
+// Conteúdo que sai renderizado para o visitante: o servidor fecha o formato
+// antes de gravar (whitelist, tetos, links só https/internos). Ver
+// lib/store-content.js.
+const CONTENT_SANITIZERS = Object.freeze({
+  homeContent: sanitizeHomeContent,
+  productDefaults: sanitizeProductDefaults,
+});
 
 const MIN_FALLBACK_PIN_LENGTH = 6;
 const MAX_FALLBACK_PIN_LENGTH = 64;
@@ -639,6 +649,12 @@ module.exports = async function adminSettingsHandler(req, res) {
         }
         valueToWrite = prepared.value;
         ignoredFields = prepared.ignored;
+      }
+
+      if (CONTENT_SANITIZERS[key]) {
+        const sanitized = CONTENT_SANITIZERS[key](valueToWrite);
+        valueToWrite = sanitized.value;
+        ignoredFields = sanitized.ignored;
       }
 
       const before = await readSetting(key);
