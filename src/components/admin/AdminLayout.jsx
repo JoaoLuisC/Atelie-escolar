@@ -46,15 +46,10 @@ const NAV_SECTIONS = [
   },
   {
     type: 'item',
-    id: 'funil',
-    label: 'Funil',
+    // Funil, Curva ABC/coorte e o Estudo de vendas (IA) — subabas de uma só.
+    id: 'vendas',
+    label: 'Vendas',
     icon: 'funnel-fill',
-  },
-  {
-    type: 'item',
-    id: 'analise',
-    label: 'Análise',
-    icon: 'bar-chart-line-fill',
   },
   {
     type: 'item',

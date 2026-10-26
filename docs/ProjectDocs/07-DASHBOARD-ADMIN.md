@@ -196,7 +196,23 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 ---
 
-### 9. Funil (`funil`)
+### 9. Vendas (`vendas`) — subabas Estudo de vendas, Funil e Curva ABC
+
+Desde 26/10/2026 Funil e Análise deixaram de ser itens do menu: são subabas de **Vendas**
+(`SalesHub`), ao lado do **Estudo de vendas** (`SalesStudyTab`).
+
+**Estudo de vendas.** Botão "Gerar nova análise" (30, 60 ou 90 dias, comparados ao período anterior
+de mesma duração). O servidor (`handlers/admin/sales-study.js` + `lib/sales-study.js`) calcula os
+agregados — funil (os mesmos cálculos da subaba Funil, `lib/funnel-metrics.js`), receita, pedidos,
+ticket, cupons, recompra, Curva ABC, categorias e origem das vendas — e manda **só esses números** ao
+Google Gemini (`GEMINI_API_KEY`, modelo `GEMINI_MODEL`, padrão `gemini-2.5-flash`), com o contexto
+do negócio e a regra de não inventar números. A resposta (resumo, o que está bom, onde perde venda, o
+que fazer, confiança) tem formato fixo e tamanhos limitados. Abaixo de 3 pedidos aprovados **e** 30
+sessões no período a IA não é chamada ("dados insuficientes"). A última análise fica em
+`settings.salesStudy`: abrir a aba não gasta cota; gerar tem limite de 10/hora e entra no audit log.
+Nenhum e-mail ou nome de cliente vai para a IA.
+
+#### Subaba Funil
 
 **Para que serve.** Visualizar o funil de conversão completo.
 
@@ -211,7 +227,7 @@ As abas listadas em `TABS_NEEDING_DASHBOARD` (dashboard, faturamento, comparativ
 
 ---
 
-### 10. Análise (`analise`)
+#### Subaba Curva ABC e coorte
 
 **Para que serve.** Análise estratégica do negócio. Base para decisões de produto e campanha.
 

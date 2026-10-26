@@ -448,6 +448,10 @@ Disparado pelo workflow `email-cron.yml` (GitHub Actions) de hora em hora (`cron
 | `/api/admin/orders`     | GET, PUT, DELETE              | Lista (`?status=` opcional, filtra por `payment_status`) + atualizar + excluir pedidos                                                          |
 | `/api/admin/users`      | GET, PUT, DELETE              | Listar + atualizar + excluir clientes (profiles)                                                                                                |
 
+| Rota                     | Método    | O que faz                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/admin/sales-study` | GET, POST | GET: última análise salva (`settings.salesStudy`) + `aiConfigured`. POST `{ days }` (7–90, padrão 30): recalcula os agregados do período atual × anterior e, com dados suficientes, pede a leitura ao Gemini. IA indisponível não derruba: volta `aiError` (`INSUFFICIENT_DATA`, `AI_NOT_CONFIGURED`, `AI_QUOTA`, `AI_FAILED`) e os números. Limite 10/hora; auditado |
+
 ### Análise (sem cache — recalculado a cada abertura, `Cache-Control: no-store`)
 
 | Endpoint                   | Método | Descrição                                                                                      |

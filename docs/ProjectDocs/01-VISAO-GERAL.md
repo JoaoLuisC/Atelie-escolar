@@ -82,12 +82,11 @@ Personas não-humanas (atores técnicos):
 6. **Cupons** — CRUD de cupons via wizard (`/api/admin/coupons`)
 7. **Faturamento** — série de faturamento de pedidos aprovados
 8. **Comparativo** — comparação período-a-período (mês atual vs anterior, etc.)
-9. **Funil** — visualização do funil (view_catalog → view_item → add_to_cart → begin_checkout → purchase) por período
-10. **Análise** — Curva ABC de produtos + clientes + coorte 12 meses + export CSV
-11. **Segmentos** — segmentação de subscribers por tags de lifecycle (ativo, recorrente, VIP, inativo 30/90/180d, categoria comprada)
-12. **Usuários** — lista usuários, troca de papel (role) e revogação de acesso
-13. **Página inicial** — home totalmente configurável: textos, imagem do topo, ordem e visibilidade dos blocos, depoimentos, números e redes, além das faixas de produtos (por categoria, Mais vendidos e Novidades)
-14. **Segurança** — configuração do 2FA do admin (segredo TOTP + PIN de recuperação; backend só devolve flags, nunca os segredos)
+9. **Vendas** — subabas **Estudo de vendas** (leitura dos números por IA, Google Gemini, em linguagem simples), **Funil** (view_catalog → view_item → add_to_cart → begin_checkout → purchase) e **Curva ABC e coorte** (produtos + clientes + coorte 12 meses + export CSV)
+10. **Segmentos** — segmentação de subscribers por tags de lifecycle (ativo, recorrente, VIP, inativo 30/90/180d, categoria comprada)
+11. **Usuários** — lista usuários, troca de papel (role) e revogação de acesso
+12. **Página inicial** — home totalmente configurável: textos, imagem do topo, ordem e visibilidade dos blocos, depoimentos, números e redes, além das faixas de produtos (por categoria, Mais vendidos e Novidades)
+13. **Segurança** — configuração do 2FA do admin (segredo TOTP + PIN de recuperação; backend só devolve flags, nunca os segredos)
 
 ### Marketing & retenção
 

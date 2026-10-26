@@ -113,6 +113,20 @@ export async function patchAdminProduct(payload) {
   });
 }
 
+/** Última análise salva da aba Vendas → Estudo de vendas (não gasta cota da IA). */
+export async function fetchSalesStudy() {
+  return request('/admin/sales-study');
+}
+
+/** Gera uma análise nova dos últimos `days` dias (usa a IA). */
+export async function generateSalesStudy(days = 30) {
+  return request('/admin/sales-study', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ days }),
+  });
+}
+
 export async function fetchAdminSetting(key) {
   return request(`/admin/settings?key=${encodeURIComponent(key)}`);
 }

@@ -202,6 +202,15 @@ function matchOperator(row, column, operator, rawValue) {
         .replace(/^\(|\)$/g, '')
         .split(',')
         .includes(String(actual));
+    // Faixas de data (relatórios do painel): datas ISO comparam bem como
+    // texto; números comparam como número.
+    case 'gte':
+    case 'lte': {
+      const isNumber = typeof actual === 'number' && !Number.isNaN(Number(value));
+      const a = isNumber ? actual : String(actual ?? '');
+      const b = isNumber ? Number(value) : value;
+      return operator === 'gte' ? a >= b : a <= b;
+    }
     default:
       throw new Error(`fake supabase: operador não suportado "${operator}"`);
   }

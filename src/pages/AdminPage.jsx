@@ -91,8 +91,8 @@ const ProductDefaultsCard = lazyTab(
   () => import('../components/admin/tabs/ProductDefaultsCard'),
 );
 const SecurityTab = lazyTab('SecurityTab', () => import('../components/admin/tabs/SecurityTab'));
-const AnalysisTab = lazyTab('AnalysisTab', () => import('../components/admin/tabs/AnalysisTab'));
-const FunnelTab = lazyTab('FunnelTab', () => import('../components/admin/tabs/FunnelTab'));
+// Funil, Curva ABC/coorte e Estudo de vendas (IA) moram como subabas da aba Vendas.
+const SalesHub = lazyTab('SalesHub', () => import('../components/admin/tabs/SalesHub'));
 const SegmentsTab = lazyTab('SegmentsTab', () => import('../components/admin/tabs/SegmentsTab'));
 
 /** Mesmo indicador do `App.jsx`, restrito à área de conteúdo. */
@@ -670,10 +670,8 @@ export function AdminPage() {
         return (
           <ComparisonTab monthlyComparison={monthlyComparison} comparisonDelta={comparisonDelta} />
         );
-      case 'funil':
-        return <FunnelTab />;
-      case 'analise':
-        return <AnalysisTab categories={dashboardData.categories || []} />;
+      case 'vendas':
+        return <SalesHub categories={dashboardData.categories || []} />;
       case 'segmentos':
         return <SegmentsTab />;
       case 'prod-saida':

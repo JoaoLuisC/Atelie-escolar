@@ -1,5 +1,5 @@
 /* GERADO por scripts/build-icon-subset.js — não edite à mão.
- * 115 ícones, extraídos de src/ e index.html (literais + dinâmicos).
+ * 117 ícones, extraídos de src/ e index.html (literais + dinâmicos).
  * Regenerar: npm run icons:subset
  */
 @font-face {
@@ -44,6 +44,7 @@
 .bi-bag-heart::before { content: "\f705"; }
 .bi-bank2::before { content: "\f62f"; }
 .bi-bar-chart::before { content: "\f17e"; }
+.bi-bar-chart-line::before { content: "\f17c"; }
 .bi-bar-chart-line-fill::before { content: "\f17b"; }
 .bi-bar-chart-steps::before { content: "\f17d"; }
 .bi-box-arrow-in-right::before { content: "\f1be"; }
@@ -95,6 +96,7 @@
 .bi-graph-up::before { content: "\f3f2"; }
 .bi-grid-1x2-fill::before { content: "\f3f3"; }
 .bi-grid-3x3::before { content: "\f3fa"; }
+.bi-hand-thumbs-up::before { content: "\f407"; }
 .bi-heart-fill::before { content: "\f415"; }
 .bi-hourglass-split::before { content: "\f41f"; }
 .bi-image::before { content: "\f42a"; }

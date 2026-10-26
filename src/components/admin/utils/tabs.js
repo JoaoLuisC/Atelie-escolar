@@ -7,8 +7,7 @@ export const TAB_LABELS = {
   'prod-saida': 'Desempenho dos produtos',
   faturamento: 'Faturamento',
   comparativo: 'Comparativo mensal',
-  funil: 'Funil de conversão',
-  analise: 'Análise (Curva ABC + Coorte)',
+  vendas: 'Vendas',
   segmentos: 'Segmentos de email',
   usuarios: 'Usuários',
   vitrine: 'Página inicial',
@@ -23,5 +22,5 @@ export const TABS_NEEDING_DASHBOARD = new Set([
   'vitrine',
   'produtos',
   'categorias',
-  'analise',
+  'vendas',
 ]);
