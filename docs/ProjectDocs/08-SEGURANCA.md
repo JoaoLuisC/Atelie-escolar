@@ -299,7 +299,7 @@ A função `public.purge_old_logs()` nasceu na migration [`20260526100000_phase2
 | `abandoned_carts` (não recuperados)                            | 90 dias  | `cleanup_old_abandoned_carts()`, job mensal                         |
 | `rate_limit_hit`                                               | 24 h     | `purge_old_rate_limit_hits()`, job de hora em hora                  |
 
-Jobs `pg_cron`: `purge_old_logs_daily` (diário 03:00 UTC), `cleanup-analytics-events` (mensal), `cleanup-email-logs-monthly` (mensal), `purge-stale-subscribers-monthly` (mensal), `cleanup-abandoned-carts-monthly` (mensal, dia 1 às 03:20 UTC) e `purge-rate-limit-hits-hourly` (`20 * * * *`). Fora da retenção, `release-stale-coupon-reservations` (a cada 15 min) devolve usos de cupom parados — ⚠️ pendente em produção. Se `pg_cron` não estiver habilitado no Supabase (`create extension pg_cron;`), a migration cai num `notice` e o purge precisa ser rodado manualmente:
+Jobs `pg_cron`: `purge_old_logs_daily` (diário 03:00 UTC), `cleanup-analytics-events` (mensal), `cleanup-email-logs-monthly` (mensal), `purge-stale-subscribers-monthly` (mensal), `cleanup-abandoned-carts-monthly` (mensal, dia 1 às 03:20 UTC) e `purge-rate-limit-hits-hourly` (`20 * * * *`). Fora da retenção, `release-stale-coupon-reservations` (a cada 15 min) devolve usos de cupom parados — aplicada em 26/10/2026. Se `pg_cron` não estiver habilitado no Supabase (`create extension pg_cron;`), a migration cai num `notice` e o purge precisa ser rodado manualmente:
 
 ```sql
 select public.purge_old_logs();

@@ -21,9 +21,11 @@ Sem isso o backend consulta colunas que não existem e quebra.
 npm run supabase:db:push     # aplica as migrations pendentes de supabase/migrations/
 ```
 
-> Desde a verificação de 02/09 entraram duas migrations (08/10), **escritas e ainda não
-> aplicadas**: `20261008000000_coupon_usage_release` e `20261008000001_profiles_role_check`. Hoje
-> são 21 no total. Aplicar é o item A do checklist de fechamento, no fim deste documento.
+> Desde a verificação de 02/09 entraram duas migrations (08/10):
+> `20261008000000_coupon_usage_release` e `20261008000001_profiles_role_check`. **Aplicadas em
+> 26/10/2026** — `migration list` mostra as 21 com local = remoto, e o push imprimiu
+> `pg_cron: release-stale-coupon-reservations agendado`. Antes, conferido que `profiles` só tinha
+> o papel `ADMIN`, dentro do novo CHECK.
 
 A lista completa, com o que cada uma faz, é mantida em
 [04-BANCO-DE-DADOS §migrations](./04-BANCO-DE-DADOS.md) — e mora **só lá**. As queries de
@@ -365,11 +367,11 @@ O que falta é operacional. Marque aqui mesmo:
 
 ### A. Fechar a rodada de 05/10 (≈1h)
 
-- [ ] Conferir `check_valid_role` em produção
+- [x] Conferir `check_valid_role` em produção
       (`select pg_get_constraintdef(oid) from pg_constraint where conname = 'check_valid_role';`)
       e ajustar `20261008000001_profiles_role_check.sql` se houver papéis além de
       CUSTOMER/SELLER/ADMIN/MASTER
-- [ ] `npm run supabase:db:push` — aplica `20261008000000_coupon_usage_release` (ACH-03) e
+- [x] `npm run supabase:db:push` — aplica `20261008000000_coupon_usage_release` (ACH-03) e
       `20261008000001_profiles_role_check` (ACH-02); confirmar no SQL Editor
       `select jobname from cron.job where jobname = 'release-stale-coupon-reservations';`
 - [ ] Revalidar no navegador, com a aba visível: título da página de produto (ACH-05) e
