@@ -14,6 +14,7 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
 } = require('../../lib/supabase');
+const { getSellerScope, scopeOrderRows } = require('../../lib/seller-scope');
 
 /**
  * GET /api/admin-cohort?months=12
@@ -75,16 +76,20 @@ module.exports = async function adminCohortHandler(req, res) {
       Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth() - (months + 1), 1),
     );
 
-    const orders = await listTableRows('orders', {
-      select: 'customer_email,completed_at,total_amount',
-      filters: [
-        { column: 'payment_status', value: 'approved' },
-        { column: 'completed_at', operator: 'gte', value: since.toISOString() },
-      ],
-      orderBy: 'completed_at',
-      ascending: true,
-      limit: 20000,
-    });
+    // Professora: só pedidos com material dela, no valor da parte dela.
+    const { orders } = await scopeOrderRows(
+      await listTableRows('orders', {
+        select: 'id,customer_email,completed_at,total_amount',
+        filters: [
+          { column: 'payment_status', value: 'approved' },
+          { column: 'completed_at', operator: 'gte', value: since.toISOString() },
+        ],
+        orderBy: 'completed_at',
+        ascending: true,
+        limit: 20000,
+      }),
+      getSellerScope(req),
+    );
 
     if (orders.length === 0) {
       const empty = {

@@ -16,6 +16,7 @@ const {
 } = require('../../lib/http');
 const { readSettingValue } = require('../../lib/store-content');
 const { buildSalesStudyData, generateInsights, hasEnoughData } = require('../../lib/sales-study');
+const { getSellerScope } = require('../../lib/seller-scope');
 
 const log = createLogger('admin-sales-study');
 
@@ -39,14 +40,20 @@ const AI_MESSAGES = Object.freeze({
   AI_FAILED: 'A IA não conseguiu responder agora. Tente de novo em alguns minutos.',
 });
 
-async function writeStudy(value) {
-  const payload = { setting_key: SETTING_KEY, setting_value: value };
+// Cada professora tem a SUA análise guardada (só com os números dela); a do
+// admin, da plataforma inteira, fica na chave sem sufixo.
+function studyKey(scope) {
+  return scope ? `${SETTING_KEY}:${scope.sellerId}` : SETTING_KEY;
+}
+
+async function writeStudy(value, key) {
+  const payload = { setting_key: key, setting_value: value };
   const existing = await getTableRow('settings', {
     select: 'setting_key',
-    filters: [{ column: 'setting_key', value: SETTING_KEY }],
+    filters: [{ column: 'setting_key', value: key }],
   });
   if (existing) {
-    await updateTable('settings', { setting_key: `eq.${SETTING_KEY}` }, payload);
+    await updateTable('settings', { setting_key: `eq.${key}` }, payload);
     return;
   }
   await insertIntoTable('settings', payload);
@@ -68,9 +75,11 @@ module.exports = async function adminSalesStudyHandler(req, res) {
     }
 
     const aiConfigured = Boolean(String(process.env.GEMINI_API_KEY || '').trim());
+    const scope = getSellerScope(req);
+    const key = studyKey(scope);
 
     if (req.method === 'GET') {
-      const study = await readSettingValue(SETTING_KEY);
+      const study = await readSettingValue(key);
       return ok(res, { study: study || null, aiConfigured });
     }
 
@@ -78,7 +87,7 @@ module.exports = async function adminSalesStudyHandler(req, res) {
     if (gate.blocked) return;
 
     const days = Number.parseInt(req.body?.days, 10) || 30;
-    const data = await buildSalesStudyData({ days });
+    const data = await buildSalesStudyData({ days, scope });
 
     let insights = null;
     let model = null;
@@ -107,12 +116,12 @@ module.exports = async function adminSalesStudyHandler(req, res) {
           : AI_MESSAGES[aiError] || null,
     };
 
-    await writeStudy(study);
+    await writeStudy(study, key);
     await logAdminAction({
       req,
       action: 'generate',
       targetType: 'sales_study',
-      targetId: SETTING_KEY,
+      targetId: key,
       after: { days: study.days, model, aiError },
     });
 

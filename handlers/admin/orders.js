@@ -2,6 +2,7 @@ const { createAdminResourceHandler } = require('../../lib/admin-resource-handler
 const {
   serviceRoleHelpers: { listTableRows },
 } = require('../../lib/supabase');
+const { getSellerScope, scopeItemRows, scopeOrderRows } = require('../../lib/seller-scope');
 
 function sortByDateDesc(items) {
   return [...items].sort((a, b) => {
@@ -11,8 +12,8 @@ function sortByDateDesc(items) {
   });
 }
 
-async function listOrders(statusFilter) {
-  const [ordersRows, itemRows] = await Promise.all([
+async function listOrders(statusFilter, scope = null) {
+  const [rawOrders, rawItems] = await Promise.all([
     listTableRows('orders', {
       select:
         'id,order_code,customer_name,customer_email,total_amount,coupon_code,discount_amount,status,payment_status,created_at,completed_at',
@@ -25,6 +26,10 @@ async function listOrders(statusFilter) {
       ascending: false,
     }),
   ]);
+
+  // Professora: só pedidos com material dela, com o valor da parte dela.
+  const { orders: ordersRows, productIds } = await scopeOrderRows(rawOrders, scope);
+  const itemRows = scopeItemRows(rawItems, productIds);
 
   const itemsByOrder = {};
   for (const row of itemRows) {
@@ -73,7 +78,9 @@ module.exports = createAdminResourceHandler({
   operations: {
     GET: async (req) => ({
       status: 200,
-      body: { orders: await listOrders(String(req.query?.status || '').trim()) },
+      body: {
+        orders: await listOrders(String(req.query?.status || '').trim(), getSellerScope(req)),
+      },
     }),
   },
 });

@@ -6,6 +6,7 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
 } = require('../../lib/supabase');
+const { getSellerScope, scopeOrderRows } = require('../../lib/seller-scope');
 const {
   ERROR_CODES,
   fail,
@@ -79,10 +80,13 @@ module.exports = async function adminFunnelHandler(req, res) {
 
     const { days, sinceIso } = parseRange(req);
 
-    const [events, orders] = await Promise.all([
+    const [events, rawOrders] = await Promise.all([
       loadFunnelEvents(sinceIso),
       loadApprovedOrders(sinceIso),
     ]);
+    // Professora: compras e receita só dos materiais dela. As visitas
+    // (sessões do site) continuam sendo as da loja.
+    const { orders } = await scopeOrderRows(rawOrders, getSellerScope(req));
 
     const sessionsByEvent = bucketBySessionAndEvent(events);
     const purchaseSessions = orders.filter((order) => order.payment_status === 'approved').length;

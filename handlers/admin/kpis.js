@@ -14,6 +14,7 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
 } = require('../../lib/supabase');
+const { getSellerScope, scopeOrderRows } = require('../../lib/seller-scope');
 
 /**
  * GET /api/admin-kpis?window=12  (window em meses)
@@ -77,14 +78,18 @@ module.exports = async function adminKpisHandler(req, res) {
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - windowMonths, 1),
     );
 
-    const orders = await listTableRows('orders', {
-      select: 'customer_email,total_amount,completed_at',
-      filters: [
-        { column: 'payment_status', value: 'approved' },
-        { column: 'completed_at', operator: 'gte', value: windowStart.toISOString() },
-      ],
-      limit: 20000,
-    });
+    // Professora: só pedidos com material dela, no valor da parte dela.
+    const { orders } = await scopeOrderRows(
+      await listTableRows('orders', {
+        select: 'id,customer_email,total_amount,completed_at',
+        filters: [
+          { column: 'payment_status', value: 'approved' },
+          { column: 'completed_at', operator: 'gte', value: windowStart.toISOString() },
+        ],
+        limit: 20000,
+      }),
+      getSellerScope(req),
+    );
 
     let revenueMTD = 0;
     let revenuePrev = 0;

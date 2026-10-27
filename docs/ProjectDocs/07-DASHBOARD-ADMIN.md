@@ -38,6 +38,13 @@ Usuários, Segurança (`adminConfig`), `product-seller` e `store-owner` continua
 `ensureAdminSession`. Trocar a dona vale a partir do próximo login dela. Produto criado pela dona
 já nasce com o `seller_id` dela.
 
+**Só os dados dela.** No painel da loja, a professora vê apenas os pedidos que têm material
+dela, com o valor só da parte dela (proporcional em pedido misto ou com cupom), e como clientes só
+quem comprou dela; produtos, Curva ABC, coorte, KPIs, funil e Estudo de vendas seguem o mesmo
+recorte (`lib/seller-scope.js`, aplicado no servidor). Produto de outro professor responde 404.
+O Estudo de vendas dela é guardado à parte (`settings.salesStudy:<id>`). As visitas do funil e os
+segmentos da newsletter continuam sendo os da loja inteira. O admin vê a plataforma toda.
+
 **Minha conta** (`AccountTab`, `/api/teacher/account`): nome editável, e-mail, tipo de conta,
 forma de login e data de criação; a senha se troca por link no e-mail, que volta ao `/admin`.
 

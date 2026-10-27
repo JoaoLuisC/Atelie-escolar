@@ -1,5 +1,11 @@
 const { ensureStoreSession } = require('../../lib/admin-session');
 const {
+  getSellerScope,
+  scopeCustomerRows,
+  scopeItemRows,
+  scopeOrderRows,
+} = require('../../lib/seller-scope');
+const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
 } = require('../../lib/supabase');
@@ -134,14 +140,14 @@ function buildSummary(payload) {
   };
 }
 
-async function loadDashboard(truncated) {
+async function loadDashboard(truncated, scope = null) {
   const [
-    productsRows,
+    rawProducts,
     categoriesRows,
-    profilesRows,
-    ordersRows,
-    orderItemsRows,
-    downloadLogsRows,
+    rawProfiles,
+    rawOrders,
+    rawOrderItems,
+    rawDownloadLogs,
     settingsRows,
   ] = await Promise.all([
     listCapped(
@@ -176,7 +182,7 @@ async function loadDashboard(truncated) {
       'orders',
       {
         select:
-          'id,order_code,customer_name,customer_email,total_amount,status,payment_status,created_at,completed_at',
+          'id,order_code,customer_id,customer_name,customer_email,total_amount,status,payment_status,created_at,completed_at',
         orderBy: 'created_at',
         ascending: false,
       },
@@ -208,6 +214,15 @@ async function loadDashboard(truncated) {
       truncated,
     ),
   ]);
+
+  // Professora: só os materiais, pedidos (com o valor da parte dela) e
+  // clientes dela (lib/seller-scope.js). Admin: tudo.
+  const { orders: ordersRows, productIds } = await scopeOrderRows(rawOrders, scope);
+  const ownsProduct = (id) => !productIds || productIds.has(String(id));
+  const productsRows = rawProducts.filter((row) => ownsProduct(row.id));
+  const orderItemsRows = scopeItemRows(rawOrderItems, productIds);
+  const downloadLogsRows = rawDownloadLogs.filter((row) => ownsProduct(row.product_id));
+  const profilesRows = scope ? scopeCustomerRows(rawProfiles, ordersRows) : rawProfiles;
 
   const categoryById = new Map(
     categoriesRows.map((category) => [String(category.id), category.name]),
@@ -335,7 +350,7 @@ module.exports = async function adminDashboardHandler(req, res) {
     }
 
     const truncated = [];
-    const payload = await loadDashboard(truncated);
+    const payload = await loadDashboard(truncated, getSellerScope(req));
     const summary = buildSummary(payload);
 
     // Regra E4: relatório administrativo é resposta por usuário, nunca em

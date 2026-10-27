@@ -3,6 +3,7 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
 } = require('../../lib/supabase');
+const { getSellerScope, scopeOrderRows } = require('../../lib/seller-scope');
 const { buildAbcCurve } = require('../../lib/abc-classification');
 const { createLogger } = require('../../lib/logger');
 
@@ -104,14 +105,18 @@ module.exports = async function adminAbcCustomersHandler(req, res) {
     const query = parseQuery(req);
     const includePII = req.query?.includePII === '1'; // só para export interno
 
-    const orders = await listTableRows('orders', {
-      select: 'customer_email,customer_name,total_amount,completed_at',
-      filters: [
-        { column: 'payment_status', value: 'approved' },
-        { column: 'completed_at', operator: 'gte', value: query.sinceIso },
-      ],
-      limit: 10000,
-    });
+    // Professora: só pedidos com material dela, no valor da parte dela.
+    const { orders } = await scopeOrderRows(
+      await listTableRows('orders', {
+        select: 'id,customer_email,customer_name,total_amount,completed_at',
+        filters: [
+          { column: 'payment_status', value: 'approved' },
+          { column: 'completed_at', operator: 'gte', value: query.sinceIso },
+        ],
+        limit: 10000,
+      }),
+      getSellerScope(req),
+    );
 
     // Agrega por email
     const byEmail = new Map();

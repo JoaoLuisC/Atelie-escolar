@@ -3,6 +3,7 @@ const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
 } = require('../../lib/supabase');
+const { getSellerScope, loadSellerProductIds, scopeItemRows } = require('../../lib/seller-scope');
 const { buildAbcCurve } = require('../../lib/abc-classification');
 const { createLogger } = require('../../lib/logger');
 
@@ -121,7 +122,14 @@ module.exports = async function adminAbcProductsHandler(req, res) {
       return ok(res, empty);
     }
 
-    const [items, categoryMap] = await Promise.all([loadOrderItems(orderIds), loadCategoryMap()]);
+    const scope = getSellerScope(req);
+    const [rawItems, categoryMap, ownIds] = await Promise.all([
+      loadOrderItems(orderIds),
+      loadCategoryMap(),
+      scope ? loadSellerProductIds(scope.sellerId) : null,
+    ]);
+    // Professora: a curva só com os materiais dela.
+    const items = scopeItemRows(rawItems, ownIds);
 
     // Agrega por product_id
     const byProduct = new Map();

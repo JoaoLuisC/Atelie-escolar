@@ -12,6 +12,7 @@ const {
 } = require('../../validation/admin.schemas');
 const { validateProductMedia } = require('../../lib/product-media');
 const { getStaffSession } = require('../../lib/admin-session');
+const { getSellerScope } = require('../../lib/seller-scope');
 
 /** Erro de validação no formato que a factory despacha por `fail()`. */
 function invalid(message) {
@@ -173,12 +174,15 @@ function toProductPayload(body = {}, existing = {}) {
  * resumida do /admin/dashboard (sem galeria, preço original, tipo, FAQ,
  * benefícios e depoimentos) e o PUT regravava esses campos vazios.
  */
-async function listProducts(id = null) {
+async function listProducts(id = null, scope = null) {
+  const filters = id ? [{ column: 'id', value: id }] : [];
+  // Professora: só os materiais dela.
+  if (scope) filters.push({ column: 'seller_id', value: scope.sellerId });
   const [productsRows, categoriesRows] = await Promise.all([
     listTableRows('products', {
       select:
         'id,slug,name,description,price,original_price,image_url,images,videos,download_url,category_id,active,featured,tags,product_type,is_kit,page_size,paper_type,kit_items,panel_sizes,faq,reviews,benefits,created_at,updated_at',
-      filters: id ? [{ column: 'id', value: id }] : [],
+      filters,
       orderBy: 'created_at',
       ascending: false,
     }),
@@ -338,6 +342,32 @@ async function deleteProduct(rawId) {
   return { status: 200, body: {} };
 }
 
+/**
+ * Professora só lê/edita/apaga produto com o `seller_id` dela; o de outro
+ * professor responde 404, como se não existisse. Admin: sem restrição.
+ */
+async function onlyOwnProduct(req, rawId, operation) {
+  const scope = getSellerScope(req);
+  if (!scope) return operation();
+  const parsed = parse(uuidId, rawId);
+  const row = parsed.ok
+    ? await getTableRow('products', {
+        select: 'id,seller_id',
+        filters: [{ column: 'id', value: parsed.data }],
+      })
+    : null;
+  if (!row || String(row.seller_id || '') !== scope.sellerId) {
+    return {
+      error: {
+        status: 404,
+        code: ERROR_CODES.PRODUCT_NOT_FOUND,
+        message: 'Produto não encontrado',
+      },
+    };
+  }
+  return operation();
+}
+
 module.exports = createAdminResourceHandler({
   storeResource: true,
   targetType: 'product',
@@ -347,12 +377,15 @@ module.exports = createAdminResourceHandler({
   operations: {
     GET: async (req) => {
       const id = String(req.query?.id || '').trim();
-      if (id) return getProduct(id);
-      return { status: 200, body: { products: await listProducts() } };
+      if (id) return onlyOwnProduct(req, id, () => getProduct(id));
+      return { status: 200, body: { products: await listProducts(null, getSellerScope(req)) } };
     },
     POST: (req) => createProduct(req.body || {}, req),
-    PUT: (req) => updateProduct(req.body || {}),
-    PATCH: (req) => patchProduct(req.body || {}),
-    DELETE: (req) => deleteProduct(String(req.query?.id || req.body?.id || '').trim()),
+    PUT: (req) => onlyOwnProduct(req, req.body?.id, () => updateProduct(req.body || {})),
+    PATCH: (req) => onlyOwnProduct(req, req.body?.id, () => patchProduct(req.body || {})),
+    DELETE: (req) => {
+      const id = String(req.query?.id || req.body?.id || '').trim();
+      return onlyOwnProduct(req, id, () => deleteProduct(id));
+    },
   },
 });

@@ -31,6 +31,7 @@ function arrange({ orders = [], settings = [] } = {}) {
   installModuleMock('../../lib/admin-session', {
     ensureAdminSession: () => true,
     ensureStoreSession: () => true,
+    getStaffSession: () => ({ role: 'admin', email: 'admin@teste.com' }),
   });
   logAdminAction = vi.fn(async () => {});
   installModuleMock('../../lib/admin-audit', { logAdminAction });
