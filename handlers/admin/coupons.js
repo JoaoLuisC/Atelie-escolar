@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════
-// CRUD de cupons pelo painel admin. Antes (pendência §3.4) os cupons só
+// CRUD de cupons pelo painel admin. Antes os cupons só
 // existiam via SQL bruto. A validação no checkout continua em
 // /api/validate-coupon (service role); este endpoint é a gestão.
 // applies_to (restrição por produto/categoria) é preservado mas ainda

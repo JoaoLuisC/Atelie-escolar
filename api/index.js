@@ -3,7 +3,7 @@
 //
 // POR QUE UMA SÓ
 // O plano Hobby publica no máximo 12 funções por deployment e o projeto tem
-// 44 handlers — o primeiro deploy real morreu exatamente nesse teto. Os
+// dezenas de handlers — o primeiro deploy real morreu exatamente nesse teto. Os
 // handlers moraram para `handlers/` (fora de `api/`, senão a Vercel os
 // publicaria como função de novo) e este arquivo serve todos eles através do
 // mesmo app Express que o `server.js` usa em desenvolvimento. Ver
@@ -27,7 +27,7 @@ const RUNTIME_ENV = String(process.env.APP_ENV || process.env.NODE_ENV || 'produ
 
 // Fora do handler de propósito: em serverless o módulo é avaliado uma vez por
 // instância e reaproveitado entre invocações. Montar o app por requisição
-// pagaria o custo de `require` das 44 rotas em todo request.
+// pagaria o custo de `require` de todas as rotas em todo request.
 const app = createApiApp({ runtimeEnv: RUNTIME_ENV });
 app.use(errorHandler);
 

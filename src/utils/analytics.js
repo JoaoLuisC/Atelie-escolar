@@ -126,7 +126,7 @@ function postEventToBackend(eventName, payload) {
     // justamente para sobreviver ao descarregamento da página — o
     // `AbortController` de 15s do `apiRequest` cancelaria o que se quer que
     // sobreviva. Não há resposta a normalizar; o `.catch` vazio é o contrato.
-    // Ver item P5.1 do docs/PADRONIZACAO-CORRECOES.md.
+    // Exceção registrada à regra C1 do CONTRIBUTING.
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

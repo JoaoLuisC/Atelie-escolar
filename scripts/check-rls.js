@@ -42,11 +42,10 @@
 // presente, a comparação acima fica disponível — sem ela, tabela vazia vira
 // inconclusiva em vez de aprovada.
 //
-// O QUE ELE **NÃO** COBRE, e por que o checklist manual continua necessário:
+// O QUE ELE **NÃO** COBRE:
 // existência das funções de purga, jobs do `pg_cron`, triggers de
 // imutabilidade do audit log e índices. Nada disso é observável pelo
-// PostgREST. As consultas para esses estão em
-// docs/reviews/CORRECOES-2026-09-01.md §2 e rodam no SQL Editor.
+// PostgREST. Esses objetos são conferidos pelo `check-schema-drift.js`.
 // ════════════════════════════════════════════════════════════════════
 
 const fs = require('node:fs');

@@ -389,7 +389,7 @@ async function refreshApprovedOrderData(order, orderId, req) {
         log.error('falha_ao_provisionar_conta_de_cliente', { reason: provisionErr.message });
       }
 
-      // Confirmação do pedido (13-ROADMAP §3.12): mesma porta do webhook, para
+      // Confirmação do pedido: mesma porta do webhook, para
       // quem foi aprovado pelo polling sem o webhook chegar. Best-effort.
       await sendOrderConfirmation({
         order,

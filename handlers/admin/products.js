@@ -24,7 +24,7 @@ function invalid(message) {
 // regra (F2), e slug divergente entre criar produto e criar categoria produz
 // categoria duplicada no menu da loja.
 
-/** Links de imagem/vídeo/arquivo do payload já montado (13-ROADMAP §3.11). */
+/** Links de imagem/vídeo/arquivo do payload já montado. */
 function mediaProblem(payload) {
   return validateProductMedia({
     images: payload.images,

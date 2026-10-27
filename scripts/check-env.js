@@ -19,7 +19,7 @@
 //     Variável cadastrada em Settings → Environment Variables é exposta ao
 //     build e ao runtime; um "secret" legado mapeado por um bloco `env` no
 //     vercel.json seria RUNTIME (este repo não tem mais esse bloco — ver
-//     12-DEPLOY-OPERACAO §1.2). Se um deploy passar a falhar listando uma
+//     docs/03-SETUP-E-DEPLOY.md §2.1). Se um deploy passar a falhar listando uma
 //     variável que você sabe que existe, é este o caso — recadastre-a em
 //     Settings para o ambiente correspondente, não desligue o gate.
 //     Em PREVIEW a lista aplicada é só a de escopo 'core' (ver VARS), então
@@ -116,7 +116,7 @@ function resolveEnv(cliEnv) {
 //    (grep de process.env em api/, lib/, routes/, services/ e de
 //    import.meta.env em src/), cruzada com server.js
 //    (REQUIRED_PRODUCTION_SECRETS), .env.example e
-//    docs/ProjectDocs/12-DEPLOY-OPERACAO.md §1.2.
+//    docs/03-SETUP-E-DEPLOY.md §2.1.
 // ────────────────────────────────────────────────────────────────────
 const VARS = [
   // — Supabase (backend, service role) —
@@ -204,7 +204,7 @@ const VARS = [
   {
     name: 'SUPABASE_STORAGE_BUCKET',
     scope: 'advisory',
-    why: 'default "public" em lib/supabase.js',
+    why: 'bucket extra aceito nos links assinados (opcional)',
   },
   { name: 'VITE_GA4_ID', scope: 'advisory', why: 'vazio desliga a medição GA4' },
   { name: 'VITE_META_PIXEL_ID', scope: 'advisory', why: 'vazio desliga o Meta Pixel' },

@@ -9,9 +9,8 @@
 //   • este aqui usa a CLI do Supabase e responde "os OBJETOS existem" —
 //     funções, triggers, policies, grants de coluna, RLS ligada.
 //
-// Juntos fecham o §2 de docs/reviews/CORRECOES-2026-09-01.md, que até então
-// era uma lista de SQL para colar à mão no editor. Lista que se cola à mão é
-// lista que ninguém roda duas vezes.
+// Juntos substituem a lista de SQL que antes se colava à mão no editor.
+// Lista que se cola à mão é lista que ninguém roda duas vezes.
 //
 // PRÉ-REQUISITOS (e o script diz qual falta, em vez de quebrar feio):
 //   • `supabase link` já feito — confirmado por supabase/.temp/project-ref;

@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ════════════════════════════════════════════════════════════════════
-// Validação de fluxos de 2026-10-05 (docs/validacao/RELATORIO-FLUXOS-2026-10-05.md).
+// Validação de fluxos de 2026-10-05 no navegador (relatório no histórico do git).
 //
 // ACH-02 — trocar papel dava 500: o handler gravava 'seller' cru e a
 //          constraint `check_valid_role` do banco só aceita MAIÚSCULAS.

@@ -1,72 +1,51 @@
 # Padrões de código — Ateliê da Escola
 
-Convenções de engenharia deste repositório. **29 regras**, agrupadas em 6 áreas.
+Convenções de engenharia deste repositório: **29 regras** em 6 áreas.
 
-Cada regra existe porque uma divergência foi **medida no código**, não por preferência estética.
-Toda regra traz a evidência que a motivou, para que dê para discordar com dados na mão.
+Cada regra existe porque uma divergência foi **medida no código**, não por preferência estética. A
+seção "O que motivou" de cada uma guarda essa divergência, no estado em que o repositório estava
+antes da regra — é a justificativa, não uma lista de pendências, e é o que permite discordar da
+regra com dados na mão.
 
-> **Como usar em review**: cite o identificador da regra (`A1`, `E3`…) no comentário do PR.
+> **Em review**: cite o identificador da regra (`A1`, `E3`…) no comentário do PR. O código também
+> cita as regras pelo identificador ("regra E1"), então eles não mudam de sentido.
 > Se a regra estiver errada, o caminho é editar este arquivo — não abrir exceção no código.
 
 ---
 
-## Estado
+## O que segura as regras
 
-As 29 regras estão **aplicadas**. Duas rodadas de padronização (13/08 e 18/08 de 2026), ambas
-medidas no código e não estimadas, fecharam a dívida:
+As 29 regras estão aplicadas. O que impede regressão é gate executável, não disciplina: todo número
+que já tinha sido declarado "0" e voltou a subir era contagem, não teste.
 
-| Medida                                   |      Antes |                  Hoje |
-| ---------------------------------------- | ---------: | --------------------: |
-| Arquivos que reprovam `prettier --check` |        189 |                 **0** |
-| Sites que devolvem `error` como string   |         58 |                 **0** |
-| Endpoints públicos sem rate limit        |          5 |                 **0** |
-| Chamadas de `console.*` no backend       |         79 |                 **0** |
-| Caminhos de rota literais no JSX         |         50 |                 **0** |
-| Mecanismos de rate limit concorrentes    |          2 |                 **1** |
-| Módulos de `lib/` sem suíte              | 13 (de 21) |         **0** (de 31) |
-| Testes                                   |        274 |              **1128** |
-| Cobertura (statements)                   | não rodava | **61,97%** (piso 48%) |
-| Avisos de lint                           |         30 |      **12** (catraca) |
-| Caminho crítico do bundle (gzip)         |   157,8 KB |          **100,5 KB** |
+| Gate                                             | Regra  | O que barra                                                                   |
+| ------------------------------------------------ | ------ | ----------------------------------------------------------------------------- |
+| `npm run format:check`                           | D1     | Arquivo fora do Prettier                                                      |
+| `npm run lint` (`--max-warnings=12`)             | D5     | Aviso de lint novo (catraca)                                                  |
+| Thresholds de cobertura em `vite.config.js`      | D2     | Cobertura abaixo do piso (statements 48, branches 39, functions 41, lines 50) |
+| `handlers/__tests__/envelope-contract.test.js`   | A1, A2 | `error` como string, erro sem `code`                                          |
+| `handlers/__tests__/rate-limit-coverage.test.js` | E1     | Rota montada sem contador, guarda de sessão ou dispensa nomeada               |
+| `routes/__tests__/api-route-parity.test.js`      | A6, E1 | Rota que não resolve para o módulo de `handlers/` esperado                    |
+| `scripts/__tests__/icon-subset.test.js`          | —      | Subconjunto de ícones desatualizado                                           |
+| `.husky/pre-commit` → `lint-staged`              | D1, D7 | `eslint --fix` e `prettier --write` só no que está em stage                   |
 
-Remedido em 16/10/2026: testes, cobertura, avisos de lint e módulos de `lib/`. As demais linhas
-são as de 18/08 e seguem guardadas por gate executável (abaixo) ou pela catraca.
+`npm run check` roda, nesta ordem, `check:env`, `format:check`, `lint`, `test`, `test:coverage` e
+`build` — a mesma lista do `.github/workflows/test.yml`, que acrescenta `npm audit`.
 
-Duas coisas dessa tabela valem para quem chega:
-
-**`D5` está em catraca, não em zero.** Sobram **12** avisos, todos diagnósticos do React Compiler:
-11 de `setState` dentro de efeito (que exigem repensar o carregamento de dados componente a
-componente) e 1 de biblioteca incompatível em `CheckoutPage.jsx`, que é o `react-hook-form` e não
-tem conserto do nosso lado. `npm run lint` roda com `--max-warnings=12`, então o número não pode
-crescer — e ao corrigir um aviso, **baixe o teto no `package.json` no mesmo commit**.
-
-> Em 16/10/2026 a medição achou 12 avisos com o teto ainda em 13: um `setState` saiu sem que o
-> teto descesse junto. O teto foi baixado para 12 na revisão de documentação dessa data.
-
-> Os 4 que saíram em 01/09/2026 eram os baratos, e ficam registrados porque a diferença entre eles
-> e os 12 restantes é o que explica por que a catraca não fecha em zero de uma vez: `resetForm`
-> declarado depois do efeito que o chama (`CategoryWizard`, `ProductWizard`) era reordenação pura;
-> `Date.now()` no render de `SegmentsTab` também _afirmava_ uma hora de geração que o backend não
-> mandou; e o `let cumulative` mutado dentro do `map` de `DashboardTab` virou soma de prefixo, com
-> o mesmo resultado por fatia. Nenhum deles mudou comportamento. Os 12 de `setState` mudam.
-
-**O que segura a regra é o gate, não a disciplina.** Todo número que já tinha sido declarado "0" e
-voltou a subir tinha a mesma coisa em comum: era contagem, não teste. Os que hoje têm gate
-executável não regridem em silêncio — `handlers/__tests__/envelope-contract.test.js`,
-`handlers/__tests__/rate-limit-coverage.test.js`, `routes/__tests__/api-route-parity.test.js` e
-`scripts/__tests__/icon-subset.test.js` falham apontando arquivo e linha.
+**`D5` está em catraca, não em zero.** Sobram 12 avisos, todos do React Compiler: 11 de `setState`
+dentro de efeito (exigem repensar o carregamento de dados componente a componente) e 1 de
+biblioteca incompatível em `CheckoutPage.jsx` (o `react-hook-form`, sem conserto do nosso lado).
+Ao corrigir um aviso, **baixe o teto no `package.json` no mesmo commit**.
 
 ### Quando a medição contradiz a regra, quem muda é a regra
 
-Cinco regras foram corrigidas ao serem aplicadas, e cada uma traz a correção anotada em bloco de
-citação na própria regra. **É o mecanismo, não a exceção**: abrir exceção no código deixaria este
-documento descrevendo um repositório que não existe.
+Cinco regras foram corrigidas ao serem aplicadas (A1, A3, C3, C6, E3), e cada uma traz a correção
+em bloco de citação. É o mecanismo, não a exceção: abrir exceção no código deixaria este documento
+descrevendo um repositório que não existe.
 
-Duas exceções permanentes estão escritas: `A6` mantém uma rota de compatibilidade, e `B1` vale
-dali para frente — endpoint novo entra com schema, os antigos seguem validando à mão.
-
-O histórico completo item a item está nos retratos de
-[docs/reviews/](./docs/reviews/).
+Exceções permanentes escritas: `A6` mantém uma rota de compatibilidade, `B1` vale dali para frente
+(endpoint novo entra com schema), `C1` admite `fetch` cru na telemetria e `C4` mantém
+`src/components/admin/utils/`. **Exceção escrita é padrão; exceção tácita é divergência.**
 
 ---
 
@@ -81,14 +60,15 @@ O histórico completo item a item está nos retratos de
 | [E](#e--dinheiro-e-runtime)    | Dinheiro e runtime    | E1–E4  |
 | [F](#f--log-e-documentação)    | Log e documentação    | F1–F3  |
 
-Prioridades: **P0** risco aberto agora · **P1** dívida que cresce · **P2** consistência.
+Prioridades: **P0** risco aberto · **P1** dívida que cresce · **P2** consistência.
 
 ---
 
 ## A · Contrato HTTP
 
-Os 44 handlers de `api/` foram escritos em momentos diferentes e cada um inventou seu próprio
-contrato. Quem paga a conta é o frontend, que hoje carrega código só para reconciliar as diferenças.
+Os handlers foram escritos em momentos diferentes e cada um tinha inventado o próprio contrato.
+Quem pagava a conta era o frontend, que carregava código só para reconciliar as diferenças. A
+referência de cada endpoint está em [docs/09-API.md](./docs/09-API.md).
 
 ### A1 · Um envelope de resposta só, para toda a API — `P0`
 
@@ -102,43 +82,28 @@ contrato. Quem paga a conta é o frontend, que hoje carrega código só para rec
 { success: false, error: { code: 'COUPON_NOT_FOUND', message: 'Cupom inválido.' } }
 ```
 
-Sem exceção, sem variante "só neste endpoint". Vale para respostas JSON; `sitemap.xml` (XML),
-`download` (redirect 302) e `track-event` (204 sem corpo) não têm corpo JSON e ficam de fora.
+Sem variante "só neste endpoint". Ficam de fora só as respostas sem corpo JSON: `sitemap.xml`
+(XML), `download` (302), `track-event` e `abandoned-cart` (204). Responda com `ok()` e `fail()` de
+`lib/http.js`.
 
-> **Nota de decisão (13/08/2026).** A primeira redação desta regra aninhava o sucesso sob
-> `data`. Foi trocada por payload plano: o ganho de `{ success, data }` sobre `{ success, ...payload }`
-> é pequeno, e o custo era reescrever todo consumidor do frontend e ~100 asserções de teste no
-> caminho do checkout. A dor real medida estava no **erro** — o shim de `parseJson` e o
-> `includes('sessao admin')` —, e é lá que a padronização foi aplicada por inteiro.
+> **Correção da regra.** A primeira redação aninhava o sucesso sob `data`. Foi trocada por payload
+> plano: o ganho de `{ success, data }` sobre `{ success, ...payload }` é pequeno, e o custo era
+> reescrever todo consumidor do frontend e ~100 asserções de teste no caminho do checkout. A dor
+> real estava no **erro**, e é lá que a padronização foi aplicada por inteiro.
 
-**O que motivou.** Três formatos convivem:
-
-| Formato                                        | Ocorrências                      |
-| ---------------------------------------------- | -------------------------------- |
-| `{ success: false, error: 'texto' }`           | 32 handlers                      |
-| `{ error: 'texto' }`                           | 9 handlers                       |
-| `{ success: false, error: { message, code } }` | `middleware/error.middleware.js` |
-
-O custo já está visível: `src/utils/api.js` tem um _shim_ em `parseJson` que detecta `error` como
-objeto e achata para string, existindo **apenas** para o cliente sobreviver aos dois formatos.
-Quando A1 estiver aplicada, esse shim sai — é a prova de que a migração terminou.
+**O que motivou.** Três formatos conviviam: `{ success: false, error: 'texto' }` em 32 handlers,
+`{ error: 'texto' }` em 9 e `{ success: false, error: { message, code } }` no middleware de erro. O
+`parseJson` de `src/utils/api.js` tinha um _shim_ que achatava `error` objeto para string, só para
+o cliente sobreviver aos dois formatos.
 
 ### A2 · Todo erro carrega um `code` estável em SCREAMING_SNAKE — `P1`
 
-**Regra.** A mensagem é para humano e pode mudar de redação a qualquer momento. O `code` é o
-contrato de máquina: é nele que o frontend ramifica.
+**Regra.** A mensagem é para humano e pode mudar de redação. O `code` (catálogo `ERROR_CODES` em
+`lib/http.js`) é o contrato de máquina: é nele que o frontend ramifica.
 
-**O que motivou.** Só `handlers/validate-coupon.js` devolve `code`, e em minúsculo (`not_found`,
-`not_eligible`). Nos outros o frontend é forçado a comparar texto em português —
-`src/components/admin/utils/format.js` decide se a sessão expirou com:
-
-```js
-String(error?.message || '')
-  .toLowerCase()
-  .includes('sessao admin');
-```
-
-Trocar uma palavra da mensagem quebra o fluxo de re-login em silêncio, sem teste que pegue.
+**O que motivou.** Só `validate-coupon` devolvia `code`, e em minúsculo. O painel decidia se a
+sessão tinha expirado com `message.toLowerCase().includes('sessao admin')` — trocar uma palavra da
+mensagem quebrava o re-login em silêncio.
 
 ### A3 · Ordem fixa no topo de todo handler — `P1`
 
@@ -146,148 +111,109 @@ Trocar uma palavra da mensagem quebra o fluxo de re-login em silêncio, sem test
 validação de schema → `try`.
 
 Ordem fixa transforma "esqueceram o rate limit" num bloco visivelmente ausente, em vez de um
-detalhe enterrado no meio do arquivo.
+detalhe enterrado no meio do arquivo. `handlers/admin/kpis.js` é o modelo a copiar.
 
-**O que motivou.** `handlers/admin-kpis.js` segue exatamente essa ordem em cinco linhas — é o modelo
-a copiar. `handlers/products.js` não tem nem CORS nem rate limit. A cobertura de CORS administrativo é
-boa (19 arquivos chamam `setAdminCorsHeaders` para 18 handlers `admin-*`); a de rate limit não (ver E1).
-
-> **Correção da regra (18/08/2026).** A primeira redação abria a ordem com "CORS", sem
-> qualificação, e a remedição mediu **26 de 44 handlers sem tocar em CORS**. A regra estava
-> errada, não o código: em produção o front e a API são **same-origin** na Vercel, e em
-> desenvolvimento o `cors` do Express resolve. Os únicos que precisam emitir CORS são os
-> **administrativos**, por causa do `credentials: 'include'` do painel — e esses 18 já emitiam.
->
-> Aplicar `setPublicCorsHeaders` nos 26 restantes teria acrescentado cabeçalho que nenhum
-> navegador consome, em 26 arquivos, para fazer a regra valer literalmente. Regra que ninguém
-> segue e nada quebra é a que ensina que as outras 24 também são opcionais — mas o conserto é
-> **corrigir a regra**, não fingir que o código a obedece.
->
-> Junto, `setAdminCorsHeaders` saiu de `lib/admin-session.js` — um módulo de **sessão** — para
-> `lib/http.js`, onde vivem os outros helpers de resposta. Ver
-> [ADR 0006](./docs/adr/0006-cors-so-quando-cross-origin.md).
+> **Correção da regra.** A primeira redação abria com "CORS", sem qualificação, e a medição achou
+> 26 de 44 handlers sem CORS. A regra estava errada, não o código: front e API são **same-origin**
+> na Vercel, e em dev o `cors` do Express resolve. Só os do painel emitem CORS
+> (`setAdminCorsHeaders`, em `lib/http.js`), por causa do `credentials: 'include'`. Ver ADR 0006
+> em [docs/02-ARQUITETURA.md](./docs/02-ARQUITETURA.md).
 
 ### A4 · Preflight `OPTIONS` sempre responde 204 — `P2`
 
 **Regra.** 204 é a resposta correta para um preflight: não há corpo a devolver.
 
-**O que motivou.** 23 handlers respondem `204` e 17 respondem `200`.
+**O que motivou.** 23 handlers respondiam `204` e 17 respondiam `200`.
 
 ### A5 · Nome do handler = nome do arquivo em camelCase + `Handler` — `P2`
 
-**Regra.** `handlers/admin-kpis.js` exporta `adminKpisHandler`.
+**Regra.** Com os handlers em subpastas, o nome inclui a pasta: `handlers/admin/kpis.js` exporta
+`adminKpisHandler`, `handlers/teacher/account.js` exporta `teacherAccountHandler`.
 
-O nome da função é o que aparece no stack trace da Vercel. `handler` genérico transforma oito
-arquivos em oito frames indistinguíveis.
+O nome da função é o que aparece no stack trace. `handler` genérico transforma oito arquivos em
+oito frames indistinguíveis.
 
-**O que motivou.** 36 arquivos seguem a convenção. 8 exportam `handler` puro:
-`handlers/admin-upload-url.js`, `handlers/notfound.js` e os seis de `api/auth/customer/`.
+**O que motivou.** 8 arquivos exportavam `handler` puro (o de upload, o de 404 e os seis de
+autenticação de cliente).
+
+> **Pendente.** Os seis de `handlers/auth/customer/` exportam só o nome do arquivo
+> (`loginHandler`, `sessionHandler`…), sem o prefixo da pasta.
 
 ### A6 · Uma convenção de URL, não duas — `P2`
 
-**Regra.** Escolher entre recurso aninhado (`/api/admin/orders`) e plano em kebab-case
-(`/api/admin-orders`) e aplicar a escolha ao produto inteiro.
-
+**Regra.** Recurso aninhado: `/api/admin/orders`, `/api/auth/customer/login`, `/api/teacher/account`.
 Mudança de URL é _breaking_: fazer via rota de compatibilidade, sem pressa.
 
-**O que motivou.** 18 endpoints administrativos eram planos (`handlers/admin-orders.js`) enquanto os 6
-de autenticação de cliente eram aninhados (`handlers/auth/customer/login.js`) — o mesmo produto expondo
-dois estilos de API.
+**O que motivou.** 18 endpoints do painel eram planos (`/api/admin-orders`) enquanto os de
+autenticação de cliente eram aninhados — o mesmo produto expondo dois estilos de API.
 
-> **Aplicada.** Os 18 viraram `api/admin/<recurso>.js`; a convenção do produto é a aninhada. As
-> URLs planas seguem atendidas por um rewrite em [`vercel.json`](./vercel.json), que existe só
-> para a janela de deploy — um painel já aberto no navegador continua chamando a URL antiga por
-> alguns minutos. Sem consumidor externo, pode ser removido após um ciclo de deploy.
->
-> **Depois (660fe74).** Os handlers saíram de `api/` para `handlers/` quando tudo passou a ser
-> servido por uma função só; os do painel moram em `handlers/admin/<recurso>.js`. A convenção de
-> URL não mudou, e o rewrite `/api/admin-(.*)` continua no `vercel.json`.
+> **Exceção.** O `vercel.json` ainda reescreve `/api/admin-(.*)` para `/api/admin/$1`. Existia só
+> para a janela de deploy (um painel aberto continuava chamando a URL antiga); sem consumidor
+> externo, pode sair.
 
 ---
 
 ## B · Validação e erros
 
-O projeto tem duas abstrações de validação e tratamento de erro instaladas e **nenhuma das duas
-está em uso**. Enquanto isso, cada handler improvisa com coerção manual.
-
 ### B1 · Toda entrada passa por um schema declarativo na borda — `P0`
 
-**Regra.** `body`, `query` e `params` são validados por um schema antes da primeira linha de lógica.
-O `zod` já está no `package.json`; falta usá-lo.
+**Regra.** `body`, `query` e `params` são validados por um schema `zod` de `validation/` antes da
+primeira linha de lógica (`parse`/`parseOrFail` de `validation/index.js`). Endpoint novo entra com
+schema; os antigos que ainda validam à mão migram quando forem tocados. Dinheiro primeiro.
 
-**O que motivou.** `zod@^4.3.6` é dependência de produção com **zero** imports em todo o repositório.
-A pasta `validation/` que hospedava os schemas não existe mais, mas ainda é referenciada em **três**
-configurações:
-
-| Arquivo            | Referência                                                |
-| ------------------ | --------------------------------------------------------- |
-| `package.json`     | script `format` / `format:check`                          |
-| `eslint.config.js` | `NODE_FILES`                                              |
-| `vite.config.js`   | `coverage.include` — mede cobertura de um diretório vazio |
-
-`handlers/create-payment.js` documenta o buraco na própria linha 15: _"os `max()` do zod em
-`validation/payment.schemas.js` NUNCA valeram neste caminho"_.
-
-Ordem sugerida ao recriar `validation/`: os endpoints de dinheiro primeiro — `create-payment`,
-`validate-coupon`, `webhook`.
+**O que motivou.** O `zod` era dependência de produção com zero imports, e a pasta `validation/`
+tinha sido apagada mas continuava referenciada em três configurações. `create-payment` registrava
+o buraco: os `max()` do schema antigo nunca valeram naquele caminho.
 
 ### B2 · Coerção defensiva não é validação — `P1`
 
 **Regra.** Depois do schema (B1), o handler confia no tipo. `Number(x || 0)` no meio da lógica
 transforma entrada inválida em zero silencioso.
 
-**O que motivou.** O padrão `Number(row.total_amount || 0)` aparece em 17 pontos de `api/` e `lib/`.
-O comentário de `lib/payment-integrity.js` já registra a consequência exata:
+**O que motivou.** `Number(row.total_amount || 0)` aparecia em 17 pontos. O comentário de
+`lib/payment-integrity.js` registra a consequência:
 
 > `Number('')` e `Number(null)` são 0, não NaN, e foi exatamente esse coerce que transformava
 > total ausente em "pedido de R$ 0,00, qualquer coisa paga".
 
 ### B3 · Ou o `AppError` vira o mecanismo real, ou sai do repositório — `P1`
 
-**Regra.** Abstração instalada e não usada é pior que ausente: quem lê o código acredita que existe
-uma política central de erro que não existe.
+**Regra.** Abstração instalada e não usada é pior que ausente: quem lê o código acredita numa
+política central de erro que não existe.
 
-**O que motivou.** `utils/app-error.js` e `middleware/error.middleware.js` estão montados no
-`server.js`, mas **nenhum** handler de `api/` lança `AppError` — a busca fora desses dois arquivos
-não retorna nada.
+**Decisão.** O `AppError` (`utils/app-error.js`) ficou **delimitado** ao middleware do Express
+(`middleware/error.middleware.js`): carrega o status do 404 de `/api/*` e é a rede que impede um
+`throw` não tratado de virar stack trace em HTML. Handler não lança `AppError`; responde com
+`fail()` de `lib/http.js`, sempre.
 
-E em produção o middleware nem roda: na Vercel cada função é isolada e o Express não está no
-caminho. O tratamento de erro real hoje é o `try/catch` repetido em cada arquivo. Decidir:
-padronizar o `AppError` dentro dos handlers (e não só no Express), ou remover os dois arquivos.
+**O que motivou.** `AppError` e o middleware estavam montados, mas nenhum handler lançava
+`AppError`. O tratamento real era o `try/catch` de cada arquivo.
 
 ---
 
 ## C · Frontend
 
-A camada React é a parte mais consistente do projeto — export nomeado, `propTypes` e hooks já são
-regra de fato. O que falta é fechar as fugas: acesso à API, rotas e formatação.
-
 ### C1 · Um cliente HTTP: `apiRequest`. `fetch` cru não passa em review — `P1`
 
-**Regra.** `apiRequest` (`src/utils/api.js`) aplica timeout de 15s via `AbortController` e normaliza
-a resposta. Quem chama `fetch` direto está abrindo mão das duas coisas.
+**Regra.** `apiRequest` (`src/utils/api.js`) aplica timeout de 15 s via `AbortController` e
+normaliza a resposta. Quem chama `fetch` direto abre mão das duas coisas.
 
-**O que motivou.** 7 arquivos usam `apiRequest`; 6 usam `fetch` cru:
+> **Exceção nomeada.** `src/components/ErrorBoundary.jsx` e `src/utils/analytics.js` usam `fetch`
+> cru como fallback do `sendBeacon`, com `keepalive`: o envio precisa sobreviver ao
+> descarregamento da página, e o timeout do `apiRequest` o cancelaria. Não há resposta a ler.
 
-- `src/services/products.js`
-- `src/components/CouponField.jsx`
-- `src/components/CrossSellSection.jsx`
-- `src/components/NewsletterSignup.jsx`
-- `src/pages/SubscriptionPages.jsx`
-- `src/pages/DownloadsPage.jsx` — usa **os dois** no mesmo arquivo
-
-Nenhuma chamada por `fetch` cru tem timeout: numa rede ruim, a tela fica carregando para sempre.
+**O que motivou.** 6 arquivos usavam `fetch` cru sem timeout — numa rede ruim, a tela ficava
+carregando para sempre.
 
 ### C2 · Componente não fala com a API; `src/services/` fala — `P1`
 
-**Regra.** O componente chama uma função de serviço nomeada pelo domínio.
+**Regra.** O componente chama uma função de serviço nomeada pelo domínio. É isso que torna uma
+troca de contrato (A1) edição em um arquivo, e não caçada por JSX.
 
-É isso que torna a troca de contrato (A1) uma edição em um arquivo, e não uma caçada por JSX.
+**O que motivou.** `CouponField`, `CrossSellSection` e `NewsletterSignup` montavam URL e chamavam a
+API de dentro do componente.
 
-**O que motivou.** `CouponField`, `CrossSellSection` e `NewsletterSignup` montam URL e chamam a API
-de dentro do componente, ignorando a camada `src/services/` que já existe com seis módulos.
-
-### C3 · Todo valor formatado sai de uma função nomeada — `P1` · aplicada em 13/08/2026
+### C3 · Todo valor formatado sai de uma função nomeada — `P1`
 
 **Regra.** Três destinos, três funções em `src/utils/currency.js`. Qual usar é decidido pelo
 **destino**, não pelo gosto:
@@ -298,349 +224,222 @@ de dentro do componente, ignorando a camada `src/services/` que já existe com s
 | CSV para Excel pt-BR            | `formatCsvNumber`    | `1234,56`     |
 | Dado estruturado (JSON-LD, API) | `formatMachinePrice` | `1234.56`     |
 
-> **Correção da regra (13/08/2026).** A primeira redação dizia "dinheiro na tela só através de
-> `formatPrice`" e apontava 7 sites como violação. **A varredura estava errada: nenhum dos 7 era
-> tela.** Seis eram colunas de CSV — e `R$ 1.234,56` num CSV quebra a leitura numérica do Excel
-> pt-BR — e um era o `price` do JSON-LD de produto, que o `schema.org/Offer` exige com ponto
-> decimal. Unificar os três teria sido regressão em SEO e em exportação.
->
-> O problema real era outro, e esse existia mesmo: só o formato de tela tinha nome. Os outros dois
-> eram expressões inline repetidas, sem nada explicando por que divergem — que é exatamente o
-> convite para alguém "consertar" a divergência. Agora os três têm nome e a diferença está escrita.
+> **Correção da regra.** A primeira redação dizia "dinheiro só através de `formatPrice`" e
+> apontava 7 violações. Nenhuma era tela: seis eram colunas de CSV (onde `R$ 1.234,56` quebra a
+> leitura numérica do Excel) e uma era o `price` do JSON-LD, que o `schema.org/Offer` exige com
+> ponto. O problema real era que só o formato de tela tinha nome; agora os três têm, e a diferença
+> está escrita.
 
 ### C4 · Uma casa por tipo de utilitário — `P2`
 
 **Regra.** `src/utils/` para o browser, `lib/` para o servidor. Utilitário de um componente
 específico mora junto do componente; utilitário genérico não.
 
-**O que motivou.** Existem três casas:
-
-| Pasta                         | Escopo   | Arquivos |
-| ----------------------------- | -------- | -------- |
-| `utils/` (raiz)               | backend  | 1        |
-| `src/utils/`                  | frontend | 8        |
-| `src/components/admin/utils/` | admin    | 3        |
-
-`src/components/admin/utils/format.js` tem `formatDateTime`, que não é específico do admin.
-
-> **Exceção NOMEADA (18/08/2026, item `P5.3`; atualizada em 16/10/2026).** `src/components/admin/utils/`
-> continua existindo, com os quatro arquivos abaixo, e isso É a regra sendo cumprida — não um
-> desvio tolerado. Todos têm consumidor só dentro do painel (abas do admin, `AdminPage` e o
-> `ProductWizard`, que é do admin):
+> **Exceção nomeada.** `src/components/admin/utils/` existe e isso **é** a regra sendo cumprida:
+> todos os arquivos têm consumidor só dentro do painel.
 >
-> | Arquivo             | Por que fica                                                                               |
-> | ------------------- | ------------------------------------------------------------------------------------------ |
-> | `derive.js`         | Derivações do painel (curva ABC, séries de faturamento, coorte). Zero consumidor fora dele |
-> | `tabs.js`           | Rótulos e o conjunto `TABS_NEEDING_DASHBOARD`. Descreve a navegação do painel e nada mais  |
-> | `category-label.js` | Rótulo seguro de categoria no painel (esconde as categorias-fantasma com nome = UUID)      |
-> | `errors.js`         | `friendlyAdminError`: traduz erro de rede ("Failed to fetch") para a dona da loja          |
+> | Arquivo             | Por que fica                                                                      |
+> | ------------------- | --------------------------------------------------------------------------------- |
+> | `derive.js`         | Derivações do painel (curva ABC, séries de faturamento, coorte)                   |
+> | `tabs.js`           | Rótulos e `TABS_NEEDING_DASHBOARD`; descreve a navegação do painel                |
+> | `category-label.js` | Rótulo seguro de categoria (esconde as categorias-fantasma com nome = UUID)       |
+> | `errors.js`         | `friendlyAdminError`: traduz erro de rede ("Failed to fetch") para a dona da loja |
 >
-> A regra diz "utilitário de um componente específico mora junto do componente", e os dois são
-> exatamente isso. O que saiu foi o que **não** era: `formatDateTime` foi para `src/utils/date.js`
-> em 13/08, e `isSessionError` foi para junto de `src/constants/error-codes.js` em 18/08 — ele
-> vivia num `format.js` que exportava uma única função, que não formatava nada.
->
-> **Exceção escrita é padrão; exceção tácita é divergência.** Esta linha existe para que a próxima
-> varredura não conte `src/components/admin/utils/` como violação e "corrija" o que está certo.
+> Esta linha existe para que a próxima varredura não "corrija" o que está certo.
+
+**O que motivou.** Três casas de utilitário, com coisa genérica (`formatDateTime`, hoje em
+`src/utils/date.js`) morando na do painel.
 
 ### C5 · Rota vem de `src/constants/routes.js` — `P2`
 
-**Regra.** Caminho literal em JSX é uma rota que ninguém consegue renomear com segurança.
+**Regra.** Caminho literal em JSX é uma rota que ninguém consegue renomear com segurança. O caso
+que dói: o caminho obscurecido do painel (`ADMIN_LOGIN_PATH`) só é seguro enquanto for único e
+centralizado.
 
-**O que motivou.** O arquivo define 2 constantes e é importado por 5 arquivos, contra **50** rotas
-literais em `to="/…"` e `navigate('/…')`. O caso que dói: o caminho obscurecido do painel
-(`ADMIN_LOGIN_PATH`) só é seguro enquanto for único e centralizado.
+**O que motivou.** 50 rotas literais em `to="/…"` e `navigate('/…')`.
 
 ### C6 · Import nomeado do React, export nomeado do componente, `propTypes` em quem recebe props — `P2`
 
-**Regra.** Já é a prática do repositório; falta escrever e travar no lint.
+**Regra.** `import { useState } from 'react'`, `export function Componente`, e `propTypes` em todo
+componente que recebe props. Exceções legítimas: `ErrorBoundary` (classe) e `main.jsx` (raiz)
+importam `React`; `App.jsx` é o único export default.
 
-> **Correção da regra (18/08/2026, item `P5.4`).** A redação era "`propTypes` **sempre**", e a
-> remedição a mediu contra 14 componentes. Mas **11 deles não recebem prop nenhuma**: são páginas
-> montadas por rota (`AdminPage`, `CheckoutPage`, `DownloadsPage`, `NotFoundPage`…). Declarar
-> `propTypes = {}` neles não verifica nada — é cerimônia que ocupa linha e ensina a tratar
-> `propTypes` como ritual em vez de contrato.
->
-> Regra reprovada por 11 arquivos em que obedecê-la não melhora nada é regra que treina o time a
-> ignorar a lista inteira de violações. A dívida real eram **três**: `HomePage`, `ProductsPage` e
-> `SubscriptionPages` — os únicos da lista que de fato recebem props.
-
-**O que motivou.** Praticamente aplicada:
-
-- 34 arquivos com `import { useState }` contra 3 com `import React` — destes, dois são legítimos
-  (`ErrorBoundary` é classe, `main.jsx` é a raiz). Sobra só `src/providers/CartProvider.jsx`.
-- 59 exports nomeados contra 1 default.
-- `propTypes` falta em três componentes: `ConsentBanner.jsx`, `admin/tabs/CouponsTab.jsx`,
-  `admin/tabs/SegmentsTab.jsx`.
+> **Correção da regra.** A redação era "`propTypes` **sempre**". Mas páginas montadas por rota não
+> recebem prop nenhuma, e `propTypes = {}` nelas não verifica nada — é cerimônia que ensina a
+> tratar `propTypes` como ritual em vez de contrato.
 
 ---
 
 ## D · Qualidade e automação
 
-Toda a ferramenta certa está instalada e configurada com cuidado. O que falta é o CI **exigir** o
-que a configuração descreve — padrão que ninguém executa é sugestão.
+Padrão que ninguém executa é sugestão: o CI exige o que a configuração descreve.
 
 ### D1 · Formatação é automática e bloqueante — `P0`
 
-**Regra.** O Prettier decide o estilo; ninguém discute formatação em review.
+**Regra.** O Prettier (`.prettierrc.json`, `printWidth: 100`) decide o estilo; ninguém discute
+formatação em review. `npm run format:check` está no `npm run check` e no CI. Commits só de
+formatação entram em `.git-blame-ignore-revs`.
 
-Aplicar em três passos:
-
-```bash
-npm run format                                    # 1. um commit único, só formatação
-git rev-parse HEAD >> .git-blame-ignore-revs      # 2. preserva o git blame
-# 3. adicionar `npm run format:check` ao npm run check e ao .github/workflows/test.yml
-```
-
-**O que motivou.** **189 arquivos** reprovam `prettier --check` — na prática, o repositório inteiro.
-O `.prettierrc.json` pede `printWidth: 100` e existem 545 linhas acima de 120 colunas
-(387 em `src/`, 93 em `api/`, 65 em `lib/`).
-
-Os scripts `format` e `format:check` existem no `package.json` e **nada** os executa: o
-`npm run check` roda env, teste, build e lint, mas não formatação, e o workflow do GitHub espelha
-essa mesma lista.
+**O que motivou.** 189 arquivos reprovavam `prettier --check`, e nada executava os scripts
+`format`/`format:check`.
 
 ### D2 · Cobertura precisa rodar antes de virar meta — `P1`
 
-**Regra.** Instalar `@vitest/coverage-v8`, medir, e ligar os thresholds no valor medido menos uma
-folga (~2pp). O piso trava regressão; não é meta de salto.
+**Regra.** Thresholds no valor medido menos uma folga (~2 pp), em `vite.config.js`. O piso trava
+regressão; não é meta de salto. Ao subir a cobertura, suba o piso.
 
-**O que motivou.** `npm run test:coverage` **quebra**: o pacote `@vitest/coverage-v8` não está em
-`node_modules/@vitest/`. O bloco `thresholds` em `vite.config.js` está comentado com um roteiro de
-três passos esperando exatamente essa instalação.
+**O que motivou.** `npm run test:coverage` quebrava por falta do `@vitest/coverage-v8`, e os
+thresholds estavam comentados esperando essa instalação.
 
 ### D3 · Todo módulo de `lib/` tem suíte — `P1`
 
-**Regra.** `lib/` é onde mora a regra de negócio compartilhada entre handlers — é o lugar de melhor
-retorno por teste escrito, porque um bug ali se manifesta em vários endpoints.
+**Regra.** `lib/` é onde mora a regra de negócio compartilhada — o melhor retorno por teste
+escrito, porque um bug ali aparece em vários endpoints. A suíte mora em `lib/__tests__/` ou, quando
+o módulo é exercitado pelo caminho do handler, em `handlers/__tests__/`.
 
-**O que motivou.** 8 de 21 módulos têm suíte. Sem teste direto, entre outros: `coupons.js` (desconto),
-`sales-counts.js`, `mercadopago-config.js`, `supabase.js`, `email-sender.js`, `abc-classification.js`.
-
-Onde já é forte: as 9 suítes de `handlers/__tests__/` cobrem o caminho do dinheiro — integridade de
-pagamento, idempotência de webhook, assinatura, download de uso único. Essa priorização é a certa;
-falta estendê-la a `lib/`.
+**O que motivou.** 8 de 21 módulos tinham suíte; `coupons.js`, `mercadopago-config.js` e
+`email-sender.js`, entre outros, não.
 
 ### D4 · Config não referencia caminho que não existe — `P2`
 
 **Regra.** Referência morta em configuração é armadilha: sugere cobertura que não acontece e esconde
-a real.
+a real. `rate-limit-coverage.test.js` aplica isso às dispensas de rate limit.
 
-**O que motivou.** `validation/**` aparece em três configurações apontando para uma pasta apagada
-(ver tabela em B1). O `coverage.include` em especial mede cobertura de um diretório vazio.
+**O que motivou.** `validation/**` aparecia em `package.json`, `eslint.config.js` e
+`vite.config.js` apontando para uma pasta apagada.
 
 ### D5 · Zerar os avisos de lint e proibir novos — `P2`
 
-**Regra.** Zerar primeiro, depois rodar `eslint . --max-warnings=0` no CI.
+**Regra.** Aviso que sobrevive a um deploy ensina o time a ignorar a saída inteira do lint. O alvo
+é `--max-warnings=0`; até lá, catraca (ver o topo).
 
-Aviso que sobrevive a um deploy ensina o time a ignorar a saída inteira do lint.
-
-**O que motivou.** 0 erros e 30 avisos. Nove são `eslint-disable` inúteis — o próprio
-`eslint.config.js` documenta que os registrou como _no-op_ justamente para que apareçam e sejam
-apagados. Outros apontam `setState` dentro de `useEffect`, que é backlog real de performance.
+**O que motivou.** 30 avisos, nove deles `eslint-disable` inúteis.
 
 ### D6 · Arquivo é UTF-8 sem BOM, sempre — `P2`
 
-**Regra.** Um `.gitattributes` e uma checagem no CI.
+**Regra.** `.gitattributes` fixa `eol=lf`; `scripts/check-utf8.js` e `scripts/fix-utf8.js`
+verificam e corrigem encoding.
 
-O projeto já tem histórico de corrupção de acento a ponto de existirem `scripts/check-utf8.js` e
-`scripts/fix-utf8.js`.
-
-**O que motivou.** `src/services/products.js` começa com BOM (`EF BB BF`) — é o único arquivo do
-repositório nessa condição.
+**O que motivou.** Histórico de corrupção de acento e um arquivo de `src/services/` com BOM.
 
 ### D7 · Hook de pré-commit roda lint e format no que mudou — `P2`
 
-**Regra.** Com `lint-staged`, o custo é de milissegundos e o erro nunca chega ao CI. Depois de D1,
-é o que impede a formatação de divergir de novo.
+**Regra.** `husky` + `lint-staged`: `eslint --fix` e `prettier --write` nos arquivos em stage. O
+custo é de milissegundos e o erro não chega ao CI. Precisar de `--no-verify` com frequência é sinal
+de que o hook está errado — mude a regra aqui.
 
-**O que motivou.** Não há `.husky/`, `lint-staged` nem `simple-git-hooks`.
+**O que motivou.** Não havia hook nenhum.
 
 ---
 
 ## E · Dinheiro e runtime
 
-Aqui as regras não são cosméticas. As três primeiras têm consequência direta em receita, entrega de
-produto pago ou conta de infraestrutura.
+Aqui as regras têm consequência direta em receita, entrega de produto pago ou conta de
+infraestrutura.
 
 ### E1 · Rate limit em todo endpoint público, sem exceção — `P0`
 
-**Regra.** `enforceRateLimit` **no handler** — nunca só no Express.
+**Regra.** `enforceRateLimit` (`lib/rate-limit.js`) **no handler** — nunca só no Express. Perfil
+compartilhado vai em `RATE_LIMITS`; balde de uso único pode ser declarado no próprio handler.
+Endpoint que não precisa (sessão, assinatura, segredo) entra na lista de dispensas nomeadas de
+`rate-limit-coverage.test.js`, com o motivo. Ver ADR 0007 em
+[docs/02-ARQUITETURA.md](./docs/02-ARQUITETURA.md).
 
-O limiter global do `server.js` não existe em produção, então proteção que mora lá é proteção que só
-funciona na máquina do desenvolvedor.
-
-**O que motivou.** 11 handlers chamam `enforceRateLimit`. Ficam descobertos em produção:
-
-| Endpoint                      | Observação                 |
-| ----------------------------- | -------------------------- |
-| `handlers/download.js`        | **entrega o arquivo pago** |
-| `handlers/products.js`        |                            |
-| `handlers/product-details.js` |                            |
-| `handlers/cross-sell.js`      |                            |
-| `handlers/home-sections.js`   |                            |
-
-O projeto já pagou por essa divergência antes. O comentário em `handlers/validate-coupon.js` registra
-que o limiter de cupom _"só existia no Express de desenvolvimento"_ e que **a divergência dev/prod
-era a causa raiz do achado**. Os cinco acima são a mesma causa raiz, ainda aberta.
+**O que motivou.** Cinco endpoints públicos sem contador em produção — entre eles `download`, que
+entrega o arquivo pago. O limitador de cupom "só existia no Express de desenvolvimento": a
+divergência dev/prod era a causa raiz.
 
 ### E2 · Nada de estado em memória dentro de função serverless — `P1`
 
 **Regra.** Cache de leitura vai para `Cache-Control` com CDN, ou para tabela. O que a instância
 guarda na RAM morre com ela.
 
-**O que motivou.** `handlers/admin-kpis.js`, `handlers/admin-abc-customers.js` e `handlers/admin-abc-products.js`
-mantêm `const cache = new Map()` com TTL de 1 hora. Na Vercel cada invocação pode cair numa
-instância nova: o acerto é acidental e por instância.
+**O que motivou.** Três relatórios do painel mantinham `const cache = new Map()` com TTL de 1 hora
+e respondiam `X-Cache: HIT` — um header que afirmava algo que o runtime não garante.
 
-Pior, os três respondem `X-Cache: HIT` — um header que afirma algo que o runtime não garante.
+### E3 · Aritmética de dinheiro em centavos inteiros — `P1`
 
-### E3 · Aritmética de dinheiro em centavos inteiros — `P1` · aplicada em 13/08/2026
-
-**Regra.** Toda soma, rateio e comparação de valor passa por `lib/money.js`, em centavos
-inteiros. Float só na fronteira: banco, Mercado Pago e tela.
-
-E o corolário que é o real ganho: **o total do pedido é derivado da soma efetivamente
-cobrada**, nunca calculado em paralelo.
-
-> **Correção da regra (13/08/2026).** A redação original mandava migrar também _"a coluna do
-> banco, quando der para migrar"_. A premissa estava errada: as colunas já são
-> `numeric(12,2)`, que no Postgres é decimal **exato**. Não havia nada a migrar — e migrar
-> para `integer` seria piora: perderia legibilidade em SQL e quebraria toda consulta e
-> relatório existente, para consertar um problema que não está no banco.
->
-> O drift é 100% do lado JavaScript: `numeric` chega ao Node como IEEE 754, e a partir daí
-> `0.1 + 0.2 !== 0.3`. Nenhuma migration foi escrita.
-
-**O que mudou.** `handlers/create-payment.js` calculava `total_amount = subtotal - desconto` de um
-lado e, do outro, rateava o desconto escalando preços por um fator fracionário, absorvendo a
-sobra no último item elegível. Os dois números batiam por aproximação — e a diferença entre
-eles é exatamente a tolerância de 1 centavo que `lib/payment-integrity.js` precisou aceitar na
-porta que entrega o produto pago.
-
-Agora o rateio é por **unidade**, em centavos, pelo método de maior resto
-(`allocateDiscountCents`), e o total do pedido sai da soma real dos itens cobrados. Os testes
-em `handlers/__tests__/checkout-money.test.js` travam o invariante sem folga:
+**Regra.** Toda soma, rateio e comparação de valor passa por `lib/money.js`, em centavos inteiros.
+Float só na fronteira: banco, Mercado Pago e tela. Corolário: **o total do pedido é derivado da
+soma efetivamente cobrada**, nunca calculado em paralelo.
 
 ```
 subtotal − desconto === total === soma(unit_price × quantity) da preference
 ```
 
-A tolerância de 1 centavo **continua** em `lib/payment-integrity.js`, e o comentário lá agora
-explica por quê: a causa interna sumiu, mas zerar a folga trocaria um risco irrelevante
-(entregar por 1 centavo a menos) por um caro (recusar quem pagou certo — e pedido recusado no
-webhook não é reprocessado). Zerar depois de observar volume real.
+O rateio é por unidade, pelo método de maior resto (`allocateDiscountCents`), e
+`handlers/__tests__/checkout-money.test.js` trava o invariante sem folga. A tolerância de 1 centavo
+de `lib/payment-integrity.js` continua de propósito: zerá-la trocaria um risco irrelevante
+(entregar por 1 centavo a menos) por um caro (recusar quem pagou certo).
+
+> **Correção da regra.** A redação original mandava migrar também as colunas do banco. Elas já são
+> `numeric(12,2)`, decimal exato no Postgres; o drift é todo do lado JavaScript. Nenhuma migration
+> foi escrita.
+
+**O que motivou.** `create-payment` calculava o total de um lado e rateava o desconto por um fator
+fracionário do outro; os dois batiam por aproximação.
 
 ### E4 · Política de cache declarada por classe de endpoint — `P2`
 
-**Regra.** Endpoint novo escolhe uma das três:
+**Regra.** Endpoint novo escolhe uma classe de `CACHE_POLICIES` (`lib/http.js`, via
+`setCachePolicy`):
 
-| Classe                   | `Cache-Control`                                                   |
-| ------------------------ | ----------------------------------------------------------------- |
-| Catálogo público         | `public, max-age=300, s-maxage=300, stale-while-revalidate=3600`  |
-| Relatório administrativo | `private, no-store, max-age=0` (dado de cliente; ver lib/http.js) |
-| Entrega de arquivo       | `no-store, max-age=0`                                             |
+| Classe                                   | `Cache-Control`                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| `catalog` — catálogo público             | `public, max-age=300, s-maxage=300, stale-while-revalidate=3600` |
+| `adminReport` — painel (dado de cliente) | `private, no-store, max-age=0`                                   |
+| `sensitive` — entrega de arquivo, token  | `no-store, max-age=0`                                            |
 
-**O que motivou.** As três políticas já existem e são coerentes onde aplicadas — falta estarem
-escritas e cobrirem os endpoints que hoje não mandam `Cache-Control` nenhum. Resolver E2 depende
-disto: é o cache de CDN que substitui o `Map` em memória.
+**O que motivou.** As políticas existiam e eram coerentes onde aplicadas, mas não estavam escritas
+e vários endpoints não mandavam `Cache-Control` nenhum. É o cache de CDN que substitui o `Map` em
+memória (E2).
 
 ---
 
 ## F · Log e documentação
 
-A documentação do projeto é volumosa e de qualidade alta. O problema não é falta — é duplicação, que
-faz duas versões da mesma verdade divergirem sem ninguém notar.
-
 ### F1 · Um formato de log: JSON estruturado com nível e contexto — `P1`
 
-**Regra.** Um `logger` em `lib/` emitindo `{ level, event, ...contexto }`, e nenhum `console` solto
-fora dele. Log de servidor é dado consultável, não frase.
+**Regra.** `createLogger` de `lib/logger.js` emitindo `{ level, event, ...contexto }`; nenhum
+`console` solto no backend fora dele. Evento de segurança vai por `lib/security-logger.js`.
 
-**O que motivou.** 79 chamadas de `console.*` no backend, das quais 22 sem nem o prefixo `[modulo]`
-que as outras adotaram. Em paralelo, `lib/security-logger.js` emite JSON estruturado adequado —
-dois formatos de log na mesma stack, e só um deles é filtrável nos logs da Vercel.
+**O que motivou.** 79 chamadas de `console.*` no backend, em dois formatos — e só um deles era
+filtrável nos logs da Vercel.
 
 ### F2 · Um documento por assunto — `P1`
 
-**Regra.** Cada tema tem exatamente um arquivo canônico. O que sobrar vira link para ele, ou é apagado.
+**Regra.** Cada tema tem exatamente um arquivo canônico; o que sobrar vira link para ele, ou é
+apagado. A documentação viva é plana:
 
-**O que motivou.** 11.756 linhas de markdown com quatro pares sobrepostos:
+- `README.md` (raiz) — porta de entrada;
+- `CONTRIBUTING.md` (raiz) — estas regras;
+- `docs/01-VISAO-GERAL.md` a `docs/10-ROADMAP.md` — um assunto por arquivo.
 
-| Versão curta           | Linhas | Versão longa                         | Linhas |
-| ---------------------- | -----: | ------------------------------------ | -----: |
-| `docs/ARCHITECTURE.md` |     81 | `docs/ProjectDocs/02-ARQUITETURA.md` |    385 |
-| `docs/SETUP.md`        |    390 | `docs/ProjectDocs/03-SETUP.md`       |    478 |
-| `docs/FLOWS.md`        |    244 | `docs/ProjectDocs/05-FLUXOS.md`      |    354 |
-| `docs/SECURITY.md`     |    352 | `docs/ProjectDocs/08-SEGURANCA.md`   |    424 |
+Documento novo só entra se não couber em nenhum desses. Doc descreve o estado atual: histórico,
+datas de rodada e retratos de review ficam no `git log`, não em arquivo.
 
-São 1.067 linhas na versão curta de cada par que ninguém sabe se ainda valem. O `docs/README.md`
-inclusive já anuncia que `ProjectDocs/` está _"substituindo os MDs avulsos abaixo"_ — falta concluir
-a substituição. Documento de setup desatualizado custa uma tarde de quem chega.
-
-> **Concluído em 18/08/2026 (item `P6.2` e §4).** Os quatro foram **apagados** — 1.159 linhas —, e
-> as menções a eles no `README.md`, no `docs/README.md` e no `docs/REVIEW-PROMPTS.md` apontam agora para o canônico, no mesmo commit. O aviso "documento em
-> retirada" no topo foi o passo 1; um arquivo que ninguém pode corrigir só existe para alguém ler
-> a versão errada, e o git guarda o histórico.
->
-> Junto, os relatórios de review passaram a ter **uma casa só e uma convenção só**:
-> tudo em `docs/reviews/`, com a área em dois dígitos (`AREA-08`, `AREA-09`). Antes havia duas
-> localizações e dois jeitos de numerar. Na raiz de `docs/` ficou apenas o `REVIEW-PROMPTS.md`,
-> que é ferramenta e não relatório.
->
-> E cada relatório anterior a 13/08 abre com um cabeçalho de **📅 retrato histórico** (item
-> `P6.1`): sem ele, um documento de 12/08 continuava sendo lido como estado atual — o de testes
-> chegava a afirmar que "nenhum workflow de CI executa `npm test`", falso desde o commit
-> `4892de9`.
+**O que motivou.** Quatro pares de documentos sobrepostos (arquitetura, setup, fluxos, segurança),
+versão curta e longa, divergindo sem ninguém notar. Documento de setup desatualizado custa uma
+tarde de quem chega.
 
 ### F3 · Decisão que atravessa arquivos vira ADR; o resto fica no código — `P2`
 
-**Regra.** Este `CONTRIBUTING.md` para as regras, e `docs/adr/` com uma página por decisão
-estrutural. Candidatas imediatas:
+**Regra.** Decisão estrutural vira um ADR na seção de ADRs de
+[docs/02-ARQUITETURA.md](./docs/02-ARQUITETURA.md), numerado em sequência ("ADR 0001", "ADR
+0002"…), com contexto, decisão e consequências. O código cita o ADR pelo número. Decisão local
+fica no comentário junto do código.
 
-- Por que CommonJS no backend e ESM no frontend
-- Por que os handlers da Vercel são os mesmos módulos servidos pelo Express
-- Por que a reconciliação de pagamento é módulo único (`lib/payment-integrity.js`)
-
-**O que motivou.** Não existe `docs/adr/`. As decisões estruturais estão em comentários longos e
-genuinamente bons dentro de `eslint.config.js`, `lib/payment-integrity.js` e `server.js` — o
-conteúdo é o certo, o lugar não é, porque quem chega não sabe abrir esses três arquivos primeiro.
-
----
-
-## Ordem em que foram aplicadas
-
-`E1` (risco aberto) → `D1` (formatar antes de refatorar, senão os diffs seguintes ficam
-ilegíveis) → `D4`+`D6` → `A1`+`A2` (envelope único) → `B1` (schemas na borda) → `C1`–`C3`
-(depende de A1) → `D2`+`D3` (cobertura) → `E2`+`E4`, depois `E3` → `F2`+`F3` (docs por último,
-porque só aí o documento descreve o que existe e não o que se pretende).
-
-Fica registrada porque explica **por que cada regra foi aplicada nesta sequência** — que é a
-informação útil se alguma precisar ser revertida. Único desvio: `E3` não exigiu migration.
+**O que motivou.** As decisões estruturais (CommonJS no backend, handlers iguais em dev e produção,
+reconciliação de pagamento num módulo só) estavam em comentários longos de `eslint.config.js`,
+`lib/payment-integrity.js` e `server.js` — conteúdo certo, lugar errado, porque quem chega não
+sabe abrir esses arquivos primeiro.
 
 ---
 
-## Metodologia
-
-Levantamento por leitura estática do repositório em 13/08/2026, branch `main`, commit `97be97f`.
-Aplicação na mesma data. Os números são reproduzíveis — por exemplo:
+## Reproduzindo
 
 ```bash
-npm run check          # env + format + lint + testes + build, na ordem do CI
+npm run check          # env + format + lint + testes + cobertura + build, na ordem do CI
 npm run test:coverage  # cobertura contra o piso de vite.config.js
-npx eslint .           # 0 erros; 19 avisos, todos do React Compiler
+npx eslint .           # 0 erros; avisos no máximo o teto de package.json
 ```
-
-### Sobre a seção "O que motivou" de cada regra
-
-Ela guarda a **divergência medida** que fez a regra existir, no estado em que o repositório
-estava antes. Não é um relatório de pendência — é a justificativa, e é o que permite discordar
-da regra com dados na mão em vez de opinião.
-
-Ela **não se apaga** quando a regra é aplicada. Apagar transformaria o documento numa lista de
-mandamentos sem origem, e a primeira pessoa a achar a regra incômoda não teria como avaliar se
-o motivo ainda vale. Quando uma medição se mostrar errada ao ser aplicada, o caminho é a nota
-em bloco de citação — como está em A1, C3 e E3.
-
-O estado atual de cada número vive num lugar só: a tabela em **Estado da padronização**, no
-topo. É ela que se atualiza.

@@ -113,7 +113,7 @@ router.all('/create-payment', wrapCompatHandler(createPaymentHandler));
 router.all('/cron-email-jobs', wrapCompatHandler(cronEmailJobsHandler));
 router.all('/cross-sell', wrapCompatHandler(crossSellHandler));
 router.all('/customer-orders', wrapCompatHandler(customerOrdersHandler));
-// LGPD self-service (§3.8): exclusão de conta com confirmação por e-mail.
+// LGPD self-service: exclusão de conta com confirmação por e-mail.
 router.all('/me-delete-account', wrapCompatHandler(meDeleteAccountHandler));
 // LGPD art. 18, V: acesso/portabilidade. O par do de cima — a pessoa podia
 // apagar os próprios dados mas não podia vê-los.
@@ -141,12 +141,11 @@ router.all('/webhook', wrapCompatHandler(webhookHandler));
 // O `server.js` já servia o caminho da raiz; o de `/api` não existia, e era o
 // único que o teste de paridade consegue enxergar.
 //
-// `/api/notfound`: em produção é um endpoint público de verdade — o
-// `vercel.json` manda para lá toda rota `/api/*` sem função, para que ela não
-// caia no catch-all do SPA e devolva HTML com status 200. No Express o
-// `notFoundHandler` de `middleware/error.middleware.js` cobre o catch-all, mas
-// o caminho nomeado não resolvia para o MESMO módulo — que é a paridade que
-// o ADR 0002 promete.
+// `/api/notfound`: rota pública nomeada. O `vercel.json` manda todo `/api/*`
+// para `api/index.js`, e rota sem handler cai no 404 JSON do Express, não no
+// SPA. O `notFoundHandler` de `middleware/error.middleware.js` cobre o
+// catch-all; o caminho nomeado precisa resolver para o MESMO módulo, que é a
+// paridade que o ADR 0002 promete.
 router.all('/sitemap.xml', wrapCompatHandler(sitemapXmlHandler));
 router.all('/notfound', wrapCompatHandler(apiNotFoundHandler));
 

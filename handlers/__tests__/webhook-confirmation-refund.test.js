@@ -13,7 +13,7 @@ import {
 } from './money-path-harness.js';
 
 // ════════════════════════════════════════════════════════════════════
-// Webhook — os dois comportamentos que faltavam (13-ROADMAP §3.12 e estorno):
+// Webhook — os dois comportamentos que faltavam (confirmação do pedido e estorno):
 //
 //   • na PRIMEIRA aprovação sai o e-mail de confirmação do pedido (antes não
 //     saía nada); reentrega não manda de novo;

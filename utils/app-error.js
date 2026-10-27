@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════
-// Erro com status HTTP, para o Express de DESENVOLVIMENTO (regra B3).
+// Erro com status HTTP, para o middleware de erro do Express (regra B3).
 //
 // ── ESCOPO, E POR QUE ELE É TÃO ESTREITO ────────────────────────────
 // Esta classe existe para um caso só: carregar `statusCode` de um ponto do
@@ -7,10 +7,10 @@
 // `throw` não tratado de virar página HTML de stack trace. Hoje o único emissor
 // é o `notFoundHandler`.
 //
-// NÃO use em `api/*.js`. Aqueles módulos são publicados pela Vercel como
-// funções isoladas, onde o middleware do Express não roda: um `throw new
-// AppError(..., 400)` ali produziria 400 em desenvolvimento e 500 genérico em
-// produção. Handler responde com `fail()` de `lib/http.js`, sempre.
+// NÃO use nos handlers. O mesmo app Express serve dev e produção (ADR 0002),
+// mas o contrato do handler é responder com `fail()` de `lib/http.js` — o
+// envelope e o `code` estável (regras A1/A2) —, nunca lançar e torcer para a
+// rede de segurança acertar o status.
 //
 // A regra B3 existia porque este arquivo estava instalado e não usado, o que é
 // pior que ausente — quem lia o código acreditava numa política central de erro

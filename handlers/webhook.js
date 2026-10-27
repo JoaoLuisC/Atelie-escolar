@@ -246,7 +246,7 @@ module.exports = async function webhookHandler(req, res) {
           log.error('falha_ao_provisionar_conta_de_cliente', { reason: provisionErr.message });
         }
 
-        // Confirmação do pedido (13-ROADMAP §3.12) — best-effort, nunca lança.
+        // Confirmação do pedido — best-effort, nunca lança.
         await sendOrderConfirmation({ order, isNewAccount: provision?.created === true });
 
         await recordEvent({

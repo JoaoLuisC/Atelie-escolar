@@ -37,7 +37,7 @@ function reportErrorToBackend(error, info) {
     //     vazio é o contrato: se a telemetria falhar, ninguém pode saber.
     //
     // Uma falha aqui não pode virar outro erro dentro do handler de erro.
-    // Ver item P5.1 do docs/PADRONIZACAO-CORRECOES.md.
+    // Exceção registrada à regra C1 do CONTRIBUTING.
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

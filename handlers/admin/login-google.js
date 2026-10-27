@@ -8,9 +8,10 @@
 //
 // SÓ PROFESSOR(A), DE PROPÓSITO. Admin/master têm 2º fator (TOTP, e-mail, PIN)
 // e o Google pularia essa etapa: um Gmail comprometido abriria o painel da
-// loja inteira. O professor não tem 2º fator hoje, então o Google não abre
-// nada que a senha já não abrisse — e só dá acesso aos produtos do próprio
-// `seller_id`. Login de admin com Google é o 13-ROADMAP §3.7.
+// plataforma. O professor não tem 2º fator hoje, então o Google não abre
+// nada que a senha já não abrisse — e os dados vêm recortados pelo próprio
+// `seller_id` (lib/seller-scope.js). Admin com Google exigiria o 2º fator
+// depois do OAuth.
 //
 // Conta Google sem perfil de professor (cliente, ou conta recém-criada pelo
 // próprio OAuth) recebe 401. A pessoa já provou ser a dona da conta Google,

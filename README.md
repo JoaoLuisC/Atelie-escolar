@@ -4,7 +4,10 @@ Loja de materiais educativos digitais (banners, painéis, atividades pedagógica
 liberado assim que o pagamento é aprovado.
 
 **Stack**: React 19 + Vite 8 + Tailwind no front · Express 5 servido por uma única função
-serverless na Vercel · Supabase (Postgres 17 + Auth + Storage) · Mercado Pago · Resend.
+serverless na Vercel · Supabase (Postgres 17 + Auth + Storage) · Mercado Pago · Resend · Gemini.
+
+Produção: https://professoramarcia.ateliedaescola.com.br — a loja da Profa. Márcia (v1). Todo
+push na `main` roda o release (testes → migrations → deploy).
 
 ---
 
@@ -19,7 +22,7 @@ npm run dev:all              # frontend :5173 + API :3000
 ```
 
 Abra http://localhost:5173. Cada variável do `.env.local` está explicada em
-[docs/ProjectDocs/03-SETUP.md](./docs/ProjectDocs/03-SETUP.md) — inclusive como gerar os quatro
+[docs/03-SETUP-E-DEPLOY.md](./docs/03-SETUP-E-DEPLOY.md) — inclusive como gerar os quatro
 segredos obrigatórios e como aplicar o schema no Supabase.
 
 ---
@@ -28,14 +31,14 @@ segredos obrigatórios e como aplicar o schema no Supabase.
 
 **[docs/README.md](./docs/README.md)** é o índice de tudo. Os atalhos mais usados:
 
-| Documento                                                                      | Para quê                                         |
-| ------------------------------------------------------------------------------ | ------------------------------------------------ |
-| [CONTRIBUTING.md](./CONTRIBUTING.md)                                           | 29 regras de convenção — ler antes de abrir PR   |
-| [docs/ProjectDocs/03-SETUP.md](./docs/ProjectDocs/03-SETUP.md)                 | Rodar localmente do zero                         |
-| [docs/ProjectDocs/02-ARQUITETURA.md](./docs/ProjectDocs/02-ARQUITETURA.md)     | Onde cada coisa mora e como um request flui      |
-| [docs/ProjectDocs/09-API-ENDPOINTS.md](./docs/ProjectDocs/09-API-ENDPOINTS.md) | Referência REST                                  |
-| [docs/ProjectDocs/08-SEGURANCA.md](./docs/ProjectDocs/08-SEGURANCA.md)         | Modelo de ameaça, RLS, secrets, LGPD             |
-| [docs/adr/](./docs/adr/README.md)                                              | Por que o projeto é assim (decisões estruturais) |
+| Documento                                                | Para quê                                         |
+| -------------------------------------------------------- | ------------------------------------------------ |
+| [CONTRIBUTING.md](./CONTRIBUTING.md)                     | Regras de código (A1–F3) — ler antes de abrir PR |
+| [docs/03-SETUP-E-DEPLOY.md](./docs/03-SETUP-E-DEPLOY.md) | Rodar localmente do zero e publicar              |
+| [docs/02-ARQUITETURA.md](./docs/02-ARQUITETURA.md)       | Onde cada coisa mora, papéis e ADRs              |
+| [docs/09-API.md](./docs/09-API.md)                       | Referência REST                                  |
+| [docs/08-SEGURANCA.md](./docs/08-SEGURANCA.md)           | Modelo de ameaça, RLS, segredos, LGPD            |
+| [docs/10-ROADMAP.md](./docs/10-ROADMAP.md)               | O que ainda está em aberto                       |
 
 ---
 
@@ -44,13 +47,17 @@ segredos obrigatórios e como aplicar o schema no Supabase.
 - Visitante navega o catálogo, filtra (categoria, preço, novidades, mais vendidos) e ordena
 - Checkout via Mercado Pago (cartão, Pix, boleto) com cupons validados no servidor
 - Download liberado automaticamente após aprovação, por token de uso único
-- Admin gerencia produtos (galeria, vídeos, FAQ, depoimentos, benefícios), categorias, cupons,
-  pedidos, vitrine e usuários — 14 abas
+- Painel da loja (dona da loja): produtos (galeria, vídeos, FAQ, depoimentos, benefícios),
+  categorias, cupons, pedidos e a página da loja com prévia ao vivo — vendo só os dados dos
+  materiais dela
+- IA (Gemini) sob demanda, por botão: descrição e SEO do produto, textos da página, estudo de vendas
+- Administração da plataforma (admin): segurança, usuários, professores e clientes
+- Área do professor(a) e aba "Minha conta" (nome, senha, e-mail)
 - Painéis de análise: funil, Curva ABC (produtos e clientes), coorte de retenção, faturamento,
   comparativo, segmentos de e-mail
 - E-mails automáticos por cron horário: newsletter com double opt-in, carrinho abandonado
   (1h/24h), pós-compra (D+3/D+15/D+45) e reativação (90 dias)
-- Auth Supabase (e-mail/senha + Google OAuth) com recuperação por e-mail
+- Auth Supabase (e-mail/senha + Google) para clientes e professores, com recuperação por e-mail
 - Admin com 2FA opcional (TOTP + PIN de recuperação) e audit log append-only das escritas
 - LGPD: banner de consentimento, exportação dos próprios dados, exclusão de conta em dois
   passos, purga automática de logs

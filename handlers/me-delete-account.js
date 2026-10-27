@@ -32,7 +32,7 @@ function respond(res, result) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// LGPD — direito ao esquecimento self-service (pendência §3.8).
+// LGPD — direito ao esquecimento self-service.
 //
 // Fluxo em 2 passos (confirmação por e-mail antes de executar):
 //   1. POST sem token (autenticado por cookie) → gera token assinado e
