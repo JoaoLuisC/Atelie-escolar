@@ -1,4 +1,4 @@
-const { ensureAdminSession } = require('../../lib/admin-session');
+const { ensureStoreSession, getStaffSession, ADMIN_ROLES } = require('../../lib/admin-session');
 const { logAdminAction } = require('../../lib/admin-audit');
 const { recordSecurityEvent, extractClientIp } = require('../../lib/security-logger');
 const { enforceRateLimit } = require('../../lib/rate-limit');
@@ -627,7 +627,7 @@ module.exports = async function adminSettingsHandler(req, res) {
   // Nenhuma resposta admin vai para o cache do navegador (ADM-01/ADM-41).
   setCachePolicy(res, 'adminReport');
   if (guardMethod(req, res, ['GET', 'PUT'])) return;
-  if (!ensureAdminSession(req, res)) return;
+  if (!ensureStoreSession(req, res)) return;
 
   try {
     if (!getSupabaseConfig()) {
@@ -644,6 +644,16 @@ module.exports = async function adminSettingsHandler(req, res) {
         status: 400,
         code: ERROR_CODES.VALIDATION_FAILED,
         message: 'Chave de configuração inválida.',
+      });
+    }
+
+    // 2FA é da administração da plataforma (aba Segurança): a dona da loja
+    // usa as outras chaves (página, vitrine, descrição padrão), não esta.
+    if (key === 'adminConfig' && !ADMIN_ROLES.has(getStaffSession(req)?.role)) {
+      return fail(res, {
+        status: 403,
+        code: ERROR_CODES.FORBIDDEN,
+        message: 'Só a administração da plataforma altera a segurança.',
       });
     }
 

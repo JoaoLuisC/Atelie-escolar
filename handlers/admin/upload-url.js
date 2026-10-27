@@ -1,5 +1,5 @@
 const crypto = require('node:crypto');
-const { ensureAdminSession } = require('../../lib/admin-session');
+const { ensureStoreSession } = require('../../lib/admin-session');
 const { logAdminAction } = require('../../lib/admin-audit');
 const { getSupabaseConfig } = require('../../lib/supabase');
 const { isSafeObjectPath } = require('../../lib/storage-signed-url');
@@ -514,7 +514,7 @@ module.exports = async function adminUploadUrlHandler(req, res) {
   // Nenhuma resposta admin vai para o cache do navegador (ADM-01/ADM-41).
   setCachePolicy(res, 'adminReport');
   if (guardMethod(req, res, ['POST'])) return;
-  if (!ensureAdminSession(req, res)) return;
+  if (!ensureStoreSession(req, res)) return;
 
   const { kind, action } = req.body || {};
   const bucket = BUCKETS[kind];

@@ -1,4 +1,4 @@
-const { ensureAdminSession } = require('../../lib/admin-session');
+const { ensureStoreSession } = require('../../lib/admin-session');
 const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
@@ -93,7 +93,7 @@ async function loadCategoryMap() {
 module.exports = async function adminAbcProductsHandler(req, res) {
   setAdminCorsHeaders(req, res);
   if (guardMethod(req, res, ['GET'])) return;
-  if (!ensureAdminSession(req, res)) return;
+  if (!ensureStoreSession(req, res)) return;
 
   try {
     if (!getSupabaseConfig()) {

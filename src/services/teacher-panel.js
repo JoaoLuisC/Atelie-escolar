@@ -36,3 +36,29 @@ export async function setTeacherProductActive(id, active) {
   }
   return data;
 }
+
+// Aba "Minha conta" (handlers/teacher/account.js): vale para qualquer sessão
+// de staff — professor(a), dona da loja ou admin.
+export async function fetchMyAccount() {
+  const { response, data } = await apiRequest('/teacher/account', {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  if (!response.ok || !data.success) {
+    throw apiError(data, 'Não foi possível carregar sua conta.');
+  }
+  return data.account;
+}
+
+export async function updateMyAccount({ displayName }) {
+  const { response, data } = await apiRequest('/teacher/account', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ displayName }),
+  });
+  if (!response.ok || !data.success) {
+    throw apiError(data, 'Não foi possível salvar sua conta.');
+  }
+  return data.account;
+}

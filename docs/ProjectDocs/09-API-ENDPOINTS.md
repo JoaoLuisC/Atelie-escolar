@@ -441,14 +441,15 @@ Disparado pelo workflow `email-cron.yml` (GitHub Actions) de hora em hora (`cron
 
 ### CRUD (todas as escritas geram audit log via `logAdminAction`)
 
-| Endpoint                    | Métodos                       | Descrição                                                                                                                                       |
-| --------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/admin/products`       | GET, POST, PUT, PATCH, DELETE | Lista (ou `?id=` para um produto) + cria + atualiza + remove produtos. A categoria precisa existir (UUID ou slug); categoria desconhecida → 400 |
-| `/api/admin/categories`     | GET, POST, PUT, DELETE        | Idem para categorias (slug normalizado; 409 em duplicata)                                                                                       |
-| `/api/admin/coupons`        | GET, POST, PUT, DELETE        | CRUD de cupons                                                                                                                                  |
-| `/api/admin/orders`         | GET, PUT, DELETE              | Lista (`?status=` opcional, filtra por `payment_status`) + atualizar + excluir pedidos                                                          |
-| `/api/admin/product-seller` | PUT                           | `{ productId, sellerId }`: atribui o produto a um perfil `SELLER` (400 se o perfil não for professor). Auditado como `assign_seller`            |
-| `/api/admin/users`          | GET, PUT, DELETE              | Listar + atualizar + excluir clientes (profiles)                                                                                                |
+| Endpoint                    | Métodos                       | Descrição                                                                                                                                                   |
+| --------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/admin/products`       | GET, POST, PUT, PATCH, DELETE | Lista (ou `?id=` para um produto) + cria + atualiza + remove produtos. A categoria precisa existir (UUID ou slug); categoria desconhecida → 400             |
+| `/api/admin/categories`     | GET, POST, PUT, DELETE        | Idem para categorias (slug normalizado; 409 em duplicata)                                                                                                   |
+| `/api/admin/coupons`        | GET, POST, PUT, DELETE        | CRUD de cupons                                                                                                                                              |
+| `/api/admin/orders`         | GET, PUT, DELETE              | Lista (`?status=` opcional, filtra por `payment_status`) + atualizar + excluir pedidos                                                                      |
+| `/api/admin/store-owner`    | GET, PUT                      | Só admin. GET `{ sellerId }` da dona da loja; PUT `{ sellerId }` (precisa ser perfil `SELLER`). Auditado como `set_store_owner`. Vale no próximo login dela |
+| `/api/admin/product-seller` | PUT                           | `{ productId, sellerId }`: atribui o produto a um perfil `SELLER` (400 se o perfil não for professor). Auditado como `assign_seller`                        |
+| `/api/admin/users`          | GET, PUT, DELETE              | Listar + atualizar + excluir clientes (profiles)                                                                                                            |
 
 | Rota                     | Método    | O que faz                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -471,10 +472,13 @@ Disparado pelo workflow `email-cron.yml` (GitHub Actions) de hora em hora (`cron
 | `/api/admin/settings`   | GET, PUT | `?key=` de uma whitelist (`homeSections` — faixas de produtos da home —, `homeContent` — textos e blocos da home —, `productDefaults` — descrição comum dos produtos — e `adminConfig` — TOTP, PIN). `homeContent` e `productDefaults` são limpos no PUT (`lib/store-content.js`: whitelist, tetos, links só https/internos; campos descartados voltam em `ignoredFields`). GET de `adminConfig` nunca devolve `totpSecret`/`fallbackPin` (só `has2FA`/`hasPin`); PUT auditado com redação de segredos |
 | `/api/admin/upload-url` | POST     | Gera signed upload URL do Supabase Storage por `kind` (image/video/download), com whitelist de extensão/MIME e bloqueio de SVG/HTML em bucket público                                                                                                                                                                                                                                                                                                                                                  |
 
+> **Painel da loja:** os endpoints de dados, CRUD, análise, vitrine/configurações e upload acima aceitam admin/master **ou a professora dona da loja** (`ensureStoreSession`). Ficam só de admin: `users`, `product-seller`, `store-owner` e `settings?key=adminConfig` (403 para a dona).
+
 ### Professor (sessão de papel `seller`; 403 para os outros papéis)
 
 | Endpoint                 | Métodos     | Descrição                                                                                                                                                                                                                  |
 | ------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/teacher/account`   | GET, PUT    | Qualquer sessão de staff. GET: e-mail, nome, papel, `storeOwner`, forma de login, criação. PUT `{ displayName }` (1–80 caracteres), auditado como `update_own_account`                                                     |
 | `/api/teacher/dashboard` | GET         | Produtos do professor logado com vendas e receita (só pedidos `approved`), categorias e resumo                                                                                                                             |
 | `/api/teacher/products`  | POST, PATCH | POST cria produto do professor (`name`, `price`, `description`, `downloadUrl` validado por `lib/product-media.js`, `categoryId`) — nasce ativo. PATCH `{ id, active }` só no produto com o próprio `seller_id` (senão 404) |
 

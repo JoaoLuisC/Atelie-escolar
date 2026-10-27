@@ -65,6 +65,7 @@ async function listOrders(statusFilter) {
 }
 
 module.exports = createAdminResourceHandler({
+  storeResource: true,
   targetType: 'order',
   errorMessage: 'Erro ao buscar pedidos do admin.',
   loggerName: 'admin-orders',

@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
+import { InfoHint } from './InfoHint';
 
-export function StatCard({ label, value, icon, accent = 'primary', hint = null }) {
+export function StatCard({ label, value, icon, accent = 'primary', hint = null, help }) {
   const accentClasses = {
     primary: 'from-violet-500/10 to-violet-500/0 text-violet-700 ring-violet-200',
     success: 'from-emerald-500/10 to-emerald-500/0 text-emerald-700 ring-emerald-200',
@@ -18,9 +19,12 @@ export function StatCard({ label, value, icon, accent = 'primary', hint = null }
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${accentClass}`} />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {label}
-          </p>
+          <div className="flex items-center gap-1">
+            <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {label}
+            </p>
+            <InfoHint title={label} text={help} />
+          </div>
           <p className="mt-2 truncate text-2xl font-bold text-slate-900 sm:text-3xl">{value}</p>
           {hint ? <p className="mt-1 truncate text-xs text-slate-500">{hint}</p> : null}
         </div>
@@ -45,4 +49,5 @@ StatCard.propTypes = {
   icon: PropTypes.string,
   accent: PropTypes.oneOf(['primary', 'success', 'warning', 'info', 'neutral']),
   hint: PropTypes.string,
+  help: PropTypes.string,
 };

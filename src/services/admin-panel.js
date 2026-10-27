@@ -113,6 +113,19 @@ export async function assignAdminProductSeller(productId, sellerId) {
   });
 }
 
+// Qual professora administra a loja (handlers/admin/store-owner.js).
+export async function fetchStoreOwner() {
+  return request('/admin/store-owner');
+}
+
+export async function setStoreOwner(sellerId) {
+  return request('/admin/store-owner', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sellerId }),
+  });
+}
+
 export async function patchAdminProduct(payload) {
   return request('/admin/products', {
     method: 'PATCH',

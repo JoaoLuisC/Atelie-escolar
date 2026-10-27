@@ -1,4 +1,4 @@
-const { ensureAdminSession } = require('../../lib/admin-session');
+const { ensureStoreSession } = require('../../lib/admin-session');
 const { getSupabaseConfig } = require('../../lib/supabase');
 const { buildSegmentationReport } = require('../../lib/customer-segmentation');
 const { createLogger } = require('../../lib/logger');
@@ -29,7 +29,7 @@ module.exports = async function adminSegmentsHandler(req, res) {
 
   if (guardMethod(req, res, ['GET'])) return;
 
-  if (!ensureAdminSession(req, res)) return;
+  if (!ensureStoreSession(req, res)) return;
 
   try {
     if (!getSupabaseConfig()) {

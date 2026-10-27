@@ -44,6 +44,9 @@ function installAuditSpy() {
 function installAdminSession({ authorized = true } = {}) {
   installModuleMock('../../lib/admin-session', {
     ensureAdminSession: vi.fn(() => authorized),
+    ensureStoreSession: vi.fn(() => authorized),
+    getStaffSession: () => ({ role: 'admin', email: 'admin@teste.com' }),
+    ADMIN_ROLES: new Set(['admin', 'master']),
     setAdminCorsHeaders: () => {},
     getAdminIdentity: () => 'admin@teste.com',
   });

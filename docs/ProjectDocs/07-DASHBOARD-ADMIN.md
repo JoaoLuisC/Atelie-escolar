@@ -21,15 +21,33 @@ Fluxo detalhado: [05-FLUXOS §4](./05-FLUXOS.md).
 Criada no commit `a2c7d40` (26/10/2026), primeira peça da v2
 ([docs/ecommerce-atelie-da-escola](../ecommerce-atelie-da-escola/README.md)).
 
-| Rota                | Quem         | Página                            | O que mostra                                                                                                                                |
-| ------------------- | ------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/admin`            | admin/master | `AdminPage` (as 14 abas abaixo)   | O painel da loja                                                                                                                            |
-| `/admin/plataforma` | admin/master | `src/pages/PlatformAdminPage.jsx` | Professores e alunos (troca de papel), faturamento total/mês e **produtos sem professor**, com atribuição (`PUT /api/admin/product-seller`) |
-| `/professores`      | professor    | `src/pages/TeachersPage.jsx`      | Meus produtos com vendas e receita (só pedidos aprovados), novo material e ativar/desativar                                                 |
+**Desde 27/10/2026 o painel tem duas versões** (`AdminPage variant`, abas em
+`PANEL_TABS` de `src/components/admin/utils/tabs.js`):
 
-O link "Professores e alunos" fica no rodapé do menu lateral do painel. Cada produto tem dono em
-`products.seller_id` (nullable enquanto houver catálogo legado sem atribuição). O professor só
-enxerga e altera linhas com o próprio `seller_id` — o filtro é feito no handler, com service role.
+| Rota           | Quem                                    | Abas                                                                                                                       |
+| -------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `/admin`       | admin/master (plataforma)               | **Professores e clientes** (`PlatformTab`: papéis, dona da loja, produtos sem professor), Usuários, Segurança, Minha conta |
+| `/professores` | professora **dona da loja**             | Painel da loja: Dashboard, Produtos, Pedidos, Cupons, Financeiro, Vendas, Segmentos, Página inicial, Minha conta           |
+| `/professores` | outro professor (SELLER sem ser a dona) | Área simples (`TeachersPage`): meus produtos com vendas e receita, novo material, ativar/desativar, Minha conta            |
+
+**Dona da loja.** A professora que administra a loja white label fica em
+`settings.storeOwner = { sellerId }`, definida pelo admin em "Professores e clientes"
+(`PUT /api/admin/store-owner`). O login grava `storeOwner: true` no cookie assinado
+(`lib/store-owner.js`); os endpoints da loja aceitam essa sessão por `ensureStoreSession`, e
+Usuários, Segurança (`adminConfig`), `product-seller` e `store-owner` continuam em
+`ensureAdminSession`. Trocar a dona vale a partir do próximo login dela. Produto criado pela dona
+já nasce com o `seller_id` dela.
+
+**Minha conta** (`AccountTab`, `/api/teacher/account`): nome editável, e-mail, tipo de conta,
+forma de login e data de criação; a senha se troca por link no e-mail, que volta ao `/admin`.
+
+**"?" nos cards.** `InfoHint` (`src/components/admin/ui/InfoHint.jsx`) explica cada card;
+`Card`, `StatCard` e os cards do Dashboard procuram o texto pelo título em
+`src/constants/card-help.js`. Card novo: acrescentar a explicação lá.
+
+Cada produto tem dono em `products.seller_id` (nullable enquanto houver catálogo legado sem
+atribuição). O professor comum só enxerga e altera linhas com o próprio `seller_id` — o filtro é
+feito no handler, com service role.
 
 > Pendências antes de abrir para outra professora (moderação, isolamento do arquivo de download,
 > split de pagamento, termos de quem vende): [13-ROADMAP, checklist F](./13-ROADMAP-PENDENCIAS.md).

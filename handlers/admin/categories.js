@@ -159,6 +159,7 @@ async function deleteCategory(rawId) {
 }
 
 module.exports = createAdminResourceHandler({
+  storeResource: true,
   targetType: 'category',
   errorMessage: 'Erro ao processar categorias do admin.',
   loggerName: 'admin-categories',

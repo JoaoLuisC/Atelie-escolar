@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ScrollToTop } from './components/ScrollToTop';
 import { ROUTES } from './constants/routes';
+import { useAuth } from './hooks/useAuth';
 
 const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })));
 const ProductsPage = lazy(() =>
@@ -40,12 +41,18 @@ const AdminLoginPage = lazy(() =>
   import('./pages/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })),
 );
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
-const PlatformAdminPage = lazy(() =>
-  import('./pages/PlatformAdminPage').then((m) => ({ default: m.PlatformAdminPage })),
-);
 const TeachersPage = lazy(() =>
   import('./pages/TeachersPage').then((m) => ({ default: m.TeachersPage })),
 );
+
+/**
+ * /professores: a dona da loja administra a loja inteira (o mesmo painel, na
+ * versão "store"); os demais professores ficam com a área simples.
+ */
+function TeacherHome() {
+  const { adminStoreOwner } = useAuth();
+  return adminStoreOwner ? <AdminPage variant="store" /> : <TeachersPage />;
+}
 
 function RouteFallback() {
   return (
@@ -79,15 +86,7 @@ export default function App() {
             path={ROUTES.admin}
             element={
               <ProtectedRoute fallback={<AdminLoginPage />} allowedRoles={['admin', 'master']}>
-                <AdminPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path={ROUTES.adminPlataforma}
-            element={
-              <ProtectedRoute fallback={<AdminLoginPage />} allowedRoles={['admin', 'master']}>
-                <PlatformAdminPage />
+                <AdminPage variant="platform" />
               </ProtectedRoute>
             }
           />
@@ -95,11 +94,13 @@ export default function App() {
             path={ROUTES.professores}
             element={
               <ProtectedRoute fallback={<AdminLoginPage />} allowedRoles={['seller']}>
-                <TeachersPage />
+                <TeacherHome />
               </ProtectedRoute>
             }
           />
           <Route path="/admin/usuarios" element={<Navigate to={ROUTES.admin} replace />} />
+          {/* A visão da plataforma virou a aba "Professores e clientes" do /admin. */}
+          <Route path="/admin/plataforma" element={<Navigate to={ROUTES.admin} replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>

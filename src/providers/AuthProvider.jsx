@@ -21,6 +21,8 @@ export const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [adminRole, setAdminRole] = useState('');
+  // Professor(a) dona da loja: abre o painel da loja em /professores.
+  const [adminStoreOwner, setAdminStoreOwner] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [customerSession, setCustomerSession] = useState(null);
   // Garante que o consumo do callback OAuth rode uma única vez (evita
@@ -37,6 +39,7 @@ export function AuthProvider({ children }) {
         if (!cancelled) {
           setAdminAuthenticated(data.authenticated === true);
           setAdminRole(data.role || '');
+          setAdminStoreOwner(data.storeOwner === true);
           // Atualização FUNCIONAL, e não `setCustomerSession(customer)` direto:
           // este efeito corre em paralelo com o do callback OAuth, e os dois
           // escrevem no mesmo estado. Na volta do Google, `fetchCustomerSession`
@@ -52,6 +55,7 @@ export function AuthProvider({ children }) {
         if (!cancelled) {
           setAdminAuthenticated(false);
           setAdminRole('');
+          setAdminStoreOwner(false);
           setCustomerSession(null);
         }
       } finally {
@@ -100,6 +104,7 @@ export function AuthProvider({ children }) {
       authReady,
       adminAuthenticated,
       adminRole,
+      adminStoreOwner,
       async loginAdmin(credentials) {
         const data = await loginAdmin(credentials);
         // Só autentica de fato quando NÃO há segundo fator pendente. Quando
@@ -108,6 +113,7 @@ export function AuthProvider({ children }) {
         if (!data?.requiresSecondFactor) {
           setAdminAuthenticated(true);
           setAdminRole(String(data?.user?.role || '').toLowerCase());
+          setAdminStoreOwner(data?.user?.storeOwner === true);
         }
         return data;
       },
@@ -120,6 +126,7 @@ export function AuthProvider({ children }) {
         if (data?.success) {
           setAdminAuthenticated(true);
           setAdminRole(String(data.user?.role || '').toLowerCase());
+          setAdminStoreOwner(data.user?.storeOwner === true);
         }
         return data;
       },
@@ -134,6 +141,7 @@ export function AuthProvider({ children }) {
           if (session && session.authenticated === false) {
             setAdminAuthenticated(false);
             setAdminRole('');
+            setAdminStoreOwner(false);
             return;
           }
           error.sessionStillActive = true;
@@ -141,6 +149,7 @@ export function AuthProvider({ children }) {
         }
         setAdminAuthenticated(false);
         setAdminRole('');
+        setAdminStoreOwner(false);
       },
       setAdminAuthenticated,
       customerSession,
@@ -195,7 +204,7 @@ export function AuthProvider({ children }) {
         setCustomerSession({ email, name, uid, role });
       },
     }),
-    [authReady, adminAuthenticated, adminRole, customerSession],
+    [authReady, adminAuthenticated, adminRole, adminStoreOwner, customerSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

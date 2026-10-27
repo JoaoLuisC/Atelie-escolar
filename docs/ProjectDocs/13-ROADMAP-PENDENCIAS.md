@@ -467,6 +467,10 @@ com login**; vira bloqueante no dia em que houver.
 - [ ] **Dinheiro:** todo pagamento cai na conta Mercado Pago do João; não há split, comissão nem
       repasse. Fazer: split do Mercado Pago (Marketplace) ou repasse manual registrado — decisão
       de negócio e fiscal ([docs/ecommerce-atelie-da-escola](../ecommerce-atelie-da-escola/README.md))
+- [ ] **2FA por conta:** o 2º fator (`adminConfig`) é um só, da administração. A dona da loja entra
+      sem 2º fator e vê pedidos e clientes. Fazer: 2FA por usuário (segredo por `profiles.id`)
+- [x] Painel separado (27/10): admin com Professores e clientes, Usuários e Segurança; a dona da
+      loja com o painel da loja em `/professores`; "Minha conta" e "?" nos cards
 - [ ] **Termos do professor:** `/termos` cobre só a loja atual. Falta o contrato de quem vende
       (licença do material, comissão, repasse, retirada)
 - [ ] `products.seller_id` ainda é nullable — atribuir os produtos legados em `/admin/plataforma`

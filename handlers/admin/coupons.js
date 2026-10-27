@@ -159,6 +159,7 @@ async function deleteCoupon(rawId) {
 }
 
 module.exports = createAdminResourceHandler({
+  storeResource: true,
   targetType: 'coupon',
   errorMessage: 'Erro ao processar cupons do admin.',
   loggerName: 'admin-coupons',

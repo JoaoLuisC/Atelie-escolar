@@ -1,4 +1,4 @@
-const { ensureAdminSession } = require('../../lib/admin-session');
+const { ensureStoreSession } = require('../../lib/admin-session');
 const { logAdminAction } = require('../../lib/admin-audit');
 const { getSupabaseConfig, supabaseRequest } = require('../../lib/supabase');
 const {
@@ -31,7 +31,7 @@ module.exports = async function adminCleanupEventsHandler(req, res) {
 
   if (guardMethod(req, res, ['POST'])) return;
 
-  if (!ensureAdminSession(req, res)) {
+  if (!ensureStoreSession(req, res)) {
     return;
   }
 

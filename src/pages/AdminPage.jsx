@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import PropTypes from 'prop-types';
 import { ROUTES } from '../constants/routes';
 import { SEO } from '../components/SEO';
 import { useAuth } from '../hooks/useAuth';
@@ -44,7 +45,7 @@ import {
   serializeHomeSections,
 } from '../components/admin/utils/derive';
 import { isSessionError } from '../constants/error-codes';
-import { TAB_LABELS, TABS_NEEDING_DASHBOARD } from '../components/admin/utils/tabs';
+import { PANEL_TABS, TAB_LABELS, TABS_NEEDING_DASHBOARD } from '../components/admin/utils/tabs';
 
 // ════════════════════════════════════════════════════════════════════
 // 14 ABAS E 2 WIZARDS POR `lazy()` — §1.3 do doc de otimização.
@@ -94,6 +95,8 @@ const SecurityTab = lazyTab('SecurityTab', () => import('../components/admin/tab
 // Funil, Curva ABC/coorte e Estudo de vendas (IA) moram como subabas da aba Vendas.
 const SalesHub = lazyTab('SalesHub', () => import('../components/admin/tabs/SalesHub'));
 const SegmentsTab = lazyTab('SegmentsTab', () => import('../components/admin/tabs/SegmentsTab'));
+const PlatformTab = lazyTab('PlatformTab', () => import('../components/admin/tabs/PlatformTab'));
+const AccountTab = lazyTab('AccountTab', () => import('../components/admin/tabs/AccountTab'));
 
 /** Mesmo indicador do `App.jsx`, restrito à área de conteúdo. */
 function TabFallback() {
@@ -126,7 +129,8 @@ const EMPTY_DASHBOARD = {
   settings: { homeSections: { sections: [] } },
 };
 
-export function AdminPage() {
+export function AdminPage({ variant = 'store' }) {
+  const panelTabs = PANEL_TABS[variant] || PANEL_TABS.store;
   const { logoutAdmin, setAdminAuthenticated, adminAuthenticated } = useAuth();
   const { pushToast } = useToast();
   // Só em DEV: em produção a flag é inerte (ver ProtectedRoute).
@@ -134,7 +138,7 @@ export function AdminPage() {
     import.meta.env.DEV && import.meta.env.VITE_ALLOW_ADMIN_BYPASS === 'true';
   const showBypassBanner = allowAdminBypass && !adminAuthenticated;
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(panelTabs[0]);
   const [dashboardData, setDashboardData] = useState(EMPTY_DASHBOARD);
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -695,6 +699,10 @@ export function AdminPage() {
         return (
           <SecurityTab config={adminConfig} onSave={handleSecuritySave} saving={securitySaving} />
         );
+      case 'plataforma':
+        return <PlatformTab />;
+      case 'conta':
+        return <AccountTab />;
       default:
         return null;
     }
@@ -703,12 +711,18 @@ export function AdminPage() {
   return (
     <>
       {/* Título próprio e noindex/nofollow: o painel não é página para buscador (LOJA-26). */}
-      <SEO title="Painel administrativo" pathname={ROUTES.admin} noindex />
+      <SEO
+        title={variant === 'platform' ? 'Administração da plataforma' : 'Painel da loja'}
+        pathname={variant === 'platform' ? ROUTES.admin : ROUTES.professores}
+        noindex
+      />
       <AdminLayout
+        variant={variant}
+        tabs={panelTabs}
         activeTab={activeTab}
         onTabChange={setActiveTab}
         pageTitle={pageTitle}
-        userLabel={adminEmail || 'Administrador'}
+        userLabel={adminEmail || (variant === 'platform' ? 'Administração' : 'Professora')}
         onLogout={onLogout}
       >
         {showBypassBanner ? (
@@ -767,3 +781,7 @@ export function AdminPage() {
     </>
   );
 }
+
+AdminPage.propTypes = {
+  variant: PropTypes.oneOf(['platform', 'store']),
+};

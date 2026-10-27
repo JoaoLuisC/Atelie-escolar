@@ -41,9 +41,6 @@ export const ROUTES = Object.freeze({
   // Entrada única do painel: sem sessão admin mostra o login, com sessão o painel.
   // A proteção é a sessão (`ProtectedRoute` + backend), não a URL.
   admin: '/admin',
-  // Visão da plataforma (professores, alunos, produtos sem professor). Fica
-  // FORA de `admin` para não tomar o lugar do painel da loja.
-  adminPlataforma: '/admin/plataforma',
 });
 
 /**

@@ -4,6 +4,7 @@ import { formatPrice } from '../../../utils/currency';
 import { formatRatio } from '../../../utils/number';
 import { fetchAdminKpis } from '../../../services/admin-panel';
 import { Card } from '../ui/Card';
+import { InfoHint } from '../ui/InfoHint';
 import { StatusChip } from '../ui/StatusChip';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
@@ -153,9 +154,12 @@ function HeroCard({
     >
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[11px] font-bold uppercase tracking-widest text-slate-500">
-            {label}
-          </p>
+          <div className="flex items-center gap-1">
+            <p className="truncate text-[11px] font-bold uppercase tracking-widest text-slate-500">
+              {label}
+            </p>
+            <InfoHint title={label} />
+          </div>
           <p className="mt-2 truncate text-2xl font-extrabold text-slate-900 sm:text-3xl">
             {value}
           </p>
@@ -205,10 +209,13 @@ function MiniStat({ label, value, icon, accent = 'neutral' }) {
       >
         <i className={`bi bi-${icon}`} />
       </span>
-      <div className="min-w-0">
-        <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          {label}
-        </p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            {label}
+          </p>
+          <InfoHint title={label} />
+        </div>
         <p className="truncate text-base font-bold text-slate-900">{value}</p>
       </div>
     </div>
@@ -493,7 +500,10 @@ function PendingDataCard({ title, icon, message, hint }) {
           <i className={`bi bi-${icon}`} />
         </span>
         <div>
-          <h2 className="text-base font-semibold text-slate-700">{title}</h2>
+          <h2 className="flex items-center gap-1.5 text-base font-semibold text-slate-700">
+            {title}
+            <InfoHint title={title} />
+          </h2>
           <p className="text-xs text-slate-500">Em breve</p>
         </div>
       </div>

@@ -11,6 +11,7 @@ const {
   uuidId,
 } = require('../../validation/admin.schemas');
 const { validateProductMedia } = require('../../lib/product-media');
+const { getStaffSession } = require('../../lib/admin-session');
 
 /** Erro de validação no formato que a factory despacha por `fail()`. */
 function invalid(message) {
@@ -241,7 +242,7 @@ async function getProduct(rawId) {
   return { status: 200, body: { product } };
 }
 
-async function createProduct(body) {
+async function createProduct(body, req) {
   const parsed = parse(productCreateSchema, body);
   if (!parsed.ok) return invalid(parsed.message);
 
@@ -250,6 +251,10 @@ async function createProduct(body) {
   const payload = toProductPayload({ ...body, category_id: category.id });
   const mediaError = mediaProblem(payload);
   if (mediaError) return invalid(mediaError);
+  // Produto criado pela dona da loja já nasce dela (products.seller_id); o
+  // admin da plataforma cria sem dono e atribui em "Professores e clientes".
+  const session = getStaffSession(req);
+  if (session?.role === 'seller' && session.userId) payload.seller_id = session.userId;
   const [created] = await insertIntoTable('products', payload);
   return { status: 201, body: { id: String(created.id) } };
 }
@@ -334,6 +339,7 @@ async function deleteProduct(rawId) {
 }
 
 module.exports = createAdminResourceHandler({
+  storeResource: true,
   targetType: 'product',
   errorMessage: 'Erro ao processar produtos do admin',
   loggerName: 'admin-products',
@@ -344,7 +350,7 @@ module.exports = createAdminResourceHandler({
       if (id) return getProduct(id);
       return { status: 200, body: { products: await listProducts() } };
     },
-    POST: (req) => createProduct(req.body || {}),
+    POST: (req) => createProduct(req.body || {}, req),
     PUT: (req) => updateProduct(req.body || {}),
     PATCH: (req) => patchProduct(req.body || {}),
     DELETE: (req) => deleteProduct(String(req.query?.id || req.body?.id || '').trim()),

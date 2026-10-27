@@ -69,6 +69,7 @@ export async function getAdminSession() {
     email: typeof data.email === 'string' ? data.email : '',
     role: typeof data.role === 'string' ? data.role.toLowerCase() : '',
     userId: typeof data.userId === 'string' ? data.userId : '',
+    storeOwner: data.storeOwner === true,
   };
 }
 

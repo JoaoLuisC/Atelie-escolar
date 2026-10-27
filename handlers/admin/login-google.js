@@ -30,6 +30,7 @@ const {
   setCachePolicy,
 } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
+const { isStoreOwner } = require('../../lib/store-owner');
 
 const log = createLogger('admin-login-google');
 
@@ -108,8 +109,9 @@ module.exports = async function adminLoginGoogleHandler(req, res) {
     }
 
     const email = String(user.email || '').toLowerCase();
-    setSessionCookie(res, { email, role, userId: user.id });
-    return ok(res, { success: true, user: { role, email } });
+    const storeOwner = await isStoreOwner({ role, userId: user.id });
+    setSessionCookie(res, { email, role, userId: user.id, storeOwner });
+    return ok(res, { success: true, user: { role, email, storeOwner } });
   } catch (error) {
     log.error('handler_failed', { reason: error?.message || String(error) });
     return fail(res, {

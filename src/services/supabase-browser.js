@@ -76,7 +76,9 @@ export function buildPasswordResetRedirectUrl(postResetRedirect = '/checkout') {
     throw new Error('Recuperacao de senha disponivel apenas no navegador.');
   }
 
-  const safeRedirect = postResetRedirect === '/downloads' ? '/downloads' : '/checkout';
+  const safeRedirect = ['/downloads', ROUTES.admin].includes(postResetRedirect)
+    ? postResetRedirect
+    : '/checkout';
   const url = new URL(CUSTOMER_RESET_PASSWORD_PATH, globalThis.window.location.origin);
   url.searchParams.set('redirect', safeRedirect);
 

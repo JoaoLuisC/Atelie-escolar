@@ -118,6 +118,9 @@ function installSupportMocks() {
     // A sessão é considerada VÁLIDA em todos os testes: o ponto é justamente
     // que "ser admin" não basta para mexer no 2º fator.
     ensureAdminSession: () => true,
+    ensureStoreSession: () => true,
+    getStaffSession: () => ({ role: 'admin', email: 'admin@teste.com' }),
+    ADMIN_ROLES: new Set(['admin', 'master']),
     setAdminCorsHeaders: () => {},
     getAdminIdentity: () => 'admin@teste.com',
     safeCompare: (a, b) => String(a) === String(b) && String(a).length > 0,

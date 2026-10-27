@@ -5,28 +5,34 @@ import App from '../App';
 import { ROUTES } from '../constants/routes';
 
 // ════════════════════════════════════════════════════════════════════
-// Qual página cada rota do painel monta.
+// Qual painel cada rota e cada conta abrem.
 //
-// O commit da plataforma de professores (a2c7d40) apontou `ROUTES.admin` para a
-// `PlatformAdminPage` (professores, alunos, faturamento) e o `AdminPage` — o
-// painel da loja, com Produtos, Home, Vendas, Cupons e Segurança — ficou sem
-// rota nenhuma. Em produção a dona perdeu o cadastro de produto sem nenhum
-// teste falhar. As páginas são trocadas por marcadores: o que importa aqui é
-// o mapa rota → página, não o conteúdo delas.
+// O commit da plataforma de professores (a2c7d40) já deixou o painel da loja
+// sem rota uma vez, sem nenhum teste falhar. Hoje são três destinos:
+//   • admin/master em /admin       → painel da PLATAFORMA (professores e
+//     clientes, usuários, segurança);
+//   • dona da loja em /professores → painel da LOJA (produtos, pedidos…);
+//   • outro professor em /professores → área simples.
+// As páginas viram marcadores: o que importa é o mapa rota × conta → página.
 // ════════════════════════════════════════════════════════════════════
 
-const authState = { authReady: true, adminAuthenticated: true, adminRole: 'admin' };
+const authState = {
+  authReady: true,
+  adminAuthenticated: true,
+  adminRole: 'admin',
+  adminStoreOwner: false,
+};
 
 vi.mock('../hooks/useAuth', () => ({ useAuth: () => authState }));
-vi.mock('../pages/AdminPage', () => ({ AdminPage: () => <p>painel-da-loja</p> }));
-vi.mock('../pages/PlatformAdminPage', () => ({
-  PlatformAdminPage: () => <p>painel-da-plataforma</p>,
+vi.mock('../pages/AdminPage', () => ({
+  AdminPage: ({ variant }) => <p>painel-{variant}</p>,
 }));
 vi.mock('../pages/TeachersPage', () => ({ TeachersPage: () => <p>area-do-professor</p> }));
 vi.mock('../pages/AdminLoginPage', () => ({ AdminLoginPage: () => <p>login</p> }));
 
-function renderAt(path, role) {
+function renderAt(path, { role, storeOwner = false }) {
   authState.adminRole = role;
+  authState.adminStoreOwner = storeOwner;
   return render(
     <MemoryRouter initialEntries={[path]}>
       <App />
@@ -35,23 +41,28 @@ function renderAt(path, role) {
 }
 
 describe('rotas do painel', () => {
-  it('/admin abre o painel da loja', async () => {
-    renderAt(ROUTES.admin, 'admin');
-    expect(await screen.findByText('painel-da-loja')).toBeInTheDocument();
+  it('admin em /admin abre o painel da plataforma', async () => {
+    renderAt(ROUTES.admin, { role: 'admin' });
+    expect(await screen.findByText('painel-platform')).toBeInTheDocument();
   });
 
-  it('/admin/plataforma abre a visão da plataforma para admin', async () => {
-    renderAt(ROUTES.adminPlataforma, 'master');
-    expect(await screen.findByText('painel-da-plataforma')).toBeInTheDocument();
+  it('o antigo /admin/plataforma leva ao /admin', async () => {
+    renderAt('/admin/plataforma', { role: 'master' });
+    expect(await screen.findByText('painel-platform')).toBeInTheDocument();
   });
 
-  it('professor não entra no painel da loja nem na plataforma', async () => {
-    renderAt(ROUTES.admin, 'seller');
-    expect(await screen.findByText('login')).toBeInTheDocument();
+  it('dona da loja em /professores abre o painel da loja', async () => {
+    renderAt(ROUTES.professores, { role: 'seller', storeOwner: true });
+    expect(await screen.findByText('painel-store')).toBeInTheDocument();
   });
 
-  it('/professores abre a área do professor', async () => {
-    renderAt(ROUTES.professores, 'seller');
+  it('outro professor em /professores fica com a área simples', async () => {
+    renderAt(ROUTES.professores, { role: 'seller' });
     expect(await screen.findByText('area-do-professor')).toBeInTheDocument();
+  });
+
+  it('professor(a) não entra no /admin', async () => {
+    renderAt(ROUTES.admin, { role: 'seller', storeOwner: true });
+    expect(await screen.findByText('login')).toBeInTheDocument();
   });
 });

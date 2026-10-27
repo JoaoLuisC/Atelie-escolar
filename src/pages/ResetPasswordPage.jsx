@@ -8,8 +8,13 @@ function getSafeRedirect(search) {
   const params = new URLSearchParams(search);
   const redirect = params.get('redirect');
 
-  return redirect === '/downloads' ? '/downloads' : '/checkout';
+  // Allowlist fixa (nada de caminho livre vindo da URL): downloads, o login do
+  // painel (troca de senha pela aba "Minha conta") ou, por padrão, o checkout.
+  if (redirect === '/downloads' || redirect === ROUTES.admin) return redirect;
+  return '/checkout';
 }
+
+const REDIRECT_LABELS = { '/downloads': 'Downloads', [ROUTES.admin]: 'o login do painel' };
 
 function applyRecoverySessionFromUrl(supabase) {
   const searchParams = new URLSearchParams(globalThis.window.location.search);
@@ -264,7 +269,7 @@ export function ResetPasswordPage() {
 
           <p className="text-xs text-slate-500">
             Após concluir, você será redirecionado para{' '}
-            <strong>{redirectTo === '/downloads' ? 'Downloads' : 'Checkout'}</strong>.
+            <strong>{REDIRECT_LABELS[redirectTo] || 'Checkout'}</strong>.
           </p>
         </form>
       </article>

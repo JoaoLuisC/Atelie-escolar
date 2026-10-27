@@ -31,6 +31,7 @@ const {
 } = require('../../lib/admin-2fa');
 const { sendEmail } = require('../../lib/email-sender');
 const { adminLoginCode } = require('../../lib/email-templates');
+const { isStoreOwner } = require('../../lib/store-owner');
 
 // TTL do desafio de 2º fator. Era 300s; caiu para 120s porque o desafio é um
 // portador de "a senha já foi conferida" e o único uso legítimo dele é o
@@ -552,13 +553,15 @@ module.exports = async function adminLoginHandler(req, res) {
     }
   }
 
+  const storeOwner = await isStoreOwner({ role: normalizedRole, userId: authData.user.id });
   // Grava a identidade individual no cookie de sessão (não-repúdio no audit).
   setSessionCookie(res, {
     email: authData.user.email || email,
     role: normalizedRole,
     userId: authData.user.id,
+    storeOwner,
   });
-  return ok(res, { success: true, user: { role: normalizedRole || 'admin', email } });
+  return ok(res, { success: true, user: { role: normalizedRole || 'admin', email, storeOwner } });
 };
 
 // Primitivos de 2º fator reaproveitados por handlers/admin/settings.js (reautenticação

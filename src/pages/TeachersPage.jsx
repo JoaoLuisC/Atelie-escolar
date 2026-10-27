@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SEO } from '../components/SEO';
+import { AccountTab } from '../components/admin/tabs/AccountTab';
+import { StatCard } from '../components/admin/ui/StatCard';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { ROUTES } from '../constants/routes';
@@ -90,21 +92,20 @@ export function TeachersPage() {
           </button>
         </header>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            ['Produtos', summary.products || 0],
-            ['Produtos ativos', summary.activeProducts || 0],
-            ['Vendas aprovadas', summary.sales || 0],
-            ['Faturamento', currency(summary.revenue)],
-          ].map(([label, value]) => (
-            <article
-              key={label}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              <p className="text-sm text-slate-500">{label}</p>
-              <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
-            </article>
-          ))}
+        <section className="grid gap-4 sm:grid-cols-3">
+          <StatCard
+            label="Meus produtos"
+            value={summary.products || 0}
+            hint={`${summary.activeProducts || 0} visíveis na loja`}
+            icon="box-seam-fill"
+          />
+          <StatCard label="Vendas" value={summary.sales || 0} icon="bag-check-fill" accent="info" />
+          <StatCard
+            label="Receita"
+            value={currency(summary.revenue)}
+            icon="cash-coin"
+            accent="success"
+          />
         </section>
 
         <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -202,6 +203,11 @@ export function TeachersPage() {
               </button>
             </div>
           </form>
+        </section>
+
+        <section className="mt-8">
+          <h2 className="mb-4 text-xl font-bold text-slate-900">Minha conta</h2>
+          <AccountTab />
         </section>
       </div>
     </main>

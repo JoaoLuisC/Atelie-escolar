@@ -15,6 +15,13 @@ module.exports = async function adminSessionHandler(req, res) {
     authenticated,
     // E-mail da conta logada, para o rodapé do painel dizer QUAL conta está
     // ativa (ADM-19). Só existe com sessão válida — o cookie é do próprio admin.
-    ...(authenticated ? { email: session.email, role: session.role, userId: session.userId } : {}),
+    ...(authenticated
+      ? {
+          email: session.email,
+          role: session.role,
+          userId: session.userId,
+          storeOwner: session.storeOwner,
+        }
+      : {}),
   });
 };

@@ -7,6 +7,12 @@ import { ROUTES } from '../../constants/routes';
 const NAV_SECTIONS = [
   {
     type: 'item',
+    id: 'plataforma',
+    label: 'Professores e clientes',
+    icon: 'mortarboard-fill',
+  },
+  {
+    type: 'item',
     id: 'dashboard',
     label: 'Dashboard',
     icon: 'grid-1x2-fill',
@@ -75,7 +81,30 @@ const NAV_SECTIONS = [
     label: 'Segurança',
     icon: 'shield-lock-fill',
   },
+  {
+    type: 'item',
+    id: 'conta',
+    label: 'Minha conta',
+    icon: 'person-circle',
+  },
 ];
+
+/** Só as abas da versão do painel; grupo sem nenhuma aba some. */
+function sectionsFor(tabs) {
+  const allowed = new Set(tabs);
+  return NAV_SECTIONS.map((section) =>
+    section.type === 'group'
+      ? { ...section, items: section.items.filter((item) => allowed.has(item.id)) }
+      : section,
+  ).filter((section) =>
+    section.type === 'group' ? section.items.length > 0 : allowed.has(section.id),
+  );
+}
+
+const PANEL_NAMES = {
+  platform: { title: 'Administração da plataforma', session: 'Administração' },
+  store: { title: 'Painel da loja', session: 'Professora · dona da loja' },
+};
 
 function NavItem({ active, label, icon, onClick }) {
   return (
@@ -147,7 +176,18 @@ NavGroup.propTypes = {
   onSelect: PropTypes.func.isRequired,
 };
 
-export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLogout, children }) {
+export function AdminLayout({
+  variant = 'store',
+  tabs,
+  activeTab,
+  onTabChange,
+  pageTitle,
+  userLabel,
+  onLogout,
+  children,
+}) {
+  const sections = sectionsFor(tabs || NAV_SECTIONS.map((section) => section.id));
+  const names = PANEL_NAMES[variant] || PANEL_NAMES.store;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuButtonRef = useRef(null);
   const today = formatToday();
@@ -197,7 +237,7 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
           </span>
           <div className="min-w-0">
             <div className="truncate text-sm font-bold text-slate-900">Ateliê da Escola</div>
-            <div className="truncate text-xs text-slate-500">Painel Administrativo</div>
+            <div className="truncate text-xs text-slate-500">{names.title}</div>
           </div>
         </div>
 
@@ -211,7 +251,7 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
             <i className="bi bi-arrow-up-right ml-auto text-xs opacity-60" />
           </Link>
           <div className="flex flex-col gap-1">
-            {NAV_SECTIONS.map((section) => {
+            {sections.map((section) => {
               if (section.type === 'group') {
                 return (
                   <NavGroup
@@ -243,17 +283,10 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
                 {userLabel}
               </div>
               <div className="truncate text-[10px] uppercase tracking-wide text-slate-500">
-                Sessão admin
+                {names.session}
               </div>
             </div>
           </div>
-          <Link
-            to={ROUTES.adminPlataforma}
-            className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
-          >
-            <i className="bi bi-people-fill" />
-            Professores e alunos
-          </Link>
           <button
             type="button"
             onClick={onLogout}
@@ -291,6 +324,8 @@ export function AdminLayout({ activeTab, onTabChange, pageTitle, userLabel, onLo
 }
 
 AdminLayout.propTypes = {
+  variant: PropTypes.oneOf(['platform', 'store']),
+  tabs: PropTypes.arrayOf(PropTypes.string),
   activeTab: PropTypes.string.isRequired,
   onTabChange: PropTypes.func.isRequired,
   pageTitle: PropTypes.string.isRequired,

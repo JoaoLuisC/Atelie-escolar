@@ -1,4 +1,4 @@
-const { ensureAdminSession } = require('../../lib/admin-session');
+const { ensureStoreSession } = require('../../lib/admin-session');
 const { logAdminAction } = require('../../lib/admin-audit');
 const { enforceRateLimit } = require('../../lib/rate-limit');
 const { createLogger } = require('../../lib/logger');
@@ -56,7 +56,7 @@ module.exports = async function adminSalesStudyHandler(req, res) {
   setAdminCorsHeaders(req, res);
   setCachePolicy(res, 'adminReport');
   if (guardMethod(req, res, ['GET', 'POST'])) return;
-  if (!ensureAdminSession(req, res)) return;
+  if (!ensureStoreSession(req, res)) return;
 
   try {
     if (!getSupabaseConfig()) {

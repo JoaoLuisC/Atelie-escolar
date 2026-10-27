@@ -28,7 +28,10 @@ function arrange({ orders = [], settings = [] } = {}) {
   });
   installSupabaseMock(store);
   installRateLimitPassthrough();
-  installModuleMock('../../lib/admin-session', { ensureAdminSession: () => true });
+  installModuleMock('../../lib/admin-session', {
+    ensureAdminSession: () => true,
+    ensureStoreSession: () => true,
+  });
   logAdminAction = vi.fn(async () => {});
   installModuleMock('../../lib/admin-audit', { logAdminAction });
   generateInsights = vi.fn(async () => ({

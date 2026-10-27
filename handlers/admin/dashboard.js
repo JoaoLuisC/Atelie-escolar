@@ -1,4 +1,4 @@
-const { ensureAdminSession } = require('../../lib/admin-session');
+const { ensureStoreSession } = require('../../lib/admin-session');
 const {
   getSupabaseConfig,
   serviceRoleHelpers: { listTableRows },
@@ -321,7 +321,7 @@ module.exports = async function adminDashboardHandler(req, res) {
 
   if (guardMethod(req, res, ['GET'])) return;
 
-  if (!ensureAdminSession(req, res)) {
+  if (!ensureStoreSession(req, res)) {
     return;
   }
 
