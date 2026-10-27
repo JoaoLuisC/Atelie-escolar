@@ -263,3 +263,52 @@ describe('/admin/products · excluir produto com pedidos (ACH-04)', () => {
     expect(res.body.error.message).toMatch(/Pause o produto/);
   });
 });
+
+describe('/admin/users · a dona da loja não sai pela aba Usuários', () => {
+  const PERFIL_DONA = { id: USER_ID, email: 'dona@loja.test', role: 'SELLER' };
+  const rotasDaDona = [
+    { method: 'GET', path: '/rest/v1/profiles', reply: () => jsonResponse(200, [PERFIL_DONA]) },
+    {
+      method: 'GET',
+      path: '/rest/v1/settings',
+      reply: () => jsonResponse(200, [{ setting_value: { sellerId: USER_ID } }]),
+    },
+  ];
+
+  it('rebaixar a dona para cliente devolve 409 e não grava nada', async () => {
+    const calls = installFetch(rotasDaDona);
+    const handler = loadFresh('../admin/users.js');
+
+    const res = createRes();
+    await handler(reqAdmin('PUT', { body: { id: USER_ID, role: 'customer' } }), res);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error.message).toMatch(/dona da loja/);
+    expect(calls.some((c) => c.method === 'PATCH' && c.path.endsWith('/profiles'))).toBe(false);
+  });
+
+  it('revogar o acesso da dona devolve 409 antes de banir', async () => {
+    const calls = installFetch(rotasDaDona);
+    const handler = loadFresh('../admin/users.js');
+
+    const res = createRes();
+    await handler(reqAdmin('DELETE', { query: { id: USER_ID } }), res);
+
+    expect(res.statusCode).toBe(409);
+    expect(calls.some((c) => c.path.includes('/auth/v1/admin/users'))).toBe(false);
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+  });
+
+  it('trocar só o nome da dona continua permitido', async () => {
+    installFetch([
+      ...rotasDaDona,
+      { method: 'PATCH', path: '/rest/v1/profiles', reply: () => jsonResponse(200, [{}]) },
+    ]);
+    const handler = loadFresh('../admin/users.js');
+
+    const res = createRes();
+    await handler(reqAdmin('PUT', { body: { id: USER_ID, name: 'Profa. Márcia' } }), res);
+
+    expect(res.statusCode).toBe(200);
+  });
+});

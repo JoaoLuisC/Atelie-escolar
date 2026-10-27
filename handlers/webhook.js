@@ -6,6 +6,7 @@ const {
 } = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
 const { sendOrderConfirmation } = require('../lib/order-confirmation');
+const { markCartsRecovered } = require('../lib/cart-recovery');
 const { recordEvent } = require('../lib/analytics-events');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 // Reconciliação de valor (P0-1) — porta ÚNICA, compartilhada com
@@ -248,6 +249,8 @@ module.exports = async function webhookHandler(req, res) {
 
         // Confirmação do pedido — best-effort, nunca lança.
         await sendOrderConfirmation({ order, isNewAccount: provision?.created === true });
+        // O carrinho virou pedido: o cron não manda mais o lembrete.
+        await markCartsRecovered(order.customer_email);
 
         await recordEvent({
           eventName: 'payment_approved',

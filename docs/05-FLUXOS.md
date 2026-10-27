@@ -262,9 +262,8 @@ sequência, cada um com link de descadastro de 1 clique.
 - `POST /api/send-confirmation-email` reenvia a confirmação; o destinatário é sempre o e-mail
   gravado no pedido.
 
-> **Limitação conhecida:** a coluna `abandoned_carts.recovered_at` é respeitada pelo cron, mas
-> nenhum fluxo a preenche. Quem abandona o carrinho e compra em seguida ainda pode receber o
-> lembrete — e ter pedido aprovado é justamente o que libera o envio.
+Quando um pedido é aprovado (webhook ou `verify-payment`), os carrinhos em aberto do mesmo
+e-mail ganham `recovered_at` (`lib/cart-recovery.js`) e o cron não manda mais o lembrete.
 
 ---
 
@@ -356,7 +355,7 @@ O `redirectTo` precisa estar no `uri_allow_list` do Supabase (`scripts/configure
 flowchart TD
     A1[Cliente: /login → Esqueci a senha] --> B
     A2[Staff: Minha conta → Esqueci a senha atual<br/>ou Enviar link para criar senha] --> B
-    A3[Staff: login do painel → Esqueci minha senha<br/>abre /login?mode=forgot] --> B
+    A3[Staff: login do painel → Esqueci minha senha<br/>abre /login?mode=forgot&redirect=/admin] --> B
     B[supabase.auth.resetPasswordForEmail<br/>redirectTo /reset-password?redirect=...] --> C[E-mail via SMTP Resend]
     C --> D[ResetPasswordPage]
     D --> E[?code= → exchangeCodeForSession<br/>#tokens → setSession]
@@ -366,8 +365,8 @@ flowchart TD
 ```
 
 O destino depois da troca só pode ser `/checkout`, `/downloads` ou `/admin`. Pela aba Minha conta
-o link volta ao `/admin` (login do painel); pelo link "Esqueci minha senha" da tela de login do
-painel, que reaproveita a tela do cliente sem `redirect`, volta ao `/checkout`.
+e pelo link "Esqueci minha senha" da tela de login do painel, o link volta ao `/admin` (login do
+painel).
 
 **Pré-requisitos.** SMTP próprio no Supabase Auth (o SMTP padrão só entrega para membros da
 organização); domínio verificado no Resend; em sandbox do Resend, só o e-mail dono da conta

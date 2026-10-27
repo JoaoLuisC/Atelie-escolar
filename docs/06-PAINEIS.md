@@ -372,20 +372,10 @@ Itens a resolver, também listados em [10-ROADMAP](./10-ROADMAP.md):
   (campo de URL), mas o servidor só aceita arquivo do Storage da loja e o upload
   (`/api/admin/upload-url`) é só da dona. Na prática, outro professor não consegue cadastrar um
   material vendável. Também não tem fotos nem edição depois de criado.
-- **"?" incompleto.** Ficam sem explicação os cards cujo título não está em `card-help.js`:
-  Produtos, Categorias, Pedidos, Cupons de desconto, Usuários, Produtos sem professor, Boas
-  práticas, Seus dados, Trocar senha, Trocar e-mail e Senha e e-mail.
 - **Usuários × Professores e clientes.** As duas abas trocam papel; Usuários chama o professor de
   "Vendedor". A lista de Usuários esconde um e-mail fixo no código (`handlers/admin/users.js`).
-- **Dona da loja sem proteção no servidor.** Só a tela impede remover o acesso da dona; pela aba
-  Usuários (ou pela API) ela pode ser rebaixada ou ter o acesso revogado, e o cookie já emitido
-  continua valendo até expirar (8 h).
 - **Dona da loja sem 2º fator.** Ela vê pedidos e e-mails de clientes e entra só com senha ou
   Google.
-- **Sessão do papel errado.** Professor(a) logado que abre `/admin` (ou admin em `/professores`)
-  vê o formulário de login, não um aviso nem o próprio painel.
-- **"Esqueci minha senha" da tela do painel** abre a recuperação do cliente sem `redirect`: depois
-  de trocar a senha, a pessoa cai no `/checkout`.
 - **Vendas por região** é um card vazio no Dashboard.
 - **Sem visualização de `security_events`** no painel (consulta por SQL ou pelo webhook de alerta
   `SECURITY_ALERT_WEBHOOK_URL`); `/api/admin/cleanup-events` existe sem botão.

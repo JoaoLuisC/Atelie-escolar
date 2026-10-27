@@ -126,6 +126,7 @@ Um mecanismo só: `enforceRateLimit` no início do handler, com contador atômic
 | `/teacher/account` (senha/e-mail)                                        | `staff-account-reauth` (IP + conta) | 5 / 10 min                    | passa               |
 | `/admin/settings` (reautenticação 2FA)                                   | `admin-settings-2fa`                | 5 / 10 min                    | passa               |
 | `/admin/ai-assist`                                                       | `admin-ai-assist`                   | 30 / hora                     | passa               |
+| `/teacher/products`                                                      | `teacher-products`                  | 60 / hora                     | passa               |
 | `/admin/sales-study`                                                     | `admin-sales-study`                 | 10 / hora                     | passa               |
 | `/verify-payment`                                                        | `verify-payment` (por pedido)       | 600 / 10 min                  | passa               |
 | ⤷ teto por conexão                                                       | `verify-payment-scan` (IP)          | 40 pedidos distintos / 10 min | passa               |
@@ -359,11 +360,13 @@ Resultados ficam fora do repositório.
   bloquear: só relatório.
 - **Runtime (`npm audit --omit=dev`): 0 vulnerabilidades.** O SDK do Mercado Pago está na 3.x,
   o que eliminou a advisory antiga do `uuid`.
-- **Árvore completa:** 13 advisories, todas em ferramentas de dev/build/teste: `shell-quote` via
-  `concurrently` (crítica), `vite` 8.0–8.1.5 (alta, servidor de dev), `undici` via `jsdom`,
-  `brace-expansion` via `eslint`, `browserslist`, `source-map-js`, `postcss-selector-parser`,
-  `baseline-browser-mapping`, `@vitest/mocker`. Quase todas saem com `npm audit fix`; o
-  `postcss-selector-parser` (via `@tailwindcss/typography`) só com `--force`.
+- **Árvore completa:** 2 advisories moderadas, ambas do `postcss-selector-parser` via
+  `@tailwindcss/typography` (só no build do CSS). O `npm audit fix` só resolve trocando de major
+  (`--force`), então ficam aceitas até o plugin publicar a correção.
+- O `npm audit fix` / `npm update` do npm 10 falha com `Cannot read properties of null (reading
+'edgesOut')` nesta árvore (bug do arborist com o peer set do `vite`). Contorno:
+  `npx npm@11 install -D <pacote>@<versão>` e depois `npm ci` com o npm normal para validar o
+  lockfile.
 
 Rotina:
 
@@ -391,4 +394,3 @@ Rotina:
   `handlers/teacher/products.js`. Só vira risco quando houver outro professor com login.
 - **Moderação.** Produto de professor nasce `active: true` e entra direto na loja.
 - **Pen-test externo** nunca feito (escopo no §11).
-- **Dependências de dev:** rodar `npm audit fix` e revalidar build e testes (§12).

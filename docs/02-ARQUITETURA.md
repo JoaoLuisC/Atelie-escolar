@@ -85,7 +85,7 @@ Projeto-mae/
 │   ├── api-compat.routes.js     # o resto de handlers/ como /api/*
 │   └── __tests__/               # paridade de rotas (identidade de módulo) + guardas
 │
-├── lib/                         # 40 módulos de serviço do backend
+├── lib/                         # 41 módulos de serviço do backend
 │   ├── express-app.js           # o app: trust proxy, helmet, cors, parsers, rotas, 404
 │   ├── route-mount.js           # mountHandler: adaptador único handler → Express
 │   ├── http.js                  # ok/fail, ERROR_CODES, guardMethod, CORS, cache (ADR 0004)
@@ -107,6 +107,7 @@ Projeto-mae/
 │   ├── payment-integrity.js     # reconciliação valor/moeda/live_mode (ADR 0003)
 │   ├── money.js                 # dinheiro em centavos inteiros
 │   ├── order-confirmation.js    # e-mail de confirmação na 1ª aprovação
+│   ├── cart-recovery.js         # carrinho vira "recuperado" na 1ª aprovação
 │   ├── coupons.js / public-catalog.js / product-media.js / store-content.js / sales-counts.js
 │   ├── gemini.js                # chamada ao Gemini com JSON de formato fechado
 │   ├── ai-assist.js             # tarefas de IA do painel (produto, SEO, página)

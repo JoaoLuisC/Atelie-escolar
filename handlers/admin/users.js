@@ -4,6 +4,7 @@ const {
 } = require('../../lib/supabase');
 const { ERROR_CODES } = require('../../lib/http');
 const { getAdminClient } = require('../../services/supabase-auth');
+const { getStoreOwnerId } = require('../../lib/store-owner');
 const { parse } = require('../../validation');
 const { userUpdateSchema, uuidId } = require('../../validation/admin.schemas');
 
@@ -50,6 +51,23 @@ function normalizeEmail(value) {
 
 function isPrivileged(role) {
   return PRIVILEGED_ROLES.has(String(role || '').toLowerCase());
+}
+
+// A dona da loja (`settings.storeOwner`) precisa continuar professora: se ela
+// virasse cliente ou perdesse o acesso, o setting apontaria para alguém fora
+// do painel e a loja ficaria sem quem a administra. Troca-se a dona primeiro.
+function storeOwnerLocked(action) {
+  return {
+    error: {
+      status: 409,
+      code: ERROR_CODES.CONFLICT,
+      message: `Esta conta é a dona da loja e não pode ${action}. Escolha outra dona em "Professores e clientes" antes.`,
+    },
+  };
+}
+
+async function isStoreOwner(id) {
+  return (await getStoreOwnerId()) === String(id);
 }
 
 function formatUsers(usersRows, statsByEmail) {
@@ -136,6 +154,9 @@ async function updateUser(body) {
   const payload = {};
   if (fields.name !== undefined) payload.display_name = fields.name;
   if (fields.role !== undefined) payload.role = DB_ROLE_BY_ASSIGNABLE[fields.role];
+  if (payload.role && payload.role !== 'SELLER' && (await isStoreOwner(id))) {
+    return storeOwnerLocked('deixar de ser professora');
+  }
   if (fields.provider !== undefined) payload.provider = fields.provider;
 
   try {
@@ -170,6 +191,8 @@ async function deleteUser(rawId) {
       },
     };
   }
+
+  if (await isStoreOwner(id)) return storeOwnerLocked('perder o acesso');
 
   // REVOGAR = impedir o login, não só sumir da lista (ACH-07 de 05/10). Apagar
   // só `profiles` deixava a conta de auth.users intacta: a pessoa continuava

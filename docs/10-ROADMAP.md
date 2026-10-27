@@ -58,18 +58,11 @@ fica em `send`); `LHCI_GITHUB_APP_TOKEN` no GitHub para o Lighthouse comentar no
   [Rich Results Test](https://search.google.com/test/rich-results).
 - Lighthouse mobile: Performance ≥ 90, SEO ≥ 95 (se SEO < 95, ver §3).
 
-### 1.3 Ajustes de código achados na revisão da documentação (27/10/2026)
+### 1.3 Segredos antigos
 
-| Problema                                                                                                                                                     | Onde                                                                                |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| Quem compra continua recebendo o lembrete de carrinho abandonado: nada preenche `abandoned_carts.recovered_at` quando o pedido é aprovado                    | `handlers/cron-email-jobs.js` (lê a coluna) × webhook/verify-payment (nunca gravam) |
-| "Esqueci minha senha" na tela de login do painel abre o fluxo do cliente sem `redirect`, e a redefinição termina no `/checkout` em vez de voltar ao painel   | `src/pages/AdminLoginPage.jsx` (link `?mode=forgot`)                                |
-| Nada no servidor impede rebaixar ou remover a dona da loja pela aba Usuários; o `settings.storeOwner` fica apontando para alguém que não é mais professor(a) | `handlers/admin/users.js`                                                           |
-| Professor(a) logado(a) que abre `/admin` vê a tela de login de novo, em vez de ir para `/professores`                                                        | `src/App.jsx` / `AdminLoginPage.jsx`                                                |
-| O "?" de ajuda ainda falta em alguns cards (Produtos, Pedidos, Cupons, Minha conta e outros)                                                                 | `src/constants/card-help.js`                                                        |
-| `/api/teacher/products` não grava no audit log (regra I1) nem tem rate limit próprio                                                                         | `handlers/teacher/products.js`                                                      |
-| 13 advisories em ferramentas de dev (2 críticas, `shell-quote` via `concurrently`); o runtime tem 0                                                          | `npm audit fix`                                                                     |
-| Credenciais antigas (`.env.production`, PATs do Supabase) continuam no histórico do git: rotacionar antes de pensar em expurgar                              | [08-SEGURANCA](./08-SEGURANCA.md), pendências                                       |
+| Problema                                                                                                                        | Onde                                          |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Credenciais antigas (`.env.production`, PATs do Supabase) continuam no histórico do git: rotacionar antes de pensar em expurgar | [08-SEGURANCA](./08-SEGURANCA.md), pendências |
 
 Recorrentes de segurança (rotação de segredos, pen-test, checklist de release) moram em
 [08-SEGURANCA](./08-SEGURANCA.md).

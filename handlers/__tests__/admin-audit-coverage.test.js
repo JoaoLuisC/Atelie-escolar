@@ -114,7 +114,8 @@ function listarRotasAdmin() {
   for (const router of routers) {
     for (const layer of router.stack || []) {
       const routePath = layer.route?.path;
-      if (!routePath || !routePath.startsWith('/admin/')) continue;
+      // /teacher/* também é painel (área do professor e Minha conta).
+      if (!routePath || !/^\/(admin|teacher)\//.test(routePath)) continue;
 
       const handles = (layer.route.stack || []).map((entry) => entry.handle);
       const mounted = handles.map((handle) => getMountedHandler(handle)).find(Boolean);

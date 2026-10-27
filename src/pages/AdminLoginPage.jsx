@@ -326,7 +326,7 @@ export function AdminLoginPage() {
             redefinição de senha da loja serve para ela também (ADM-18). */}
         <div className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs">
           <Link
-            to={`${ROUTES.login}?mode=forgot`}
+            to={`${ROUTES.login}?mode=forgot&redirect=${encodeURIComponent(ROUTES.admin)}`}
             className="font-semibold text-violet-700 hover:underline"
           >
             Esqueci minha senha

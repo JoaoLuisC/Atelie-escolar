@@ -101,7 +101,6 @@ Lista resumida; o que fazer e em que ordem está em [10-ROADMAP](./10-ROADMAP.md
 
 - **Plataforma de professores (v2)**: sem split/repasse (todo pagamento cai numa conta Mercado Pago só), sem moderação (produto de professor nasce ativo), sem prefixo por vendedor no arquivo de download, sem contrato do vendedor, `products.seller_id` ainda opcional.
 - **2º fator por conta**: o 2º fator é um só, da administração. Professor(a) e a dona da loja entram sem 2º fator.
-- **Audit log da área simples do professor**: criar e ativar/desativar produto em `/api/teacher/products` não grava no `admin_audit_log`.
 - **Mídia paga** (Google Ads, Meta Ads), **A/B test** e **heatmap**: não iniciados.
 - **Export CSV** só existe na Curva ABC e coorte; pedidos, clientes e segmentos ainda não exportam.
 - **Vendas por região**: o checkout não pede UF, então o card do Dashboard fica vazio.

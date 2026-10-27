@@ -7,6 +7,7 @@ const {
 } = require('../lib/supabase');
 const { ensureCustomerAccountFromCheckout } = require('../lib/customer-account-provisioning');
 const { sendOrderConfirmation } = require('../lib/order-confirmation');
+const { markCartsRecovered } = require('../lib/cart-recovery');
 const { recordSecurityEvent, extractClientIp } = require('../lib/security-logger');
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 
@@ -396,6 +397,7 @@ async function refreshApprovedOrderData(order, orderId, req) {
         items: orderItems,
         isNewAccount: provision?.created === true,
       });
+      await markCartsRecovered(order.customer_email);
     }
 
     // A resposta reflete o que foi PERSISTIDO. Quando o UPDATE afetou a linha,

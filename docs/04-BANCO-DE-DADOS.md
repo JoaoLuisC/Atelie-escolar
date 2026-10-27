@@ -210,16 +210,16 @@ Só backend. CRUD na aba Cupons do painel; validação em `/api/validate-coupon`
 Carrinho com e-mail informado e pagamento não confirmado; lembretes em ~1h e ~24h pelo cron de
 e-mail. Só backend. Retenção de 90 dias.
 
-| Coluna                      | Tipo                 | Notas                                                         |
-| --------------------------- | -------------------- | ------------------------------------------------------------- |
-| `id`                        | bigint identity PK   |                                                               |
-| `email`                     | text                 | UNIQUE `(lower(email), coalesce(session_id, ''))`             |
-| `session_id`                | text nullable        |                                                               |
-| `items`, `total_amount`     | jsonb, numeric(12,2) | Retrato do carrinho                                           |
-| `attribution_data`          | jsonb                |                                                               |
-| `reminder_sent_at`          | timestamptz nullable | Gravado pelo cron                                             |
-| `recovered_at`              | timestamptz nullable | Reservada: nada grava hoje; o cron só lê para pular lembretes |
-| `created_at` / `updated_at` | timestamptz          |                                                               |
+| Coluna                      | Tipo                 | Notas                                                                                                          |
+| --------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`                        | bigint identity PK   |                                                                                                                |
+| `email`                     | text                 | UNIQUE `(lower(email), coalesce(session_id, ''))`                                                              |
+| `session_id`                | text nullable        |                                                                                                                |
+| `items`, `total_amount`     | jsonb, numeric(12,2) | Retrato do carrinho                                                                                            |
+| `attribution_data`          | jsonb                |                                                                                                                |
+| `reminder_sent_at`          | timestamptz nullable | Gravado pelo cron                                                                                              |
+| `recovered_at`              | timestamptz nullable | Gravado na primeira aprovação de um pedido com o mesmo e-mail (`lib/cart-recovery.js`); o cron pula o carrinho |
+| `created_at` / `updated_at` | timestamptz          |                                                                                                                |
 
 ### `email_subscribers`
 

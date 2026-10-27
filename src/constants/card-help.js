@@ -71,10 +71,30 @@ export const CARD_HELP = Object.freeze({
   'Descrição padrão de todos os produtos':
     'Um texto que aparece em todas as páginas de produto, logo abaixo da descrição de cada um (ex.: como funciona o download).',
   'Segundo fator': 'Código extra pedido no login da administração, além da senha.',
+  'Boas práticas': 'Cuidados simples que mantêm a conta da administração segura.',
+  Produtos:
+    'Todos os materiais da loja. Daqui você cria, edita, pausa (some da loja sem perder nada) ou exclui cada um.',
+  Categorias:
+    'Os grupos que organizam a loja (ex.: banners, atividades). O cliente usa para filtrar o catálogo.',
+  Pedidos:
+    'Cada compra feita na loja, com o status do pagamento no Mercado Pago. Pedido aprovado já liberou os downloads.',
+  'Cupons de desconto':
+    'Códigos que o cliente digita no checkout para ganhar desconto. O desconto é conferido no servidor, nunca no navegador.',
+  Usuários: 'Contas de clientes e professores: compras, valor gasto e o papel de cada uma.',
+
+  // ── Minha conta ──
+  'Seus dados': 'Nome e e-mail desta conta, como aparecem no painel.',
+  'Senha e e-mail': 'Como você entra no painel.',
+  'Trocar senha':
+    'Pede a senha atual para confirmar que é você. A nova vale a partir do próximo login.',
+  'Trocar e-mail':
+    'O e-mail novo só passa a valer depois que você clicar no link de confirmação enviado para ele.',
 
   // ── Plataforma e área do professor ──
   Professores: 'Contas com perfil de professor(a): podem vender materiais na plataforma.',
   Clientes: 'Contas de quem compra na loja.',
+  'Produtos sem professor':
+    'Materiais que ainda não têm um(a) professor(a) responsável. Atribua cada um para ele contar no painel de quem vende.',
   'Faturamento total': 'Tudo que já foi vendido e pago na plataforma.',
   'Faturamento no mês': 'Pedidos pagos desde o dia 1º deste mês.',
   'Meus produtos': 'Quantos materiais você cadastrou e quantos estão visíveis na loja.',

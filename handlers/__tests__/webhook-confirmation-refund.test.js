@@ -97,9 +97,18 @@ function arrange({ mpPayment = payment(), order = baseOrder(), tokens = [], prov
   const sendOrderConfirmation = vi.fn(async () => ({ sent: true }));
   installModuleMock('../../lib/order-confirmation', { sendOrderConfirmation });
 
+  const markCartsRecovered = vi.fn(async () => ({ marked: true }));
+  installModuleMock('../../lib/cart-recovery', { markCartsRecovered });
+
   installMercadoPagoSdkMock({ payment: mpPayment });
 
-  return { store, recordEvent, sendOrderConfirmation, handler: loadHandler('../webhook.js') };
+  return {
+    store,
+    recordEvent,
+    sendOrderConfirmation,
+    markCartsRecovered,
+    handler: loadHandler('../webhook.js'),
+  };
 }
 
 function webhookRequest(requestId = 'req-1') {
@@ -153,6 +162,16 @@ describe('confirmação do pedido por e-mail', () => {
     expect(order.order_code).toBe(ORDER_CODE);
     expect(order.customer_email).toBe('dono@real.com');
     expect(isNewAccount).toBe(true);
+  });
+
+  it('na primeira aprovação o carrinho do e-mail vira recuperado (sem lembrete depois)', async () => {
+    const { handler, markCartsRecovered } = arrange();
+
+    await handler(webhookRequest('req-1'), createMockRes());
+    await handler(webhookRequest('req-2'), createMockRes());
+
+    expect(markCartsRecovered).toHaveBeenCalledTimes(1);
+    expect(markCartsRecovered).toHaveBeenCalledWith('dono@real.com');
   });
 
   it('reentrega da notificação aprovada não manda o e-mail de novo', async () => {

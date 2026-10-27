@@ -61,8 +61,24 @@ describe('rotas do painel', () => {
     expect(await screen.findByText('area-do-professor')).toBeInTheDocument();
   });
 
-  it('professor(a) não entra no /admin', async () => {
+  it('professor(a) logado(a) no /admin vai para o painel dele(a), não para o login', async () => {
     renderAt(ROUTES.admin, { role: 'seller', storeOwner: true });
-    expect(await screen.findByText('login')).toBeInTheDocument();
+    expect(await screen.findByText('painel-store')).toBeInTheDocument();
+    expect(screen.queryByText('painel-platform')).not.toBeInTheDocument();
+  });
+
+  it('admin logado no /professores vai para o /admin', async () => {
+    renderAt(ROUTES.professores, { role: 'admin' });
+    expect(await screen.findByText('painel-platform')).toBeInTheDocument();
+  });
+
+  it('sem sessão, o /admin mostra o login', async () => {
+    authState.adminAuthenticated = false;
+    try {
+      renderAt(ROUTES.admin, { role: null });
+      expect(await screen.findByText('login')).toBeInTheDocument();
+    } finally {
+      authState.adminAuthenticated = true;
+    }
   });
 });

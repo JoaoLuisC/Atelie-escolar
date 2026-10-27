@@ -1,6 +1,16 @@
 import PropTypes from 'prop-types';
-import { useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
+import { ROUTES } from '../constants/routes';
 import { useAuth } from '../hooks/useAuth';
+
+// Painel de cada papel de staff. Logado no painel errado (professora abrindo
+// /admin, admin abrindo /professores), a pessoa vai para o dela em vez de ver
+// o formulário de login de novo.
+const PANEL_BY_ROLE = Object.freeze({
+  admin: ROUTES.admin,
+  master: ROUTES.admin,
+  seller: ROUTES.professores,
+});
 
 /**
  * Guarda do painel admin. Sem sessão admin, renderiza `fallback` (o formulário
@@ -39,6 +49,8 @@ export function ProtectedRoute({ children, fallback, allowedRoles }) {
     allowedRoles.includes(String(adminRole || '').toLowerCase());
 
   if ((!adminAuthenticated || !roleAllowed) && (!allowAdminBypass || wantsLogin)) {
+    const ownPanel = adminAuthenticated && PANEL_BY_ROLE[String(adminRole || '').toLowerCase()];
+    if (ownPanel && ownPanel !== location.pathname) return <Navigate to={ownPanel} replace />;
     return fallback;
   }
 

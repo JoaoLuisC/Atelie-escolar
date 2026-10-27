@@ -18,6 +18,8 @@ const {
   setCachePolicy,
 } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
+const { logAdminAction } = require('../../lib/admin-audit');
+const { enforceRateLimit, RATE_LIMITS } = require('../../lib/rate-limit');
 const { validateProductMedia } = require('../../lib/product-media');
 
 const log = createLogger('teacher-products');
@@ -40,6 +42,8 @@ module.exports = async function teacherProductsHandler(req, res) {
   setAdminCorsHeaders(req, res);
   setCachePolicy(res, 'adminReport');
   if (guardMethod(req, res, ['POST', 'PATCH'])) return;
+  const gate = await enforceRateLimit(req, res, RATE_LIMITS.teacherProducts);
+  if (gate.blocked) return;
   if (!ensureRoleSession(req, res, ['seller'])) return;
 
   const sellerId = getStaffSession(req)?.userId;
@@ -79,6 +83,13 @@ module.exports = async function teacherProductsHandler(req, res) {
         category_id: categoryId?.data || null,
         active: true,
       });
+      await logAdminAction({
+        req,
+        action: 'create',
+        targetType: 'product',
+        targetId: String(product.id),
+        after: { name: parsed.data.name, price: parsed.data.price, sellerId },
+      });
       return ok(res, { id: String(product.id) }, { status: 201 });
     }
 
@@ -105,6 +116,13 @@ module.exports = async function teacherProductsHandler(req, res) {
       { id: 'eq.' + parsed.data.id, seller_id: 'eq.' + sellerId },
       payload,
     );
+    await logAdminAction({
+      req,
+      action: 'patch',
+      targetType: 'product',
+      targetId: String(parsed.data.id),
+      after: { active: payload.active, sellerId },
+    });
     return ok(res, {});
   } catch (error) {
     log.error('handler_failed', { reason: error?.message || String(error) });
