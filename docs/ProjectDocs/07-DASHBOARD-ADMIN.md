@@ -41,6 +41,25 @@ já nasce com o `seller_id` dela.
 **Minha conta** (`AccountTab`, `/api/teacher/account`): nome editável, e-mail, tipo de conta,
 forma de login e data de criação; a senha se troca por link no e-mail, que volta ao `/admin`.
 
+**Página da loja com prévia ao vivo.** A aba "Página da loja" (antes "Página inicial") mostra,
+ao lado do formulário, a própria `HomePage` renderizada com o rascunho (`HomePreview`, tela de
+1280 px reduzida, `inert`), com o aviso "Alterações ainda não salvas". As partes do formulário
+ganharam nomes em linguagem simples ("Banner principal", "Vitrine de produtos", "Passo a passo
+da compra"…) e uma frase dizendo onde ficam na página.
+
+**IA (Gemini) — sempre um botão que diz o que faz e só gera no clique** (`AiAssistPanel`;
+nada é gravado sem a pessoa clicar em "Usar…" e depois salvar):
+
+| Onde                          | Botão                           | O que sugere                                                         |
+| ----------------------------- | ------------------------------- | -------------------------------------------------------------------- |
+| Cadastro de produto (etapa 1) | Escrever descrição com IA       | Descrição de venda, benefícios e FAQ                                 |
+| Cadastro de produto (etapa 1) | Sugerir nome, Google e preço    | Nome, título/resumo do Google e faixa de preço comparada ao catálogo |
+| Página da loja                | Sugerir textos da página com IA | Banner, vitrine e passo a passo (aparecem na prévia antes de salvar) |
+| Vendas → Estudo de vendas     | Gerar nova análise              | Leitura dos números da loja (já existia)                             |
+
+Backend: `POST /api/admin/ai-assist` (`lib/ai-assist.js` sobre `lib/gemini.js`). A IA recebe só
+o que foi digitado e nomes/categorias/preços do catálogo — nunca dados de cliente.
+
 **"?" nos cards.** `InfoHint` (`src/components/admin/ui/InfoHint.jsx`) explica cada card;
 `Card`, `StatCard` e os cards do Dashboard procuram o texto pelo título em
 `src/constants/card-help.js`. Card novo: acrescentar a explicação lá.

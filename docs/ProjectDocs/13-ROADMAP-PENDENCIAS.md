@@ -471,6 +471,9 @@ com login**; vira bloqueante no dia em que houver.
       sem 2º fator e vê pedidos e clientes. Fazer: 2FA por usuário (segredo por `profiles.id`)
 - [x] Painel separado (27/10): admin com Professores e clientes, Usuários e Segurança; a dona da
       loja com o painel da loja em `/professores`; "Minha conta" e "?" nos cards
+- [x] Página da loja com prévia ao vivo e nomes simples; IA por botão na descrição/nome/preço do
+      produto e nos textos da página (27/10)
+- [ ] IA para o professor comum (área simples): hoje os botões de IA ficam no painel da loja
 - [ ] **Termos do professor:** `/termos` cobre só a loja atual. Falta o contrato de quem vende
       (licença do material, comissão, repasse, retirada)
 - [ ] `products.seller_id` ainda é nullable — atribuir os produtos legados em `/admin/plataforma`

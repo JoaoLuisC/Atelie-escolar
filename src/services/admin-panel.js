@@ -263,3 +263,14 @@ export async function uploadProductAsset({ kind, file, onProgress }) {
 
   return { url: finalUrl, bucket, path };
 }
+
+// Sugestão de texto pela IA (handlers/admin/ai-assist.js). `task`:
+// productCopy | productSeo | homeCopy. Só é chamada no clique do botão.
+export async function requestAiAssist(task, input) {
+  const data = await request('/admin/ai-assist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task, input }),
+  });
+  return data.suggestion;
+}

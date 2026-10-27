@@ -73,7 +73,7 @@ const NAV_SECTIONS = [
   {
     type: 'item',
     id: 'vitrine',
-    label: 'Página inicial',
+    label: 'Página da loja',
     icon: 'layout-text-window-reverse',
   },
   {

@@ -350,9 +350,23 @@ ProductCard.propTypes = {
   }).isRequired,
 };
 
-export function HomePage() {
+/**
+ * @param {object}  [props]
+ * @param {object}  [props.previewContent] rascunho do editor "Página da loja"
+ *        (aba do painel): a página mostra ESTE conteúdo em vez do salvo, sem
+ *        buscá-lo — é a prévia ao vivo.
+ * @param {boolean} [props.embedded] sem cabeçalho/rodapé da loja nem SEO —
+ *        para a página caber dentro do painel.
+ */
+export function HomePage({ previewContent = null, embedded = false }) {
   // `null` até a configuração da home responder (ou falhar e cair no padrão).
-  const [content, setContent] = useState(null);
+  const [savedContent, setContent] = useState(null);
+  const isPreview = previewContent !== null;
+  const previewMerged = useMemo(
+    () => (isPreview ? mergeHomeContent(previewContent) : null),
+    [isPreview, previewContent],
+  );
+  const content = previewMerged || savedContent;
   const [homeSections, setHomeSections] = useState([]);
   const [homeSectionsStatus, setHomeSectionsStatus] = useState('');
   const [homeSectionsError, setHomeSectionsError] = useState('');
@@ -370,6 +384,8 @@ export function HomePage() {
   }, [socialProof]);
 
   useEffect(() => {
+    // Na prévia o conteúdo vem do editor; nada a buscar.
+    if (isPreview) return undefined;
     let mounted = true;
     // Sem setState síncrono aqui (regra D5): o estado só muda quando a
     // resposta chega. Falha de rede não quebra a home — vale o padrão.
@@ -383,7 +399,7 @@ export function HomePage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isPreview]);
 
   useEffect(() => {
     let mounted = true;
@@ -727,6 +743,15 @@ export function HomePage() {
 
   const seo = content?.seo || DEFAULT_HOME_CONTENT.seo;
 
+  const blocks = content ? (
+    content.blocks.filter((block) => block.enabled).map((block) => renderBlock(block.id))
+  ) : (
+    // Configuração ainda chegando: só o fundo do hero, com esqueleto.
+    <HeroBlock hero={null} prefersReducedMotion={prefersReducedMotion} />
+  );
+
+  if (embedded) return <div className="bg-white">{blocks}</div>;
+
   return (
     <Shell>
       <SEO
@@ -735,12 +760,12 @@ export function HomePage() {
         pathname="/"
         jsonLd={homeJsonLd}
       />
-      {content ? (
-        content.blocks.filter((block) => block.enabled).map((block) => renderBlock(block.id))
-      ) : (
-        // Configuração ainda chegando: só o fundo do hero, com esqueleto.
-        <HeroBlock hero={null} prefersReducedMotion={prefersReducedMotion} />
-      )}
+      {blocks}
     </Shell>
   );
 }
+
+HomePage.propTypes = {
+  previewContent: PropTypes.object,
+  embedded: PropTypes.bool,
+};

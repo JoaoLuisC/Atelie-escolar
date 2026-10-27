@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════
 // Conteúdo PADRÃO da página inicial — e a regra de como ele se mistura com o
-// que a admin salvou na aba "Página inicial" do painel.
+// que a admin salvou na aba "Página da loja" do painel.
 //
 // O servidor (lib/store-content.js) guarda só o que foi salvo, já limpo. Aqui
 // mora o resto: os textos que a home sempre teve, que valem enquanto a admin
@@ -9,11 +9,11 @@
 // ════════════════════════════════════════════════════════════════════
 
 export const HOME_BLOCKS = Object.freeze([
-  { id: 'hero', label: 'Topo (hero)' },
-  { id: 'marquee', label: 'Faixa de palavras' },
-  { id: 'catalog', label: 'Catálogo e faixas de produtos' },
-  { id: 'howItWorks', label: 'Como funciona' },
-  { id: 'socialProof', label: 'Prova social e redes' },
+  { id: 'hero', label: 'Banner principal (topo da página)' },
+  { id: 'marquee', label: 'Faixa de palavras que desliza' },
+  { id: 'catalog', label: 'Vitrine de produtos' },
+  { id: 'howItWorks', label: 'Passo a passo da compra' },
+  { id: 'socialProof', label: 'Depoimentos, números e redes sociais' },
 ]);
 
 export const DEFAULT_HOME_CONTENT = Object.freeze({

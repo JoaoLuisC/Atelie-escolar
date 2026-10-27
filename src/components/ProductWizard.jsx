@@ -2,7 +2,9 @@ import PropTypes from 'prop-types';
 import { useEffect, useRef, useState } from 'react';
 import { ModalWizard } from './ModalWizard';
 import { useToast } from '../hooks/useToast';
-import { uploadProductAsset } from '../services/admin-panel';
+import { requestAiAssist, uploadProductAsset } from '../services/admin-panel';
+import { AiAssistPanel } from './admin/ui/AiAssistPanel';
+import { formatPrice } from '../utils/currency';
 import { categoryLabel } from './admin/utils/category-label';
 import {
   cleanBenefits,
@@ -202,6 +204,29 @@ export function ProductWizard({
     { id: 'conversion', label: 'Conversão' },
   ];
 
+  // O que a IA recebe: só o que já está digitado no formulário.
+  function aiInput() {
+    return {
+      name: formData.name,
+      category: categories.find((cat) => cat.id === formData.category)?.name || '',
+      description: formData.description,
+      price: formData.price,
+    };
+  }
+
+  // Benefícios e FAQ sugeridos entram DEPOIS dos que já existem (nada é apagado).
+  function applyAiExtras(suggestion) {
+    setBenefits((prev) => [
+      ...prev.filter((item) => item.label),
+      ...suggestion.beneficios.map((label) => ({ icon: '', label })),
+    ]);
+    setFaq((prev) => [
+      ...prev.filter((item) => item.question || item.answer),
+      ...suggestion.faq.map((item) => ({ question: item.pergunta, answer: item.resposta })),
+    ]);
+    pushToast('Benefícios e perguntas adicionados na etapa Conversão.', 'success');
+  }
+
   return (
     <ModalWizard
       title={initialProduct ? 'Editar Produto' : 'Adicionar Produto'}
@@ -278,6 +303,121 @@ export function ProductWizard({
               className={INPUT_CLASS}
             />
           </Field>
+
+          <div className="flex flex-col gap-3 sm:col-span-2">
+            <AiAssistPanel
+              title="Escrever descrição com IA"
+              description="A IA escreve uma descrição de venda, benefícios e perguntas frequentes a partir do nome, da categoria e do que você já escreveu. Você revisa e escolhe o que usar."
+              buttonLabel="Escrever descrição"
+              onRequest={() => requestAiAssist('productCopy', aiInput())}
+              renderSuggestion={(suggestion) => (
+                <>
+                  <p className="whitespace-pre-line">{suggestion.descricao}</p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({ ...prev, description: suggestion.descricao }))
+                    }
+                    className={AI_USE_BUTTON}
+                  >
+                    Usar esta descrição
+                  </button>
+                  {suggestion.beneficios.length || suggestion.faq.length ? (
+                    <div className="space-y-2 border-t border-slate-100 pt-3">
+                      {suggestion.beneficios.length ? (
+                        <p>
+                          <strong>Benefícios:</strong> {suggestion.beneficios.join(' · ')}
+                        </p>
+                      ) : null}
+                      {suggestion.faq.map((item) => (
+                        <p key={item.pergunta}>
+                          <strong>{item.pergunta}</strong> {item.resposta}
+                        </p>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => applyAiExtras(suggestion)}
+                        className={AI_USE_BUTTON}
+                      >
+                        Usar benefícios e perguntas (aba Conversão)
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            />
+            <AiAssistPanel
+              title="Sugerir nome, Google e preço"
+              description="Sugere um nome mais fácil de achar, como o material aparece no Google e uma faixa de preço comparando com os outros materiais da loja."
+              buttonLabel="Sugerir"
+              onRequest={() => requestAiAssist('productSeo', aiInput())}
+              renderSuggestion={(suggestion) => (
+                <>
+                  <p>
+                    <strong>Nome:</strong> {suggestion.nome}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, name: suggestion.nome }))}
+                    className={AI_USE_BUTTON}
+                  >
+                    Usar este nome
+                  </button>
+                  <div className="rounded-lg bg-slate-50 p-3 text-xs">
+                    <p className="text-[13px] font-semibold text-blue-800">
+                      {suggestion.tituloGoogle}
+                    </p>
+                    <p className="mt-1 text-slate-600">{suggestion.descricaoGoogle}</p>
+                    <p className="mt-2 text-slate-500">
+                      Assim o material pode aparecer no Google. O Google usa o nome e o começo da
+                      descrição.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        description: `${suggestion.descricaoGoogle}
+
+${prev.description}`.trim(),
+                      }))
+                    }
+                    className={AI_USE_BUTTON}
+                  >
+                    Pôr o resumo no início da descrição
+                  </button>
+                  {suggestion.precoMaximo > 0 ? (
+                    <div className="border-t border-slate-100 pt-3">
+                      <p>
+                        <strong>Preço sugerido:</strong> {formatPrice(suggestion.precoMinimo)} a{' '}
+                        {formatPrice(suggestion.precoMaximo)}
+                      </p>
+                      {suggestion.justificativaPreco ? (
+                        <p className="text-xs text-slate-500">{suggestion.justificativaPreco}</p>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            price: (
+                              Math.round(
+                                ((suggestion.precoMinimo + suggestion.precoMaximo) / 2) * 100,
+                              ) / 100
+                            ).toFixed(2),
+                          }))
+                        }
+                        className={AI_USE_BUTTON}
+                      >
+                        Usar o meio da faixa no preço
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            />
+          </div>
         </div>
       ) : null}
 
@@ -421,6 +561,8 @@ export function ProductWizard({
   );
 }
 
+const AI_USE_BUTTON =
+  'inline-flex w-fit items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 transition hover:bg-violet-50';
 const INPUT_CLASS =
   'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
 const SECONDARY_BTN_CLASS =

@@ -64,9 +64,9 @@ export const CARD_HELP = Object.freeze({
   // ── Outras abas ──
   'Tags por número de assinantes':
     'Quantas pessoas da newsletter se interessam por cada assunto, para escolher o tema das campanhas.',
-  'Vitrine da home':
+  'Faixas de produtos':
     'As faixas de produtos da página inicial: quais aparecem, em que ordem e quantos produtos cada uma mostra.',
-  'Página inicial':
+  'Textos e imagens da página':
     'Os textos, a imagem e a ordem dos blocos da página que o cliente vê ao entrar na loja.',
   'Descrição padrão de todos os produtos':
     'Um texto que aparece em todas as páginas de produto, logo abaixo da descrição de cada um (ex.: como funciona o download).',

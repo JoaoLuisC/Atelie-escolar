@@ -681,7 +681,7 @@ export function AdminPage({ variant = 'store' }) {
       case 'prod-saida':
         return <PerformanceTab productPerformance={productPerformance} />;
       case 'vitrine':
-        // Aba "Página inicial": textos e blocos da home em cima, faixas de
+        // Aba "Página da loja": textos e blocos da home (com prévia) em cima, faixas de
         // produtos (a antiga Vitrine) embaixo.
         return (
           <div className="space-y-4">

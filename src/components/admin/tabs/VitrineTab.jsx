@@ -135,7 +135,7 @@ export function VitrineTab({ sections, categories, onChange, onSave, saving = fa
 
   return (
     <Card
-      title="Vitrine da home"
+      title="Faixas de produtos"
       subtitle="Defina quais seções aparecem na página inicial, em que ordem e com quantos produtos."
       action={
         <Button icon="check-lg" onClick={onSave} disabled={saving}>

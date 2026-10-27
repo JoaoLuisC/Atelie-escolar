@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { AiAssistPanel } from '../ui/AiAssistPanel';
 import { useToast } from '../../../hooks/useToast';
 import {
   fetchAdminSetting,
+  requestAiAssist,
   saveAdminSetting,
   uploadProductAsset,
 } from '../../../services/admin-panel';
 import { HOME_BLOCKS, mergeHomeContent } from '../../../constants/home-content';
+import { HomePreview } from './HomePreview';
 import { friendlyAdminError } from '../utils/errors';
 
 // Imagem do topo da home: maior que a de produto (500kB), mas ainda leve — é o
@@ -64,11 +67,16 @@ Field.propTypes = {
   rows: PropTypes.number,
 };
 
-function Section({ title, children }) {
+function Section({ title, description, children }) {
   return (
     <details className="group rounded-xl border border-slate-200 bg-slate-50/50 open:bg-white">
-      <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-slate-800">
-        {title}
+      <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3">
+        <span>
+          <span className="block text-sm font-semibold text-slate-800">{title}</span>
+          {description ? (
+            <span className="mt-0.5 block text-xs font-normal text-slate-500">{description}</span>
+          ) : null}
+        </span>
         <i className="bi bi-chevron-down text-slate-400 transition group-open:rotate-180" />
       </summary>
       <div className="space-y-3 border-t border-slate-200 px-4 py-4">{children}</div>
@@ -78,6 +86,7 @@ function Section({ title, children }) {
 
 Section.propTypes = {
   title: PropTypes.string.isRequired,
+  description: PropTypes.string,
   children: PropTypes.node,
 };
 
@@ -93,12 +102,17 @@ export function HomeContentEditor() {
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(0);
+  // O que está salvo no site, para a prévia dizer se há alteração pendente.
+  const [savedSnapshot, setSavedSnapshot] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     fetchAdminSetting('homeContent')
       .then((data) => {
-        if (!cancelled) setContent(mergeHomeContent(data?.value));
+        if (cancelled) return;
+        const loaded = mergeHomeContent(data?.value);
+        setContent(loaded);
+        setSavedSnapshot(JSON.stringify(loaded));
       })
       .catch((error) => {
         if (!cancelled) {
@@ -112,7 +126,7 @@ export function HomeContentEditor() {
 
   if (loadError) {
     return (
-      <Card title="Página inicial">
+      <Card title="Textos e imagens da página">
         <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {loadError}
         </p>
@@ -122,7 +136,7 @@ export function HomeContentEditor() {
 
   if (!content) {
     return (
-      <Card title="Página inicial">
+      <Card title="Textos e imagens da página">
         <p className="text-sm text-slate-500">Carregando…</p>
       </Card>
     );
@@ -130,6 +144,25 @@ export function HomeContentEditor() {
 
   function update(section, field, value) {
     setContent((prev) => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
+  }
+
+  // Sugestão da IA vai para o RASCUNHO: aparece na prévia, e só chega ao site
+  // quando a pessoa clicar em Salvar.
+  function applyAiCopy(suggestion) {
+    setContent((prev) => ({
+      ...prev,
+      hero: {
+        ...prev.hero,
+        title: suggestion.bannerTitulo || prev.hero.title,
+        subtitle: suggestion.bannerSubtitulo || prev.hero.subtitle,
+      },
+      catalog: { ...prev.catalog, title: suggestion.vitrineTitulo || prev.catalog.title },
+      howItWorks: {
+        ...prev.howItWorks,
+        title: suggestion.passoAPassoTitulo || prev.howItWorks.title,
+        subtitle: suggestion.passoAPassoSubtitulo || prev.howItWorks.subtitle,
+      },
+    }));
   }
 
   function updateListItem(section, field, index, key, value, slots) {
@@ -229,7 +262,8 @@ export function HomeContentEditor() {
     try {
       setSaving(true);
       await saveAdminSetting({ key: 'homeContent', value: buildPayload() });
-      pushToast('Página inicial salva. Ela aparece no site em até 1 minuto.', 'success');
+      setSavedSnapshot(JSON.stringify(content));
+      pushToast('Página salva. Ela aparece no site em até 1 minuto.', 'success');
     } catch (error) {
       pushToast(friendlyAdminError(error, 'Erro ao salvar a página inicial.'), 'error');
     } finally {
@@ -250,451 +284,519 @@ export function HomeContentEditor() {
 
   const blockLabel = (id) => HOME_BLOCKS.find((block) => block.id === id)?.label || id;
 
-  return (
-    <Card
-      title="Página inicial"
-      subtitle="Textos, imagem e ordem dos blocos da home. As faixas de produtos ficam no cartão abaixo."
-      action={
-        <a
-          href="/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm font-medium text-violet-700 hover:underline"
-        >
-          Ver a página inicial <i className="bi bi-box-arrow-up-right" />
-        </a>
-      }
-    >
-      <div className="space-y-3">
-        <Section title="Blocos da página (ordem e visibilidade)">
-          <ol className="space-y-2">
-            {content.blocks.map((block, index) => (
-              <li
-                key={block.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
-              >
-                <label className="flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={block.enabled}
-                    onChange={() => toggleBlock(index)}
-                    className="h-4 w-4 rounded border-slate-300 text-violet-600"
-                  />
-                  {blockLabel(block.id)}
-                  {!block.enabled ? (
-                    <span className="text-xs text-slate-400">(escondido)</span>
-                  ) : null}
-                </label>
-                <span className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon="arrow-up"
-                    aria-label={`Subir ${blockLabel(block.id)}`}
-                    disabled={index === 0}
-                    onClick={() => moveBlock(index, -1)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon="arrow-down"
-                    aria-label={`Descer ${blockLabel(block.id)}`}
-                    disabled={index === content.blocks.length - 1}
-                    onClick={() => moveBlock(index, 1)}
-                  />
-                </span>
-              </li>
-            ))}
-          </ol>
-        </Section>
+  const dirty = JSON.stringify(content) !== savedSnapshot;
 
-        <Section title="Topo (hero)">
-          <Field
-            label="Título"
-            value={content.hero.title}
-            onChange={(v) => update('hero', 'title', v)}
-            help={HIGHLIGHT_HELP}
-            maxLength={160}
+  return (
+    <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
+      <Card
+        title="Textos e imagens da página"
+        subtitle="Edite à esquerda e veja o resultado na prévia ao lado. Nada muda no site até você clicar em Salvar."
+        action={
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-medium text-violet-700 hover:underline"
+          >
+            Ver a página inicial <i className="bi bi-box-arrow-up-right" />
+          </a>
+        }
+      >
+        <div className="space-y-3">
+          <AiAssistPanel
+            title="Sugerir textos da página com IA"
+            description="A IA lê os nomes e categorias dos seus materiais e sugere o título do banner, a frase de apoio e os títulos das partes da página. Você vê na prévia antes de salvar."
+            buttonLabel="Sugerir textos"
+            onRequest={() =>
+              requestAiAssist('homeCopy', {
+                currentText: [
+                  content.hero.title,
+                  content.hero.subtitle,
+                  content.catalog.title,
+                  content.howItWorks.title,
+                ]
+                  .filter(Boolean)
+                  .join(' | '),
+              })
+            }
+            renderSuggestion={(suggestion) => (
+              <>
+                <dl className="space-y-2">
+                  {[
+                    ['Banner — título', suggestion.bannerTitulo],
+                    ['Banner — frase de apoio', suggestion.bannerSubtitulo],
+                    ['Vitrine — título', suggestion.vitrineTitulo],
+                    ['Passo a passo — título', suggestion.passoAPassoTitulo],
+                    ['Passo a passo — frase', suggestion.passoAPassoSubtitulo],
+                  ]
+                    .filter(([, value]) => value)
+                    .map(([label, value]) => (
+                      <div key={label}>
+                        <dt className="text-xs font-semibold text-slate-500">{label}</dt>
+                        <dd>{value}</dd>
+                      </div>
+                    ))}
+                </dl>
+                <Button size="sm" icon="check2" onClick={() => applyAiCopy(suggestion)}>
+                  Usar estes textos (aparecem na prévia)
+                </Button>
+              </>
+            )}
           />
-          <Field
-            label="Subtítulo (opcional)"
-            value={content.hero.subtitle}
-            onChange={(v) => update('hero', 'subtitle', v)}
-            multiline
-            maxLength={600}
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
+          <Section
+            title="Ordem das partes da página"
+            description="Escolha o que aparece e em que ordem, de cima para baixo."
+          >
+            <ol className="space-y-2">
+              {content.blocks.map((block, index) => (
+                <li
+                  key={block.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                >
+                  <label className="flex items-center gap-2 text-sm text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={block.enabled}
+                      onChange={() => toggleBlock(index)}
+                      className="h-4 w-4 rounded border-slate-300 text-violet-600"
+                    />
+                    {blockLabel(block.id)}
+                    {!block.enabled ? (
+                      <span className="text-xs text-slate-400">(escondido)</span>
+                    ) : null}
+                  </label>
+                  <span className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="arrow-up"
+                      aria-label={`Subir ${blockLabel(block.id)}`}
+                      disabled={index === 0}
+                      onClick={() => moveBlock(index, -1)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="arrow-down"
+                      aria-label={`Descer ${blockLabel(block.id)}`}
+                      disabled={index === content.blocks.length - 1}
+                      onClick={() => moveBlock(index, 1)}
+                    />
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </Section>
+
+          <Section
+            title={blockLabel('hero')}
+            description="A primeira coisa que o cliente vê: título grande, botão e imagem."
+          >
             <Field
-              label="Texto do botão"
-              value={content.hero.ctaLabel}
-              onChange={(v) => update('hero', 'ctaLabel', v)}
+              label="Título"
+              value={content.hero.title}
+              onChange={(v) => update('hero', 'title', v)}
+              help={HIGHLIGHT_HELP}
+              maxLength={160}
+            />
+            <Field
+              label="Subtítulo (opcional)"
+              value={content.hero.subtitle}
+              onChange={(v) => update('hero', 'subtitle', v)}
+              multiline
+              maxLength={600}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="Texto do botão"
+                value={content.hero.ctaLabel}
+                onChange={(v) => update('hero', 'ctaLabel', v)}
+                help="Deixe vazio para esconder o botão."
+                maxLength={80}
+              />
+              <Field
+                label="Link do botão"
+                value={content.hero.ctaLink}
+                onChange={(v) => update('hero', 'ctaLink', v)}
+                error={errors.ctaLink}
+                help="Ex.: /produtos"
+                maxLength={500}
+              />
+            </div>
+            <div className="rounded-lg border border-dashed border-slate-300 p-3">
+              <p className="text-sm font-medium text-slate-700">Imagem do topo (opcional)</p>
+              <p className="text-xs text-slate-500">
+                Aparece ao lado do título, inteira, sem cortes. JPG, PNG ou WebP até 1 MB.
+              </p>
+              {content.hero.imageUrl ? (
+                <div className="mt-3 flex items-center gap-3">
+                  <img
+                    src={content.hero.imageUrl}
+                    alt="Prévia da imagem do topo"
+                    className="h-24 w-36 rounded-lg bg-slate-50 object-contain ring-1 ring-slate-200"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon="trash"
+                    onClick={() => update('hero', 'imageUrl', '')}
+                  >
+                    Remover imagem
+                  </Button>
+                </div>
+              ) : null}
+              <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
+                <i className="bi bi-upload" />
+                {uploading
+                  ? `Enviando… ${uploading}%`
+                  : content.hero.imageUrl
+                    ? 'Trocar imagem'
+                    : 'Enviar imagem'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  disabled={Boolean(uploading)}
+                  onChange={handleHeroImage}
+                />
+              </label>
+              {content.hero.imageUrl ? (
+                <div className="mt-3">
+                  <Field
+                    label="Descrição da imagem (para acessibilidade)"
+                    value={content.hero.imageAlt}
+                    onChange={(v) => update('hero', 'imageAlt', v)}
+                    maxLength={160}
+                  />
+                </div>
+              ) : null}
+            </div>
+          </Section>
+
+          <Section
+            title={blockLabel('marquee')}
+            description="Palavras curtas que passam na faixa colorida logo abaixo do banner."
+          >
+            <Field
+              label="Palavras"
+              value={(content.marquee.items || []).join(', ')}
+              onChange={(v) =>
+                update(
+                  'marquee',
+                  'items',
+                  // trimStart: sem ele o espaço depois da vírgula se acumula a
+                  // cada tecla, porque o campo exibe a lista com ', '.
+                  v.split(',').map((item) => item.trimStart()),
+                )
+              }
+              help="Separe por vírgula. Até 12 palavras. Deixe vazio para esconder a faixa."
+            />
+          </Section>
+
+          <Section
+            title={blockLabel('catalog')}
+            description="Título da área de produtos. Quais produtos aparecem se escolhe no cartão “Faixas de produtos”, abaixo."
+          >
+            <Field
+              label="Etiqueta acima do título (texto curtinho)"
+              value={content.catalog.eyebrow}
+              onChange={(v) => update('catalog', 'eyebrow', v)}
+              maxLength={80}
+            />
+            <Field
+              label="Título"
+              value={content.catalog.title}
+              onChange={(v) => update('catalog', 'title', v)}
+              help={HIGHLIGHT_HELP}
+              maxLength={160}
+            />
+            <Field
+              label="Texto do botão do catálogo"
+              value={content.catalog.ctaLabel}
+              onChange={(v) => update('catalog', 'ctaLabel', v)}
               help="Deixe vazio para esconder o botão."
               maxLength={80}
             />
+          </Section>
+
+          <Section
+            title={blockLabel('howItWorks')}
+            description="Explica em poucos passos como comprar e baixar o material."
+          >
             <Field
-              label="Link do botão"
-              value={content.hero.ctaLink}
-              onChange={(v) => update('hero', 'ctaLink', v)}
-              error={errors.ctaLink}
-              help="Ex.: /produtos"
-              maxLength={500}
+              label="Etiqueta acima do título (texto curtinho)"
+              value={content.howItWorks.eyebrow}
+              onChange={(v) => update('howItWorks', 'eyebrow', v)}
+              maxLength={80}
             />
-          </div>
-          <div className="rounded-lg border border-dashed border-slate-300 p-3">
-            <p className="text-sm font-medium text-slate-700">Imagem do topo (opcional)</p>
-            <p className="text-xs text-slate-500">
-              Aparece ao lado do título, inteira, sem cortes. JPG, PNG ou WebP até 1 MB.
-            </p>
-            {content.hero.imageUrl ? (
-              <div className="mt-3 flex items-center gap-3">
-                <img
-                  src={content.hero.imageUrl}
-                  alt="Prévia da imagem do topo"
-                  className="h-24 w-36 rounded-lg bg-slate-50 object-contain ring-1 ring-slate-200"
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon="trash"
-                  onClick={() => update('hero', 'imageUrl', '')}
-                >
-                  Remover imagem
-                </Button>
-              </div>
-            ) : null}
-            <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
-              <i className="bi bi-upload" />
-              {uploading
-                ? `Enviando… ${uploading}%`
-                : content.hero.imageUrl
-                  ? 'Trocar imagem'
-                  : 'Enviar imagem'}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                disabled={Boolean(uploading)}
-                onChange={handleHeroImage}
-              />
-            </label>
-            {content.hero.imageUrl ? (
-              <div className="mt-3">
-                <Field
-                  label="Descrição da imagem (para acessibilidade)"
-                  value={content.hero.imageAlt}
-                  onChange={(v) => update('hero', 'imageAlt', v)}
-                  maxLength={160}
-                />
-              </div>
-            ) : null}
-          </div>
-        </Section>
-
-        <Section title="Faixa de palavras">
-          <Field
-            label="Palavras"
-            value={(content.marquee.items || []).join(', ')}
-            onChange={(v) =>
-              update(
-                'marquee',
-                'items',
-                // trimStart: sem ele o espaço depois da vírgula se acumula a
-                // cada tecla, porque o campo exibe a lista com ', '.
-                v.split(',').map((item) => item.trimStart()),
-              )
-            }
-            help="Separe por vírgula. Até 12 palavras. Deixe vazio para esconder a faixa."
-          />
-        </Section>
-
-        <Section title="Catálogo e faixas de produtos">
-          <Field
-            label="Texto pequeno acima do título"
-            value={content.catalog.eyebrow}
-            onChange={(v) => update('catalog', 'eyebrow', v)}
-            maxLength={80}
-          />
-          <Field
-            label="Título"
-            value={content.catalog.title}
-            onChange={(v) => update('catalog', 'title', v)}
-            help={HIGHLIGHT_HELP}
-            maxLength={160}
-          />
-          <Field
-            label="Texto do botão do catálogo"
-            value={content.catalog.ctaLabel}
-            onChange={(v) => update('catalog', 'ctaLabel', v)}
-            help="Deixe vazio para esconder o botão."
-            maxLength={80}
-          />
-        </Section>
-
-        <Section title="Como funciona">
-          <Field
-            label="Texto pequeno acima do título"
-            value={content.howItWorks.eyebrow}
-            onChange={(v) => update('howItWorks', 'eyebrow', v)}
-            maxLength={80}
-          />
-          <Field
-            label="Título"
-            value={content.howItWorks.title}
-            onChange={(v) => update('howItWorks', 'title', v)}
-            help={HIGHLIGHT_HELP}
-            maxLength={160}
-          />
-          <Field
-            label="Subtítulo"
-            value={content.howItWorks.subtitle}
-            onChange={(v) => update('howItWorks', 'subtitle', v)}
-            maxLength={600}
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            {steps.map((step, index) => (
-              <div key={index} className="rounded-lg border border-slate-200 p-3">
-                <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
-                  Passo {index + 1}
-                </p>
-                <Field
-                  label={`Título do passo ${index + 1}`}
-                  value={step.title}
-                  onChange={(v) =>
-                    updateListItem('howItWorks', 'steps', index, 'title', v, STEP_SLOTS)
-                  }
-                  maxLength={80}
-                />
-                <div className="mt-2">
+            <Field
+              label="Título"
+              value={content.howItWorks.title}
+              onChange={(v) => update('howItWorks', 'title', v)}
+              help={HIGHLIGHT_HELP}
+              maxLength={160}
+            />
+            <Field
+              label="Subtítulo"
+              value={content.howItWorks.subtitle}
+              onChange={(v) => update('howItWorks', 'subtitle', v)}
+              maxLength={600}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {steps.map((step, index) => (
+                <div key={index} className="rounded-lg border border-slate-200 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
+                    Passo {index + 1}
+                  </p>
                   <Field
-                    label={`Texto do passo ${index + 1}`}
-                    value={step.text}
+                    label={`Título do passo ${index + 1}`}
+                    value={step.title}
                     onChange={(v) =>
-                      updateListItem('howItWorks', 'steps', index, 'text', v, STEP_SLOTS)
+                      updateListItem('howItWorks', 'steps', index, 'title', v, STEP_SLOTS)
                     }
-                    multiline
-                    rows={2}
-                    maxLength={600}
+                    maxLength={80}
+                  />
+                  <div className="mt-2">
+                    <Field
+                      label={`Texto do passo ${index + 1}`}
+                      value={step.text}
+                      onChange={(v) =>
+                        updateListItem('howItWorks', 'steps', index, 'text', v, STEP_SLOTS)
+                      }
+                      multiline
+                      rows={2}
+                      maxLength={600}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">Passo sem título e sem texto não aparece.</p>
+            <Field
+              label="Quadro de aviso — título"
+              value={content.howItWorks.infoTitle}
+              onChange={(v) => update('howItWorks', 'infoTitle', v)}
+              maxLength={80}
+            />
+            <Field
+              label="Quadro de aviso — texto"
+              value={content.howItWorks.infoText}
+              onChange={(v) => update('howItWorks', 'infoText', v)}
+              maxLength={600}
+            />
+          </Section>
+
+          <Section
+            title={blockLabel('socialProof')}
+            description="O que clientes dizem, números da loja e links do Instagram e TikTok."
+          >
+            <Field
+              label="Etiqueta acima do título (texto curtinho)"
+              value={content.socialProof.eyebrow}
+              onChange={(v) => update('socialProof', 'eyebrow', v)}
+              maxLength={80}
+            />
+            <Field
+              label="Título"
+              value={content.socialProof.title}
+              onChange={(v) => update('socialProof', 'title', v)}
+              help={HIGHLIGHT_HELP}
+              maxLength={160}
+            />
+            <Field
+              label="Subtítulo"
+              value={content.socialProof.subtitle}
+              onChange={(v) => update('socialProof', 'subtitle', v)}
+              maxLength={600}
+            />
+
+            <p className="pt-2 text-sm font-medium text-slate-700">Números</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {stats.map((stat, index) => (
+                <div key={index} className="grid grid-cols-2 gap-2">
+                  <Field
+                    label={`Número em destaque ${index + 1} (ex.: 500+)`}
+                    value={stat.value}
+                    onChange={(v) =>
+                      updateListItem('socialProof', 'stats', index, 'value', v, STAT_SLOTS)
+                    }
+                    maxLength={20}
+                  />
+                  <Field
+                    label={`O que o número ${index + 1} significa`}
+                    value={stat.label}
+                    onChange={(v) =>
+                      updateListItem('socialProof', 'stats', index, 'label', v, STAT_SLOTS)
+                    }
+                    maxLength={40}
                   />
                 </div>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-slate-500">Passo sem título e sem texto não aparece.</p>
-          <Field
-            label="Destaque — título"
-            value={content.howItWorks.infoTitle}
-            onChange={(v) => update('howItWorks', 'infoTitle', v)}
-            maxLength={80}
-          />
-          <Field
-            label="Destaque — texto"
-            value={content.howItWorks.infoText}
-            onChange={(v) => update('howItWorks', 'infoText', v)}
-            maxLength={600}
-          />
-        </Section>
+              ))}
+            </div>
 
-        <Section title="Prova social e redes">
-          <Field
-            label="Texto pequeno acima do título"
-            value={content.socialProof.eyebrow}
-            onChange={(v) => update('socialProof', 'eyebrow', v)}
-            maxLength={80}
-          />
-          <Field
-            label="Título"
-            value={content.socialProof.title}
-            onChange={(v) => update('socialProof', 'title', v)}
-            help={HIGHLIGHT_HELP}
-            maxLength={160}
-          />
-          <Field
-            label="Subtítulo"
-            value={content.socialProof.subtitle}
-            onChange={(v) => update('socialProof', 'subtitle', v)}
-            maxLength={600}
-          />
-
-          <p className="pt-2 text-sm font-medium text-slate-700">Números</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {stats.map((stat, index) => (
-              <div key={index} className="grid grid-cols-2 gap-2">
+            <p className="pt-2 text-sm font-medium text-slate-700">Depoimentos</p>
+            {testimonials.map((item, index) => (
+              <div key={index} className="space-y-2 rounded-lg border border-slate-200 p-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Field
+                    label={`Nome ${index + 1}`}
+                    value={item.name}
+                    onChange={(v) =>
+                      updateListItem(
+                        'socialProof',
+                        'testimonials',
+                        index,
+                        'name',
+                        v,
+                        testimonials.length,
+                      )
+                    }
+                    maxLength={80}
+                  />
+                  <Field
+                    label={`Profissão ou cidade de quem deu o depoimento ${index + 1}`}
+                    value={item.role}
+                    onChange={(v) =>
+                      updateListItem(
+                        'socialProof',
+                        'testimonials',
+                        index,
+                        'role',
+                        v,
+                        testimonials.length,
+                      )
+                    }
+                    maxLength={80}
+                  />
+                </div>
                 <Field
-                  label={`Número ${index + 1}`}
-                  value={stat.value}
-                  onChange={(v) =>
-                    updateListItem('socialProof', 'stats', index, 'value', v, STAT_SLOTS)
-                  }
-                  maxLength={20}
-                />
-                <Field
-                  label={`Legenda ${index + 1}`}
-                  value={stat.label}
-                  onChange={(v) =>
-                    updateListItem('socialProof', 'stats', index, 'label', v, STAT_SLOTS)
-                  }
-                  maxLength={40}
-                />
-              </div>
-            ))}
-          </div>
-
-          <p className="pt-2 text-sm font-medium text-slate-700">Depoimentos</p>
-          {testimonials.map((item, index) => (
-            <div key={index} className="space-y-2 rounded-lg border border-slate-200 p-3">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Field
-                  label={`Nome ${index + 1}`}
-                  value={item.name}
+                  label={`Depoimento ${index + 1}`}
+                  value={item.text}
                   onChange={(v) =>
                     updateListItem(
                       'socialProof',
                       'testimonials',
                       index,
-                      'name',
+                      'text',
                       v,
                       testimonials.length,
                     )
                   }
-                  maxLength={80}
+                  multiline
+                  rows={2}
+                  maxLength={600}
                 />
-                <Field
-                  label={`Cargo/cidade ${index + 1}`}
-                  value={item.role}
-                  onChange={(v) =>
-                    updateListItem(
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="trash"
+                  onClick={() =>
+                    update(
                       'socialProof',
                       'testimonials',
-                      index,
-                      'role',
-                      v,
-                      testimonials.length,
+                      testimonials.filter((_, i) => i !== index),
                     )
                   }
-                  maxLength={80}
-                />
+                >
+                  Remover depoimento
+                </Button>
               </div>
-              <Field
-                label={`Depoimento ${index + 1}`}
-                value={item.text}
-                onChange={(v) =>
-                  updateListItem(
-                    'socialProof',
-                    'testimonials',
-                    index,
-                    'text',
-                    v,
-                    testimonials.length,
-                  )
-                }
-                multiline
-                rows={2}
-                maxLength={600}
-              />
+            ))}
+            {testimonials.length < MAX_TESTIMONIALS ? (
               <Button
-                variant="ghost"
+                variant="secondary"
                 size="sm"
-                icon="trash"
+                icon="plus-lg"
                 onClick={() =>
-                  update(
-                    'socialProof',
-                    'testimonials',
-                    testimonials.filter((_, i) => i !== index),
-                  )
+                  update('socialProof', 'testimonials', [
+                    ...testimonials,
+                    { name: '', role: '', text: '' },
+                  ])
                 }
               >
-                Remover depoimento
+                Adicionar depoimento
               </Button>
+            ) : null}
+
+            <p className="pt-2 text-sm font-medium text-slate-700">Redes sociais</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="Link do Instagram"
+                value={content.socialProof.instagramUrl}
+                onChange={(v) => update('socialProof', 'instagramUrl', v)}
+                error={errors.instagramUrl}
+                help="Vazio esconde o botão."
+                maxLength={500}
+              />
+              <Field
+                label="Texto do botão do Instagram"
+                value={content.socialProof.instagramLabel}
+                onChange={(v) => update('socialProof', 'instagramLabel', v)}
+                maxLength={80}
+              />
+              <Field
+                label="Link do TikTok"
+                value={content.socialProof.tiktokUrl}
+                onChange={(v) => update('socialProof', 'tiktokUrl', v)}
+                error={errors.tiktokUrl}
+                help="Vazio esconde o botão."
+                maxLength={500}
+              />
+              <Field
+                label="Texto do botão do TikTok"
+                value={content.socialProof.tiktokLabel}
+                onChange={(v) => update('socialProof', 'tiktokLabel', v)}
+                maxLength={80}
+              />
             </div>
-          ))}
-          {testimonials.length < MAX_TESTIMONIALS ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon="plus-lg"
-              onClick={() =>
-                update('socialProof', 'testimonials', [
-                  ...testimonials,
-                  { name: '', role: '', text: '' },
-                ])
-              }
-            >
-              Adicionar depoimento
-            </Button>
-          ) : null}
+          </Section>
 
-          <p className="pt-2 text-sm font-medium text-slate-700">Redes sociais</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              label="Link do Instagram"
-              value={content.socialProof.instagramUrl}
-              onChange={(v) => update('socialProof', 'instagramUrl', v)}
-              error={errors.instagramUrl}
-              help="Vazio esconde o botão."
-              maxLength={500}
-            />
-            <Field
-              label="Texto do botão do Instagram"
-              value={content.socialProof.instagramLabel}
-              onChange={(v) => update('socialProof', 'instagramLabel', v)}
-              maxLength={80}
-            />
-            <Field
-              label="Link do TikTok"
-              value={content.socialProof.tiktokUrl}
-              onChange={(v) => update('socialProof', 'tiktokUrl', v)}
-              error={errors.tiktokUrl}
-              help="Vazio esconde o botão."
-              maxLength={500}
-            />
-            <Field
-              label="Texto do botão do TikTok"
-              value={content.socialProof.tiktokLabel}
-              onChange={(v) => update('socialProof', 'tiktokLabel', v)}
-              maxLength={80}
-            />
-          </div>
-        </Section>
-
-        <Section title="Google (título e descrição da página)">
-          <Field
-            label="Título na aba e no Google"
-            value={content.seo.title}
-            onChange={(v) => update('seo', 'title', v)}
-            maxLength={160}
-          />
-          <Field
-            label="Descrição no Google"
-            value={content.seo.description}
-            onChange={(v) => update('seo', 'description', v)}
-            multiline
-            maxLength={600}
-          />
-        </Section>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          icon="arrow-counterclockwise"
-          onClick={handleRestoreDefaults}
-        >
-          Restaurar textos padrão
-        </Button>
-        <div className="flex items-center gap-3">
-          {hasErrors ? (
-            <span className="text-xs text-rose-600">Corrija os links marcados para salvar.</span>
-          ) : null}
-          <Button
-            icon="check2"
-            onClick={handleSave}
-            disabled={saving || hasErrors || Boolean(uploading)}
+          <Section
+            title="Como a loja aparece no Google"
+            description="Título da aba do navegador e o texto que aparece na busca."
           >
-            {saving ? 'Salvando…' : 'Salvar página inicial'}
-          </Button>
+            <Field
+              label="Título na aba e no Google"
+              value={content.seo.title}
+              onChange={(v) => update('seo', 'title', v)}
+              maxLength={160}
+            />
+            <Field
+              label="Descrição no Google"
+              value={content.seo.description}
+              onChange={(v) => update('seo', 'description', v)}
+              multiline
+              maxLength={600}
+            />
+          </Section>
         </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="arrow-counterclockwise"
+            onClick={handleRestoreDefaults}
+          >
+            Restaurar textos padrão
+          </Button>
+          <div className="flex items-center gap-3">
+            {hasErrors ? (
+              <span className="text-xs text-rose-600">Corrija os links marcados para salvar.</span>
+            ) : null}
+            <Button
+              icon="check2"
+              onClick={handleSave}
+              disabled={saving || hasErrors || Boolean(uploading)}
+            >
+              {saving ? 'Salvando…' : 'Salvar página'}
+            </Button>
+          </div>
+        </div>
+      </Card>
+      <div className="xl:sticky xl:top-20">
+        <HomePreview content={buildPayload()} dirty={dirty} />
       </div>
-    </Card>
+    </div>
   );
 }

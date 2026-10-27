@@ -10,7 +10,7 @@ export const TAB_LABELS = {
   vendas: 'Vendas',
   segmentos: 'Segmentos de email',
   usuarios: 'Usuários',
-  vitrine: 'Página inicial',
+  vitrine: 'Página da loja',
   seguranca: 'Segurança',
   plataforma: 'Professores e clientes',
   conta: 'Minha conta',
