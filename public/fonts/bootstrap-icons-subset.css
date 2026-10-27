@@ -1,5 +1,5 @@
 /* GERADO por scripts/build-icon-subset.js — não edite à mão.
- * 120 ícones, extraídos de src/ e index.html (literais + dinâmicos).
+ * 119 ícones, extraídos de src/ e index.html (literais + dinâmicos).
  * Regenerar: npm run icons:subset
  */
 @font-face {
@@ -114,7 +114,6 @@
 .bi-mortarboard::before { content: "\f6fe"; }
 .bi-mortarboard-fill::before { content: "\f6fd"; }
 .bi-palette-fill::before { content: "\f4b0"; }
-.bi-palette2::before { content: "\f4b2"; }
 .bi-pencil-square::before { content: "\f4ca"; }
 .bi-people::before { content: "\f4d0"; }
 .bi-people-fill::before { content: "\f4cf"; }

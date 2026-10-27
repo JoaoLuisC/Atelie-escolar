@@ -218,7 +218,9 @@ Projeto-mae/
 │
 ├── public/
 │   ├── robots.txt
-│   ├── favicon.svg
+│   ├── logo.png                          # Coruja roxa (marca da loja e do painel)
+│   ├── favicon-16/32.png, apple-touch-icon.png, icon-192/512.png  # Ícones da aba, celular e barra de tarefas
+│   ├── site.webmanifest                  # Nome e ícones ao fixar/instalar o site
 │   ├── og-default.png                    # Imagem OG padrão (1200×630)
 │   └── fonts/                            # Subset do bootstrap-icons
 │

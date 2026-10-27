@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { formatToday } from '../../utils/date';
 import { ROUTES } from '../../constants/routes';
+import { OwlLogo } from '../OwlLogo';
 
 const NAV_SECTIONS = [
   {
@@ -232,8 +233,8 @@ export function AdminLayout({
         } lg:flex`}
       >
         <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-violet-700 text-white shadow-sm">
-            <i className="bi bi-palette2 text-lg" />
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-violet-100">
+            <OwlLogo size={34} />
           </span>
           <div className="min-w-0">
             <div className="truncate text-sm font-bold text-slate-900">Ateliê da Escola</div>

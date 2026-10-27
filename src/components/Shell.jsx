@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
+import { OwlLogo } from './OwlLogo';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { CartContext } from '../providers/CartProvider';
@@ -153,8 +154,8 @@ export function Shell({ children }) {
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 lg:px-6">
           <Link to={ROUTES.home} className="flex items-center gap-2.5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-brand">
-              <OwlLogo width={28} height={28} />
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-brand-100">
+              <OwlLogo size={34} />
             </span>
             <span className="hidden font-display text-base font-bold uppercase tracking-wide text-slate-800 sm:inline">
               Profa. Marciar Cardoso
@@ -378,8 +379,8 @@ export function Shell({ children }) {
           <div className="grid gap-10 md:grid-cols-4">
             <div className="md:col-span-2 md:pr-8">
               <Link to={ROUTES.home} className="inline-flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800">
-                  <OwlLogo width={22} height={22} />
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white">
+                  <OwlLogo size={30} />
                 </span>
                 <span className="font-display text-sm font-semibold uppercase tracking-wider text-white">
                   Profa. Marciar Cardoso
@@ -513,50 +514,6 @@ export function Shell({ children }) {
     </div>
   );
 }
-
-function OwlLogo({ width, height }) {
-  return (
-    <svg
-      width={width}
-      height={height}
-      viewBox="0 0 36 36"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <ellipse cx="18" cy="24" rx="11" ry="10" fill="#9B5DE5" />
-      <ellipse cx="18" cy="13" rx="9" ry="9" fill="#9B5DE5" />
-      <polygon points="10,8 12,2 14,8" fill="#7A3DC0" />
-      <polygon points="22,8 24,2 26,8" fill="#7A3DC0" />
-      <circle cx="13.5" cy="13" r="4" fill="#FEE440" />
-      <circle cx="13.5" cy="13" r="2" fill="#1a0030" />
-      <circle cx="14.5" cy="11.5" r=".8" fill="rgba(255,255,255,0.7)" />
-      <circle cx="22.5" cy="13" r="4" fill="#FEE440" />
-      <circle cx="22.5" cy="13" r="2" fill="#1a0030" />
-      <circle cx="23.5" cy="11.5" r=".8" fill="rgba(255,255,255,0.7)" />
-      <polygon points="16,16 20,16 18,18.5" fill="#FEE440" />
-      <path
-        d="M8,22 Q12,17 14,25"
-        stroke="#7A3DC0"
-        strokeWidth="1.5"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <path
-        d="M28,22 Q24,17 22,25"
-        stroke="#7A3DC0"
-        strokeWidth="1.5"
-        fill="none"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-OwlLogo.propTypes = {
-  width: PropTypes.number.isRequired,
-  height: PropTypes.number.isRequired,
-};
 
 Shell.propTypes = {
   children: PropTypes.node.isRequired,

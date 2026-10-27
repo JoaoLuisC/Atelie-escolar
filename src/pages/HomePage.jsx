@@ -28,7 +28,7 @@ function buildHomeJsonLd(origin, socialProof) {
       '@type': 'Organization',
       name: 'Profa. Marciar Cardoso · Ateliê da Escola',
       url: origin,
-      logo: `${origin}/favicon.svg`,
+      logo: `${origin}/icon-512.png`,
       ...(sameAs.length ? { sameAs } : {}),
     },
     {
