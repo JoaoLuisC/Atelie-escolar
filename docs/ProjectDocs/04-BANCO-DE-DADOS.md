@@ -456,7 +456,7 @@ Função idempotente (versão final na phase6) que deleta:
 
 ---
 
-## Migrations (23 arquivos)
+## Migrations (24 arquivos)
 
 Aplicar em ordem. Pode-se rodar tudo de uma vez via `npm run supabase:db:push`.
 
@@ -485,6 +485,7 @@ Aplicar em ordem. Pode-se rodar tudo de uma vez via `npm run supabase:db:push`.
 | [`20261008000001_profiles_role_check.sql`](../../supabase/migrations/20261008000001_profiles_role_check.sql)                         | Recria a `check_valid_role` em `profiles`: `upper(role) in ('CUSTOMER','SELLER','ADMIN','MASTER')`, `not valid`. ✅ Aplicada em produção em 26/10/2026 ([13-ROADMAP, checklist A](./13-ROADMAP-PENDENCIAS.md))                                                                                                                                                                                                                              |
 | [`20261026000000_coupon_reservation_compensation.sql`](../../supabase/migrations/20261026000000_coupon_reservation_compensation.sql) | Funções `decrement_coupon_usage()` e `release_coupon_reservation()` (SECURITY DEFINER, só service role): devolve na hora o uso de cupom quando o checkout falha antes de criar a preferência no MP; o cron de 2h segue como rede de segurança. Aplicada pelo workflow de release                                                                                                                                                            |
 | [`20261026000001_product_seller_ownership.sql`](../../supabase/migrations/20261026000001_product_seller_ownership.sql)               | `products.seller_id` (FK `profiles`, nullable) + índice — plataforma de professores ([07-DASHBOARD-ADMIN](./07-DASHBOARD-ADMIN.md#plataforma-de-professores)). Aplicada pelo workflow de release                                                                                                                                                                                                                                            |
+| [`20261027000000_profiles_email_sync.sql`](../../supabase/migrations/20261027000000_profiles_email_sync.sql)                         | Trigger `on_auth_user_email_changed` + `sync_profile_email()` (SECURITY DEFINER): quando o e-mail muda no Supabase Auth (troca pela "Minha conta", depois do link), `profiles.email` acompanha                                                                                                                                                                                                                                              |
 
 ### Como aplicar
 

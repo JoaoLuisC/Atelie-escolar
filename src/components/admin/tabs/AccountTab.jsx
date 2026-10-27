@@ -9,10 +9,12 @@ import {
 } from '../../../services/supabase-browser';
 import { formatDateTime } from '../../../utils/date';
 import { Card } from '../ui/Card';
+import { EmailCard, PasswordCard } from './AccountSecurityCards';
 
-// Aba "Minha conta": os dados da própria conta de quem está no painel, com o
-// nome editável e a troca de senha por link no e-mail (o mesmo fluxo de
-// "Esqueci minha senha", que volta para o login do painel).
+// Aba "Minha conta": os dados da própria conta de quem está no painel — nome,
+// senha e e-mail editáveis (senha e e-mail pedem a senha atual). Conta do
+// Google sem senha cria uma pelo link de "Esqueci minha senha", que volta ao
+// login do painel.
 
 const ROLE_LABELS = {
   seller: 'Professor(a)',
@@ -140,23 +142,30 @@ export function AccountTab() {
         </form>
       </Card>
 
-      <Card
-        title="Senha e acesso"
-        subtitle="Para trocar a senha, mandamos um link para o seu e-mail."
-      >
-        <p className="text-sm text-slate-600">
-          O link vale por pouco tempo. Depois de criar a senha nova, você volta para o login do
-          painel. Para trocar o e-mail da conta, fale com a administração da plataforma.
-        </p>
-        <button
-          type="button"
-          onClick={onResetPassword}
-          disabled={sendingReset}
-          className="mt-4 rounded-lg border border-violet-200 px-4 py-2 text-sm font-semibold text-violet-700 disabled:opacity-50"
+      {account.provider === 'google' ? (
+        <Card
+          title="Senha e e-mail"
+          subtitle="Sua conta entra pelo Google: o e-mail é o da sua conta Google."
         >
-          {sendingReset ? 'Enviando…' : 'Enviar link para trocar a senha'}
-        </button>
-      </Card>
+          <p className="text-sm text-slate-600">
+            Se quiser entrar também com e-mail e senha, crie uma senha pelo link que mandamos para{' '}
+            {account.email}.
+          </p>
+          <button
+            type="button"
+            onClick={onResetPassword}
+            disabled={sendingReset}
+            className="mt-4 rounded-lg border border-violet-200 px-4 py-2 text-sm font-semibold text-violet-700 disabled:opacity-50"
+          >
+            {sendingReset ? 'Enviando…' : 'Enviar link para criar senha'}
+          </button>
+        </Card>
+      ) : (
+        <>
+          <PasswordCard onForgot={onResetPassword} sendingReset={sendingReset} />
+          <EmailCard currentEmail={account.email} />
+        </>
+      )}
     </div>
   );
 }

@@ -7,7 +7,11 @@ const {
 const { recordSecurityEvent, extractClientIp } = require('../../lib/security-logger');
 const { safeCompare, setSessionCookie } = require('../../lib/admin-session');
 const { resolveSecret } = require('../../lib/env-secret');
-const { getAnonClient, getProfileRoleByEmail } = require('../../services/supabase-auth');
+const {
+  getAnonClient,
+  getProfileRoleByEmail,
+  getProfileRoleByUserId,
+} = require('../../services/supabase-auth');
 const { enforceRateLimit, resolveIdentifier, RATE_LIMITS } = require('../../lib/rate-limit');
 const {
   ERROR_CODES,
@@ -513,7 +517,12 @@ module.exports = async function adminLoginHandler(req, res) {
     });
   }
 
-  const role = await getProfileRoleByEmail(authData.user.email || email);
+  // Pelo id da conta primeiro: depois de uma troca de e-mail (aba "Minha
+  // conta"), buscar só pelo e-mail podia não achar o perfil e trancar a
+  // pessoa fora do painel. O e-mail fica de reserva para perfis antigos.
+  const role =
+    (await getProfileRoleByUserId(authData.user.id)) ||
+    (await getProfileRoleByEmail(authData.user.email || email));
   const normalizedRole = String(role || '')
     .trim()
     .toLowerCase();

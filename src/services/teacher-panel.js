@@ -62,3 +62,29 @@ export async function updateMyAccount({ displayName }) {
   }
   return data.account;
 }
+
+// Troca de senha e de e-mail da própria conta: as duas pedem a senha atual.
+async function postAccountAction(payload, fallback) {
+  const { response, data } = await apiRequest('/teacher/account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok || !data.success) throw apiError(data, fallback);
+  return data;
+}
+
+export function changeMyPassword({ currentPassword, newPassword }) {
+  return postAccountAction(
+    { action: 'change-password', currentPassword, newPassword },
+    'Não foi possível trocar a senha.',
+  );
+}
+
+export function requestMyEmailChange({ currentPassword, newEmail }) {
+  return postAccountAction(
+    { action: 'change-email', currentPassword, newEmail },
+    'Não foi possível pedir a troca de e-mail.',
+  );
+}

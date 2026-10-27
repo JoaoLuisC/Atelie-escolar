@@ -45,8 +45,10 @@ recorte (`lib/seller-scope.js`, aplicado no servidor). Produto de outro professo
 O Estudo de vendas dela é guardado à parte (`settings.salesStudy:<id>`). As visitas do funil e os
 segmentos da newsletter continuam sendo os da loja inteira. O admin vê a plataforma toda.
 
-**Minha conta** (`AccountTab`, `/api/teacher/account`): nome editável, e-mail, tipo de conta,
-forma de login e data de criação; a senha se troca por link no e-mail, que volta ao `/admin`.
+**Minha conta** (`AccountTab`, `/api/teacher/account`): nome, senha e e-mail editáveis; tipo de
+conta, forma de login e data de criação. Senha e e-mail pedem a senha atual; o e-mail novo só vale
+depois do clique no link de confirmação. "Esqueci a senha atual" manda o link de redefinição, que
+volta ao `/admin`. Conta que entra pelo Google cria senha por esse link.
 
 **Página da loja com prévia ao vivo.** A aba "Página da loja" (antes "Página inicial") mostra,
 ao lado do formulário, a própria `HomePage` renderizada com o rascunho (`HomePreview`, tela de

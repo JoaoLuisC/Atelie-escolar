@@ -131,6 +131,8 @@ beforeEach(() => {
   installModuleMock('../../services/supabase-auth', {
     getAnonClient: () => ({ auth: { signInWithPassword } }),
     getProfileRoleByEmail,
+    // Sem perfil pelo id: cai na busca por e-mail, que é o que estes testes controlam.
+    getProfileRoleByUserId: vi.fn(async () => null),
   });
 
   installPartialMock('../../lib/supabase', {
