@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { ROUTES } from '../constants/routes';
+import { LoginChooser } from '../components/LoginChooser';
 import { SEO } from '../components/SEO';
 
 // Nome de cada método de 2º fator como a admin o reconhece.
@@ -124,17 +125,18 @@ export function AdminLoginPage() {
       {/* Título próprio da aba e fora dos buscadores (ADM-18 / LOJA-26). */}
       <SEO title="Entrar no painel" pathname={ROUTES.admin} noindex />
       <article className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/80 p-8 shadow-2xl backdrop-blur">
+        <LoginChooser active="professor" />
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-violet-700 text-white shadow-lg">
             <i className="bi bi-shield-lock-fill text-2xl" />
           </span>
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-violet-600">
-              Área da plataforma
+              Área do professor
             </p>
-            <h1 className="mt-1 text-2xl font-bold text-slate-900">Acesso restrito</h1>
+            <h1 className="mt-1 text-2xl font-bold text-slate-900">Entrar como professor(a)</h1>
             <p className="mt-2 text-sm text-slate-600">
-              Use o e-mail e a senha da sua conta de professor ou administradora.
+              Use o e-mail e a senha da sua conta de professor(a) ou de administração da loja.
             </p>
           </div>
         </div>

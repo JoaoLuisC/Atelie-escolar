@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { GoogleLogo } from '../components/GoogleLogo';
+import { LoginChooser } from '../components/LoginChooser';
 import { SEO } from '../components/SEO';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
@@ -414,15 +416,10 @@ export function CustomerAuthPage() {
           type="button"
           onClick={submitGoogleLogin}
           disabled={loading}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-4 py-2.5 text-sm font-medium text-[#1f1f1f] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
         >
-          <span
-            aria-hidden="true"
-            className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 via-amber-500 to-sky-500 text-[10px] font-bold text-white"
-          >
-            G
-          </span>
-          {loading ? 'Conectando…' : 'Entrar com Google'}
+          <GoogleLogo />
+          {loading ? 'Conectando…' : 'Continuar com o Google'}
         </button>
 
         <div
@@ -641,6 +638,7 @@ export function CustomerAuthPage() {
     <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-100 via-white to-sky-50 px-4 py-10">
       <SEO title="Entrar ou criar conta" pathname="/login" noindex />
       <article className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-xl backdrop-blur sm:p-8">
+        {!customerSession?.email && !deleteToken ? <LoginChooser active="cliente" /> : null}
         <header className="mb-5">
           <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Conta</p>
           <h1 className="font-display text-2xl font-extrabold text-slate-900">

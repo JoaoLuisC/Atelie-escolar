@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { GoogleLogo } from '../components/GoogleLogo';
 import { CartPriceNotice } from '../components/CartDrawer';
 import { CouponField } from '../components/CouponField';
 import { SEO } from '../components/SEO';
@@ -635,8 +636,8 @@ export function CheckoutPage() {
                     disabled={googleLoading || processing}
                     className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
                   >
-                    <i className="bi bi-google text-base" aria-hidden="true" />
-                    {googleLoading ? 'Abrindo Google…' : 'Continuar com Google'}
+                    <GoogleLogo />
+                    {googleLoading ? 'Abrindo Google…' : 'Continuar com o Google'}
                   </button>
                   <Link
                     to={`${ROUTES.login}?mode=login&redirect=${ROUTES.checkout}`}

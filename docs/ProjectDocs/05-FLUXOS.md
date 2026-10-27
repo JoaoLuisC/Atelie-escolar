@@ -58,7 +58,7 @@ sequenceDiagram
     participant G as Google
     participant API as Express API
 
-    U->>FE: Clica "Entrar com Google"
+    U->>FE: Clica "Continuar com o Google"
     FE->>SB: supabase.auth.signInWithOAuth({provider:'google',<br/>redirectTo: /login?oauth=google&redirect=...})
     Note over FE: code_verifier salvo em localStorage
     SB-->>U: 302 redirect → Google
