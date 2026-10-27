@@ -11,6 +11,7 @@
 - Cookie `admin_session` HttpOnly assinado com HMAC-SHA256, TTL 8h, SameSite=Strict
 - As duas telas de login abrem com o seletor **Sou cliente | Sou professor(a)** (`src/components/LoginChooser.jsx`): cliente vai para `/login` (Supabase Auth, com Google), professor(a) para `/admin` — o mesmo login serve à professora e à administração, e o papel da conta decide o destino
 - O login aceita `profiles.role IN ('ADMIN', 'MASTER', 'SELLER')` (resposta idêntica para senha errada e conta de outro papel). Admin/master vão para o painel; professor (`SELLER`) vai para `/professores` e recebe 401/403 nas APIs `/api/admin/*`. O 2º fator só é cobrado de admin/master
+- **Professor(a) também entra com Google** ("Continuar com o Google" no `/admin`): o OAuth do Supabase volta para `/admin?oauth=staff` e `POST /api/admin/login-google` abre a sessão de staff **só para perfil `SELLER`**. Admin/master com Google recebem 403 — o Google pularia o 2º fator (ver [13-ROADMAP §3.7](./13-ROADMAP-PENDENCIAS.md))
 - Rate-limit: 5 tentativas / 10 min (`RATE_LIMITS.adminLogin`, contador no Postgres, vale em dev e produção; o sucesso também conta) + balde separado de 5 / 10 min para o 2º fator (fail-closed: contador fora do ar → 503)
 
 Fluxo detalhado: [05-FLUXOS §4](./05-FLUXOS.md).

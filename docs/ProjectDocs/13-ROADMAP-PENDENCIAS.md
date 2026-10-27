@@ -189,6 +189,11 @@ Resta apenas **validar em produção**: o Supabase exige a URL no `uri_allow_lis
 
 ### 3.7 Login admin com Google (OAuth) — futuro
 
+> **Professor(a) já entra com Google desde 27/10/2026** (`handlers/admin/login-google.js`, volta em
+> `/admin?oauth=staff`), sem 2º fator, porque o professor não tem 2º fator nem pela senha. O que
+> continua futuro é **admin/master** com Google, que precisa manter o 2º fator (abaixo); hoje o
+> endpoint devolve 403 para eles.
+
 Hoje o painel só aceita e-mail + senha + 2FA opcional (`handlers/admin/login.js`). Cliente já tem Google OAuth funcionando — dá pra reusar a infra.
 
 **Para implementar:**

@@ -52,6 +52,8 @@ const METODOS_DE_ESCRITA = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DISPENSADOS = Object.freeze({
   'admin/login.js:POST':
     'Autenticação, não mutação de dado. O rastro dela é security_events (admin_login_ok/failed), que registra tentativa recusada — coisa que o audit log não deve fazer.',
+  'admin/login-google.js:POST':
+    'Autenticação do professor(a) com Google, mesmo caso do login por senha: o rastro é security_events (admin_login_failed com method google).',
   'admin/logout.js:POST': 'Só limpa o próprio cookie; não toca recurso nenhum.',
 });
 

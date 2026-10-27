@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { ROUTES } from '../constants/routes';
+import { GoogleLogo } from '../components/GoogleLogo';
 import { LoginChooser } from '../components/LoginChooser';
+import { STAFF_OAUTH_MARKER } from '../services/supabase-browser';
 import { SEO } from '../components/SEO';
 
 // Nome de cada método de 2º fator como a admin o reconhece.
@@ -21,10 +23,19 @@ function describeMethods(methods) {
 // Renderizada pelo ProtectedRoute na própria /admin quando não há sessão admin.
 export function AdminLoginPage() {
   const navigate = useNavigate();
-  const { loginAdmin } = useAuth();
+  const { loginAdmin, loginAdminGoogle, completeAdminGoogle } = useAuth();
   const { pushToast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
+  const location = useLocation();
+  // Voltando do Google (`?oauth=staff`)? Lido na montagem: o estado inicial já
+  // nasce "carregando", sem setState síncrono dentro do efeito.
+  const [returningFromGoogle] = useState(
+    () => new URLSearchParams(location.search).get('oauth') === STAFF_OAUTH_MARKER,
+  );
+  const [loading, setLoading] = useState(returningFromGoogle);
+  const [status, setStatus] = useState(
+    returningFromGoogle ? 'Concluindo o login com Google...' : '',
+  );
+  const googleHandledRef = useRef(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [factorCode, setFactorCode] = useState('');
@@ -68,6 +79,38 @@ export function AdminLoginPage() {
       pushToast(message, 'error');
     } finally {
       setSendingEmail(false);
+    }
+  }
+
+  // Uma vez só: o `code` do Google é de uso único, e o StrictMode monta duas vezes.
+  useEffect(() => {
+    if (!returningFromGoogle || googleHandledRef.current) return;
+    googleHandledRef.current = true;
+    completeAdminGoogle()
+      .then((data) => {
+        if (!data?.success) return;
+        pushToast('Login realizado.', 'success');
+        navigate(ROUTES.professores, { replace: true });
+      })
+      .catch((error) => {
+        const message = error.message || 'Não foi possível entrar com Google.';
+        setStatus(message);
+        pushToast(message, 'error');
+      })
+      .finally(() => setLoading(false));
+  }, [returningFromGoogle, completeAdminGoogle, navigate, pushToast]);
+
+  async function handleGoogleLogin() {
+    setLoading(true);
+    setStatus('Abrindo o Google...');
+    try {
+      await loginAdminGoogle();
+      // navega para o Google: o "carregando" fica até o redirect
+    } catch (error) {
+      const message = error.message || 'Falha ao iniciar login com Google.';
+      setStatus(message);
+      pushToast(message, 'error');
+      setLoading(false);
     }
   }
 
@@ -139,6 +182,31 @@ export function AdminLoginPage() {
               Use o e-mail e a senha da sua conta de professor(a) ou de administração da loja.
             </p>
           </div>
+        </div>
+
+        {/* Só professor(a): a administração tem 2º fator e entra pela senha
+            (handlers/admin/login-google.js explica o porquê). */}
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-4 py-2.5 text-sm font-medium text-[#1f1f1f] shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+        >
+          <GoogleLogo />
+          Continuar com o Google
+        </button>
+        <p className="mt-1.5 text-center text-xs text-slate-500">
+          Para professores(as). A administração da loja entra com e-mail e senha.
+        </p>
+
+        <div
+          role="separator"
+          aria-label="ou"
+          className="my-4 flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400"
+        >
+          <span className="h-px flex-1 bg-slate-200" />
+          ou
+          <span className="h-px flex-1 bg-slate-200" />
         </div>
 
         <form className="flex flex-col gap-3" onSubmit={onSubmit}>

@@ -7,7 +7,8 @@ import { ROUTES } from '../constants/routes';
 //
 // São duas telas e dois logins diferentes por baixo: o cliente entra pelo
 // Supabase Auth (`/login`, com Google), o professor e a administração pela
-// sessão de staff (`/admin`, com 2º fator). O seletor só leva de uma à outra;
+// sessão de staff (`/admin`: Google só para professor(a); a administração
+// usa senha + 2º fator). O seletor só leva de uma à outra;
 // não muda nada da autenticação. Quem é professor cai em `/professores` e
 // quem administra a loja, no painel — quem decide é o papel da conta.
 // ════════════════════════════════════════════════════════════════════

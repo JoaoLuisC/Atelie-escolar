@@ -1,5 +1,9 @@
 import { apiError, apiRequest } from '../utils/api';
-import { buildOAuthRedirectUrl, getSupabaseBrowserClient } from './supabase-browser';
+import {
+  buildOAuthRedirectUrl,
+  getSupabaseBrowserClient,
+  STAFF_OAUTH_MARKER,
+} from './supabase-browser';
 
 const INVALID_CREDENTIALS_MESSAGE = 'Credenciais inválidas.';
 
@@ -103,6 +107,10 @@ export async function consumeCustomerSessionFromAuthCallback() {
   if (!globalThis.window) return null;
 
   const url = new URL(globalThis.window.location.href);
+  // Volta do Google do professor(a): quem conclui é o AdminLoginPage, com a
+  // sessão de staff. Sem esta saída, o `code` na URL viraria também uma
+  // sessão de CLIENTE para a mesma conta.
+  if (url.searchParams.get('oauth') === STAFF_OAUTH_MARKER) return null;
   const hasOAuthMarker =
     url.searchParams.get('oauth') === 'google' ||
     url.searchParams.has('code') ||

@@ -22,7 +22,7 @@
 // As duas funções de URL abaixo NÃO mudaram: só usam `URL` e
 // `constants/routes`, são minúsculas, e continuam síncronas.
 // ════════════════════════════════════════════════════════════════════
-import { CUSTOMER_RESET_PASSWORD_PATH, sanitizeRedirectPath } from '../constants/routes';
+import { CUSTOMER_RESET_PASSWORD_PATH, ROUTES, sanitizeRedirectPath } from '../constants/routes';
 
 let clientPromise = null;
 
@@ -80,6 +80,22 @@ export function buildPasswordResetRedirectUrl(postResetRedirect = '/checkout') {
   const url = new URL(CUSTOMER_RESET_PASSWORD_PATH, globalThis.window.location.origin);
   url.searchParams.set('redirect', safeRedirect);
 
+  return url.toString();
+}
+
+/**
+ * `?oauth=` da volta do Google para o login de professor(a), em `/admin`.
+ * Distinto do `google` do cliente: os dois fluxos usam o mesmo OAuth do
+ * Supabase, e é este marcador que decide qual sessão a volta abre.
+ */
+export const STAFF_OAUTH_MARKER = 'staff';
+
+export function buildStaffOAuthRedirectUrl() {
+  if (!globalThis.window) {
+    throw new Error('Login com Google disponivel apenas no navegador.');
+  }
+  const url = new URL(ROUTES.admin, globalThis.window.location.origin);
+  url.searchParams.set('oauth', STAFF_OAUTH_MARKER);
   return url.toString();
 }
 

@@ -1,6 +1,12 @@
 import { createContext, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { getAdminSession, loginAdmin, logoutAdmin } from '../services/admin-auth';
+import {
+  completeStaffGoogleLogin,
+  getAdminSession,
+  loginAdmin,
+  logoutAdmin,
+  startStaffGoogleLogin,
+} from '../services/admin-auth';
 import {
   fetchCustomerSession,
   consumeCustomerSessionFromAuthCallback,
@@ -102,6 +108,18 @@ export function AuthProvider({ children }) {
         if (!data?.requiresSecondFactor) {
           setAdminAuthenticated(true);
           setAdminRole(String(data?.user?.role || '').toLowerCase());
+        }
+        return data;
+      },
+      async loginAdminGoogle() {
+        await startStaffGoogleLogin();
+      },
+      // Volta do Google do professor(a). `null` quando a URL não é essa volta.
+      async completeAdminGoogle() {
+        const data = await completeStaffGoogleLogin();
+        if (data?.success) {
+          setAdminAuthenticated(true);
+          setAdminRole(String(data.user?.role || '').toLowerCase());
         }
         return data;
       },
