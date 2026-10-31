@@ -34,7 +34,7 @@ describe('API contracts', () => {
     vi.clearAllMocks();
   });
 
-  it('create-payment valida payload obrigatorio', async () => {
+  it('create-payment sem sessão é 401 antes de validar o corpo (regra A3)', async () => {
     const handler = (await import('../create-payment.js')).default;
     const req = {
       method: 'POST',
@@ -48,9 +48,9 @@ describe('API contracts', () => {
     await handler(req, res);
 
     expectApiError(res, {
-      status: 400,
-      code: 'VALIDATION_FAILED',
-      message: 'Items são obrigatórios',
+      status: 401,
+      code: 'CUSTOMER_SESSION_INVALID',
+      message: 'Entre ou crie sua conta antes de finalizar a compra.',
     });
   });
 

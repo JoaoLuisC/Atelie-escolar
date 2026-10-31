@@ -425,7 +425,7 @@ export function Shell({ children }) {
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
                 {footer.navigationTitle}
               </h4>
               <ul className="mt-4 space-y-2.5 text-sm">
@@ -462,7 +462,7 @@ export function Shell({ children }) {
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
                 {footer.contactTitle}
               </h4>
               <ul className="mt-4 space-y-2.5 text-sm">
@@ -472,7 +472,8 @@ export function Shell({ children }) {
                     className="flex items-center gap-2 text-slate-400 transition hover:text-white"
                   >
                     <i className="bi bi-envelope" aria-hidden="true" />
-                    {CONTACT_EMAIL}
+                    {/* break-all: a 768 px a coluna é estreita e o endereço vazava, criando rolagem horizontal. */}
+                    <span className="min-w-0 break-all">{CONTACT_EMAIL}</span>
                   </a>
                 </li>
                 {footer.whatsappUrl ? (

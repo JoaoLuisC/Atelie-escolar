@@ -210,6 +210,24 @@ module.exports = async function createPaymentHandler(req, res) {
   if (gate.blocked) return;
 
   try {
+    // ── CONTA OBRIGATÓRIA (regra A3: autenticação antes da validação) ───
+    // Toda compra é de uma conta: o pedido leva o `customer_id` da sessão e o
+    // e-mail sai do cookie assinado, não do formulário (LOJA-40). Sem sessão é
+    // 401 antes de olhar o corpo — um payload qualquer não pode responder 400 e
+    // revelar o formato esperado a quem nem tem conta.
+    const session = getCustomerSessionFromRequest(req);
+    const sessionUid = String(session?.uid || '').trim();
+    const sessionEmail = String(session?.email || '')
+      .trim()
+      .toLowerCase();
+    if (!sessionUid || !sessionEmail) {
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
+        message: 'Entre ou crie sua conta antes de finalizar a compra.',
+      });
+    }
+
     // ── VALIDAÇÃO NA BORDA (regra B1) ─────────────────────────────────
     // Um schema no lugar de ~45 linhas de checagem manual. Os limites são os
     // MESMOS de antes (e-mail 254 do RFC 5321, nome 120, CPF 11 dígitos,
@@ -239,26 +257,6 @@ module.exports = async function createPaymentHandler(req, res) {
     } = parsed.data;
     const attributionData = sanitizeAttribution(attribution);
 
-    // LOJA-40: com sessão de cliente, o pedido é DA CONTA. O e-mail sai do
-    // cookie assinado, não do formulário — antes o campo era editável e um
-    // pedido com outro e-mail nunca era adotado pela conta (a adoção de órfãos
-    // em handlers/customer-orders.js casa pelo e-mail de auth.users). O
-    // `customer_id` NÃO é gravado aqui: ele referencia auth.users, e um cookie
-    // ainda válido de conta já excluída faria o INSERT falhar por FK — a
-    // adoção continua sendo o caminho do vínculo. Convidado (sem sessão) segue
-    // exatamente como antes.
-    const session = getCustomerSessionFromRequest(req);
-    const sessionUid = String(session?.uid || '').trim();
-    const sessionEmail = String(session?.email || '')
-      .trim()
-      .toLowerCase();
-    if (!sessionUid || !sessionEmail) {
-      return fail(res, {
-        status: 401,
-        code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
-        message: 'Entre ou crie sua conta antes de finalizar a compra.',
-      });
-    }
     const customerData = { ...parsedCustomer, email: sessionEmail };
     const couponCustomerKey = sessionUid
       ? `user:${sessionUid}`
