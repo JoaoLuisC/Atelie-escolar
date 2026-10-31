@@ -95,6 +95,10 @@ const SecurityTab = lazyTab('SecurityTab', () => import('../components/admin/tab
 // Funil, Curva ABC/coorte e Estudo de vendas (IA) moram como subabas da aba Vendas.
 const SalesHub = lazyTab('SalesHub', () => import('../components/admin/tabs/SalesHub'));
 const SegmentsTab = lazyTab('SegmentsTab', () => import('../components/admin/tabs/SegmentsTab'));
+const SocialPublishingTab = lazyTab(
+  'SocialPublishingTab',
+  () => import('../components/admin/tabs/SocialPublishingTab'),
+);
 const PlatformTab = lazyTab('PlatformTab', () => import('../components/admin/tabs/PlatformTab'));
 const AccountTab = lazyTab('AccountTab', () => import('../components/admin/tabs/AccountTab'));
 
@@ -678,6 +682,8 @@ export function AdminPage({ variant = 'store' }) {
         return <SalesHub categories={dashboardData.categories || []} />;
       case 'segmentos':
         return <SegmentsTab />;
+      case 'redes':
+        return <SocialPublishingTab />;
       case 'prod-saida':
         return <PerformanceTab productPerformance={productPerformance} />;
       case 'vitrine':

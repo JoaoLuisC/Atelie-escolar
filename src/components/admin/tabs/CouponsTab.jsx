@@ -34,6 +34,18 @@ function usageLabel(coupon) {
   return `${used} ${used === 1 ? 'uso' : 'usos'} · ${limite}`;
 }
 
+function audienceLabel(coupon) {
+  const labels = {
+    all: 'Todos os clientes',
+    customers: 'Clientes com conta',
+    new_customers: 'Primeira compra',
+    returning_customers: 'Quem já comprou',
+    emails: `${coupon.eligibleEmails?.length || 0} pessoa(s) específica(s)`,
+    purchase_milestone: `1 uso a cada ${coupon.purchasesRequired || 1} compras`,
+  };
+  return labels[coupon.audience || 'all'];
+}
+
 export function CouponsTab() {
   const { pushToast } = useToast();
   const [coupons, setCoupons] = useState([]);
@@ -190,6 +202,13 @@ export function CouponsTab() {
                   <li>
                     <i className="bi bi-graph-up mr-1" aria-hidden="true" />
                     {usageLabel(coupon)}
+                  </li>
+                  <li>
+                    <i className="bi bi-people mr-1" aria-hidden="true" />
+                    {audienceLabel(coupon)}
+                    {coupon.maxUsesPerCustomer
+                      ? ` · máx. ${coupon.maxUsesPerCustomer} por cliente`
+                      : ''}
                   </li>
                   {coupon.minOrderAmount ? (
                     <li>

@@ -18,6 +18,19 @@ export const HOME_BLOCKS = Object.freeze([
 
 export const DEFAULT_HOME_CONTENT = Object.freeze({
   blocks: HOME_BLOCKS.map(({ id }) => ({ id, enabled: true })),
+  navigation: { title: 'Profa. Marciar Cardoso', size: 'medium' },
+  footer: {
+    title: 'Profa. Marciar Cardoso',
+    description:
+      'Materiais gráficos digitais profissionais e editáveis para festas, eventos e decoração escolar. Download instantâneo após a aprovação do pagamento.',
+    navigationTitle: 'Navegação',
+    contactTitle: 'Contato',
+    instagramUrl: 'https://instagram.com/profamarciarcardoso',
+    facebookUrl: '',
+    pinterestUrl: '',
+    whatsappUrl: '',
+    whatsappLabel: '',
+  },
   seo: {
     title: 'Materiais educativos digitais para professores',
     description:
@@ -30,6 +43,16 @@ export const DEFAULT_HOME_CONTENT = Object.freeze({
     ctaLink: '/produtos',
     imageUrl: '',
     imageAlt: '',
+    imagePosition: 'right',
+    imageAnimation: 'none',
+    backgroundStyle: 'default',
+    backgroundColor: '#ede9fe',
+    backgroundColorEnd: '#e0f2fe',
+    bannerSize: 'medium',
+    textAlign: 'left',
+    showIcons: true,
+    icons: '',
+    iconSize: 'medium',
   },
   marquee: {
     items: ['BANNERS', 'PAINÉIS', 'ATIVIDADES', 'LEMBRANCINHAS', 'KITS'],
@@ -42,7 +65,7 @@ export const DEFAULT_HOME_CONTENT = Object.freeze({
   howItWorks: {
     eyebrow: 'Simples assim',
     title: 'Do clique à impressão *em minutos*',
-    subtitle: 'Sem cadastro obrigatório. Sem espera. Sem complicação.',
+    subtitle: 'Crie sua conta e acesse seus materiais após a confirmação do pagamento.',
     steps: [
       {
         title: 'Escolha',
@@ -139,6 +162,8 @@ export function mergeHomeContent(saved) {
   const source = isPlainObject(saved) ? saved : {};
   return {
     blocks: mergeBlocks(source.blocks),
+    navigation: mergeSection(DEFAULT_HOME_CONTENT.navigation, source.navigation),
+    footer: mergeSection(DEFAULT_HOME_CONTENT.footer, source.footer),
     seo: mergeSection(DEFAULT_HOME_CONTENT.seo, source.seo),
     hero: mergeSection(DEFAULT_HOME_CONTENT.hero, source.hero),
     marquee: mergeSection(DEFAULT_HOME_CONTENT.marquee, source.marquee),

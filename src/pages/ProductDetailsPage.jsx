@@ -325,26 +325,35 @@ export function ProductDetailsPage() {
               </h1>
               {/* whitespace-pre-line: as quebras de linha digitadas no painel
                   (parágrafos, listas) aparecem como a professora escreveu. */}
-              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">
-                {product.description || 'Sem descrição disponível.'}
-              </p>
-
-              {/* Descrição comum a todos os produtos (aba Produtos do painel). */}
-              {product.sharedDescription?.text ? (
-                <section
-                  aria-label={product.sharedDescription.title || 'Sobre os materiais'}
-                  className="mt-4 rounded-xl border border-brand-100 bg-brand-50/50 p-4"
+              <div
+                className="flex flex-col"
+                style={{ textAlign: product.descriptionLayout?.descriptionAlign || 'left' }}
+              >
+                <p
+                  className={`mt-3 whitespace-pre-line leading-relaxed text-slate-600 ${product.descriptionLayout?.descriptionOrder === 'shared-first' ? 'order-2' : ''} ${{ small: 'text-xs', medium: 'text-sm', large: 'text-base' }[product.descriptionLayout?.descriptionSize] || 'text-sm'}`}
                 >
-                  {product.sharedDescription.title ? (
-                    <h2 className="mb-1 font-heading text-sm font-bold text-slate-800">
-                      {product.sharedDescription.title}
-                    </h2>
-                  ) : null}
-                  <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
-                    {product.sharedDescription.text}
-                  </p>
-                </section>
-              ) : null}
+                  {product.description || 'Sem descrição disponível.'}
+                </p>
+
+                {/* Descrição comum a todos os produtos (aba Produtos do painel). */}
+                {product.sharedDescription?.text ? (
+                  <section
+                    aria-label={product.sharedDescription.title || 'Sobre os materiais'}
+                    className={`mt-4 rounded-xl border border-brand-100 bg-brand-50/50 p-4 ${product.descriptionLayout?.descriptionOrder === 'shared-first' ? 'order-1' : ''}`}
+                  >
+                    {product.sharedDescription.title ? (
+                      <h2 className="mb-1 font-heading text-sm font-bold text-slate-800">
+                        {product.sharedDescription.title}
+                      </h2>
+                    ) : null}
+                    <p
+                      className={`whitespace-pre-line leading-relaxed text-slate-600 ${{ small: 'text-xs', medium: 'text-sm', large: 'text-base' }[product.descriptionLayout?.descriptionSize] || 'text-sm'}`}
+                    >
+                      {product.sharedDescription.text}
+                    </p>
+                  </section>
+                ) : null}
+              </div>
 
               <div className="mt-6 rounded-xl bg-slate-50 p-4">
                 <div className="flex items-baseline gap-3">

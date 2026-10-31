@@ -57,6 +57,26 @@ export async function fetchMyOrders({ signal } = {}) {
   return { orders: data.orders || [], sessionExpired: false };
 }
 
+export async function requestRefund({ orderId, reason, phone }) {
+  const { response, data } = await apiRequest('/refund-request', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId, reason, phone }),
+  });
+  if (!response.ok || !data.success)
+    throw apiError(data, 'Não foi possível registrar a solicitação.');
+  return data;
+}
+
+export async function fetchMyRefundRequests() {
+  const { response, data } = await apiRequest('/refund-request', { credentials: 'include' });
+  if (!response.ok || !data.success) {
+    throw apiError(data, 'Não foi possível consultar as solicitações.');
+  }
+  return data.requests || [];
+}
+
 /**
  * URL de download de um token.
  *

@@ -50,19 +50,21 @@ Projeto-mae/
 │   └── index.js                 # A ÚNICA função serverless: remonta a URL a partir de `__path`
 │                                #   e entrega ao app Express compartilhado
 │
-├── handlers/                    # 54 endpoints — o MESMO módulo em dev e em produção
+├── handlers/                    # 58 endpoints — o MESMO módulo em dev e em produção
 │   ├── auth/customer/           # login, register, session, logout
 │   │   └── google/              # start, callback (OAuth do cliente)
-│   ├── admin/                   # 23 endpoints do painel, em /api/admin/<recurso>
+│   ├── admin/                   # 25 endpoints do painel, em /api/admin/<recurso>
 │   │   ├── login.js             # e-mail/senha de staff + 2º fator de admin/master
 │   │   ├── login-google.js      # Google, só para professor(a)
 │   │   ├── logout.js / session.js
 │   │   ├── products.js / categories.js / coupons.js / orders.js / users.js  # factory (ADR 0005)
+│   │   ├── refund-requests.js   # solicitações de devolução (factory, recorte da professora)
 │   │   ├── dashboard.js / kpis.js / funnel.js / cohort.js / segments.js
 │   │   ├── abc-products.js / abc-customers.js / sales-study.js
 │   │   ├── settings.js          # homeSections, homeContent, productDefaults, adminConfig
 │   │   ├── upload-url.js        # URL assinada de upload no Storage
 │   │   ├── ai-assist.js         # textos de produto/SEO/página pelo Gemini
+│   │   ├── social-publish.js    # publicar no Facebook/Instagram/Pinterest/TikTok/WhatsApp
 │   │   ├── store-owner.js       # qual professora é a dona da loja (só admin)
 │   │   ├── product-seller.js    # de qual professora é um produto (só admin)
 │   │   └── cleanup-events.js
@@ -72,6 +74,7 @@ Projeto-mae/
 │   ├── products.js / product-details.js / home-sections.js / home-content.js  # catálogo público
 │   ├── create-payment.js / verify-payment.js / webhook.js / download.js       # dinheiro e entrega
 │   ├── validate-coupon.js / cross-sell.js / customer-orders.js
+│   ├── refund-request.js / me-profile.js        # devolução e nome do cliente
 │   ├── track-event.js / abandoned-cart.js
 │   ├── subscribe.js / confirm-subscription.js / unsubscribe.js / send-confirmation-email.js
 │   ├── me-delete-account.js / me-export-data.js   # LGPD
@@ -89,7 +92,7 @@ Projeto-mae/
 │   ├── express-app.js           # o app: trust proxy, helmet, cors, parsers, rotas, 404
 │   ├── route-mount.js           # mountHandler: adaptador único handler → Express
 │   ├── http.js                  # ok/fail, ERROR_CODES, guardMethod, CORS, cache (ADR 0004)
-│   ├── logger.js                # log JSON estruturado
+│   ├── logger.js                # log JSON estruturado, com e-mail/CPF/telefone mascarados
 │   ├── env-secret.js            # segredos fail-closed + flags de ambiente
 │   ├── supabase.js              # cliente REST service_role + helpers
 │   ├── admin-session.js         # cookie `admin_session` (HMAC), guardas, anti-CSRF
@@ -101,14 +104,15 @@ Projeto-mae/
 │   ├── staff-account.js         # troca de senha/e-mail com a senha atual
 │   ├── customer-session.js      # cookie `customer_session` (HMAC)
 │   ├── customer-auth-handlers.js# lógica de auth do cliente (as guardas ficam em handlers/)
-│   ├── customer-account-provisioning.js  # conta do comprador convidado após o pagamento
+│   ├── customer-account-provisioning.js  # conta para e-mail de pedido sem conta (legado: o checkout já exige conta)
 │   ├── rate-limit.js            # enforceRateLimit + RATE_LIMITS, contador no Postgres (ADR 0007)
 │   ├── mercadopago-config.js    # SDK do MP + assinatura do webhook
 │   ├── payment-integrity.js     # reconciliação valor/moeda/live_mode (ADR 0003)
 │   ├── money.js                 # dinheiro em centavos inteiros
 │   ├── order-confirmation.js    # e-mail de confirmação na 1ª aprovação
 │   ├── cart-recovery.js         # carrinho vira "recuperado" na 1ª aprovação
-│   ├── coupons.js / public-catalog.js / product-media.js / store-content.js / sales-counts.js
+│   ├── coupons.js               # estado, público (validateCouponAudience) e limite por cliente
+│   ├── public-catalog.js / product-media.js / store-content.js / sales-counts.js
 │   ├── gemini.js                # chamada ao Gemini com JSON de formato fechado
 │   ├── ai-assist.js             # tarefas de IA do painel (produto, SEO, página)
 │   ├── sales-study.js / funnel-metrics.js       # Estudo de vendas e métricas do funil
@@ -116,7 +120,7 @@ Projeto-mae/
 │   ├── analytics-events.js / attribution-sanitize.js
 │   ├── security-headers.js / security-logger.js
 │   ├── email-sender.js / email-templates.js     # nodemailer → SMTP do Resend
-│   ├── storage-signed-url.js / concurrency.js
+│   ├── storage-signed-url.js / concurrency.js   # assinatura só de product_files
 │   └── __tests__/
 │
 ├── middleware/error.middleware.js   # notFoundHandler + errorHandler (rede de segurança)
@@ -135,13 +139,15 @@ Projeto-mae/
 │   ├── providers/                   # AuthProvider, CartProvider, ToastProvider
 │   ├── hooks/                       # useAuth, useCart, useToast, useProductFilters
 │   ├── services/                    # a única camada que chama a API (admin-*, teacher-panel,
-│   │                                #   checkout, products, customer-auth, supabase-browser…)
+│   │                                #   checkout, products, customer-auth, downloads,
+│   │                                #   store-settings (navbar/rodapé), supabase-browser…)
 │   ├── utils/                       # api.js (apiRequest), analytics, attribution, consent,
 │   │                                #   formatação, abc.js (paridade com o backend), csv-export
 │   ├── constants/                   # routes, error-codes (espelho do backend), home-content, seller
 │   └── test/                        # setup do Vitest (node e browser)
 │
-├── supabase/                        # schema.sql, security-hardening.sql, seed, config.toml, migrations/
+├── supabase/                        # schema.sql, security-hardening.sql, seed, config.toml, migrations/,
+│                                    #   templates/ (e-mails do Auth: confirmação e recuperação)
 ├── scripts/                         # check-env, check-rls, check-schema-drift, check-advisor,
 │                                    #   configure-auth, db-inspect, utf8, subset de ícones, fix-dns
 ├── public/                          # logo (coruja), favicons, webmanifest, og-default, fontes, robots

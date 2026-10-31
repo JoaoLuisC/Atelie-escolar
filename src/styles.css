@@ -20,3 +20,34 @@
     font-family: 'Raleway', system-ui, sans-serif;
   }
 }
+
+@keyframes hero-image-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes hero-image-slide {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.hero-image-fade {
+  animation: hero-image-fade 700ms ease-out both;
+}
+.hero-image-slide {
+  animation: hero-image-slide 700ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-image-fade,
+  .hero-image-slide {
+    animation: none;
+  }
+}

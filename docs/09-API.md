@@ -54,62 +54,66 @@ Para a dona da loja, pedidos, clientes, produtos e relatórios vêm recortados a
 
 ## Mapa
 
-| Endpoint                             | Métodos                       | Guarda                         | Rate limit                                          |
-| ------------------------------------ | ----------------------------- | ------------------------------ | --------------------------------------------------- |
-| `/api/products`                      | GET                           | pública                        | `catalog` 120/min por IP                            |
-| `/api/product-details`               | GET                           | pública                        | `catalog`                                           |
-| `/api/home-content`                  | GET                           | pública                        | `catalog`                                           |
-| `/api/home-sections`                 | GET                           | pública                        | `catalog`                                           |
-| `/api/cross-sell`                    | GET                           | pública                        | `catalog`                                           |
-| `/sitemap.xml`, `/api/sitemap.xml`   | GET                           | pública                        | dispensado (CDN)                                    |
-| `/api/create-payment`                | POST                          | pública (sessão opcional)      | 20/min por IP                                       |
-| `/api/verify-payment`                | POST (GET aceito)             | pública                        | 600/10 min por IP+pedido; 40 pedidos/IP             |
-| `/api/webhook`                       | POST                          | assinatura MP                  | dispensado (HMAC)                                   |
-| `/api/download`                      | GET                           | token de uso único             | 20/10 min por IP+token; 30 tokens/IP                |
-| `/api/validate-coupon`               | POST                          | pública                        | 20/min por IP; cotação usa `catalog`                |
-| `/api/send-confirmation-email`       | POST                          | pública                        | 5/10 min por IP                                     |
-| `/api/customer-orders`               | GET                           | cliente                        | dispensado (sessão)                                 |
-| `/api/me-delete-account`             | POST                          | cliente                        | 5/min por IP                                        |
-| `/api/me-export-data`                | GET                           | cliente                        | 5/5 min por IP                                      |
-| `/api/auth/customer/login`           | POST                          | pública                        | 5/10 min por IP+e-mail; 20 e-mails/IP; fail-closed  |
-| `/api/auth/customer/register`        | POST                          | pública                        | 5/10 min; fail-closed                               |
-| `/api/auth/customer/google/start`    | GET                           | pública                        | 20/10 min                                           |
-| `/api/auth/customer/google/callback` | POST                          | pública                        | 20/10 min                                           |
-| `/api/auth/customer/session`         | GET                           | lê o cookie                    | dispensado                                          |
-| `/api/auth/customer/logout`          | POST                          | same-origin                    | dispensado                                          |
-| `/api/subscribe`                     | POST                          | pública                        | 5/min por IP                                        |
-| `/api/confirm-subscription`          | GET                           | pública                        | 20/min por IP                                       |
-| `/api/unsubscribe`                   | GET, POST                     | pública                        | 20/min por IP                                       |
-| `/api/track-event`                   | POST                          | pública                        | 120/min por IP                                      |
-| `/api/abandoned-cart`                | POST                          | pública                        | 30/min por IP                                       |
-| `/api/cron-email-jobs`               | POST, GET                     | `X-Cron-Secret`                | dispensado (segredo)                                |
-| `/api/admin/login`                   | POST                          | pública                        | 5/10 min (senha); 5/10 min no 2º fator, fail-closed |
-| `/api/admin/login-google`            | POST                          | pública                        | `staff-google-login` 20/10 min                      |
-| `/api/admin/logout`                  | POST                          | same-origin                    | dispensado                                          |
-| `/api/admin/session`                 | GET                           | lê o cookie                    | dispensado                                          |
-| `/api/admin/dashboard`               | GET                           | store                          | sessão                                              |
-| `/api/admin/kpis`                    | GET                           | store                          | sessão                                              |
-| `/api/admin/abc-products`            | GET                           | store                          | sessão                                              |
-| `/api/admin/abc-customers`           | GET                           | store                          | sessão                                              |
-| `/api/admin/cohort`                  | GET                           | store                          | sessão                                              |
-| `/api/admin/funnel`                  | GET                           | store                          | sessão                                              |
-| `/api/admin/segments`                | GET                           | store                          | sessão                                              |
-| `/api/admin/products`                | GET, POST, PUT, PATCH, DELETE | store                          | sessão                                              |
-| `/api/admin/categories`              | GET, POST, PUT, DELETE        | store                          | sessão                                              |
-| `/api/admin/coupons`                 | GET, POST, PUT, DELETE        | store                          | sessão                                              |
-| `/api/admin/orders`                  | GET                           | store                          | sessão                                              |
-| `/api/admin/settings`                | GET, PUT                      | store (`adminConfig` só admin) | sessão; mudar 2FA: 5/10 min                         |
-| `/api/admin/upload-url`              | POST                          | store                          | sessão                                              |
-| `/api/admin/ai-assist`               | POST                          | store                          | 30/hora                                             |
-| `/api/admin/sales-study`             | GET, POST                     | store                          | POST: 10/hora                                       |
-| `/api/admin/cleanup-events`          | POST                          | store                          | sessão                                              |
-| `/api/admin/users`                   | GET, PUT, DELETE              | admin                          | sessão                                              |
-| `/api/admin/product-seller`          | PUT                           | admin                          | sessão                                              |
-| `/api/admin/store-owner`             | GET, PUT                      | admin                          | sessão                                              |
-| `/api/teacher/account`               | GET, PUT, POST                | staff                          | POST: 5/10 min por conta+IP                         |
-| `/api/teacher/dashboard`             | GET                           | seller                         | sessão                                              |
-| `/api/teacher/products`              | POST, PATCH                   | seller                         | `teacher-products` 60/h                             |
-| `/api/notfound`                      | qualquer                      | pública                        | dispensado                                          |
+| Endpoint                             | Métodos                       | Guarda                              | Rate limit                                          |
+| ------------------------------------ | ----------------------------- | ----------------------------------- | --------------------------------------------------- |
+| `/api/products`                      | GET                           | pública                             | `catalog` 120/min por IP                            |
+| `/api/product-details`               | GET                           | pública                             | `catalog`                                           |
+| `/api/home-content`                  | GET                           | pública                             | `catalog`                                           |
+| `/api/home-sections`                 | GET                           | pública                             | `catalog`                                           |
+| `/api/cross-sell`                    | GET                           | pública                             | `catalog`                                           |
+| `/sitemap.xml`, `/api/sitemap.xml`   | GET                           | pública                             | dispensado (CDN)                                    |
+| `/api/create-payment`                | POST                          | cliente (401 sem sessão)            | 20/min por IP                                       |
+| `/api/verify-payment`                | POST (GET aceito)             | pública                             | 600/10 min por IP+pedido; 40 pedidos/IP             |
+| `/api/webhook`                       | POST                          | assinatura MP                       | dispensado (HMAC)                                   |
+| `/api/download`                      | GET                           | token (sessão de outra conta → 403) | 20/10 min por IP+token; 30 tokens/IP                |
+| `/api/validate-coupon`               | POST                          | pública (sessão lida p/ público)    | 20/min por IP; cotação usa `catalog`                |
+| `/api/send-confirmation-email`       | POST                          | pública                             | 5/10 min por IP                                     |
+| `/api/customer-orders`               | GET                           | cliente                             | dispensado (sessão)                                 |
+| `/api/me-delete-account`             | POST                          | cliente                             | 5/min por IP                                        |
+| `/api/me-export-data`                | GET                           | cliente                             | 5/5 min por IP                                      |
+| `/api/me-profile`                    | GET, PUT                      | cliente                             | 20/10 min                                           |
+| `/api/refund-request`                | GET, POST                     | cliente                             | 10/10 min                                           |
+| `/api/auth/customer/login`           | POST                          | pública                             | 5/10 min por IP+e-mail; 20 e-mails/IP; fail-closed  |
+| `/api/auth/customer/register`        | POST                          | pública                             | 5/10 min; fail-closed                               |
+| `/api/auth/customer/google/start`    | GET                           | pública                             | 20/10 min                                           |
+| `/api/auth/customer/google/callback` | POST                          | pública                             | 20/10 min                                           |
+| `/api/auth/customer/session`         | GET                           | lê o cookie                         | dispensado                                          |
+| `/api/auth/customer/logout`          | POST                          | same-origin                         | dispensado                                          |
+| `/api/subscribe`                     | POST                          | pública                             | 5/min por IP                                        |
+| `/api/confirm-subscription`          | GET                           | pública                             | 20/min por IP                                       |
+| `/api/unsubscribe`                   | GET, POST                     | pública                             | 20/min por IP                                       |
+| `/api/track-event`                   | POST                          | pública                             | 120/min por IP                                      |
+| `/api/abandoned-cart`                | POST                          | pública                             | 30/min por IP                                       |
+| `/api/cron-email-jobs`               | POST, GET                     | `X-Cron-Secret`                     | dispensado (segredo)                                |
+| `/api/admin/login`                   | POST                          | pública                             | 5/10 min (senha); 5/10 min no 2º fator, fail-closed |
+| `/api/admin/login-google`            | POST                          | pública                             | `staff-google-login` 20/10 min                      |
+| `/api/admin/logout`                  | POST                          | same-origin                         | dispensado                                          |
+| `/api/admin/session`                 | GET                           | lê o cookie                         | dispensado                                          |
+| `/api/admin/dashboard`               | GET                           | store                               | sessão                                              |
+| `/api/admin/kpis`                    | GET                           | store                               | sessão                                              |
+| `/api/admin/abc-products`            | GET                           | store                               | sessão                                              |
+| `/api/admin/abc-customers`           | GET                           | store                               | sessão                                              |
+| `/api/admin/cohort`                  | GET                           | store                               | sessão                                              |
+| `/api/admin/funnel`                  | GET                           | store                               | sessão                                              |
+| `/api/admin/segments`                | GET                           | store                               | sessão                                              |
+| `/api/admin/products`                | GET, POST, PUT, PATCH, DELETE | store                               | sessão                                              |
+| `/api/admin/categories`              | GET, POST, PUT, DELETE        | store                               | sessão                                              |
+| `/api/admin/coupons`                 | GET, POST, PUT, DELETE        | store                               | sessão                                              |
+| `/api/admin/orders`                  | GET                           | store                               | sessão                                              |
+| `/api/admin/refund-requests`         | GET, PUT                      | store                               | sessão                                              |
+| `/api/admin/settings`                | GET, PUT                      | store (`adminConfig` só admin)      | sessão; mudar 2FA: 5/10 min                         |
+| `/api/admin/upload-url`              | POST                          | store                               | sessão                                              |
+| `/api/admin/ai-assist`               | POST                          | store                               | 30/hora                                             |
+| `/api/admin/sales-study`             | GET, POST                     | store                               | POST: 10/hora                                       |
+| `/api/admin/social-publish`          | GET, POST                     | store                               | POST: 20/hora                                       |
+| `/api/admin/cleanup-events`          | POST                          | store                               | sessão                                              |
+| `/api/admin/users`                   | GET, PUT, DELETE              | admin                               | sessão                                              |
+| `/api/admin/product-seller`          | PUT                           | admin                               | sessão                                              |
+| `/api/admin/store-owner`             | GET, PUT                      | admin                               | sessão                                              |
+| `/api/teacher/account`               | GET, PUT, POST                | staff                               | POST: 5/10 min por conta+IP                         |
+| `/api/teacher/dashboard`             | GET                           | seller                              | sessão                                              |
+| `/api/teacher/products`              | POST, PATCH                   | seller                              | `teacher-products` 60/h                             |
+| `/api/notfound`                      | qualquer                      | pública                             | dispensado                                          |
 
 "Sessão" e "dispensado" são as exceções nomeadas em `handlers/__tests__/rate-limit-coverage.test.js`,
 que falha se uma rota montada não tiver contador, guarda de sessão ou dispensa registrada.
@@ -157,15 +161,18 @@ Um produto ativo. **Query:** `slug` ou `id` (só UUID é tratado como `id`; o re
 número, é buscado como slug).
 
 Resposta `{ success, product }`, com `faq[]`, `reviews[]`, `benefits[]`, `category`, `categorySlug`,
-`kitItems[]`, `panelSizes[]` e `sharedDescription` (`{ title, text }` do setting `productDefaults`,
-ou `null`; falha ao ler a configuração não derruba a resposta). Nunca expõe `download_url`.
+`kitItems[]`, `panelSizes[]`, `sharedDescription` (`{ title, text }` do setting `productDefaults`,
+ou `null`; falha ao ler a configuração não derruba a resposta) e `descriptionLayout`
+(`{ descriptionOrder, descriptionAlign, descriptionSize }`). Nunca expõe `download_url`.
 
 ### `GET /api/home-content`
 
 Textos e blocos da página da loja salvos no painel (setting `homeContent`), limpos de novo na
 leitura (`lib/store-content.js`). Devolve só o que foi salvo —
-`{ success, content: { blocks?, seo?, hero?, marquee?, catalog?, howItWorks?, socialProof? } }`,
-`{}` se vazio —; o front completa com os padrões de `src/constants/home-content.js`.
+`{ success, content: { blocks?, navigation?, footer?, seo?, hero?, marquee?, catalog?, howItWorks?, socialProof? } }`,
+`{}` se vazio —; o front completa com os padrões de `src/constants/home-content.js`. `navigation`
+(título, tamanho) e `footer` (textos e links `https://` das redes) alimentam o `Shell.jsx` em todas
+as páginas (`src/services/store-settings.js`).
 
 ### `GET /api/home-sections`
 
@@ -189,8 +196,9 @@ produtos ativos (`/produtos/<slug>`). `application/xml`, cache público de 1 h.
 
 ### `POST /api/create-payment`
 
-Cria pedido e preferência do Mercado Pago. Sessão de cliente é opcional: convidado compra sem
-conta (provisionada na aprovação); com `customer_session`, o e-mail do pedido é o da conta.
+Cria pedido e preferência do Mercado Pago. **Exige `customer_session`**: sem ela, 401
+`CUSTOMER_SESSION_INVALID` (o checkout cria a conta antes). O e-mail do pedido é sempre o da conta
+e o pedido grava `customer_id`.
 
 ```json
 {
@@ -208,9 +216,13 @@ subtotal, discount, total, couponApplied }`.
   (produto digital), `productId` UUID, tetos de tamanho para nome, e-mail, telefone e CPF.
 - Preço sempre do banco. Desconto rateado por unidade em centavos (`lib/money.js`); o total do
   pedido é a soma do que vai para a preferência (regra E3).
-- Cupom validado no servidor e reservado atomicamente (`increment_coupon_usage`) antes de criar o
-  pedido; a reserva é devolvida após 2 h sem pagamento (`release_stale_coupon_reservations`).
-  Cupom inválido ou esgotado não é erro: o pedido segue sem desconto (`couponApplied: null`).
+- Cupom validado no servidor (estado, público, itens elegíveis) e reservado atomicamente
+  (`increment_coupon_usage(coupon_id, 'user:<uid>')`, limite total e por cliente) antes de criar o
+  pedido, que grava `coupon_customer_key`; a reserva é devolvida após 2 h sem pagamento
+  (`release_stale_coupon_reservations`). Cupom recusado **é erro**: 422 com o código do cupom
+  (`COUPON_*`, `COUPON_NOT_ELIGIBLE` para público ou carrinho sem item elegível,
+  `COUPON_EXHAUSTED` para limite total ou por cliente) e nenhum pedido é criado. Sem cupom,
+  `couponApplied: null`.
 - Cria `orders` (`pending`, `order_code` com 128 bits de entropia) e `order_items`; a preferência
   leva `external_reference = order_code`. Registra `checkout_initiated`.
 
@@ -266,9 +278,13 @@ Notificação do Mercado Pago (`{ type, data: { id } }`).
 (5 min) e 302 para ela, com `Referrer-Policy: no-referrer` e `Cache-Control: no-store`; grava
 `download_logs`.
 
+Sem login, o token basta (link do e-mail). Com `customer_session` de **outra** conta (o
+`customer_id` do pedido é diferente), 403 `FORBIDDEN` e evento `download_token_other_customer`, sem
+gastar o token. Só assina arquivo do bucket privado `product_files` (ou `SUPABASE_STORAGE_BUCKET`).
+
 Erros: 400 sem token; 401 `DOWNLOAD_TOKEN_INVALID` | `DOWNLOAD_TOKEN_USED` |
-`DOWNLOAD_TOKEN_EXPIRED`; 404 produto/arquivo; 500 `DOWNLOAD_UNAVAILABLE` se `download_url` não for
-do Storage (fail-closed, token não é consumido, evento `download_url_not_storage`); 502 se a
+`DOWNLOAD_TOKEN_EXPIRED`; 403 sessão de outra conta; 404 produto/arquivo; 500 `DOWNLOAD_UNAVAILABLE`
+se `download_url` não for do Storage ou estiver fora de `product_files` (fail-closed, token não é consumido, evento `download_url_not_storage`); 502 se a
 assinatura falhar (claim devolvido).
 
 ### `POST /api/validate-coupon`
@@ -276,6 +292,9 @@ assinatura falhar (claim devolvido).
 - `{ code, items }`: valida o cupom contra o carrinho com preços do banco. Resposta
   `{ success, coupon: { code, discountType, discountValue }, items, subtotal, discount, total }`.
 - `{ quote: true, items }`: só cota o carrinho (`{ success, items, subtotal }`), no balde `catalog`.
+- Lê a `customer_session`, se houver, para o público do cupom e o limite por cliente: cupom com
+  público diferente de `all` ou com `max_uses_per_customer` pede login (422 `COUPON_NOT_ELIGIBLE`).
+  É só prévia — o `create-payment` decide.
 
 422 com `COUPON_NOT_FOUND`, `COUPON_INACTIVE`, `COUPON_NOT_YET_VALID`, `COUPON_EXPIRED`,
 `COUPON_EXHAUSTED`, `COUPON_MINIMUM_NOT_MET` ou `COUPON_NOT_ELIGIBLE`; `VALIDATION_FAILED` com
@@ -296,8 +315,26 @@ Idempotente por `email_sent_log` (`order_confirmation` + `orderId`). Best-effort
 ### `GET /api/customer-orders`
 
 Pedidos do cliente logado, com itens e tokens de download. Escopo por `customer_id` do cookie,
-nunca por parâmetro. Pedidos de convidado sem `customer_id` com o mesmo e-mail confirmado em
-`auth.users` são adotados pela conta antes da listagem.
+nunca por parâmetro. Pedidos antigos de convidado sem `customer_id` com o mesmo e-mail confirmado
+em `auth.users` são adotados pela conta antes da listagem.
+
+### `GET|POST /api/refund-request`
+
+Solicitação de devolução, com `customer_session` (401 sem ela).
+
+- **GET:** `{ success, requests: [{ id, order_id, reason, phone, status, admin_response, created_at, updated_at }] }`
+  da conta.
+- **POST** `{ orderId, reason?, phone? }`: `orderId` é o `order_code` (até 100); motivo até 2.000;
+  telefone opcional, só dígitos, espaço e `()+.-`, 8 a 40 caracteres — senão 400
+  `VALIDATION_FAILED`. Pedido não aprovado ou de outra conta → 404. Cria com status `open` → 201
+  `{ requestId }`. Já existe uma não encerrada (inclusive na corrida, pelo índice único) → 200
+  `{ requestId, alreadyRequested: true }`. **Não estorna nada.**
+
+### `GET|PUT /api/me-profile`
+
+Perfil do cliente, com `customer_session` (401 sem ela). GET devolve `{ user }` com o nome de
+`profiles.display_name`. PUT `{ name }` (2–120 caracteres, espaços colapsados) grava em
+`profiles`, renova o cookie e devolve `{ user }`; perfil inexistente → 404.
 
 ### `POST /api/me-delete-account`
 
@@ -312,21 +349,22 @@ Exclusão da própria conta (LGPD) em dois passos, ambos com `customer_session`:
 ### `GET /api/me-export-data`
 
 Acesso e portabilidade (LGPD art. 18, V). Exige o cookie e confirma o uid em `auth.users`. Devolve
-pedidos (com itens e metadados de download), inscrição na newsletter e carrinhos abandonados.
+o titular (nome do perfil), pedidos (com itens e metadados de download), solicitações de devolução
+(`solicitacoesDeDevolucao`), inscrição na newsletter e carrinhos abandonados.
 Não inclui, de propósito, o valor dos tokens de download, eventos de analytics nem registros de
 segurança — o campo `naoIncluido` declara isso. `Cache-Control: no-store`; evento
 `customer_data_exported` sem PII.
 
 ### Autenticação de cliente
 
-| Endpoint                             | Método | O que faz                                           |
-| ------------------------------------ | ------ | --------------------------------------------------- |
-| `/api/auth/customer/login`           | POST   | E-mail + senha; emite `customer_session`            |
-| `/api/auth/customer/register`        | POST   | Cadastro com e-mail, senha e nome                   |
-| `/api/auth/customer/google/start`    | GET    | Inicia o OAuth do Google pelo Supabase              |
-| `/api/auth/customer/google/callback` | POST   | Conclui o OAuth e abre a sessão                     |
-| `/api/auth/customer/session`         | GET    | Sessão atual ou `null`                              |
-| `/api/auth/customer/logout`          | POST   | Limpa o cookie; exige requisição same-origin (CSRF) |
+| Endpoint                             | Método | O que faz                                                                                               |
+| ------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------- |
+| `/api/auth/customer/login`           | POST   | E-mail + senha; emite `customer_session`                                                                |
+| `/api/auth/customer/register`        | POST   | Cadastro com e-mail, senha e nome. Senha 8+ com maiúscula, minúscula, número e caractere especial (400) |
+| `/api/auth/customer/google/start`    | GET    | Inicia o OAuth do Google pelo Supabase                                                                  |
+| `/api/auth/customer/google/callback` | POST   | Conclui o OAuth e abre a sessão                                                                         |
+| `/api/auth/customer/session`         | GET    | Sessão atual ou `null`                                                                                  |
+| `/api/auth/customer/logout`          | POST   | Limpa o cookie; exige requisição same-origin (CSRF)                                                     |
 
 ---
 
@@ -406,24 +444,26 @@ Todas as respostas do painel saem `private, no-store`. Toda escrita grava audito
 
 ### Painel da loja (`ensureStoreSession`)
 
-| Endpoint                    | Métodos                       | O que faz                                                                                                                                                                                                                                                                                                                                                                  |
-| --------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/admin/dashboard`      | GET                           | Payload agregado: produtos, categorias, perfis, pedidos, itens, logs de download, settings e resumo de receita                                                                                                                                                                                                                                                             |
-| `/api/admin/kpis`           | GET                           | `?window=` (meses, 1–36, padrão 12). Receita do mês e do anterior, ticket médio, pedidos, LTV, recompra (CAC `null`)                                                                                                                                                                                                                                                       |
-| `/api/admin/abc-products`   | GET                           | Curva ABC por receita (`?period=` padrão `month`, `?categoryId=`)                                                                                                                                                                                                                                                                                                          |
-| `/api/admin/abc-customers`  | GET                           | Curva ABC de clientes + vip/recorrente/eventual (`?period=` padrão `quarter`); e-mails mascarados salvo `?includePII=1`                                                                                                                                                                                                                                                    |
-| `/api/admin/cohort`         | GET                           | Retenção por coorte mensal (`?months=`, 1–36)                                                                                                                                                                                                                                                                                                                              |
-| `/api/admin/funnel`         | GET                           | Funil por sessão + atribuição UTM (`?days=`, 1–180)                                                                                                                                                                                                                                                                                                                        |
-| `/api/admin/segments`       | GET                           | Segmentação agregada de inscritos, sem lista de e-mails                                                                                                                                                                                                                                                                                                                    |
-| `/api/admin/products`       | GET, POST, PUT, PATCH, DELETE | Lista (ou `?id=`), cria, atualiza, altera parcialmente e remove. Categoria precisa existir (UUID ou slug), senão 400. Produto criado pela dona já nasce com o `seller_id` dela                                                                                                                                                                                             |
-| `/api/admin/categories`     | GET, POST, PUT, DELETE        | CRUD de categorias (slug normalizado; 409 em duplicata)                                                                                                                                                                                                                                                                                                                    |
-| `/api/admin/coupons`        | GET, POST, PUT, DELETE        | CRUD de cupons                                                                                                                                                                                                                                                                                                                                                             |
-| `/api/admin/orders`         | GET                           | Pedidos com itens; `?status=` filtra por `payment_status`. Para a dona, só pedidos com material dela                                                                                                                                                                                                                                                                       |
-| `/api/admin/settings`       | GET, PUT                      | `?key=` entre `homeSections`, `homeContent`, `productDefaults` e `adminConfig`. `homeContent`/`productDefaults` são limpos no PUT (`lib/store-content.js`; descartes voltam em `ignoredFields`). `adminConfig` (TOTP, PIN) é só de admin (403 para a dona), nunca devolve segredos (`has2FA`/`hasPin`) e mudar o 2º fator exige o fator vigente (`SECOND_FACTOR_REQUIRED`) |
-| `/api/admin/upload-url`     | POST                          | `{ kind, action }` com `kind` = `image`, `video` ou `download` e `action` = `sign` (padrão, gera signed upload URL) ou `confirm` (confere o objeto enviado). Whitelist de extensão/MIME; SVG/HTML barrados em bucket público                                                                                                                                               |
-| `/api/admin/ai-assist`      | POST                          | `{ task, input }`, `task` = `productCopy` (descrição, benefícios, FAQ), `productSeo` (nome, Google, faixa de preço) ou `homeCopy` (textos da loja). Só gera no clique, nada é gravado. Cota do Gemini → 429 `RATE_LIMITED`; IA indisponível → 503                                                                                                                          |
-| `/api/admin/sales-study`    | GET, POST                     | GET: última análise (`settings.salesStudy`) + `aiConfigured`. POST `{ days }` (7–90, padrão 30): recalcula período atual × anterior e pede a leitura ao Gemini; sem IA, volta os números e `aiError` (`INSUFFICIENT_DATA`, `AI_NOT_CONFIGURED`, `AI_QUOTA`, `AI_FAILED`)                                                                                                   |
-| `/api/admin/cleanup-events` | POST                          | RPC `cleanup_old_analytics_events` (remove eventos com mais de 180 dias)                                                                                                                                                                                                                                                                                                   |
+| Endpoint                     | Métodos                       | O que faz                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/admin/dashboard`       | GET                           | Payload agregado: produtos, categorias, perfis, pedidos, itens, logs de download, settings e resumo de receita                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/api/admin/kpis`            | GET                           | `?window=` (meses, 1–36, padrão 12). Receita do mês e do anterior, ticket médio, pedidos, LTV, recompra (CAC `null`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `/api/admin/abc-products`    | GET                           | Curva ABC por receita (`?period=` padrão `month`, `?categoryId=`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `/api/admin/abc-customers`   | GET                           | Curva ABC de clientes + vip/recorrente/eventual (`?period=` padrão `quarter`); e-mails mascarados salvo `?includePII=1`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `/api/admin/cohort`          | GET                           | Retenção por coorte mensal (`?months=`, 1–36)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `/api/admin/funnel`          | GET                           | Funil por sessão + atribuição UTM (`?days=`, 1–180)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `/api/admin/segments`        | GET                           | Segmentação agregada de inscritos, sem lista de e-mails                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `/api/admin/products`        | GET, POST, PUT, PATCH, DELETE | Lista (ou `?id=`), cria, atualiza, altera parcialmente e remove. Categoria precisa existir (UUID ou slug), senão 400. Produto criado pela dona já nasce com o `seller_id` dela                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/api/admin/categories`      | GET, POST, PUT, DELETE        | CRUD de categorias (slug normalizado; 409 em duplicata)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `/api/admin/coupons`         | GET, POST, PUT, DELETE        | CRUD de cupons. Campos: `code`, `discountType`, `discountValue`, `validFrom` (data pura = 00:00 de Brasília), `validUntil` (23:59:59 de Brasília), `maxUses`, `maxUsesPerCustomer` (≥ 1 ou vazio), `minOrderAmount`, `audience` (`all`, `customers`, `new_customers`, `returning_customers`, `emails`, `purchase_milestone`), `eligibleEmails` (obrigatório em `emails`, até 500), `purchasesRequired` (obrigatório em `purchase_milestone`), `active`                                                                                                                                                                                                                                                |
+| `/api/admin/orders`          | GET                           | Pedidos com itens; `?status=` filtra por `payment_status`. Para a dona, só pedidos com material dela                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `/api/admin/refund-requests` | GET, PUT                      | GET: solicitações com `order: { order_code, customer_name, customer_email }`, só dos pedidos no recorte da professora. PUT `{ id, status, response }` — `status` em `open`, `contacted`, `accepted`, `declined`, `resolved`; resposta até 4.000 — grava e audita (`refund_request`); pedido fora do recorte → 403. Não estorna                                                                                                                                                                                                                                                                                                                                                                        |
+| `/api/admin/settings`        | GET, PUT                      | `?key=` entre `homeSections`, `homeContent`, `productDefaults` e `adminConfig`. `homeContent`/`productDefaults` são limpos no PUT (`lib/store-content.js`; descartes voltam em `ignoredFields`). `adminConfig` (TOTP, PIN) é só de admin (403 para a dona), nunca devolve segredos (`has2FA`/`hasPin`) e mudar o 2º fator exige o fator vigente (`SECOND_FACTOR_REQUIRED`)                                                                                                                                                                                                                                                                                                                            |
+| `/api/admin/upload-url`      | POST                          | `{ kind, action }` com `kind` = `image`, `video` ou `download` e `action` = `sign` (padrão, gera signed upload URL) ou `confirm` (confere o objeto enviado). Whitelist de extensão/MIME; SVG/HTML barrados em bucket público                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `/api/admin/ai-assist`       | POST                          | `{ task, input }`, `task` = `productCopy` (descrição, benefícios, FAQ), `productSeo` (nome, Google, faixa de preço) ou `homeCopy` (textos da loja). Só gera no clique, nada é gravado. Cota do Gemini → 429 `RATE_LIMITED`; IA indisponível → 503                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `/api/admin/sales-study`     | GET, POST                     | GET: última análise (`settings.salesStudy`) + `aiConfigured`. POST `{ days }` (7–90, padrão 30): recalcula período atual × anterior e pede a leitura ao Gemini; sem IA, volta os números e `aiError` (`INSUFFICIENT_DATA`, `AI_NOT_CONFIGURED`, `AI_QUOTA`, `AI_FAILED`)                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/admin/social-publish`  | GET, POST                     | GET: `{ platforms: { facebook, instagram, pinterest, tiktok, whatsapp } }`, `true` se as variáveis da rede existem (nunca o token). POST `{ platform, caption (até 2.200), mediaUrl?, link?, title?, recipient?, privacy?, videoSize? }`: só `https://`; rede sem variáveis → 503. Facebook (foto ou post), Instagram e Pinterest (imagem obrigatória, até 8 MB), TikTok (vídeo até 64 MB; consulta `creator_info` e só aceita a privacidade permitida; devolve o `upload_url` para o navegador enviar o vídeo), WhatsApp (`recipient` com DDI, 8–15 dígitos). Erros: 400 entrada, 422 token vencido/sem permissão ou mídia recusada, 429 limite da rede, 502 rede fora/timeout. Audita sem a legenda |
+| `/api/admin/cleanup-events`  | POST                          | RPC `cleanup_old_analytics_events` (remove eventos com mais de 180 dias)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ### Só admin (`ensureAdminSession`)
 
@@ -457,20 +497,20 @@ Todas as respostas do painel saem `private, no-store`. Toda escrita grava audito
 
 ## 9. Erros comuns
 
-| HTTP | Quando                                                                                                                   |
-| ---- | ------------------------------------------------------------------------------------------------------------------------ |
-| 400  | Payload ou query inválido (`VALIDATION_FAILED`)                                                                          |
-| 401  | Sessão ausente/expirada; token de download inválido, usado ou expirado; assinatura do webhook; `X-Cron-Secret` errado    |
-| 403  | Papel sem acesso; logout cross-origin; editar/excluir admin/master em `users`; `me-delete-account` de conta admin/master |
-| 404  | Recurso inexistente ou de outro professor; `verify-payment` com e-mail que não bate; `/api/*` sem rota                   |
-| 405  | Método não permitido (header `Allow`)                                                                                    |
-| 409  | Duplicata (slug de categoria); confirmação de inscrição descadastrada                                                    |
-| 410  | Link de confirmação expirado (`CONFIRMATION_EXPIRED`)                                                                    |
-| 422  | Cupom não aplicável em `/api/validate-coupon`                                                                            |
-| 429  | Rate limit (`RATE_LIMITED`); também cota esgotada do Gemini                                                              |
-| 500  | Erro interno, mensagem genérica                                                                                          |
-| 502  | Falha ao assinar a URL do download (token devolvido)                                                                     |
-| 503  | Contador indisponível em balde fail-closed; IA indisponível; falha de e-mail no cadastro                                 |
+| HTTP | Quando                                                                                                                                                                                                |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | Payload ou query inválido (`VALIDATION_FAILED`)                                                                                                                                                       |
+| 401  | Sessão ausente/expirada; token de download inválido, usado ou expirado; assinatura do webhook; `X-Cron-Secret` errado                                                                                 |
+| 403  | Papel sem acesso; download com sessão de outra conta; devolução fora do recorte da professora; logout cross-origin; editar/excluir admin/master em `users`; `me-delete-account` de conta admin/master |
+| 404  | Recurso inexistente ou de outro professor; pedido aprovado não encontrado na devolução; `verify-payment` com e-mail que não bate; `/api/*` sem rota                                                   |
+| 405  | Método não permitido (header `Allow`)                                                                                                                                                                 |
+| 409  | Duplicata (slug de categoria); confirmação de inscrição descadastrada                                                                                                                                 |
+| 410  | Link de confirmação expirado (`CONFIRMATION_EXPIRED`)                                                                                                                                                 |
+| 422  | Cupom não aplicável em `/api/validate-coupon` ou `/api/create-payment`; rede social recusou a publicação                                                                                              |
+| 429  | Rate limit (`RATE_LIMITED`); também cota esgotada do Gemini ou limite da rede social                                                                                                                  |
+| 500  | Erro interno, mensagem genérica                                                                                                                                                                       |
+| 502  | Falha ao assinar a URL do download (token devolvido); rede social fora do ar                                                                                                                          |
+| 503  | Contador indisponível em balde fail-closed; IA indisponível; falha de e-mail no cadastro; rede social não configurada                                                                                 |
 
 Pagamento rejeitado não é erro HTTP: o webhook responde 200 e o `verify-payment` devolve
 `paymentStatus: "rejected"`.
@@ -486,11 +526,11 @@ curl http://localhost:3000/health
 # Login de cliente e chamada com sessão
 curl -X POST http://localhost:3000/api/auth/customer/login -c cookies.txt \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"SenhaForte123"}'
+  -d '{"email":"user@example.com","password":"SenhaForte123!"}'
 curl http://localhost:3000/api/customer-orders -b cookies.txt
 
-# Criar pagamento
-curl -X POST http://localhost:3000/api/create-payment -H "Content-Type: application/json" \
+# Criar pagamento (exige a sessão de cliente do passo acima)
+curl -X POST http://localhost:3000/api/create-payment -b cookies.txt -H "Content-Type: application/json" \
   -d '{"customer":{"email":"x@y.com","name":"Teste"},"items":[{"productId":"<id-real>","quantity":1}]}'
 
 # Webhook assinado

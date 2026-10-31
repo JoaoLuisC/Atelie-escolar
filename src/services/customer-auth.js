@@ -107,6 +107,8 @@ export async function consumeCustomerSessionFromAuthCallback() {
   if (!globalThis.window) return null;
 
   const url = new URL(globalThis.window.location.href);
+  // Links de recuperação pertencem à página de redefinição, não ao Google.
+  if (url.pathname === '/reset-password') return null;
   // Volta do Google do professor(a): quem conclui é o AdminLoginPage, com a
   // sessão de staff. Sem esta saída, o `code` na URL viraria também uma
   // sessão de CLIENTE para a mesma conta.
@@ -172,6 +174,19 @@ export async function fetchCustomerSession() {
     return null;
   }
 
+  return normalizeUser(data.user);
+}
+
+export async function updateCustomerProfile(name) {
+  const { response, data } = await apiRequest('/me-profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok || data?.success !== true) {
+    throw apiError(data, 'Não foi possível salvar seu perfil.');
+  }
   return normalizeUser(data.user);
 }
 

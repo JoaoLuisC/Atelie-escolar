@@ -73,6 +73,17 @@ async function getProfileRoleByUserId(userId) {
   return null;
 }
 
+async function getProfileByUserId(userId) {
+  const admin = getAdminClient();
+  if (!admin) return null;
+  const result = await admin
+    .from('profiles')
+    .select('role,display_name,email')
+    .eq('id', userId)
+    .maybeSingle();
+  return result.error ? null : result.data || null;
+}
+
 async function getProfileRoleByEmail(email) {
   const admin = getAdminClient();
   if (!admin) {
@@ -104,4 +115,5 @@ module.exports = {
   getAdminClient,
   getProfileRoleByEmail,
   getProfileRoleByUserId,
+  getProfileByUserId,
 };

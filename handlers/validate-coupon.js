@@ -9,6 +9,7 @@ const { validateCouponSchema } = require('../validation/payment.schemas');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { sumItemsCents, toCentsOrZero, toReais } = require('../lib/money');
 const { createLogger } = require('../lib/logger');
+const { getCustomerSessionFromRequest } = require('../lib/customer-session');
 
 const log = createLogger('validate-coupon');
 const {
@@ -16,6 +17,8 @@ const {
   validateCouponState,
   buildEligibleSet,
   computeDiscount,
+  validateCouponAudience,
+  validateCouponCustomerLimit,
 } = require('../lib/coupons');
 
 // Modo COTAÇÃO (`{ quote: true, items }`): o mesmo carrinho, sem cupom. Existe
@@ -135,6 +138,23 @@ module.exports = async function validateCouponHandler(req, res) {
       // (inexistente, expirado, esgotado, abaixo do mínimo etc.). O `code` já
       // vem canônico de lib/coupons.js — ver a nota da regra A2 lá.
       return fail(res, { status: 422, code: state.code, message: state.message });
+    }
+    const session = getCustomerSessionFromRequest(req);
+    const audienceState = await validateCouponAudience(coupon, {
+      uid: session?.uid,
+      email: session?.email,
+    });
+    if (!audienceState.ok) {
+      return fail(res, {
+        status: 422,
+        code: audienceState.code,
+        message: audienceState.message,
+      });
+    }
+    const customerKey = session?.uid ? `user:${session.uid}` : null;
+    const limitState = await validateCouponCustomerLimit(coupon, customerKey);
+    if (!limitState.ok) {
+      return fail(res, { status: 422, code: limitState.code, message: limitState.message });
     }
 
     const { eligible, restricted } = buildEligibleSet(coupon.applies_to, items);

@@ -4,6 +4,7 @@ import {
   createMockRes,
   createSupabaseStore,
   expectApiError,
+  installModuleMock,
   installPartialMock,
   installRateLimitPassthrough,
   installSecurityLoggerMock,
@@ -67,8 +68,13 @@ function arrange({
   tokens = [tokenRow()],
   products = [productRow()],
   signedUrl = SIGNED_URL,
+  orders = [],
+  sessionUid = null,
 } = {}) {
-  const store = createSupabaseStore({ download_tokens: tokens, products });
+  const store = createSupabaseStore({ download_tokens: tokens, products, orders });
+  installModuleMock('../../lib/customer-session', {
+    getCustomerSessionFromRequest: () => (sessionUid ? { uid: sessionUid } : null),
+  });
   installSupabaseMock(store);
   const security = installSecurityLoggerMock();
 
@@ -312,5 +318,32 @@ describe('download — uso único do token', () => {
     expect(res.statusCode).toBe(400);
     expect(res.headers['Referrer-Policy']).toBe('no-referrer');
     expect(res.headers['Cache-Control']).toBe('no-store, max-age=0');
+  });
+
+  it('logado com OUTRA conta: recusa sem queimar o token do comprador', async () => {
+    const { handler, store } = arrange({
+      orders: [{ id: ORDER_ID, customer_id: 'dona-do-pedido' }],
+      sessionUid: 'outra-conta',
+    });
+    const res = createMockRes();
+
+    await handler(downloadRequest(), res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.redirect).not.toHaveBeenCalled();
+    expect(store.rows('download_tokens')[0].used).toBe(false);
+  });
+
+  it('logado com a conta do pedido (ou sem login, pelo link do e-mail): entrega', async () => {
+    for (const sessionUid of ['dona-do-pedido', null]) {
+      resetModuleRegistry();
+      const { handler } = arrange({
+        orders: [{ id: ORDER_ID, customer_id: 'dona-do-pedido' }],
+        sessionUid,
+      });
+      const res = createMockRes();
+      await handler(downloadRequest(), res);
+      expect(res.redirect).toHaveBeenCalled();
+    }
   });
 });

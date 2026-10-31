@@ -211,47 +211,77 @@ Marquee.propTypes = {
  */
 function HeroBlock({ hero, prefersReducedMotion }) {
   const hasImage = Boolean(hero?.imageUrl);
+  const colors = [hero?.backgroundColor || '#ede9fe', hero?.backgroundColorEnd || '#e0f2fe'];
+  const backgrounds = {
+    solid: colors[0],
+    linear: `linear-gradient(135deg, ${colors.join(', ')})`,
+    radial: `radial-gradient(circle, ${colors.join(', ')})`,
+  };
+  const bannerPadding = {
+    small: 'py-6 lg:py-8',
+    medium: 'py-10 lg:py-14',
+    large: 'py-16 lg:py-24',
+  };
+  const imageAnimation = { fade: 'hero-image-fade', slide: 'hero-image-slide' };
+  const selectedIcons = String(hero?.icons || '')
+    .split(',')
+    .map((icon) => icon.trim())
+    .filter(Boolean)
+    .slice(0, SCHOOL_ICONS.length);
+  const iconSize = { small: 'text-xl', medium: 'text-3xl', large: 'text-5xl' };
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50">
-      <div
-        aria-hidden="true"
-        className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-brand-400/30 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-accent-sky/20 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute top-1/2 left-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-pink/15 blur-3xl"
-      />
+    <section
+      className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50"
+      style={{ background: backgrounds[hero?.backgroundStyle] }}
+    >
+      {(!hero || hero.backgroundStyle === 'default') && (
+        <>
+          <div
+            aria-hidden="true"
+            className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-brand-400/30 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-accent-sky/20 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute top-1/2 left-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-pink/15 blur-3xl"
+          />
+        </>
+      )}
 
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden sm:block">
-        {SCHOOL_ICONS.map((icon, i) => (
-          <span
-            key={i}
-            className={`absolute text-3xl opacity-60 ${icon.position}`}
-            style={
-              prefersReducedMotion
-                ? undefined
-                : {
-                    animation: `float ${5 + i * 0.5}s ease-in-out infinite`,
-                    animationDelay: `${i * 0.3}s`,
-                  }
-            }
-          >
-            {icon.emoji}
-          </span>
-        ))}
-      </div>
+      {hero?.showIcons !== false && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden sm:block">
+          {SCHOOL_ICONS.slice(0, selectedIcons.length || SCHOOL_ICONS.length).map((icon, i) => (
+            <span
+              key={i}
+              className={`absolute ${iconSize[hero?.iconSize] || iconSize.medium} opacity-60 ${icon.position}`}
+              style={
+                prefersReducedMotion
+                  ? undefined
+                  : {
+                      animation: `float ${5 + i * 0.5}s ease-in-out infinite`,
+                      animationDelay: `${i * 0.3}s`,
+                    }
+              }
+            >
+              {selectedIcons[i] || icon.emoji}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div
-        className={`relative mx-auto max-w-6xl px-4 py-10 lg:px-6 lg:py-14 ${
+        className={`relative mx-auto max-w-6xl px-4 lg:px-6 ${bannerPadding[hero?.bannerSize] || bannerPadding.medium} ${
           hasImage ? 'grid items-center gap-8 md:grid-cols-2' : ''
         }`}
       >
         {hero ? (
-          <div className="max-w-3xl">
+          <div
+            className={`max-w-3xl ${HERO_BLOCK_ALIGN[hero.textAlign] || ''}`}
+            style={{ textAlign: hero.textAlign || 'left' }}
+          >
             <h1 className="font-display text-2xl font-extrabold leading-tight text-slate-900 sm:text-3xl lg:text-4xl">
               <HighlightedText value={hero.title} />
             </h1>
@@ -262,7 +292,9 @@ function HeroBlock({ hero, prefersReducedMotion }) {
             ) : null}
 
             {hero.ctaLabel ? (
-              <div className="mt-5 flex flex-wrap gap-3">
+              <div
+                className={`mt-5 flex flex-wrap gap-3 ${HERO_BUTTON_ALIGN[hero.textAlign] || ''}`}
+              >
                 <SmartLink
                   to={hero.ctaLink || ROUTES.produtos}
                   className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-5 py-2.5 text-sm font-semibold text-white shadow-brand transition hover:scale-105"
@@ -281,12 +313,14 @@ function HeroBlock({ hero, prefersReducedMotion }) {
         )}
 
         {hasImage ? (
-          <div className="flex justify-center">
+          <div
+            className={`flex justify-center ${hero.imagePosition === 'left' ? 'md:order-first' : ''}`}
+          >
             <img
               src={hero.imageUrl}
               alt={hero.imageAlt || stripHighlights(hero.title)}
               decoding="async"
-              className="max-h-80 w-full rounded-2xl object-contain"
+              className={`max-h-[432px] w-full rounded-2xl object-contain ${!prefersReducedMotion ? imageAnimation[hero.imageAnimation] || '' : ''}`}
             />
           </div>
         ) : null}
@@ -311,7 +345,7 @@ function ProductCard({ product }) {
   return (
     <Link
       to={`/produtos/${product.slug || product.id}`}
-      className="group flex w-44 shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-brand-soft transition duration-300 hover:-translate-y-1 hover:shadow-brand"
+      className="group flex w-[238px] shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-brand-soft transition duration-300 hover:-translate-y-1 hover:shadow-brand"
     >
       {/* Imagem INTEIRA (object-contain): a foto que a professora sobe não é
           cortada para caber no quadro. */}
@@ -358,6 +392,12 @@ ProductCard.propTypes = {
  * @param {boolean} [props.embedded] sem cabeçalho/rodapé da loja nem SEO —
  *        para a página caber dentro do painel.
  */
+// `text-align` alinha só o texto: o botão é item de flex e o bloco tem largura
+// máxima. Sem estas classes, "Centralizado" e "À direita" deixavam o botão (e,
+// sem imagem, o bloco inteiro) encostados à esquerda do banner.
+const HERO_BUTTON_ALIGN = { center: 'justify-center', right: 'justify-end' };
+const HERO_BLOCK_ALIGN = { center: 'mx-auto', right: 'ml-auto' };
+
 export function HomePage({ previewContent = null, embedded = false }) {
   // `null` até a configuração da home responder (ou falhar e cair no padrão).
   const [savedContent, setContent] = useState(null);

@@ -153,17 +153,27 @@ Em dev, deixe `CORS_ORIGINS` vazio: qualquer `localhost:<porta>` é aceito.
 
 ### 2.2 Recomendadas e opcionais de função
 
-| Variável                     | Efeito                                                                                        |
-| ---------------------------- | --------------------------------------------------------------------------------------------- |
-| `APP_ENV`                    | `development` · `test` · `preview` · `production`. Decide o fail-closed dos segredos          |
-| `SMTP_FROM`                  | Remetente, num domínio verificado no Resend. Sem ela cai em `SMTP_USER`                       |
-| `SMTP_PORT`                  | `465` para o Resend (TLS direto). Default do código: 587                                      |
-| `VITE_GA4_ID`                | GA4 (`G-…`). Vazio não carrega o script                                                       |
-| `VITE_META_PIXEL_ID`         | Meta Pixel. Vazio não carrega. Os dois só disparam depois do aceite no banner de cookies      |
-| `SECURITY_ALERT_WEBHOOK_URL` | POST JSON em eventos de segurança (Slack, Discord…). Vazio: só log + tabela `security_events` |
-| `GEMINI_API_KEY`             | IA do painel (estudo de vendas e textos de produto/página). Vazio: o painel funciona sem a IA |
-| `GEMINI_MODEL`               | Modelo do Gemini. Default `gemini-2.5-flash`                                                  |
-| `SUPABASE_STORAGE_BUCKET`    | Bucket **extra** aceito em `download_url`, além dos três fixos (§3.3). Normalmente fica vazio |
+| Variável                                             | Efeito                                                                                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `APP_ENV`                                            | `development` · `test` · `preview` · `production`. Decide o fail-closed dos segredos                               |
+| `SMTP_FROM`                                          | Remetente, num domínio verificado no Resend. Sem ela cai em `SMTP_USER`                                            |
+| `SMTP_PORT`                                          | `465` para o Resend (TLS direto). Default do código: 587                                                           |
+| `VITE_GA4_ID`                                        | GA4 (`G-…`). Vazio não carrega o script                                                                            |
+| `VITE_META_PIXEL_ID`                                 | Meta Pixel. Vazio não carrega. Os dois só disparam depois do aceite no banner de cookies                           |
+| `SECURITY_ALERT_WEBHOOK_URL`                         | POST JSON em eventos de segurança (Slack, Discord…). Vazio: só log + tabela `security_events`                      |
+| `GEMINI_API_KEY`                                     | IA do painel (estudo de vendas e textos de produto/página). Vazio: o painel funciona sem a IA                      |
+| `GEMINI_MODEL`                                       | Modelo do Gemini. Default `gemini-2.5-flash`                                                                       |
+| `SUPABASE_STORAGE_BUCKET`                            | Bucket **extra** aceito em `download_url`, além de `product_files` (§3.3). Normalmente fica vazio                  |
+| `META_GRAPH_VERSION`                                 | Versão da Graph API da Meta. Default `v24.0`                                                                       |
+| `META_PAGE_ACCESS_TOKEN` + `FACEBOOK_PAGE_ID`        | Publicar na página do Facebook pela aba "Publicar nas redes"                                                       |
+| `META_PAGE_ACCESS_TOKEN` + `INSTAGRAM_BUSINESS_ID`   | Publicar no Instagram (conta profissional ligada à página)                                                         |
+| `PINTEREST_ACCESS_TOKEN` + `PINTEREST_BOARD_ID`      | Criar pin (token com `pins:write`)                                                                                 |
+| `TIKTOK_ACCESS_TOKEN`                                | Enviar vídeo ao TikTok (`video.publish`; app não auditado pode ficar limitado a privado)                           |
+| `WHATSAPP_ACCESS_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` | Mensagem pela WhatsApp Cloud API (texto livre só dentro da janela de atendimento; fora dela, só template aprovado) |
+
+As variáveis das redes são opcionais e só do servidor (nunca `VITE_`): rede sem elas aparece
+desconectada no painel. Antes de liberar o botão à operação, faça uma publicação privada ou de
+teste por rede.
 
 ### 2.3 Ajustes finos (todos com default no código)
 
@@ -253,12 +263,15 @@ Três buckets, com nomes fixos no código:
 | Bucket           | Visibilidade | Limite | Conteúdo                                 |
 | ---------------- | ------------ | ------ | ---------------------------------------- |
 | `product_images` | público      | 10 MB  | imagens de produto (SVG/HTML bloqueados) |
-| `product_videos` | privado      | 50 MB  | vídeos de produto                        |
+| `product_videos` | público      | 50 MB  | vídeos de produto (vitrine)              |
 | `product_files`  | privado      | 50 MB  | arquivos entregues à cliente (PDF/ZIP)   |
 
-O upload é feito pelo painel (`POST /api/admin/upload-url`). Em cada produto, `download_url` aceita
-`product_files/<caminho>`, a URL completa do Storage ou uma URL externa (ex.: Google Drive, por
-redirect). Para o Storage, a cliente sempre recebe URL assinada de 5 minutos.
+A visibilidade está na migration `20261031020000_storage_buckets_visibility.sql` (o `db push` a
+aplica) e o upload também converge para ela. O upload é feito pelo painel
+(`POST /api/admin/upload-url`). Em cada produto, `download_url` aceita só `product_files/<caminho>`
+ou a URL completa do Storage desse bucket; link externo ou arquivo em `product_images`/
+`product_videos` é recusado na gravação e na entrega. A cliente sempre recebe URL assinada de 5
+minutos.
 
 ### 3.4 Login com Google e URLs de redirect
 
@@ -276,7 +289,7 @@ redirect). Para o Storage, a cliente sempre recebe URL assinada de 5 minutos.
 
 - `/login?oauth=google&redirect=…` (cliente)
 - `/admin?oauth=staff` (login de staff, professora e admin)
-- a página de redefinição de senha
+- a página de redefinição de senha (`/reset-password`)
 
 Todos estão sob o domínio da loja, então basta `site_url = APP_URL` e `APP_URL/**` na allow list
 (o `**` cobre `/admin` e a query string). O script faz isso **sem apagar** o que já existe:
@@ -309,6 +322,31 @@ com escape ASCII (ex.: Python com `json.dumps(..., ensure_ascii=True)`): `curl` 
 converter `ê`/`ã` para cp1252 e o Supabase grava `�`.
 
 Não use Gmail: limite de ~500/dia, remetente forçado e sem DKIM próprio.
+
+Teste cadastro e recuperação em Gmail, Outlook e um domínio corporativo. Nenhum código garante a
+caixa de entrada: o destino decide por autenticação (SPF, DKIM, DMARC), reputação e comportamento
+do destinatário.
+
+### 3.6 Política de senha e templates de e-mail do Auth
+
+O `supabase/config.toml` declara, para o Supabase local:
+
+- `minimum_password_length = 8` e `password_requirements = "lower_upper_letters_digits_symbols"` — a
+  mesma regra do app (cadastro, checkout, `lib/staff-account.js`);
+- `[auth.email.template.confirmation]` e `[auth.email.template.recovery]`, com assunto em português
+  e corpo em `supabase/templates/confirmation.html` e `recovery.html`.
+
+**O release não envia o `config.toml`** (só faz `supabase db push`). Em produção, configure à mão no
+Dashboard do Supabase:
+
+1. Authentication → Sign In / Providers → Email: senha mínima **8** e requisito "letras
+   minúsculas, maiúsculas, dígitos e símbolos".
+2. Authentication → Email Templates: em "Confirm signup" e "Reset password", cole o HTML de
+   `supabase/templates/` e o assunto do `config.toml`. O de recuperação monta o link como
+   `{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery&next={{ .RedirectTo }}`:
+   o `token_hash` só é trocado pela sessão quando a pessoa abre a página, então o scanner de
+   e-mail que segue links não gasta o código.
+3. Confirme que `/reset-password` está coberto pela allow list (§3.4).
 
 ---
 
@@ -428,10 +466,14 @@ no MP (§4.2), origens no Google Cloud e os redirects 308 do `vercel.json`.
 
 - Home, `/produtos` e uma página de produto carregam; `/sitemap.xml` e `/robots.txt` respondem.
 - Adicionar ao carrinho abre a gaveta sem trocar de página.
-- Cupom inválido mostra erro legível; válido aplica na hora.
-- Checkout abre o Mercado Pago. Num release que mexe em pagamento, faça uma compra real de valor
+- Cupom inválido mostra erro legível; válido aplica na hora. Num release que mexe em cupom, teste
+  um cupom de pessoa específica e um de recompensa por número de compras.
+- Página da loja: editar um texto da home, da navbar e do rodapé e ver no site; upload de vídeo de
+  produto toca na página sem login.
+- Checkout sem login cria a conta antes de pagar; checkout abre o Mercado Pago. Num release que mexe em pagamento, faça uma compra real de valor
   baixo e confira: aprovação pelo polling e pelo webhook, e-mail de confirmação, `/downloads` com o
-  link funcionando.
+  link funcionando, "Solicitar devolução" no histórico e a resposta da professora em Pedidos →
+  Solicitações de devolução.
 
 **Conta e painel**
 
@@ -461,6 +503,10 @@ Logs da API: Vercel → Logs, função `api/index`, filtrando pelo caminho (`/ap
 | Cliente pagou e `/downloads` está vazio               | Painel → Pedidos: conferir `payment_status` e `download_tokens`. Se o MP diz pago e o banco não, `POST /api/verify-payment` com `{ orderId, email }` reconcilia. Link direto: `/downloads?order=<id>` |
 | E-mail não chega                                      | Resend → Activity (bounce, SPF/DKIM). Domínio verificado? `SMTP_FROM` nele? Cota do plano? Logs de `/api/send-confirmation-email`                                                                     |
 | Reset de senha não chega                              | SMTP custom no Supabase Auth (§3.5) e redirect na allow list (§3.4)                                                                                                                                   |
+| Link de redefinir senha cai numa página errada        | Template de recuperação de `supabase/templates/recovery.html` não foi colado no Dashboard (§3.6)                                                                                                      |
+| Download dá 500 `DOWNLOAD_UNAVAILABLE`                | `download_url` fora de `product_files` (ex.: em `product_images`/`product_videos`, agora recusado). Reenviar o arquivo pelo painel; o token não foi gasto                                             |
+| Download dá 403 "pertence a outra conta"              | A pessoa está logada com outra conta: sair, ou entrar com a conta que comprou                                                                                                                         |
+| "Publicar nas redes" com a rede desconectada          | Variáveis da rede ausentes (§2.2). 422 ao publicar: token vencido ou sem a permissão de publicação                                                                                                    |
 | Login Google volta com erro de redirect               | `APP_URL/**` falta na allow list do Supabase (`configure-auth.js`)                                                                                                                                    |
 | Escrita do painel responde 403 "Origem não permitida" | Painel aberto por um host fora de `APP_URL` + `CORS_ORIGINS` (ex.: `.vercel.app`). Acrescente em `CORS_ORIGINS`                                                                                       |
 | `ADMIN_SESSION_INVALID` no painel                     | Sessão expirou (8 h) ou `ADMIN_SESSION_SECRET` mudou. Entrar de novo                                                                                                                                  |

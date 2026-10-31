@@ -22,6 +22,7 @@ function resetMockState() {
     customerSession: { email: 'cliente@teste.com', name: 'Cliente Teste' },
     setCustomerSession: vi.fn(),
     logoutCustomer: vi.fn(),
+    registerCustomer: vi.fn(),
   });
 }
 resetMockState();
@@ -187,6 +188,25 @@ describe('CheckoutPage', () => {
     authState.customerSession = null;
     renderAt();
     expect(screen.getByLabelText('E-mail')).not.toHaveAttribute('readonly');
+  });
+
+  it('cria conta com senha e aguarda confirmação antes de gerar pagamento', async () => {
+    authState.customerSession = null;
+    authState.registerCustomer.mockResolvedValue({ verificationRequired: true });
+    renderAt();
+    fireEvent.change(screen.getByLabelText('Nome completo'), { target: { value: 'Maria Silva' } });
+    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'maria@exemplo.com' } });
+    fireEvent.change(screen.getByLabelText('Crie uma senha'), { target: { value: 'Segura123!' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
+    expect(await screen.findByText(/Confirme seu e-mail/)).toBeInTheDocument();
+    expect(authState.registerCustomer).toHaveBeenCalledWith({
+      name: 'Maria Silva',
+      email: 'maria@exemplo.com',
+      password: 'Segura123!',
+    });
+    expect(
+      globalThis.fetch.mock.calls.some(([url]) => String(url).includes('/create-payment')),
+    ).toBe(false);
   });
 
   it('volta do Mercado Pago com ?status=failure avisa a recusa (LOJA-38)', () => {

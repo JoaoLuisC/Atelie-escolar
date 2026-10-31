@@ -49,7 +49,7 @@ describe('DownloadsPage', () => {
         error: { code: 'DOWNLOAD_TOKEN_INVALID', message: 'Token invalido' },
       }),
     });
-    localStorage.setItem('lastOrderEmail', 'cliente@teste.com');
+    authState.customerSession = { email: 'cliente@teste.com' };
 
     render(
       <MemoryRouter initialEntries={['/downloads?order=ORD-ERRO']}>
@@ -87,8 +87,71 @@ describe('DownloadsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText(/Escolha um pedido no seu histórico/)).toBeInTheDocument();
+    expect(await screen.findByText('Nenhum pedido encontrado na sua conta.')).toBeInTheDocument();
     expect(screen.queryByText(/entre na sua conta/i)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de pedidos' }));
+    expect(screen.getByText(/Escolha um pedido no seu histórico/)).toBeInTheDocument();
+  });
+
+  it('lista produtos aprovados e prepara um novo link de download', async () => {
+    authState.customerSession = { email: 'cliente@teste.com' };
+    globalThis.fetch = vi.fn(async (url) => ({
+      ok: true,
+      json: async () =>
+        String(url).includes('/customer-orders')
+          ? {
+              success: true,
+              orders: [
+                {
+                  orderId: 'ORD-1',
+                  paymentStatus: 'approved',
+                  items: [{ id: 'p1', title: 'Material' }],
+                },
+              ],
+            }
+          : {
+              success: true,
+              order: {
+                paymentStatus: 'approved',
+                downloadTokens: [{ productId: 'p1', token: 'novo-token', available: true }],
+              },
+            },
+    }));
+    render(
+      <MemoryRouter initialEntries={['/downloads']}>
+        <DownloadsPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Material')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Baixar' }));
+    expect(await screen.findByRole('link', { name: 'Baixar arquivo' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('novo-token'),
+    );
+  });
+
+  it('permite solicitar devolução sem motivo ou telefone', async () => {
+    authState.customerSession = { email: 'cliente@teste.com' };
+    globalThis.fetch = vi.fn(async (url) => ({
+      ok: true,
+      json: async () =>
+        String(url).includes('/customer-orders')
+          ? { success: true, orders: [{ orderId: 'ORD-1', paymentStatus: 'approved', items: [] }] }
+          : { success: true, requestId: 'r1' },
+    }));
+    render(
+      <MemoryRouter initialEntries={['/downloads']}>
+        <DownloadsPage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de pedidos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Solicitar devolução' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar solicitação' }));
+    expect(await screen.findByText(/Solicitação do pedido #ORD-1 recebida/)).toBeInTheDocument();
+    const [, options] = globalThis.fetch.mock.calls.find(
+      ([url, init]) => String(url).includes('/refund-request') && init.method === 'POST',
+    );
+    expect(JSON.parse(options.body)).toEqual({ orderId: 'ORD-1', reason: '', phone: '' });
   });
 
   it('pedido sem e-mail: o campo prometido existe e consulta o pedido (LOJA-42)', async () => {

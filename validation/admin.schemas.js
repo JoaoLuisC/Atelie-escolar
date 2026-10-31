@@ -134,19 +134,25 @@ const discountType = z.enum(['percent', 'fixed'], {
  * completo; isto protege quem mandar só a data.
  */
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-const optionalDate = z
-  .union([z.string(), z.number(), z.date(), z.null()])
-  .transform((value) => {
-    if (value === null || String(value).trim() === '') return null;
-    const raw = typeof value === 'string' ? value.trim() : value;
-    const date = new Date(
-      typeof raw === 'string' && DATE_ONLY.test(raw) ? `${raw}T23:59:59.999-03:00` : raw,
-    );
-    return Number.isNaN(date.getTime()) ? Number.NaN : date.toISOString();
-  })
-  .refine((value) => value === null || typeof value === 'string', {
-    error: 'Data de validade inválida.',
-  });
+// O INÍCIO vale desde 00:00 do dia (antes ele também virava 23:59, e o cupom
+// não valia no próprio dia de início); o FIM vale até 23:59:59.
+function brtDate(timeOfDay) {
+  return z
+    .union([z.string(), z.number(), z.date(), z.null()])
+    .transform((value) => {
+      if (value === null || String(value).trim() === '') return null;
+      const raw = typeof value === 'string' ? value.trim() : value;
+      const date = new Date(
+        typeof raw === 'string' && DATE_ONLY.test(raw) ? `${raw}T${timeOfDay}-03:00` : raw,
+      );
+      return Number.isNaN(date.getTime()) ? Number.NaN : date.toISOString();
+    })
+    .refine((value) => value === null || typeof value === 'string', {
+      error: 'Data de validade inválida.',
+    });
+}
+const optionalDate = brtDate('23:59:59.999');
+const optionalStartDate = brtDate('00:00:00.000');
 
 /** Número opcional não-negativo: vazio ou não-numérico vira `null`. */
 const optionalNonNegative = z.union([z.string(), z.number(), z.null()]).transform((value) => {
@@ -160,10 +166,26 @@ const couponCreateSchema = z
     code: couponCode,
     discountType: discountType.optional(),
     discountValue: z.coerce.number({ error: 'Valor do desconto deve ser maior que zero.' }),
-    validFrom: optionalDate.optional(),
+    validFrom: optionalStartDate.optional(),
     validUntil: optionalDate.optional(),
     maxUses: optionalNonNegative.optional(),
+    maxUsesPerCustomer: optionalNonNegative.optional(),
     minOrderAmount: optionalNonNegative.optional(),
+    audience: z
+      .enum([
+        'all',
+        'customers',
+        'new_customers',
+        'returning_customers',
+        'emails',
+        'purchase_milestone',
+      ])
+      .optional(),
+    purchasesRequired: optionalNonNegative.optional(),
+    eligibleEmails: z
+      .array(z.string().trim().toLowerCase().email({ error: 'E-mail de cliente inválido.' }))
+      .max(500, { error: 'Limite de 500 e-mails por cupom.' })
+      .optional(),
     active: z.boolean().optional(),
   })
   .refine((data) => Number.isFinite(data.discountValue) && data.discountValue > 0, {
@@ -173,6 +195,18 @@ const couponCreateSchema = z
   .refine((data) => !((data.discountType || 'percent') === 'percent' && data.discountValue > 100), {
     error: 'Desconto percentual não pode passar de 100%.',
     path: ['discountValue'],
+  })
+  .refine((data) => data.audience !== 'emails' || (data.eligibleEmails?.length || 0) > 0, {
+    error: 'Informe ao menos um e-mail elegível.',
+    path: ['eligibleEmails'],
+  })
+  .refine((data) => data.maxUsesPerCustomer == null || data.maxUsesPerCustomer >= 1, {
+    error: 'O limite por cliente precisa ser 1 ou mais (vazio = sem limite).',
+    path: ['maxUsesPerCustomer'],
+  })
+  .refine((data) => data.audience !== 'purchase_milestone' || Number(data.purchasesRequired) >= 1, {
+    error: 'Informe quantas compras liberam a recompensa.',
+    path: ['purchasesRequired'],
   });
 
 // ── Produtos ─────────────────────────────────────────────────────────

@@ -105,6 +105,23 @@ function installSupabase() {
       },
       { email: OUTRA.email, items: [], total_amount: 99, created_at: '', updated_at: '' },
     ],
+    profiles: [
+      { id: TITULAR.uid, display_name: 'Ana Editada', created_at: '', updated_at: '' },
+      { id: OUTRA.uid, display_name: 'Bruna', created_at: '', updated_at: '' },
+    ],
+    refund_requests: [
+      {
+        order_id: 1,
+        customer_id: TITULAR.uid,
+        reason: 'Arquivo errado',
+        phone: '(11) 90000-0000',
+        status: 'open',
+        admin_response: '',
+        created_at: '2026-08-05T00:00:00.000Z',
+        updated_at: '2026-08-05T00:00:00.000Z',
+      },
+      { order_id: 2, customer_id: OUTRA.uid, reason: 'Motivo da Bruna', status: 'open' },
+    ],
   };
 
   function casa(row, coluna, operador, valor) {
@@ -236,6 +253,20 @@ describe('me-export-data · escopo', () => {
     expect(res.body.newsletter.confirmada).toBe(true);
     expect(res.body.carrinhosAbandonados).toHaveLength(1);
     expect(res.body.carrinhosAbandonados[0].total).toBe(30);
+  });
+});
+
+describe('me-export-data · perfil e devoluções', () => {
+  it('traz o nome editado no perfil e só as devoluções do titular', async () => {
+    const res = await exportar();
+
+    expect(res.body.titular.nome).toBe('Ana Editada');
+    expect(res.body.solicitacoesDeDevolucao).toHaveLength(1);
+    expect(res.body.solicitacoesDeDevolucao[0]).toMatchObject({
+      motivo: 'Arquivo errado',
+      situacao: 'open',
+    });
+    expect(JSON.stringify(res.body)).not.toContain('Motivo da Bruna');
   });
 });
 

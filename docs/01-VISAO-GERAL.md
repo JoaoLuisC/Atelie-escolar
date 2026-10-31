@@ -18,14 +18,14 @@ A marca é a coruja roxa (`src/components/OwlLogo.jsx`), usada na loja, nos pain
 
 ## Quem usa
 
-| Persona            | Quem                                                                                 | O que faz no sistema                                                                                                                                                                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Visitante**      | Professora procurando material                                                       | Navega pelo catálogo, filtra e ordena, lê depoimentos e vê o preço                                                                                                                                                                                      |
-| **Cliente**        | Quem comprou (com conta ou como convidado)                                           | Carrinho, checkout, pagamento, download, histórico de pedidos em `/conta`, exportação dos próprios dados e exclusão da conta (LGPD)                                                                                                                     |
-| **Inscrito**       | Quem confirmou a newsletter (double opt-in)                                          | Recebe a newsletter. A sequência pós-compra e a reativação não dependem de inscrição: vão para quem tem pedido aprovado (relação contratual), salvo descadastro                                                                                         |
-| **Dona da loja**   | A Profa. Márcia: perfil `seller` marcado em `settings.storeOwner`                    | Entra em `/professores` e recebe o **Painel da loja** completo: produtos, categorias, pedidos, cupons, faturamento, vendas, segmentos, página da loja e "Minha conta". Vê só os pedidos, clientes e produtos dos materiais dela (`lib/seller-scope.js`) |
-| **Professor(a)**   | Outro perfil `seller`, sem ser a dona                                                | Entra em `/professores` e recebe a área simples (`TeachersPage`): os próprios produtos e vendas, cadastro de material, ativar/desativar e "Minha conta". Não vê pedidos nem clientes da loja                                                            |
-| **Admin / master** | Administração da plataforma (`profiles.role` `ADMIN` ou `MASTER`, mesmas permissões) | `/admin` = **Administração da plataforma**: abas Professores e clientes (quem é a dona da loja, dono de cada produto), Usuários (papéis e acesso), Segurança (2º fator) e Minha conta. Não opera a loja. Toda escrita do painel vai para o audit log    |
+| Persona            | Quem                                                                                 | O que faz no sistema                                                                                                                                                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Visitante**      | Professora procurando material                                                       | Navega pelo catálogo, filtra e ordena, lê depoimentos e vê o preço                                                                                                                                                                                                                           |
+| **Cliente**        | Quem comprou (sempre com conta, criada no checkout se preciso)                       | Carrinho, checkout, pagamento, download, histórico e solicitação de devolução em `/downloads`, nome editável, exportação dos próprios dados e exclusão da conta (LGPD)                                                                                                                       |
+| **Inscrito**       | Quem confirmou a newsletter (double opt-in)                                          | Recebe a newsletter. A sequência pós-compra e a reativação não dependem de inscrição: vão para quem tem pedido aprovado (relação contratual), salvo descadastro                                                                                                                              |
+| **Dona da loja**   | A Profa. Márcia: perfil `seller` marcado em `settings.storeOwner`                    | Entra em `/professores` e recebe o **Painel da loja** completo: produtos, categorias, pedidos (e devoluções), cupons, faturamento, vendas, segmentos, publicação nas redes, página da loja e "Minha conta". Vê só os pedidos, clientes e produtos dos materiais dela (`lib/seller-scope.js`) |
+| **Professor(a)**   | Outro perfil `seller`, sem ser a dona                                                | Entra em `/professores` e recebe a área simples (`TeachersPage`): os próprios produtos e vendas, cadastro de material, ativar/desativar e "Minha conta". Não vê pedidos nem clientes da loja                                                                                                 |
+| **Admin / master** | Administração da plataforma (`profiles.role` `ADMIN` ou `MASTER`, mesmas permissões) | `/admin` = **Administração da plataforma**: abas Professores e clientes (quem é a dona da loja, dono de cada produto), Usuários (papéis e acesso), Segurança (2º fator) e Minha conta. Não opera a loja. Toda escrita do painel vai para o audit log                                         |
 
 Detalhes de cada painel em [06-PAINEIS](./06-PAINEIS.md).
 
@@ -44,7 +44,7 @@ Atores técnicos:
 
 ### Catálogo
 
-- Home configurável pela dona da loja: textos, imagem do topo, ordem e visibilidade dos blocos, depoimentos, números, redes e faixas de produtos (por categoria, Mais vendidos, Novidades).
+- Home configurável pela dona da loja: textos, banner do topo (imagem, fundo, animação), ordem e visibilidade dos blocos, depoimentos, números, redes e faixas de produtos (por categoria, Mais vendidos, Novidades); também o título da navbar e o rodapé de todas as páginas.
 - `/produtos` com filtro por categoria e faixa de preço, presets `mais-vendidos` / `novidades` e ordenação (preço, novidade, vendas, nome). Existe filtro textual por `?q=` (usado pela SearchAction do JSON-LD da home), mas a loja não tem campo de busca visível.
 - `/produtos/:slug` com galeria, vídeos, descrição, FAQ, depoimentos, benefícios e cross-sell (co-ocorrência de compra, com fallback por categoria).
 - SEO técnico: slug nas URLs, título e descrição por página, JSON-LD `Product` + `Offer`, sitemap dinâmico, canonical e imagem OG padrão.
@@ -52,8 +52,9 @@ Atores técnicos:
 ### Compra e entrega
 
 - Carrinho em `localStorage`, em drawer (não navega).
-- Checkout numa página só: e-mail, nome, cupom e pagamento. Compra como convidado permitida; a conta é provisionada e o cliente recebe e-mail para definir a senha.
-- Cupom pré-validado na tela e validado de verdade no servidor, no `create-payment`.
+- Checkout numa página só: conta, nome, cupom e pagamento. Comprar exige conta: quem não tem cria ali mesmo (e-mail + senha) ou entra com Google.
+- Cupom pré-validado na tela e validado de verdade no servidor, no `create-payment`; pode valer para todos, só a primeira compra, quem já comprou, e-mails específicos ou como recompensa a cada N compras, com limite por cliente.
+- Solicitação de devolução pelo histórico em `/downloads`, respondida pela loja no painel (o estorno continua manual, no Mercado Pago).
 - Aprovação pelo webhook do Mercado Pago, com polling na tela como reserva.
 - E-mail de confirmação do pedido na primeira aprovação (idempotente).
 - Download por token de uso único, entregue por URL assinada do Storage; até 5 downloads por item, com reemissão do link pelo botão "Atualizar" em `/downloads`.
@@ -69,7 +70,7 @@ Fluxos completos em [05-FLUXOS](./05-FLUXOS.md).
 
 ### Painéis
 
-- **Painel da loja** (dona da loja, em `/professores`): Dashboard, Produtos, Desempenho dos produtos, Categorias, Pedidos, Cupons, Faturamento, Comparativo mensal, Vendas (Estudo de vendas, Funil, Curva ABC e coorte), Segmentos de email, Página da loja (com prévia ao vivo) e Minha conta.
+- **Painel da loja** (dona da loja, em `/professores`): Dashboard, Produtos, Desempenho dos produtos, Categorias, Pedidos, Cupons, Faturamento, Comparativo mensal, Vendas (Estudo de vendas, Funil, Curva ABC e coorte), Segmentos de email, Publicar nas redes (Facebook, Instagram, Pinterest, TikTok, WhatsApp), Página da loja (com prévia ao vivo) e Minha conta.
 - **Administração da plataforma** (`/admin`): Professores e clientes, Usuários, Segurança e Minha conta.
 - **Área do professor** (`/professores`, demais professores): resumo, meus produtos, novo material e Minha conta.
 
@@ -90,7 +91,7 @@ Eventos do funil (GA4, Pixel e `analytics_events`), UTM first-touch anexada ao p
 
 ### Conformidade
 
-- **LGPD**: consentimento antes de GA4/Pixel, double opt-in, descadastro em um clique, exportação e exclusão self-service, retenção limitada dos logs e e-mail mascarado nos logs. Detalhes em [08-SEGURANCA](./08-SEGURANCA.md).
+- **LGPD**: consentimento antes de GA4/Pixel, double opt-in, descadastro em um clique, exportação e exclusão self-service, retenção limitada dos logs e e-mail, CPF e telefone mascarados nos logs. Detalhes em [08-SEGURANCA](./08-SEGURANCA.md).
 - **Acessibilidade e SEO**: gate do Lighthouse no CI (regra F1 em [07-NEGOCIO-E-MARKETING](./07-NEGOCIO-E-MARKETING.md)), fontes ≥ 16px em mobile, `aria-busy`/skeleton e mensagens de erro humanas.
 
 ---

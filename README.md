@@ -45,11 +45,14 @@ segredos obrigatórios e como aplicar o schema no Supabase.
 ## O que a loja faz
 
 - Visitante navega o catálogo, filtra (categoria, preço, novidades, mais vendidos) e ordena
-- Checkout via Mercado Pago (cartão, Pix, boleto) com cupons validados no servidor
+- Checkout via Mercado Pago (cartão, Pix, boleto), com conta obrigatória criada no próprio
+  checkout, e cupons validados no servidor (por público, por cliente ou recompensa a cada N compras)
 - Download liberado automaticamente após aprovação, por token de uso único
+- Solicitação de devolução pelo cliente, respondida no painel (estorno manual no Mercado Pago)
 - Painel da loja (dona da loja): produtos (galeria, vídeos, FAQ, depoimentos, benefícios),
-  categorias, cupons, pedidos e a página da loja com prévia ao vivo — vendo só os dados dos
-  materiais dela
+  categorias, cupons, pedidos e devoluções, a página da loja (com navbar e rodapé) com prévia ao
+  vivo e publicação nas redes (Facebook, Instagram, Pinterest, TikTok, WhatsApp) — vendo só os
+  dados dos materiais dela
 - IA (Gemini) sob demanda, por botão: descrição e SEO do produto, textos da página, estudo de vendas
 - Administração da plataforma (admin): segurança, usuários, professores e clientes
 - Área do professor(a) e aba "Minha conta" (nome, senha, e-mail)

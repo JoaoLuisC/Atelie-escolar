@@ -11,7 +11,11 @@ const {
   isPresentableCategoryName,
 } = require('../lib/public-catalog');
 const { UUID_RE } = require('../validation/common.schemas');
-const { readSettingValue, toPublicSharedDescription } = require('../lib/store-content');
+const {
+  readSettingValue,
+  toPublicSharedDescription,
+  sanitizeProductDefaults,
+} = require('../lib/store-content');
 
 const log = createLogger('product-details');
 
@@ -131,6 +135,11 @@ module.exports = async function productDetailsHandler(req, res) {
         reviews: Array.isArray(product.reviews) ? product.reviews : [],
         benefits: Array.isArray(product.benefits) ? product.benefits : [],
         sharedDescription: toPublicSharedDescription(productDefaults),
+        descriptionLayout: (() => {
+          const { descriptionOrder, descriptionAlign, descriptionSize } =
+            sanitizeProductDefaults(productDefaults).value;
+          return { descriptionOrder, descriptionAlign, descriptionSize };
+        })(),
       },
     });
   } catch (error) {

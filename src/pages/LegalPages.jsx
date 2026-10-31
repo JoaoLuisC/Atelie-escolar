@@ -109,8 +109,7 @@ export function PrivacyPage() {
         <li>
           <strong>Na conta de cliente:</strong> e-mail e senha (guardada apenas como resumo
           criptográfico — nós não temos acesso à senha). Se você entrar com o Google, recebemos o
-          seu nome e e-mail da conta Google. Depois da primeira compra aprovada, criamos uma conta
-          com o e-mail do pedido e enviamos um link para você definir a senha.
+          seu nome e e-mail da conta Google. Você pode criar sua conta no checkout antes de pagar.
         </li>
         <li>
           <strong>No pagamento:</strong> os dados do cartão, do Pix ou do boleto são informados
@@ -125,6 +124,10 @@ export function PrivacyPage() {
           <strong>Carrinho salvo:</strong> se você digitar o e-mail no checkout e não concluir a
           compra, guardamos o e-mail e os itens do carrinho para lembrar você da compra (veja a
           seção 4).
+        </li>
+        <li>
+          <strong>Solicitação de devolução:</strong> o pedido, a data e, se você quiser informar, o
+          motivo e um telefone para contato, além das respostas da loja ao longo do atendimento.
         </li>
         <li>
           <strong>Newsletter:</strong> e-mail e a confirmação da inscrição, apenas se você se
@@ -248,6 +251,10 @@ export function PrivacyPage() {
           <strong>Conta de cliente:</strong> até você pedir a exclusão.
         </li>
         <li>
+          <strong>Solicitações de devolução:</strong> enquanto a sua conta existir, junto com o
+          pedido a que se referem; são apagadas quando você exclui a conta.
+        </li>
+        <li>
           <strong>Registros de download:</strong> 12 meses.
         </li>
         <li>
@@ -353,8 +360,8 @@ export function TermsPage() {
       <h2>3. Conta de cliente</h2>
       <ul>
         <li>
-          Você pode comprar sem criar conta. Depois da primeira compra aprovada, criamos uma conta
-          com o e-mail do pedido e enviamos um link para você definir a senha.
+          Para comprar pela loja, entre na sua conta ou crie uma conta no checkout. Quando for
+          necessário confirmar o e-mail, confirme-o e entre na conta antes de continuar.
         </li>
         <li>Também é possível entrar com a conta Google.</li>
         <li>
@@ -403,7 +410,7 @@ export function TermsPage() {
         </li>
       </ul>
 
-      <h2>6. Licença de uso</h2>
+      <h2 id="licenca">6. Licença de uso</h2>
       <p>
         Os materiais são protegidos pela Lei de Direitos Autorais (Lei nº 9.610/1998). A compra dá a
         você uma licença <strong>pessoal, não exclusiva e intransferível</strong> para usar os
@@ -422,14 +429,29 @@ export function TermsPage() {
         <li>Alterar os materiais e apresentá-los como de sua autoria.</li>
         <li>Usar os materiais em produtos ou campanhas comerciais sem autorização por escrito.</li>
       </ul>
+      <p>
+        <strong>Materiais editáveis no Canva:</strong> quando o produto é entregue como link de
+        modelo do Canva, o link serve para você criar uma cópia na sua própria conta Canva e
+        adaptá-la para a sua turma. A licença acima vale também para essa cópia: não compartilhe o
+        link do modelo nem publique a cópia como modelo público. Fontes, imagens e outros elementos
+        do Canva usados no material seguem, além destes Termos, as regras de licença do próprio
+        Canva.
+      </p>
       <p>O descumprimento pode levar ao bloqueio da conta e às medidas legais cabíveis.</p>
+      <p>
+        Este resumo explica as regras de uso destes materiais; ele não é orientação jurídica. Em
+        caso de dúvida sobre um uso específico, escreva para <ContactLink />.
+      </p>
 
       <h2>7. Direito de arrependimento e reembolso</h2>
       <ul>
         <li>
           Pelo Código de Defesa do Consumidor (art. 49), você pode desistir da compra em até{' '}
-          <strong>7 dias</strong> contados da data do pagamento. Basta escrever para <ContactLink />{' '}
-          com o número do pedido.
+          <strong>7 dias</strong> contados da contratação ou da disponibilização do produto ou
+          serviço, conforme aplicável. Você não precisa justificar o arrependimento nem informar
+          telefone. Para solicitar, use &quot;Solicitar devolução&quot; em Meus produtos ou escreva
+          para <ContactLink /> com o número do pedido. A solicitação não gera estorno automático: a
+          loja responde por ali mesmo e combina o reembolso com você.
         </li>
         <li>
           O reembolso é feito pelo Mercado Pago, no mesmo meio de pagamento usado na compra. Com o

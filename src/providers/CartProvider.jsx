@@ -58,7 +58,7 @@ export function CartProvider({ children }) {
         id: product.id,
         name: product.name,
         price: Number(product.price) || 0,
-        image: product.image || '',
+        image: product.image || product.images?.find(Boolean) || '',
         // categoryId é necessário para a elegibilidade de cupom por categoria
         // na prévia do checkout (validate-coupon). Sem ele o cupom restrito
         // sempre reporta "não elegível", divergindo da cobrança em create-payment.

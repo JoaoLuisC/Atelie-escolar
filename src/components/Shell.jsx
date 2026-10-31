@@ -9,6 +9,8 @@ import { CartDrawer } from './CartDrawer';
 import { NewsletterSignup } from './NewsletterSignup';
 import { ROUTES } from '../constants/routes';
 import { SELLER } from '../constants/seller';
+import { DEFAULT_HOME_CONTENT, mergeHomeContent } from '../constants/home-content';
+import { fetchStoreSettings } from '../services/store-settings';
 
 function navLinkClass({ isActive }) {
   return `inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
@@ -42,19 +44,6 @@ function mobileSecondaryLinkClass() {
 // e o WhatsApp era o número fictício (11) 99999-9999. Endereço de contato é
 // decisão da dona da loja — não se inventa. Valor VAZIO esconde o item; para
 // exibir, basta preencher aqui com o endereço real.
-const SOCIAL_LINKS = [
-  {
-    label: 'Instagram',
-    icon: 'instagram',
-    href: 'https://instagram.com/profamarciarcardoso',
-  },
-  { label: 'Facebook', icon: 'facebook', href: '' },
-  { label: 'Pinterest', icon: 'pinterest', href: '' },
-].filter((social) => social.href);
-
-// Ex.: { href: 'https://wa.me/55DDDNUMERO', label: '(DDD) NÚMERO' }.
-const WHATSAPP_CONTACT = { href: '', label: '' };
-
 // O mesmo canal dos Termos e da Política de Privacidade (src/constants/seller.js).
 const CONTACT_EMAIL = SELLER.email;
 
@@ -69,7 +58,28 @@ export function Shell({ children }) {
   const { pushToast } = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
+  const [storeContent, setStoreContent] = useState(DEFAULT_HOME_CONTENT);
   const navRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchStoreSettings()
+      .then((content) => {
+        if (active) setStoreContent(mergeHomeContent(content));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const { navigation, footer } = storeContent;
+  const socialLinks = [
+    { label: 'Instagram', icon: 'instagram', href: footer.instagramUrl },
+    { label: 'Facebook', icon: 'facebook', href: footer.facebookUrl },
+    { label: 'Pinterest', icon: 'pinterest', href: footer.pinterestUrl },
+  ].filter((social) => social.href);
+  const navigationPadding = { small: 'py-1', medium: 'py-3', large: 'py-5' };
 
   const isAdminRole = ['admin', 'master'].includes(
     String(customerSession?.role || '').toLowerCase(),
@@ -152,13 +162,15 @@ export function Shell({ children }) {
         ref={navRef}
         className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur"
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 lg:px-6">
+        <div
+          className={`mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 lg:px-6 ${navigationPadding[navigation.size] || navigationPadding.medium}`}
+        >
           <Link to={ROUTES.home} className="flex items-center gap-2.5">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-brand-100">
               <OwlLogo size={34} />
             </span>
             <span className="hidden font-display text-base font-bold uppercase tracking-wide text-slate-800 sm:inline">
-              Profa. Marciar Cardoso
+              {navigation.title}
             </span>
           </Link>
 
@@ -242,7 +254,10 @@ export function Shell({ children }) {
                 }`
               }
             >
-              <i className="bi bi-person-circle" /> {customerSession?.email ? 'Conta' : 'Entrar'}
+              <i className="bi bi-person-circle" />{' '}
+              {customerSession?.email
+                ? customerSession.name?.trim().split(/\s+/)[0] || customerSession.email
+                : 'Entrar'}
             </NavLink>
 
             {customerSession?.email ? (
@@ -351,7 +366,9 @@ export function Shell({ children }) {
                   className={mobileNavLinkClass}
                 >
                   <i className="bi bi-person-circle" aria-hidden="true" />{' '}
-                  {customerSession?.email ? 'Conta' : 'Entrar'}
+                  {customerSession?.email
+                    ? customerSession.name?.trim().split(/\s+/)[0] || customerSession.email
+                    : 'Entrar'}
                 </NavLink>
               </li>
               {customerSession?.email ? (
@@ -383,16 +400,15 @@ export function Shell({ children }) {
                   <OwlLogo size={30} />
                 </span>
                 <span className="font-display text-sm font-semibold uppercase tracking-wider text-white">
-                  Profa. Marciar Cardoso
+                  {footer.title}
                 </span>
               </Link>
               <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-400">
-                Materiais gráficos digitais profissionais e editáveis para festas, eventos e
-                decoração escolar. Download instantâneo após a aprovação do pagamento.
+                {footer.description}
               </p>
-              {SOCIAL_LINKS.length ? (
+              {socialLinks.length ? (
                 <div className="mt-5 flex gap-2">
-                  {SOCIAL_LINKS.map((social) => (
+                  {socialLinks.map((social) => (
                     <a
                       key={social.label}
                       href={social.href}
@@ -410,7 +426,7 @@ export function Shell({ children }) {
 
             <div>
               <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Navegação
+                {footer.navigationTitle}
               </h4>
               <ul className="mt-4 space-y-2.5 text-sm">
                 <li>
@@ -447,7 +463,7 @@ export function Shell({ children }) {
 
             <div>
               <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Contato
+                {footer.contactTitle}
               </h4>
               <ul className="mt-4 space-y-2.5 text-sm">
                 <li>
@@ -459,16 +475,16 @@ export function Shell({ children }) {
                     {CONTACT_EMAIL}
                   </a>
                 </li>
-                {WHATSAPP_CONTACT.href ? (
+                {footer.whatsappUrl ? (
                   <li>
                     <a
-                      href={WHATSAPP_CONTACT.href}
+                      href={footer.whatsappUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 text-slate-400 transition hover:text-white"
                     >
                       <i className="bi bi-whatsapp" aria-hidden="true" />
-                      {WHATSAPP_CONTACT.label}
+                      {footer.whatsappLabel || 'WhatsApp'}
                     </a>
                   </li>
                 ) : null}
@@ -490,12 +506,18 @@ export function Shell({ children }) {
                 {SELLER.name} · CNPJ {SELLER.cnpj} · {SELLER.city}
               </p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <Link to={ROUTES.privacidade} className="transition hover:text-white">
                 Privacidade
               </Link>
               <Link to={ROUTES.termos} className="transition hover:text-white">
                 Termos
+              </Link>
+              <Link
+                to={{ pathname: ROUTES.termos, hash: '#licenca' }}
+                className="transition hover:text-white"
+              >
+                Licença de uso
               </Link>
               {/* A revogação do consentimento (LGPD art. 8º §5º) só era
                   alcançável lendo a política até o meio. */}

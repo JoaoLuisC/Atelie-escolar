@@ -1,5 +1,5 @@
 /* GERADO por scripts/build-icon-subset.js — não edite à mão.
- * 119 ícones, extraídos de src/ e index.html (literais + dinâmicos).
+ * 121 ícones, extraídos de src/ e index.html (literais + dinâmicos).
  * Regenerar: npm run icons:subset
  */
 @font-face {
@@ -38,6 +38,7 @@
 .bi-arrow-right::before { content: "\f138"; }
 .bi-arrow-up::before { content: "\f148"; }
 .bi-arrow-up-right::before { content: "\f144"; }
+.bi-arrows-fullscreen::before { content: "\f14d"; }
 .bi-bag::before { content: "\f179"; }
 .bi-bag-check::before { content: "\f171"; }
 .bi-bag-check-fill::before { content: "\f170"; }
@@ -128,6 +129,7 @@
 .bi-receipt::before { content: "\f50f"; }
 .bi-receipt-cutoff::before { content: "\f50e"; }
 .bi-search::before { content: "\f52a"; }
+.bi-share-fill::before { content: "\f52d"; }
 .bi-shield-check::before { content: "\f52f"; }
 .bi-shield-lock::before { content: "\f538"; }
 .bi-shield-lock-fill::before { content: "\f537"; }

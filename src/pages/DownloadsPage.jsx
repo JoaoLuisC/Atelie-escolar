@@ -6,7 +6,13 @@ import { SkeletonDownloadList } from '../components/Skeleton';
 import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { buildDownloadUrl, fetchMyOrders, fetchOrderStatus } from '../services/downloads';
+import {
+  buildDownloadUrl,
+  fetchMyRefundRequests,
+  fetchMyOrders,
+  fetchOrderStatus,
+  requestRefund,
+} from '../services/downloads';
 import { errorMessageOf } from '../utils/api';
 import { formatPrice } from '../utils/currency';
 import { trackPurchaseOnce } from '../utils/analytics';
@@ -97,11 +103,28 @@ function usePendingOrderPolling({
   }, [orderId, orderEmail, paymentStatus, pushToast, setOrder, setPollingStatus, setStatus]);
 }
 
+// Situação do pedido em português, como a cliente lê no histórico.
+const PAYMENT_STATUS_LABELS = {
+  approved: 'Aprovado',
+  completed: 'Concluído',
+  pending: 'Aguardando pagamento',
+  in_process: 'Em análise',
+  rejected: 'Recusado',
+  cancelled: 'Cancelado',
+  failed: 'Não concluído',
+  refunded: 'Estornado',
+  charged_back: 'Estornado',
+};
+
+function paymentStatusLabel(status) {
+  return PAYMENT_STATUS_LABELS[String(status || '').toLowerCase()] || status || '—';
+}
+
 export function DownloadsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { pushToast } = useToast();
-  const { customerSession } = useAuth();
+  const { customerSession, updateCustomerName } = useAuth();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
   const [order, setOrder] = useState(null);
@@ -114,21 +137,48 @@ export function DownloadsPage() {
   // estado, e não na URL, pelo mesmo motivo do POST do achado M6.
   const [typedEmail, setTypedEmail] = useState('');
   const [manualEmail, setManualEmail] = useState('');
+  const [activeTab, setActiveTab] = useState(() =>
+    new URLSearchParams(location.search).has('order') ? 'history' : 'products',
+  );
+  const [preparedDownloads, setPreparedDownloads] = useState({});
+  const [preparingDownload, setPreparingDownload] = useState('');
+  const [refundOrder, setRefundOrder] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [refundPhone, setRefundPhone] = useState('');
+  const [refundPending, setRefundPending] = useState(false);
+  const [refundReceipt, setRefundReceipt] = useState('');
+  const [refundRequests, setRefundRequests] = useState([]);
+  // null = ainda não editado (mostra o nome da sessão); '' = a pessoa apagou o campo.
+  const [accountName, setAccountName] = useState(null);
+  const [accountSaving, setAccountSaving] = useState(false);
+
+  useEffect(() => {
+    if (!customerSession?.email) return;
+    fetchMyRefundRequests()
+      .then(setRefundRequests)
+      .catch(() => {});
+  }, [customerSession?.email]);
+
+  async function saveAccount(event) {
+    event.preventDefault();
+    setAccountSaving(true);
+    try {
+      await updateCustomerName(accountName ?? customerSession?.name ?? '');
+      pushToast('Nome atualizado.', 'success');
+    } catch (error) {
+      pushToast(error?.message || 'Não foi possível salvar sua conta.', 'error');
+    } finally {
+      setAccountSaving(false);
+    }
+  }
 
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order') || localStorage.getItem('lastOrderId') || '';
   // O e-mail é o segundo fator que autoriza a consulta do pedido, mas nunca
   // pode morar na URL: parâmetros aparecem no histórico, nos logs de acesso e
-  // são lidos por scripts de analytics. Checkouts novos guardam-no localmente;
-  // links recebidos por e-mail pedem a informação nesta tela.
-  const orderEmail = (
-    manualEmail ||
-    localStorage.getItem('lastOrderEmail') ||
-    customerSession?.email ||
-    ''
-  )
-    .trim()
-    .toLowerCase();
+  // são lidos por scripts de analytics. O checkout exige conta, então vem da
+  // sessão; links recebidos por e-mail sem login pedem a informação nesta tela.
+  const orderEmail = (manualEmail || customerSession?.email || '').trim().toLowerCase();
   const orderEmailIsValid = EMAIL_RE.test(orderEmail);
   const hasSuccessFlag = params.get('success') === '1';
   const isLoggedIn = Boolean(customerSession?.email);
@@ -291,7 +341,54 @@ export function DownloadsPage() {
   function openOrder(orderCode, internalOrderId) {
     const id = orderCode || internalOrderId;
     if (!id) return;
+    setActiveTab('history');
     navigate(`/downloads?order=${encodeURIComponent(id)}`);
+  }
+
+  async function prepareDownload(entry, item) {
+    const orderCode = entry.orderId || entry.internalOrderId;
+    const key = `${orderCode}:${item.id}`;
+    setPreparingDownload(key);
+    try {
+      const { response, data } = await fetchOrderStatus({
+        orderId: orderCode,
+        email: customerSession.email,
+      });
+      if (!response.ok || !data.success || data.order?.paymentStatus !== 'approved') {
+        throw new Error(errorMessageOf(data) || 'Não foi possível preparar o download.');
+      }
+      const token = (data.order.downloadTokens || []).find(
+        (candidate) =>
+          String(candidate.productId) === String(item.id) && candidate.available !== false,
+      );
+      if (!token?.token) throw new Error('Arquivo indisponível. Entre em contato com a loja.');
+      setPreparedDownloads((previous) => ({ ...previous, [key]: token.token }));
+    } catch (error) {
+      pushToast(error.message || 'Não foi possível preparar o download.', 'error');
+    } finally {
+      setPreparingDownload('');
+    }
+  }
+
+  async function submitRefund(event) {
+    event.preventDefault();
+    setRefundPending(true);
+    try {
+      await requestRefund({ orderId: refundOrder, reason: refundReason, phone: refundPhone });
+      setRefundReceipt(
+        `Solicitação do pedido #${refundOrder} recebida. A loja entrará em contato pelo e-mail da conta.`,
+      );
+      fetchMyRefundRequests()
+        .then(setRefundRequests)
+        .catch(() => {});
+      setRefundOrder('');
+      setRefundReason('');
+      setRefundPhone('');
+    } catch (error) {
+      pushToast(error.message || 'Não foi possível registrar a solicitação.', 'error');
+    } finally {
+      setRefundPending(false);
+    }
   }
 
   function submitManualEmail(event) {
@@ -335,6 +432,130 @@ export function DownloadsPage() {
           </p>
         </header>
 
+        {customerSession?.email ? (
+          <nav aria-label="Área do cliente" className="mb-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              aria-pressed={activeTab === 'products'}
+              onClick={() => setActiveTab('products')}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === 'products' ? 'bg-brand-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}
+            >
+              Produtos
+            </button>
+            <button
+              type="button"
+              aria-pressed={activeTab === 'history'}
+              onClick={() => setActiveTab('history')}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === 'history' ? 'bg-brand-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}
+            >
+              Histórico de pedidos
+            </button>
+            <button
+              type="button"
+              aria-pressed={activeTab === 'account'}
+              onClick={() => setActiveTab('account')}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === 'account' ? 'bg-brand-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}
+            >
+              Minha conta
+            </button>
+          </nav>
+        ) : null}
+
+        {customerSession?.email && activeTab === 'account' ? (
+          <article className="mb-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="font-heading text-lg font-bold text-slate-900">Editar minha conta</h2>
+            <form onSubmit={saveAccount} className="mt-4 max-w-md space-y-3">
+              <div>
+                <label
+                  htmlFor="downloads-account-name"
+                  className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Nome
+                </label>
+                <input
+                  id="downloads-account-name"
+                  value={accountName ?? customerSession?.name ?? ''}
+                  onChange={(event) => setAccountName(event.target.value)}
+                  minLength={2}
+                  maxLength={120}
+                  required
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                />
+              </div>
+              <p className="text-xs text-slate-500">E-mail: {customerSession.email}</p>
+              <button
+                type="submit"
+                disabled={accountSaving}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {accountSaving ? 'Salvando…' : 'Salvar alterações'}
+              </button>
+              <Link
+                to={ROUTES.conta}
+                className="ml-3 text-xs font-semibold text-brand-700 hover:underline"
+              >
+                Privacidade e exclusão da conta
+              </Link>
+            </form>
+          </article>
+        ) : null}
+
+        {customerSession?.email && activeTab === 'products' ? (
+          <article className="mb-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="font-heading text-lg font-bold text-slate-900">Seus produtos</h2>
+            {searchingByEmail ? (
+              <p className="mt-2 text-sm text-slate-500">Carregando seus produtos...</p>
+            ) : null}
+            {!searchingByEmail &&
+            !orders.some((entry) => entry.paymentStatus === 'approved' && entry.items?.length) ? (
+              <p className="mt-2 text-sm text-slate-500">
+                {emailStatus || 'Nenhum produto disponível ainda.'}
+              </p>
+            ) : null}
+            <ul className="mt-3 space-y-3">
+              {orders
+                .filter((entry) => entry.paymentStatus === 'approved')
+                .flatMap((entry) =>
+                  (entry.items || []).map((item) => {
+                    const key = `${entry.orderId || entry.internalOrderId}:${item.id}`;
+                    return (
+                      <li
+                        key={key}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-3"
+                      >
+                        <div>
+                          <strong className="block text-sm text-slate-800">{item.title}</strong>
+                          <span className="text-xs text-slate-500">
+                            Pedido #{entry.orderId || entry.internalOrderId}
+                          </span>
+                        </div>
+                        {preparedDownloads[key] ? (
+                          <a
+                            href={buildDownloadUrl(preparedDownloads[key])}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white"
+                          >
+                            Baixar arquivo
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={Boolean(preparingDownload)}
+                            onClick={() => prepareDownload(entry, item)}
+                            className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                          >
+                            {preparingDownload === key ? 'Preparando…' : 'Baixar'}
+                          </button>
+                        )}
+                      </li>
+                    );
+                  }),
+                )}
+            </ul>
+          </article>
+        ) : null}
+
         {hasSuccessFlag ? (
           <article className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
             <strong className="block font-bold">Pagamento confirmado.</strong>
@@ -343,257 +564,346 @@ export function DownloadsPage() {
           </article>
         ) : null}
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="font-heading text-lg font-bold text-slate-900">
-                {orderId ? `Pedido #${orderId}` : 'Nenhum pedido selecionado'}
-              </h3>
-              {status ? <p className="text-sm text-slate-500">{status}</p> : null}
-            </div>
-            {/* Sem pedido não há o que atualizar nem progresso a mostrar
-                (LOJA-48): o stepper marcava "Processando" sem pedido nenhum. */}
-            {orderId ? (
-              <button
-                type="button"
-                onClick={() => loadOrder()}
-                disabled={loading}
-                className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-              >
-                {loading ? 'Atualizando…' : 'Atualizar'}
-              </button>
-            ) : null}
-          </div>
-
-          {needsEmail ? (
-            <form
-              onSubmit={submitManualEmail}
-              noValidate
-              className="mb-4 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
-            >
-              <div className="min-w-0 flex-1">
-                <label
-                  htmlFor="downloads-order-email"
-                  className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  E-mail usado na compra
-                </label>
-                <input
-                  id="downloads-order-email"
-                  type="email"
-                  value={typedEmail}
-                  onChange={(event) => setTypedEmail(event.target.value)}
-                  placeholder="seu@email.com"
-                  maxLength={254}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:text-sm"
-                />
+        {(!customerSession?.email || activeTab === 'history') && (
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="font-heading text-lg font-bold text-slate-900">
+                  {orderId ? `Pedido #${orderId}` : 'Nenhum pedido selecionado'}
+                </h3>
+                {status ? <p className="text-sm text-slate-500">{status}</p> : null}
               </div>
-              <button
-                type="submit"
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-              >
-                Consultar pedido
-              </button>
-            </form>
-          ) : null}
-
-          {orderId ? (
-            <StatusStepper
-              activeStep={statusStep}
-              // O `status` já aparece logo acima; repeti-lo aqui duplicava a
-              // frase (LOJA-48). O stepper fica com o andamento da verificação.
-              description={
-                pollingStatus ||
-                'Acompanhe a liberação em tempo real. Pode fechar a aba e voltar quando quiser.'
-              }
-              steps={[
-                { label: 'Processando', description: 'Validando a cobrança.' },
-                { label: 'Confirmando', description: 'Organizando os links.' },
-                { label: 'Liberado', description: 'Acesso pronto.' },
-              ]}
-            />
-          ) : null}
-
-          {customerSession?.email ? (
-            <div className="mt-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Seus pedidos{' '}
-                  <span className="normal-case text-slate-400">({customerSession.email})</span>
-                </p>
+              {/* Sem pedido não há o que atualizar nem progresso a mostrar
+                (LOJA-48): o stepper marcava "Processando" sem pedido nenhum. */}
+              {orderId ? (
                 <button
                   type="button"
-                  onClick={() => loadMyOrders()}
-                  disabled={searchingByEmail}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-60"
+                  onClick={() => loadOrder()}
+                  disabled={loading}
+                  className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                 >
-                  {searchingByEmail ? 'Atualizando…' : 'Atualizar'}
+                  {loading ? 'Atualizando…' : 'Atualizar'}
                 </button>
-              </div>
-              {emailStatus ? <p className="mt-2 text-xs text-slate-500">{emailStatus}</p> : null}
+              ) : null}
             </div>
-          ) : (
-            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm text-slate-700">
-                Para ver o histórico dos seus pedidos e baixar os arquivos, entre na sua conta.
-              </p>
-              <Link
-                to={`${ROUTES.login}?redirect=${ROUTES.downloads}`}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+
+            {needsEmail ? (
+              <form
+                onSubmit={submitManualEmail}
+                noValidate
+                className="mb-4 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
               >
-                <i className="bi bi-box-arrow-in-right" aria-hidden="true" /> Entrar
-              </Link>
-            </div>
-          )}
+                <div className="min-w-0 flex-1">
+                  <label
+                    htmlFor="downloads-order-email"
+                    className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
+                    E-mail usado na compra
+                  </label>
+                  <input
+                    id="downloads-order-email"
+                    type="email"
+                    value={typedEmail}
+                    onChange={(event) => setTypedEmail(event.target.value)}
+                    placeholder="seu@email.com"
+                    maxLength={254}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:text-sm"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+                >
+                  Consultar pedido
+                </button>
+              </form>
+            ) : null}
 
-          {orderError ? (
-            <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
-              <strong className="block text-sm font-bold text-rose-800">
-                Falha ao carregar pedido
-              </strong>
-              <p className="mt-1 text-xs text-rose-700/80">{orderError}</p>
-            </div>
-          ) : null}
+            {orderId ? (
+              <StatusStepper
+                activeStep={statusStep}
+                // O `status` já aparece logo acima; repeti-lo aqui duplicava a
+                // frase (LOJA-48). O stepper fica com o andamento da verificação.
+                description={
+                  pollingStatus ||
+                  'Acompanhe a liberação em tempo real. Pode fechar a aba e voltar quando quiser.'
+                }
+                steps={[
+                  { label: 'Processando', description: 'Validando a cobrança.' },
+                  { label: 'Confirmando', description: 'Organizando os links.' },
+                  { label: 'Liberado', description: 'Acesso pronto.' },
+                ]}
+              />
+            ) : null}
 
-          {/* Estado de espera: pedido encontrado mas ainda não aprovado.
+            {customerSession?.email ? (
+              <div className="mt-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Seus pedidos{' '}
+                    <span className="normal-case text-slate-400">({customerSession.email})</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => loadMyOrders()}
+                    disabled={searchingByEmail}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    {searchingByEmail ? 'Atualizando…' : 'Atualizar'}
+                  </button>
+                </div>
+                {emailStatus ? <p className="mt-2 text-xs text-slate-500">{emailStatus}</p> : null}
+              </div>
+            ) : (
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm text-slate-700">
+                  Para ver o histórico dos seus pedidos e baixar os arquivos, entre na sua conta.
+                </p>
+                <Link
+                  to={`${ROUTES.login}?redirect=${ROUTES.downloads}`}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                >
+                  <i className="bi bi-box-arrow-in-right" aria-hidden="true" /> Entrar
+                </Link>
+              </div>
+            )}
+
+            {orderError ? (
+              <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                <strong className="block text-sm font-bold text-rose-800">
+                  Falha ao carregar pedido
+                </strong>
+                <p className="mt-1 text-xs text-rose-700/80">{orderError}</p>
+              </div>
+            ) : null}
+
+            {/* Estado de espera: pedido encontrado mas ainda não aprovado.
               Combinamos um aviso suave com skeletons que ancoram o usuário
               no layout que vai aparecer assim que o pagamento confirmar. */}
-          {order && order.paymentStatus === 'pending' ? (
-            <div className="mt-5 space-y-3">
-              <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200">
-                <i className="bi bi-hourglass-split mr-1.5" aria-hidden="true" />
-                Pagamento ainda em análise. Você não precisa fazer nada — assim que confirmar, seus
-                arquivos aparecem aqui.
+            {order && order.paymentStatus === 'pending' ? (
+              <div className="mt-5 space-y-3">
+                <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200">
+                  <i className="bi bi-hourglass-split mr-1.5" aria-hidden="true" />
+                  Pagamento ainda em análise. Você não precisa fazer nada — assim que confirmar,
+                  seus arquivos aparecem aqui.
+                </p>
+                <SkeletonDownloadList count={Math.max(1, (order.items || []).length || 2)} />
+              </div>
+            ) : null}
+
+            {order && order.paymentStatus !== 'approved' && order.paymentStatus !== 'pending' ? (
+              <p className="mt-5 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-800 ring-1 ring-rose-200">
+                <i className="bi bi-x-octagon mr-1.5" aria-hidden="true" />
+                Este pedido não foi aprovado. Se já tentou pagar e o valor foi cobrado, nos chame
+                por e-mail que verificamos.
               </p>
-              <SkeletonDownloadList count={Math.max(1, (order.items || []).length || 2)} />
-            </div>
-          ) : null}
+            ) : null}
 
-          {order && order.paymentStatus !== 'approved' && order.paymentStatus !== 'pending' ? (
-            <p className="mt-5 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-800 ring-1 ring-rose-200">
-              <i className="bi bi-x-octagon mr-1.5" aria-hidden="true" />
-              Este pedido não foi aprovado. Se já tentou pagar e o valor foi cobrado, nos chame por
-              e-mail que verificamos.
-            </p>
-          ) : null}
+            {/* Carga inicial com orderId conhecido: skeleton enquanto o backend responde. */}
+            {loading && orderId && !order ? (
+              <div className="mt-5 space-y-2">
+                <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">
+                  Arquivos disponíveis
+                </h4>
+                <SkeletonDownloadList count={2} />
+              </div>
+            ) : null}
 
-          {/* Carga inicial com orderId conhecido: skeleton enquanto o backend responde. */}
-          {loading && orderId && !order ? (
-            <div className="mt-5 space-y-2">
-              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">
-                Arquivos disponíveis
-              </h4>
-              <SkeletonDownloadList count={2} />
-            </div>
-          ) : null}
-
-          {orders.length > 0 ? (
-            <div className="mt-5">
-              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">
-                Histórico de pedidos
-              </h4>
-              <ul className="flex flex-col gap-2">
-                {orders.map((entry) => (
-                  <li
-                    key={`${entry.orderId}-${entry.internalOrderId || ''}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <strong className="block text-sm text-slate-800">
-                        Pedido #{entry.orderId || entry.internalOrderId}
-                      </strong>
-                      <p className="text-xs text-slate-500">
-                        Status: {entry.paymentStatus || entry.status} · Total:{' '}
-                        {formatPrice(entry.totalAmount)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => openOrder(entry.orderId, entry.internalOrderId)}
-                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                    >
-                      Abrir pedido
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {order?.paymentStatus === 'approved' ? (
-            <div className="mt-5">
-              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">
-                Arquivos disponíveis
-              </h4>
-              {(order.downloadTokens || []).length === 0 ? (
-                <div className="space-y-3">
-                  <p className="rounded-xl bg-sky-50 px-3 py-2.5 text-sm text-sky-800 ring-1 ring-sky-200">
-                    <i className="bi bi-arrow-clockwise mr-1.5" aria-hidden="true" />
-                    Tudo certo com o pagamento — estamos preparando os arquivos. Em alguns segundos
-                    clique em Atualizar.
-                  </p>
-                  <SkeletonDownloadList count={Math.max(1, (order.items || []).length || 1)} />
-                </div>
-              ) : (
-                <>
-                  <ul className="flex flex-col gap-2">
-                    {(order.downloadTokens || []).map((item) => (
+            {orders.length > 0 ? (
+              <div className="mt-5">
+                <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">
+                  Histórico de pedidos
+                </h4>
+                <ul className="flex flex-col gap-2">
+                  {orders.map((entry) => {
+                    const refund = refundRequests.find(
+                      (item) => String(item.order_id) === String(entry.internalOrderId),
+                    );
+                    return (
                       <li
-                        key={item.token}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-br from-brand-50 to-white p-3 ring-1 ring-brand-100"
+                        key={`${entry.orderId}-${entry.internalOrderId || ''}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5"
                       >
                         <div className="min-w-0">
                           <strong className="block text-sm text-slate-800">
-                            {item.productName || `Produto ${item.productId}`}
+                            Pedido #{entry.orderId || entry.internalOrderId}
                           </strong>
                           <p className="text-xs text-slate-500">
-                            Token vinculado ao pedido aprovado.
+                            Status: {paymentStatusLabel(entry.paymentStatus || entry.status)} ·
+                            Total: {formatPrice(entry.totalAmount)}
                           </p>
+                          {refund ? (
+                            <p className="mt-1 text-xs font-semibold text-violet-700">
+                              Devolução:{' '}
+                              {{
+                                open: 'aberta',
+                                contacted: 'em conversa',
+                                accepted: 'aceita',
+                                declined: 'não aceita',
+                                resolved: 'resolvida',
+                              }[refund.status] || refund.status}
+                              {refund.admin_response ? ` — ${refund.admin_response}` : ''}
+                            </p>
+                          ) : null}
                         </div>
-                        {/* `available === false` = o servidor não reemitiu o link
-                            (teto de downloads do item). Um "Baixar" aqui daria 401. */}
-                        {item.available === false ? (
-                          <span className="text-xs font-semibold text-slate-500">
-                            Limite de downloads atingido — fale conosco
-                          </span>
-                        ) : (
-                          <a
-                            href={buildDownloadUrl(item.token)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                        <button
+                          type="button"
+                          onClick={() => openOrder(entry.orderId, entry.internalOrderId)}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                        >
+                          Abrir pedido
+                        </button>
+                        {entry.paymentStatus === 'approved' && entry.orderId && !refund ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRefundReceipt('');
+                              setRefundOrder(entry.orderId);
+                            }}
+                            className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700"
                           >
-                            <i className="bi bi-download" /> Baixar
-                          </a>
-                        )}
+                            Solicitar devolução
+                          </button>
+                        ) : null}
                       </li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Cada link é de uso único e expira por segurança. Se um download não abrir ou o
-                    link já tiver sido usado, clique em <strong>Atualizar</strong> acima para gerar
-                    novos links — ou nos chame por e-mail.
+                    );
+                  })}
+                </ul>
+                {refundReceipt ? (
+                  <p
+                    role="status"
+                    className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"
+                  >
+                    {refundReceipt}
                   </p>
-                </>
-              )}
-            </div>
-          ) : null}
+                ) : null}
+                {refundOrder ? (
+                  <form
+                    onSubmit={submitRefund}
+                    className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4"
+                  >
+                    <h5 className="font-semibold text-slate-900">
+                      Solicitar devolução do pedido #{refundOrder}
+                    </h5>
+                    <p className="text-xs text-slate-600">
+                      Você pode informar o motivo e telefone para facilitar o atendimento; eles são
+                      opcionais.
+                    </p>
+                    <label className="block text-sm text-slate-700">
+                      Motivo (opcional)
+                      <textarea
+                        value={refundReason}
+                        maxLength={2000}
+                        onChange={(event) => setRefundReason(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                      />
+                    </label>
+                    <label className="block text-sm text-slate-700">
+                      Telefone (opcional)
+                      <input
+                        type="tel"
+                        value={refundPhone}
+                        maxLength={40}
+                        onChange={(event) => setRefundPhone(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                      />
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        disabled={refundPending}
+                        type="submit"
+                        className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        {refundPending ? 'Enviando…' : 'Enviar solicitação'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRefundOrder('')}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
+              </div>
+            ) : null}
 
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Link
-              to={ROUTES.produtos}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              Voltar para produtos
-            </Link>
-            <Link
-              to={ROUTES.checkout}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              Ir para checkout
-            </Link>
-          </div>
-        </article>
+            {order?.paymentStatus === 'approved' ? (
+              <div className="mt-5">
+                <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">
+                  Arquivos disponíveis
+                </h4>
+                {(order.downloadTokens || []).length === 0 ? (
+                  <div className="space-y-3">
+                    <p className="rounded-xl bg-sky-50 px-3 py-2.5 text-sm text-sky-800 ring-1 ring-sky-200">
+                      <i className="bi bi-arrow-clockwise mr-1.5" aria-hidden="true" />
+                      Tudo certo com o pagamento — estamos preparando os arquivos. Em alguns
+                      segundos clique em Atualizar.
+                    </p>
+                    <SkeletonDownloadList count={Math.max(1, (order.items || []).length || 1)} />
+                  </div>
+                ) : (
+                  <>
+                    <ul className="flex flex-col gap-2">
+                      {(order.downloadTokens || []).map((item) => (
+                        <li
+                          key={item.token}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-br from-brand-50 to-white p-3 ring-1 ring-brand-100"
+                        >
+                          <div className="min-w-0">
+                            <strong className="block text-sm text-slate-800">
+                              {item.productName || `Produto ${item.productId}`}
+                            </strong>
+                            <p className="text-xs text-slate-500">
+                              Token vinculado ao pedido aprovado.
+                            </p>
+                          </div>
+                          {/* `available === false` = o servidor não reemitiu o link
+                            (teto de downloads do item). Um "Baixar" aqui daria 401. */}
+                          {item.available === false ? (
+                            <span className="text-xs font-semibold text-slate-500">
+                              Limite de downloads atingido — fale conosco
+                            </span>
+                          ) : (
+                            <a
+                              href={buildDownloadUrl(item.token)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                            >
+                              <i className="bi bi-download" /> Baixar
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Cada link é de uso único e expira por segurança. Se um download não abrir ou o
+                      link já tiver sido usado, clique em <strong>Atualizar</strong> acima para
+                      gerar novos links — ou nos chame por e-mail.
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              <Link
+                to={ROUTES.produtos}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Voltar para produtos
+              </Link>
+              <Link
+                to={ROUTES.checkout}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Ir para checkout
+              </Link>
+            </div>
+          </article>
+        )}
       </section>
     </Shell>
   );

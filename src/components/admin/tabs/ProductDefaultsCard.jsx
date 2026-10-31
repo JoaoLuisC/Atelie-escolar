@@ -30,6 +30,9 @@ export function ProductDefaultsCard() {
         setForm({
           sharedDescriptionTitle: value.sharedDescriptionTitle || '',
           sharedDescription: value.sharedDescription || '',
+          descriptionOrder: value.descriptionOrder || 'product-first',
+          descriptionAlign: value.descriptionAlign || 'left',
+          descriptionSize: value.descriptionSize || 'medium',
         });
       })
       .catch((error) => {
@@ -47,9 +50,7 @@ export function ProductDefaultsCard() {
       setSaving(true);
       await saveAdminSetting({ key: 'productDefaults', value: form });
       pushToast(
-        form.sharedDescription.trim()
-          ? 'Descrição padrão salva. Ela aparece nos produtos em até 1 minuto.'
-          : 'Descrição padrão removida dos produtos.',
+        'Textos e apresentação salvos. Eles aparecem nos produtos em até 1 minuto.',
         'success',
       );
     } catch (error) {
@@ -61,8 +62,8 @@ export function ProductDefaultsCard() {
 
   return (
     <Card
-      title="Descrição padrão de todos os produtos"
-      subtitle="Aparece na página de cada produto, logo abaixo da descrição dele. Deixe vazio para não mostrar."
+      title="Textos das páginas de produtos"
+      subtitle="Edite o texto comum e a apresentação das descrições em todos os produtos."
       className="mb-4"
     >
       {loadError ? (
@@ -89,6 +90,51 @@ export function ProductDefaultsCard() {
               }
             />
           </label>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              [
+                'Ordem dos textos',
+                'descriptionOrder',
+                [
+                  ['product-first', 'Produto primeiro'],
+                  ['shared-first', 'Texto comum primeiro'],
+                ],
+              ],
+              [
+                'Alinhamento',
+                'descriptionAlign',
+                [
+                  ['left', 'Esquerda'],
+                  ['center', 'Centro'],
+                  ['right', 'Direita'],
+                ],
+              ],
+              [
+                'Tamanho do texto',
+                'descriptionSize',
+                [
+                  ['small', 'Pequeno'],
+                  ['medium', 'Médio'],
+                  ['large', 'Grande'],
+                ],
+              ],
+            ].map(([label, key, options]) => (
+              <label key={key} className="block text-sm font-medium text-slate-700">
+                {label}
+                <select
+                  className={inputClass}
+                  value={form[key]}
+                  onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
+                >
+                  {options.map(([value, title]) => (
+                    <option key={value} value={value}>
+                      {title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
           <label htmlFor="shared-description" className="block text-sm font-medium text-slate-700">
             Texto
             <textarea

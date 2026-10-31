@@ -4,9 +4,27 @@ import { useToast } from '../hooks/useToast';
 import { getSupabaseBrowserClient } from '../services/supabase-browser';
 import { ROUTES } from '../constants/routes';
 
+/**
+ * O template de e-mail (supabase/templates/recovery.html) aponta sempre para
+ * /reset-password do site e leva o RedirectTo original em `next`: assim o link
+ * funciona mesmo quando o Supabase cai no Site URL. O destino vem de
+ * `redirect` (direto) ou do `redirect` de dentro de `next`.
+ */
+function readRedirectParam(params) {
+  const direct = params.get('redirect');
+  if (direct) return direct;
+  try {
+    return new URL(params.get('next') || '', globalThis.window?.location?.origin).searchParams.get(
+      'redirect',
+    );
+  } catch {
+    return null;
+  }
+}
+
 function getSafeRedirect(search) {
   const params = new URLSearchParams(search);
-  const redirect = params.get('redirect');
+  const redirect = readRedirectParam(params);
 
   // Allowlist fixa (nada de caminho livre vindo da URL): downloads, o login do
   // painel (troca de senha pela aba "Minha conta") ou, por padrão, o checkout.
@@ -15,30 +33,6 @@ function getSafeRedirect(search) {
 }
 
 const REDIRECT_LABELS = { '/downloads': 'Downloads', [ROUTES.admin]: 'o login do painel' };
-
-function applyRecoverySessionFromUrl(supabase) {
-  const searchParams = new URLSearchParams(globalThis.window.location.search);
-  const code = String(searchParams.get('code') || '').trim();
-
-  if (code) {
-    return supabase.auth.exchangeCodeForSession(code);
-  }
-
-  const hashParams = new URLSearchParams(
-    String(globalThis.window.location.hash || '').replace(/^#/, ''),
-  );
-  const accessToken = String(hashParams.get('access_token') || '').trim();
-  const refreshToken = String(hashParams.get('refresh_token') || '').trim();
-
-  if (accessToken && refreshToken) {
-    return supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-  }
-
-  return Promise.resolve({ data: null, error: null });
-}
 
 /**
  * Erro do SDK do Supabase em português (LOJA-45).
@@ -72,7 +66,7 @@ export function recoveryErrorMessage(error, fallback) {
     return 'A nova senha precisa ser diferente da anterior.';
   }
   if (code === 'weak_password' || message.includes('password')) {
-    return 'Senha fraca. Use ao menos 8 caracteres, com letra maiúscula, minúscula e número.';
+    return 'Senha fraca. Use ao menos 8 caracteres, com letra maiúscula, minúscula, número e caractere especial.';
   }
   if (Number(error?.status) === 429 || code.includes('rate_limit')) {
     return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
@@ -124,12 +118,24 @@ export function ResetPasswordPage() {
       }
 
       try {
-        const { error } = await applyRecoverySessionFromUrl(supabase);
-        if (error) {
-          throw error;
+        // O template próprio usa token_hash para que scanners de e-mail não
+        // consumam o link antes da pessoa. A troca só ocorre dentro da página.
+        const params = new URLSearchParams(location.search);
+        const tokenHash = params.get('token_hash');
+        if (tokenHash) {
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'recovery',
+          });
+          if (verifyError) throw verifyError;
+          params.delete('token_hash');
+          params.delete('type');
+          globalThis.history.replaceState({}, '', `${location.pathname}?${params.toString()}`);
         }
-
-        const { data } = await supabase.auth.getSession();
+        // No fluxo padrão/legado, o SDK já processa o código durante a
+        // inicialização; não repetimos exchangeCodeForSession.
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
         if (data.session) {
           pushToast('Defina uma nova senha para sua conta.', 'warning');
         } else {
@@ -152,7 +158,7 @@ export function ResetPasswordPage() {
     return () => {
       cancelled = true;
     };
-  }, [pushToast, resolveSupabase]);
+  }, [location.pathname, location.search, pushToast, resolveSupabase]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -162,8 +168,16 @@ export function ResetPasswordPage() {
       return;
     }
 
-    if (!/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
-      pushToast('A senha deve ter letra maiúscula, minúscula e número.', 'warning');
+    if (
+      !/[a-z]/.test(newPassword) ||
+      !/[A-Z]/.test(newPassword) ||
+      !/\d/.test(newPassword) ||
+      !/[^A-Za-z0-9\s]/.test(newPassword)
+    ) {
+      pushToast(
+        'A senha deve ter letra maiúscula, minúscula, número e caractere especial.',
+        'warning',
+      );
       return;
     }
 
@@ -236,7 +250,8 @@ export function ResetPasswordPage() {
               className={inputClass}
             />
             <p id="new-password-help" className="mt-1 text-xs text-slate-500">
-              Use ao menos 8 caracteres, com letra maiúscula, minúscula e número.
+              Use ao menos 8 caracteres, com letra maiúscula, minúscula, número e caractere
+              especial.
             </p>
           </div>
           <div>

@@ -54,8 +54,8 @@ Cada regra traz, quando aplicável, onde está no código e o que ainda falta.
 - **B1. CTA principal acima da dobra** em toda página com objetivo de conversão.
 - **B2. Um objetivo por página.** Produto vende o produto; captura captura e-mail; home apresenta a marca.
 - **B3. Carrinho não bloqueia navegação.** Adicionar abre toast + drawer (`CartDrawer.jsx`), sem trocar de página.
-- **B4. Checkout em uma página.** E-mail, nome, cupom e pagamento na mesma tela.
-- **B5. Login social opcional.** Compra como convidado sempre possível.
+- **B4. Checkout em uma página.** Conta (ou criação dela), nome, cupom e pagamento na mesma tela.
+- **B5. Conta obrigatória, criada no próprio checkout.** Desde 31/10/2026 o `create-payment` recusa compra sem sessão de cliente (401): quem não tem conta cria ali mesmo (e-mail + senha) ou usa "Continuar com Google", sem sair da página. A conta dá acesso aos arquivos, ao histórico, à devolução e aos cupons por público.
 - **B6. Mensagens de erro humanas.** "Não conseguimos confirmar seu pagamento. Tente outro cartão ou Pix.", nunca "Erro 500: payment_intent_failed".
 - **B7. Loading sempre visível.** Polling e requisições assíncronas com `aria-busy`, skeleton ou stepper.
 - **B8. Fonte ≥ 16px em mobile.** Abaixo disso o iOS dá zoom no input.
@@ -125,7 +125,8 @@ Alvo em produção, medido no mobile: Performance ≥ 90 e SEO ≥ 95.
 - **G3. Assinatura do webhook validada** (HMAC-SHA256 com `WEBHOOK_SECRET`, `lib/mercadopago-config.js`). Sem segredo, rejeita. **Não remover.**
 - **G4. Polling é reserva, não caminho principal.** Existe em `CheckoutPage.jsx` (4s, com backoff) e `DownloadsPage.jsx` (10s) para cobrir webhook atrasado.
 - **G5. Download por token efêmero.** Nunca URL direta do arquivo: token de uso único com validade e _claim_ atômico, entregue por URL assinada do Storage (`download_tokens`, `download_logs`). Link gasto de pedido aprovado é reemitido pelo "Atualizar" em `/downloads` (prova de posse: código do pedido + e-mail), com teto de 5 downloads por item (`MAX_DOWNLOADS_PER_ITEM` em `handlers/verify-payment.js`); no teto, a tela troca "Baixar" por "fale conosco".
-- **G6. Cupom validado no backend.** `POST /api/validate-coupon` é só UX; a validação real é no `create-payment` (`lib/coupons.js`), com uso incrementado de forma atômica (RPC `increment_coupon_usage`). O uso reservado por pedido não pago volta ao cupom depois de 2h (`release_stale_coupon_reservations`, pg_cron a cada 15 min) e é recontado se o pagamento chegar depois (trigger `orders_reclaim_coupon_on_approval`).
+- **G6. Cupom validado no backend.** `POST /api/validate-coupon` é só UX; a validação real é no `create-payment` (`lib/coupons.js`), com uso incrementado de forma atômica (RPC `increment_coupon_usage`, que reserva o limite total e o limite por cliente na mesma transação). Cupom recusado no `create-payment` devolve 422 e não cria pedido. O uso reservado por pedido não pago volta ao cupom depois de 2h (`release_stale_coupon_reservations`, pg_cron a cada 15 min) e é recontado se o pagamento chegar depois (trigger `orders_reclaim_coupon_on_approval`).
+- **G6a. Cupom por público e fidelidade.** O cupom pode valer para todos, só quem tem conta, só a primeira compra (sem pedido aprovado pela conta nem pelo e-mail, sem diferenciar maiúsculas), só quem já comprou, uma lista de e-mails, ou como recompensa: 1 uso a cada N compras aprovadas (`purchase_milestone`). Limite opcional de usos por cliente (`max_uses_per_customer`). Datas de início e fim no horário de Brasília. Para fidelidade, prefira a recompensa por N compras a um cupom aberto: ela só libera o uso que a cliente ganhou.
 - **G7. Vários meios de pagamento.** Pix, cartão e boleto pelo Checkout Pro. Não desabilitar sem dado de baixa conversão.
 
 ### H. Segurança e privacidade
@@ -136,14 +137,14 @@ Detalhes de implementação em [08-SEGURANCA](./08-SEGURANCA.md).
 - **H2.** RLS em todas as tabelas; tabela nova nasce com RLS.
 - **H3.** Sessão em cookie HttpOnly + `SameSite=Strict`, assinado por HMAC.
 - **H4.** Rate limit em endpoint público: `enforceRateLimit(req, res, RATE_LIMITS.<perfil>)` no handler, com contador no Postgres (decisão registrada em [02-ARQUITETURA](./02-ARQUITETURA.md)). Endpoint público novo precisa de perfil em `RATE_LIMITS`.
-- **H5.** Senha com mínimo de 8 caracteres, maiúscula, minúscula e número. O formulário cobra tudo; o backend revalida o mínimo de 8, e as classes de caractere dependem da política do Supabase Auth.
-- **H6.** Dados mínimos: nome e e-mail para comprar. Sem endereço (não há produto físico).
+- **H5.** Senha com mínimo de 8 caracteres, maiúscula, minúscula, número e caractere especial — no cadastro, no checkout, na troca de senha do staff (`lib/staff-account.js`) e no Supabase Auth (`supabase/config.toml`, `password_requirements = "lower_upper_letters_digits_symbols"`). O formulário cobra e o backend revalida.
+- **H6.** Dados mínimos: nome, e-mail e a conta para comprar; telefone só se a cliente quiser informar na devolução. Sem endereço (não há produto físico).
 - **H7.** Direito ao esquecimento e à portabilidade, self-service: `POST /api/me-delete-account` em dois passos (pedido → confirmação por e-mail), anonimizando os pedidos; `GET /api/me-export-data` ("Baixar meus dados" em `/conta`).
 - **H8.** Backup: o Supabase Free guarda 7 dias, o Pro 30. Produção com movimento real deve estar no Pro.
 
 ### I. Painéis (loja e plataforma)
 
-- **I1. Toda escrita do painel é auditada.** `admin_audit_log` (`admin_id, action, target_type, target_id, before, after, ip, created_at`), preenchido por `lib/admin-audit.js` em produtos, categorias, cupons, usuários, settings, página da loja, dona da loja, dono do produto, upload/remoção de mídia, limpeza de eventos, IA e Minha conta. Append-only (triggers bloqueiam UPDATE/DELETE), campos sensíveis redigidos, retenção de 18 meses, cobertura testada em `handlers/__tests__/admin-audit-coverage.test.js`. A área simples do professor (`/api/teacher/products`) também audita.
+- **I1. Toda escrita do painel é auditada.** `admin_audit_log` (`admin_id, action, target_type, target_id, before, after, ip, created_at`), preenchido por `lib/admin-audit.js` em produtos, categorias, cupons, usuários, settings, página da loja, dona da loja, dono do produto, upload/remoção de mídia, limpeza de eventos, IA, solicitações de devolução, publicação nas redes (sem a legenda) e Minha conta. Append-only (triggers bloqueiam UPDATE/DELETE), campos sensíveis redigidos, retenção de 18 meses, cobertura testada em `handlers/__tests__/admin-audit-coverage.test.js`. A área simples do professor (`/api/teacher/products`) também audita.
 - **I2. 2º fator.** Opcional, recomendado: TOTP, código por e-mail ou PIN de emergência, configurado na aba Segurança da Administração da plataforma. Vale só para admin/master; professor(a), inclusive a dona da loja, entra sem 2º fator (pendência de 2FA por conta em [10-ROADMAP](./10-ROADMAP.md)). A conta de administração deve ter 2FA ativo em produção.
 - **I3. Curva ABC sempre disponível.** No Dashboard (resumo) e em Vendas → Curva ABC e coorte. Decisões de produto e mídia passam por ela.
 - **I4. Export CSV em qualquer relatório.** Hoje só em Vendas → Curva ABC e coorte (produtos, clientes e coorte, via `src/utils/csv-export.js`). **Falta:** pedidos, clientes, segmentos e vendas por período.
@@ -325,7 +326,7 @@ Estrutura das campanhas de busca (modelo Kwong): **genérica** (termos amplos da
 
 ## Anti-padrões
 
-**Produto e UX:** pop-up agressivo de newsletter na entrada · forçar conta para comprar · escassez falsa ("só 2 disponíveis" em produto digital) · carrossel automático no topo · mais de 1 CTA primário por tela · esconder o preço final até o fim · jargão ("checkout") onde o público não conhece.
+**Produto e UX:** pop-up agressivo de newsletter na entrada · mandar criar conta numa página à parte antes do checkout (a conta é criada dentro dele, B5) · escassez falsa ("só 2 disponíveis" em produto digital) · carrossel automático no topo · mais de 1 CTA primário por tela · esconder o preço final até o fim · jargão ("checkout") onde o público não conhece.
 
 **Mídia paga:** otimizar para clique quando o objetivo é venda · misturar frio e quente no mesmo conjunto · nome no título do anúncio · anunciar para inativos totais · dobrar orçamento sem 7 dias de dado · pausar no 1º dia ruim · criativo infinito sem público definido.
 

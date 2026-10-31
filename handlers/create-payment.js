@@ -43,12 +43,12 @@ const log = createLogger('create-payment');
  *   Fail-closed: qualquer erro de rede/RPC devolve false (sem desconto), em vez
  *   de conceder desconto sem contabilizar.
  */
-async function claimCouponUsage(couponId) {
+async function claimCouponUsage(couponId, customerKey) {
   try {
     const result = await supabaseRequest('rpc/increment_coupon_usage', {
       method: 'POST',
       useServiceRole: true,
-      body: JSON.stringify({ p_coupon_id: couponId }),
+      body: JSON.stringify({ p_coupon_id: couponId, p_customer_key: customerKey || null }),
     });
 
     // PostgREST devolve o escalar da função (ou null). Alguns proxies embrulham
@@ -66,12 +66,12 @@ async function claimCouponUsage(couponId) {
  * Mercado Pago. Sem pedido persistido não há como o cron de 2h encontrá-la,
  * portanto este rollback imediato evita esgotar um cupom por erro interno.
  */
-async function releaseUnattachedCouponUsage(couponId) {
+async function releaseUnattachedCouponUsage(couponId, customerKey) {
   try {
     await supabaseRequest('rpc/decrement_coupon_usage', {
       method: 'POST',
       useServiceRole: true,
-      body: JSON.stringify({ p_coupon_id: couponId }),
+      body: JSON.stringify({ p_coupon_id: couponId, p_customer_key: customerKey || null }),
     });
     return true;
   } catch (err) {
@@ -195,6 +195,7 @@ module.exports = async function createPaymentHandler(req, res) {
   // a preferência, mantemos a reserva: uma resposta de rede pode esconder uma
   // preferência válida, e o cron/trigger já tratam esse caso com segurança.
   let claimedCouponId = null;
+  let claimedCouponCustomerKey = null;
   let createdOrder = null;
   let paymentPreferenceAttempted = false;
 
@@ -251,8 +252,17 @@ module.exports = async function createPaymentHandler(req, res) {
     const sessionEmail = String(session?.email || '')
       .trim()
       .toLowerCase();
-    const customerData =
-      sessionUid && sessionEmail ? { ...parsedCustomer, email: sessionEmail } : parsedCustomer;
+    if (!sessionUid || !sessionEmail) {
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
+        message: 'Entre ou crie sua conta antes de finalizar a compra.',
+      });
+    }
+    const customerData = { ...parsedCustomer, email: sessionEmail };
+    const couponCustomerKey = sessionUid
+      ? `user:${sessionUid}`
+      : `email:${String(customerData.email).trim().toLowerCase()}`;
 
     if (!getSupabaseConfig()) {
       return fail(res, {
@@ -320,8 +330,18 @@ module.exports = async function createPaymentHandler(req, res) {
       const normalizedCode = couponHelpers.normalizeCode(couponCode);
       const coupon = await couponHelpers.loadCoupon(normalizedCode);
       const state = couponHelpers.validateCouponState(coupon, toReais(subtotalCents));
+      const audienceState = state.ok
+        ? await couponHelpers.validateCouponAudience(coupon, {
+            uid: sessionUid,
+            email: customerData.email,
+          })
+        : state;
 
-      if (state.ok) {
+      if (!audienceState.ok) {
+        return fail(res, { status: 422, code: audienceState.code, message: audienceState.message });
+      }
+
+      if (audienceState.ok) {
         const { eligible, restricted } = couponHelpers.buildEligibleSet(
           coupon.applies_to,
           validatedItems,
@@ -339,10 +359,18 @@ module.exports = async function createPaymentHandler(req, res) {
         // (release_stale_coupon_reservations, migration 20261008000000) — e é
         // recontado se o pagamento chegar tarde. Até lá erramos para o lado de
         // contar demais, nunca de conceder de graça.
+        if (restricted && eligibleSubtotalCents === 0) {
+          return fail(res, {
+            status: 422,
+            code: ERROR_CODES.COUPON_NOT_ELIGIBLE,
+            message: 'Os itens do carrinho não são elegíveis para este cupom.',
+          });
+        }
         if (!restricted || eligibleSubtotalCents > 0) {
-          const usageClaimed = await claimCouponUsage(coupon.id);
+          const usageClaimed = await claimCouponUsage(coupon.id, couponCustomerKey);
           if (usageClaimed) {
             claimedCouponId = coupon.id;
+            claimedCouponCustomerKey = couponCustomerKey;
             discountAmount = couponHelpers.computeDiscount(
               coupon,
               toReais(subtotalCents),
@@ -352,6 +380,12 @@ module.exports = async function createPaymentHandler(req, res) {
             if (restricted) {
               eligibleItemIds = new Set(eligible.map((item) => item.id));
             }
+          } else {
+            return fail(res, {
+              status: 422,
+              code: ERROR_CODES.COUPON_EXHAUSTED,
+              message: 'Este cupom atingiu o limite total ou o seu limite por cliente.',
+            });
           }
         }
       }
@@ -378,11 +412,13 @@ module.exports = async function createPaymentHandler(req, res) {
       customer_email: customerData.email,
       customer_cpf: customerData.cpf,
       customer_phone: customerData.phone,
+      customer_id: sessionUid,
       total_amount: totalAmount,
       status: 'pending',
       payment_status: 'pending',
       attribution_data: attributionData,
       coupon_code: appliedCouponCode,
+      coupon_customer_key: appliedCouponCode ? couponCustomerKey : null,
       discount_amount: discountAmountApplied,
     });
 
@@ -458,7 +494,7 @@ module.exports = async function createPaymentHandler(req, res) {
       if (createdOrder?.id) {
         await releaseCouponReservationForOrder(createdOrder.id);
       } else {
-        await releaseUnattachedCouponUsage(claimedCouponId);
+        await releaseUnattachedCouponUsage(claimedCouponId, claimedCouponCustomerKey);
       }
     }
     log.error('handler_failed', { reason: error?.message || String(error) });

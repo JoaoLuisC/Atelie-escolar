@@ -158,6 +158,31 @@ async function montarCarrinhos(email) {
   }));
 }
 
+async function montarPerfil(uid) {
+  return getTableRow('profiles', {
+    select: 'display_name,created_at,updated_at',
+    filters: [{ column: 'id', value: uid }],
+  });
+}
+
+async function montarDevolucoes(uid) {
+  const solicitacoes = await listTableRows('refund_requests', {
+    select: 'order_id,reason,phone,status,admin_response,created_at,updated_at',
+    filters: [{ column: 'customer_id', value: uid }],
+    orderBy: 'created_at',
+    ascending: false,
+  });
+  return solicitacoes.map((item) => ({
+    pedido: item.order_id,
+    motivo: item.reason || '',
+    telefone: item.phone || '',
+    situacao: item.status,
+    respostaDaLoja: item.admin_response || '',
+    criadaEm: item.created_at,
+    atualizadaEm: item.updated_at,
+  }));
+}
+
 module.exports = async function meExportDataHandler(req, res) {
   // Ordem da regra A3: método → rate limit → autenticação → try.
   if (guardMethod(req, res, ['GET'])) return;
@@ -197,10 +222,12 @@ module.exports = async function meExportDataHandler(req, res) {
       });
     }
 
-    const [pedidos, newsletter, carrinhos] = await Promise.all([
+    const [pedidos, newsletter, carrinhos, perfil, devolucoes] = await Promise.all([
       montarPedidos(identidade.uid),
       montarNewsletter(identidade.email),
       montarCarrinhos(identidade.email),
+      montarPerfil(identidade.uid),
+      montarDevolucoes(identidade.uid),
     ]);
 
     // Rastro de que o acesso aconteceu — sem PII no evento, só o fato.
@@ -217,10 +244,11 @@ module.exports = async function meExportDataHandler(req, res) {
       geradoEm: new Date().toISOString(),
       titular: {
         email: identidade.email,
-        nome: identidade.nome,
+        nome: perfil?.display_name || identidade.nome,
         contaCriadaEm: identidade.contaCriadaEm,
       },
       pedidos,
+      solicitacoesDeDevolucao: devolucoes,
       newsletter,
       carrinhosAbandonados: carrinhos,
       // O que fica de fora vai DENTRO do arquivo, não só no código: um export

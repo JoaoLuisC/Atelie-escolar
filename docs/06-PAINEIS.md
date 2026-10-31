@@ -141,15 +141,15 @@ segredos redigidos. Professor(a), inclusive a dona da loja, não tem 2º fator.
 
 ## Painel da loja (`/professores`, dona da loja)
 
-Doze abas em dez itens de menu: Dashboard · Produtos (Lista de produtos, Desempenho, Categorias) ·
-Pedidos · Cupons · Financeiro (Faturamento, Comparativo) · Vendas · Segmentos · Página da loja ·
-Minha conta.
+Treze abas em onze itens de menu: Dashboard · Produtos (Lista de produtos, Desempenho,
+Categorias) · Pedidos · Cupons · Financeiro (Faturamento, Comparativo) · Vendas · Segmentos ·
+Publicar nas redes · Página da loja · Minha conta.
 
 ### Só os dados dela
 
 O servidor recorta tudo pelo `seller_id` dela (`lib/seller-scope.js`):
 
-- **Pedidos:** só os que têm material dela; dentro deles, só os itens dela, e o valor é a parte
+- **Pedidos e solicitações de devolução:** só os que têm material dela; dentro deles, só os itens dela, e o valor é a parte
   dela: `total_amount × (itens dela ÷ todos os itens)` — o pedido inteiro, com o desconto do cupom,
   quando só tem material dela.
 - **Clientes:** só quem comprou dela.
@@ -179,10 +179,11 @@ Fonte: `GET /api/admin/dashboard` + `GET /api/admin/kpis?window=12`.
 
 ### Produtos → Lista de produtos (`produtos`)
 
-- **Descrição padrão de todos os produtos** (`ProductDefaultsCard`): título opcional + texto de até
-  4.000 caracteres, exibido na página de cada produto logo abaixo da descrição própria; vazio não
-  aparece. Setting `productDefaults`, servido ao público como `sharedDescription` em
-  `GET /api/product-details`.
+- **Textos das páginas de produtos** (`ProductDefaultsCard`): título opcional + texto comum de até
+  4.000 caracteres, exibido na página de cada produto junto da descrição própria; vazio não
+  aparece. Também escolhe a apresentação das duas descrições: ordem (produto primeiro ou texto
+  comum primeiro), alinhamento e tamanho do texto. Setting `productDefaults`, servido ao público
+  como `sharedDescription` e `descriptionLayout` em `GET /api/product-details`.
 - **Lista:** nome, selo "Destaque", categoria, preço, ativo/pausado. Busca por nome, filtro por
   categoria e por status.
 - **Ações:** Novo produto e Editar (`ProductWizard`, 4 passos: Básico → Mídia → Preço e tipo →
@@ -213,12 +214,27 @@ Fonte: `GET /api/admin/orders?status=`. A API também aceita `PUT` (status, clie
 `DELETE` (exclusão real), ambos auditados, sem botão na tela. Pedido tem valor histórico: não
 apagar.
 
+**Solicitações de devolução** (cartão na mesma aba). Uma linha por pedido do cliente: código,
+cliente, motivo, telefone (ou "Não informado"), data, um seletor de situação — Aberta, Em conversa,
+Devolução aceita, Não aceita, Resolvida — e a resposta que o cliente vê em `/downloads`. Salvar
+grava status e resposta e entra no audit log (`refund_request`). **Nada é estornado por aqui**: o
+reembolso aceito é feito no Mercado Pago, e o webhook marca o pedido como `refunded`. Fonte:
+`GET`/`PUT /api/admin/refund-requests`; a professora só vê e responde os pedidos dela (403 nos
+outros).
+
 ### Cupons (`cupons`)
 
-Cards com código, desconto (% ou valor fixo), status, validade, usos (`used_count`/`max_uses`) e
-pedido mínimo. Novo/Editar (`CouponWizard`) e Excluir. Fonte: `/api/admin/coupons`. A validação de
-uso acontece no checkout (`/api/validate-coupon` como prévia, `create-payment` de verdade). Cupom
-vale para o pedido inteiro.
+Cards com código, desconto (% ou valor fixo), status, validade, usos (`used_count`/`max_uses`),
+público e limite por cliente, e pedido mínimo. Novo/Editar (`CouponWizard`) e Excluir. Fonte:
+`/api/admin/coupons`. A validação de uso acontece no checkout (`/api/validate-coupon` como prévia,
+`create-payment` de verdade). Cupom vale para o pedido inteiro.
+
+O `CouponWizard` pede código, tipo e valor, **usos por cliente** (vazio = sem limite), **público**
+— Todos, Somente clientes com conta, Somente primeira compra, Clientes que já compraram, Pessoas
+específicas (lista de e-mails, até 500) ou Recompensa por número de compras (quantas compras
+liberam um uso) —, pedido mínimo, limite total e as datas de **início e fim no horário de
+Brasília** (início 00:00, fim 23:59:59; vazio = já vale / não expira). Regras do público em
+[05-FLUXOS](./05-FLUXOS.md), seção 3.
 
 ### Financeiro → Faturamento (`faturamento`)
 
@@ -269,19 +285,47 @@ e o número de assinantes por tag — `cliente_ativo` (compra em até 90 dias), 
 `categoria:<slug>`. Só contagens, sem lista de e-mails. Fonte: `GET /api/admin/segments`
 (`lib/customer-segmentation.js`).
 
+### Publicar nas redes (`redes`)
+
+`SocialPublishingTab`: escolhe a rede (Facebook, Instagram, Pinterest, TikTok ou WhatsApp), escreve
+a legenda (até 2.200 caracteres) e anexa a mídia. Rede sem as variáveis de ambiente aparece
+desconectada e o botão fica desligado (`GET /api/admin/social-publish` só diz quais estão
+configuradas, nunca o token).
+
+- **Facebook:** com imagem, vira foto da página; sem imagem, post de texto com link opcional.
+- **Instagram e Pinterest:** imagem obrigatória (até 8 MB), enviada antes ao Storage público
+  (`product_images`); no Pinterest, título (padrão: a legenda) e link são opcionais.
+- **TikTok:** vídeo de até 64 MB e privacidade; o servidor consulta `creator_info` e só aceita a
+  privacidade que a conta permite (padrão "Somente eu"). O navegador envia o vídeo direto para o
+  TikTok.
+- **WhatsApp:** mensagem de texto para um número com DDI (8 a 15 dígitos), pela Cloud API.
+
+Erros em linguagem simples: entrada inválida 400, token vencido/sem permissão ou mídia recusada
+422, limite da rede 429, rede fora do ar 502. Limite de 20 publicações por hora. Cada publicação
+entra no audit log sem a legenda (só rede, id externo e se tinha mídia/link). Variáveis em
+[03-SETUP-E-DEPLOY](./03-SETUP-E-DEPLOY.md), §2.2.
+
 ### Página da loja (`vitrine`)
 
 Tudo o que aparece na home pública, em dois cartões.
 
-**Textos e imagens da página** (`HomeContentEditor`, setting `homeContent`). Formulário à
-esquerda e, ao lado, a prévia ao vivo (`HomePreview`): a própria `HomePage` renderizada com o
-rascunho, numa tela de 1280 px reduzida e sem cliques (`inert`), com o selo "Alterações ainda não
-salvas" ou "Igual ao que está no site".
+**Textos e imagens da página** (`HomeContentEditor`, setting `homeContent`). Seções que abrem e
+fecham, com dois modos: "Editar" e "Expandir visualização" — a prévia (`HomePreview`): a própria
+`HomePage` renderizada com o rascunho, numa tela de 1280 px reduzida e sem cliques (`inert`), com o
+selo "Alterações ainda não salvas" ou "Igual ao que está no site". Nada é publicado até salvar.
+
+- **Barra de navegação:** título e tamanho (pequeno, médio, grande) — vale em todas as páginas.
+- **Rodapé:** nome, descrição, títulos das seções de navegação e de contato, links `https://` de
+  Instagram, Facebook, Pinterest e WhatsApp e o texto do WhatsApp. O rodapé sempre traz o link
+  "Licença de uso" (`/termos#licenca`). O `Shell.jsx` lê esses dados de `GET /api/home-content`
+  (`src/services/store-settings.js`).
 
 - **Ordem das partes da página:** ligar, desligar e reordenar os blocos.
 - **Banner principal (topo da página):** título (trecho entre `*asteriscos*` sai colorido),
   subtítulo, texto e link do botão, imagem opcional (até 1 MB, exibida inteira) e texto
-  alternativo.
+  alternativo; posição da imagem (esquerda/direita), animação (nenhuma, surgir, deslizar), fundo
+  (padrão, cor sólida, gradiente linear ou radial, com duas cores), tamanho do banner, alinhamento
+  do texto e ícones opcionais com tamanho.
 - **Faixa de palavras que desliza**, **Vitrine de produtos** (título e botão da área de
   produtos), **Passo a passo da compra**, **Depoimentos, números e redes sociais** (até 6
   depoimentos, 4 números, Instagram e TikTok) e **Como a loja aparece no Google** (título e
@@ -328,7 +372,7 @@ nem relatórios da loja.
 - **Seus dados:** nome editável (até 80 caracteres); e-mail, tipo de conta ("Professor(a) · dona
   da loja", "Professor(a)" ou "Administração da plataforma"), forma de login e data de criação.
 - **Conta com senha:** "Trocar senha" (senha atual + nova duas vezes; 8+ caracteres com maiúscula,
-  minúscula e número) com o link "Esqueci a senha atual (receber link por e-mail)", e "Trocar
+  minúscula, número e caractere especial) com o link "Esqueci a senha atual (receber link por e-mail)", e "Trocar
   e-mail" (e-mail novo + senha atual; a troca só vale depois do clique no link enviado ao endereço
   novo).
 - **Conta Google:** "Senha e e-mail" com "Enviar link para criar senha"; o e-mail é o da conta

@@ -40,23 +40,21 @@ const log = createLogger('admin-upload-url');
 //      products. É a rede que pega o que passou pelas duas anteriores.
 // ════════════════════════════════════════════════════════════════════
 
-// `enforcePrivate` só em product_files: é conteúdo PAGO, cujo único caminho
-// legítimo de entrega é o signed URL de handlers/download.js (que funciona com o
-// bucket privado). Bucket público ali torna o arquivo alcançável por adivinhação
-// de path, contornando o gate de pagamento — por isso este é o único caso em que
-// mexemos na visibilidade. Em product_images/product_videos a visibilidade real
-// é apenas conferida e reportada: o front serve essas mídias direto pela URL
-// (<img>/<video>), então virar o flag aqui quebraria a vitrine.
+// product_files é conteúdo PAGO e permanece privado. Imagens e vídeos são
+// mídia da vitrine: o navegador precisa carregá-los sem sessão, então os dois
+// buckets públicos convergem para `public: true`.
 const BUCKETS = {
   image: {
     name: 'product_images',
     isPublic: true,
+    enforcePublic: true,
     maxSize: 10 * 1024 * 1024,
     mimes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif'],
   },
   video: {
     name: 'product_videos',
-    isPublic: false,
+    isPublic: true,
+    enforcePublic: true,
     maxSize: 50 * 1024 * 1024,
     mimes: ['video/mp4', 'video/webm', 'video/quicktime'],
   },
@@ -192,6 +190,12 @@ async function resolveBucketVisibility(bucket, current) {
       properties: { bucket: bucket.name, action: 'forced_private' },
     });
     return false;
+  }
+
+  // Imagens e vídeos da vitrine são conteúdo público: a página do produto
+  // precisa conseguir carregá-los em <img>/<video> sem sessão nem URL efêmera.
+  if (bucket.enforcePublic && !currentPublic) {
+    return true;
   }
 
   if (currentPublic !== bucket.isPublic) {

@@ -44,6 +44,19 @@ describe('CartProvider', () => {
     expect(localStorage.getItem('cart')).toBe('[]');
   });
 
+  it('mantém a primeira imagem ao adicionar pela página de detalhes', () => {
+    const ctx = montar();
+    act(() => {
+      ctx.atual.addToCart({
+        id: 'p1',
+        name: 'Banner',
+        price: 9.9,
+        images: ['https://example.com/imagem.jpg'],
+      });
+    });
+    expect(ctx.atual.cart[0].image).toBe('https://example.com/imagem.jpg');
+  });
+
   it('storage sem cota: adicionar não derruba a árvore (LOJA-01)', () => {
     const ctx = montar();
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {

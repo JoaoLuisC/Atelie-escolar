@@ -15,10 +15,10 @@ const { parse } = require('../../validation');
 const { bigintId, couponCreateSchema } = require('../../validation/admin.schemas');
 
 const SELECT_FIELDS =
-  'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,used_count,min_order_amount,applies_to,active,created_at';
+  'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,max_uses_per_customer,used_count,min_order_amount,applies_to,audience,eligible_emails,purchases_required,active,created_at';
 
 const EDITABLE_FIELDS =
-  'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,min_order_amount,applies_to,active';
+  'id,code,discount_type,discount_value,valid_from,valid_until,max_uses,max_uses_per_customer,min_order_amount,applies_to,audience,eligible_emails,purchases_required,active';
 
 /** Erro de validação no formato que a factory despacha por `fail()`. */
 function invalid(message) {
@@ -54,7 +54,19 @@ function mergeCouponInput(body = {}, existing = {}) {
     validFrom: pick('validFrom', body.validFrom, existing.valid_from ?? null),
     validUntil: pick('validUntil', body.validUntil, existing.valid_until ?? null),
     maxUses: pick('maxUses', body.maxUses, existing.max_uses ?? null),
+    maxUsesPerCustomer: pick(
+      'maxUsesPerCustomer',
+      body.maxUsesPerCustomer,
+      existing.max_uses_per_customer ?? null,
+    ),
     minOrderAmount: pick('minOrderAmount', body.minOrderAmount, existing.min_order_amount ?? null),
+    audience: body.audience ?? existing.audience ?? 'all',
+    eligibleEmails: pick('eligibleEmails', body.eligibleEmails, existing.eligible_emails ?? []),
+    purchasesRequired: pick(
+      'purchasesRequired',
+      body.purchasesRequired,
+      existing.purchases_required ?? null,
+    ),
     active: Object.hasOwn(body, 'active') ? Boolean(body.active) : existing.active !== false,
   };
 }
@@ -68,8 +80,16 @@ function toCouponRow(data, existing = {}) {
     valid_from: data.validFrom ?? null,
     valid_until: data.validUntil ?? null,
     max_uses: data.maxUses != null ? Math.max(0, Math.floor(data.maxUses)) : null,
+    max_uses_per_customer:
+      data.maxUsesPerCustomer != null ? Math.max(1, Math.floor(data.maxUsesPerCustomer)) : null,
     min_order_amount: data.minOrderAmount != null ? Math.max(0, data.minOrderAmount) : null,
     active: data.active !== false,
+    audience: data.audience || 'all',
+    eligible_emails: data.audience === 'emails' ? [...new Set(data.eligibleEmails || [])] : [],
+    purchases_required:
+      data.audience === 'purchase_milestone'
+        ? Math.max(1, Math.floor(data.purchasesRequired))
+        : null,
     applies_to: existing.applies_to ?? {},
   };
 }
@@ -83,9 +103,13 @@ function toCouponView(row) {
     validFrom: row.valid_from ?? null,
     validUntil: row.valid_until ?? null,
     maxUses: row.max_uses ?? null,
+    maxUsesPerCustomer: row.max_uses_per_customer ?? null,
     usedCount: Number(row.used_count || 0),
     minOrderAmount: row.min_order_amount ?? null,
     appliesTo: row.applies_to || {},
+    audience: row.audience || 'all',
+    eligibleEmails: row.eligible_emails || [],
+    purchasesRequired: row.purchases_required ?? null,
     active: row.active !== false,
     createdAt: row.created_at,
   };

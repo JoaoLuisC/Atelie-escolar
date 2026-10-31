@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="pt-BR">
+  <body>
+    <h1>Redefina sua senha</h1>
+    <p>Recebemos uma solicitação para alterar a senha da sua conta no Ateliê da Escola.</p>
+    <!-- O link abre primeiro a loja e só então troca o token_hash por sessão.
+         Isso evita que scanners de segurança do e-mail consumam o link de uso
+         único antes do clique da pessoa. O caminho vem do SiteURL (sempre
+         válido); o RedirectTo pedido vai em `next` e a página lê dali o
+         destino permitido (checkout, downloads ou painel). -->
+    <p><a href="{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next={{ .RedirectTo }}">Escolher uma nova senha</a></p>
+    <p>Se você não pediu a alteração, ignore esta mensagem. Sua senha atual não será alterada.</p>
+  </body>
+</html>

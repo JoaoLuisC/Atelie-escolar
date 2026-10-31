@@ -62,7 +62,7 @@ describe('CustomerAuthPage', () => {
 
     fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Cliente QA' } });
     fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'qa@exemplo.com' } });
-    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'Abcdefg1' } });
+    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'Abcdefg1!' } });
     fireEvent.click(screen.getByRole('button', { name: 'Criar conta' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('e-mail de confirmação');

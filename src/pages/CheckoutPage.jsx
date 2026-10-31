@@ -83,7 +83,7 @@ function readPaymentReturn(search) {
 export function CheckoutPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { customerSession, loginCustomerGoogle } = useAuth();
+  const { customerSession, loginCustomerGoogle, registerCustomer } = useAuth();
   const {
     cart,
     total,
@@ -111,9 +111,6 @@ export function CheckoutPage() {
   // link visível "Abrir pagamento" (fallback quando o popup é bloqueado no
   // iOS/Safari e o window.open não abre).
   const [paymentUrl, setPaymentUrl] = useState('');
-  // E-mail informado por convidado no checkout. Guardado localmente para não
-  // forjar uma sessão de autenticação (setCustomerSession) para quem não logou.
-  const [guestEmail, setGuestEmail] = useState('');
   const {
     formState: { errors },
     handleSubmit,
@@ -287,9 +284,7 @@ export function CheckoutPage() {
           setStatusTone('success');
           pushToast('Pagamento aprovado.', 'success');
           setStatus('Tudo certo! Pagamento aprovado. Levando você para a área de downloads…');
-          navigate(
-            `/downloads?order=${encodeURIComponent(pendingOrderId)}&email=${encodeURIComponent(pendingOrderEmail)}&success=1`,
-          );
+          navigate(`/downloads?order=${encodeURIComponent(pendingOrderId)}&success=1`);
           return;
         }
 
@@ -375,6 +370,21 @@ export function CheckoutPage() {
     const itemsToCharge = checked.ok ? checked.cart : cart;
 
     try {
+      if (!customerSession?.email) {
+        const registration = await registerCustomer({ name, email, password: formData.password });
+        setValue('password', '');
+        if (registration?.verificationRequired) {
+          setProcessing(false);
+          setStatusTone('info');
+          setStatus(
+            'Conta criada. Confirme seu e-mail e entre na conta para continuar o pagamento.',
+          );
+          return;
+        }
+        if (!registration?.user?.email) {
+          throw new Error('Não foi possível iniciar sua sessão. Entre na conta para continuar.');
+        }
+      }
       const payload = {
         items: itemsToCharge.map((item) => ({ productId: item.id, quantity: item.quantity || 1 })),
         customer: { name, email },
@@ -382,19 +392,15 @@ export function CheckoutPage() {
         couponCode: activeCoupon?.code || null,
       };
 
-      // Convidado: guardamos o e-mail apenas localmente. NÃO forjamos uma
-      // sessão de autenticação (setCustomerSession) para quem não fez login.
-      if (email && customerSession?.email !== email) {
-        setGuestEmail(email);
-      }
-
       // O serviço já valida o envelope e a presença da URL de pagamento — sem
       // isso, `undefined` viajava até o `window.open` e o navegador abria uma
       // aba em branco, sem nenhum erro na tela.
       const { orderId: novoPedido, paymentUrl: nextPaymentUrl } = await createPayment(payload);
 
+      // Só o código: o e-mail do pedido é o da conta (a sessão o traz de volta
+      // em /downloads), então não precisa ficar guardado no navegador.
       localStorage.setItem('lastOrderId', novoPedido);
-      localStorage.setItem('lastOrderEmail', email);
+      localStorage.removeItem('lastOrderEmail');
 
       // Guarda a URL para o botão de fallback e tenta abrir o popup. Em iOS/
       // Safari o popup pode ser bloqueado — por isso o link fica sempre visível.
@@ -439,9 +445,6 @@ export function CheckoutPage() {
   const returnOrderId =
     paymentReturn.orderId ||
     (paymentReturn.status ? globalThis.localStorage?.getItem('lastOrderId') || '' : '');
-  const returnOrderEmail = paymentReturn.status
-    ? globalThis.localStorage?.getItem('lastOrderEmail') || accountEmail
-    : '';
 
   async function onGoogleSignIn() {
     setGoogleLoading(true);
@@ -592,9 +595,7 @@ export function CheckoutPage() {
                 que aprovar, os arquivos ficam liberados em Meus produtos.
                 {returnOrderId ? (
                   <Link
-                    to={`${ROUTES.downloads}?order=${encodeURIComponent(returnOrderId)}${
-                      returnOrderEmail ? `&email=${encodeURIComponent(returnOrderEmail)}` : ''
-                    }`}
+                    to={`${ROUTES.downloads}?order=${encodeURIComponent(returnOrderId)}`}
                     className="mt-2 flex w-fit items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700"
                   >
                     Acompanhar pedido <i className="bi bi-arrow-right" aria-hidden="true" />
@@ -620,15 +621,9 @@ export function CheckoutPage() {
             ) : (
               <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                 <p className="mb-2 text-xs text-slate-600">
-                  Acelere preenchendo seus dados pela sua conta Google — ou continue como convidado
-                  preenchendo nome e e-mail abaixo.
+                  Entre com Google ou crie sua conta com e-mail e senha abaixo. Sua conta permite
+                  acessar os produtos após a compra.
                 </p>
-                {guestEmail ? (
-                  <p className="mb-2 text-xs text-slate-600">
-                    Comprando como convidado:{' '}
-                    <strong className="text-slate-800">{guestEmail}</strong>
-                  </p>
-                ) : null}
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -719,6 +714,41 @@ export function CheckoutPage() {
                   </p>
                 ) : null}
               </div>
+
+              {!customerSession?.email ? (
+                <div>
+                  <label
+                    htmlFor="checkout-password"
+                    className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
+                    Crie uma senha
+                  </label>
+                  <input
+                    id="checkout-password"
+                    type="password"
+                    autoComplete="new-password"
+                    disabled={processing}
+                    aria-invalid={Boolean(errors.password)}
+                    aria-describedby="checkout-password-help"
+                    className={`${inputClass} ${errors.password ? errorInputClass : ''}`}
+                    {...register('password', {
+                      required: 'Crie uma senha para sua conta.',
+                      validate: (value) =>
+                        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).{8,}$/.test(value) ||
+                        'Use ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial.',
+                    })}
+                  />
+                  <p id="checkout-password-help" className="mt-1 text-xs text-slate-500">
+                    Use ao menos 8 caracteres, com letra maiúscula, minúscula, número e caractere
+                    especial.
+                  </p>
+                  {errors.password ? (
+                    <p role="alert" className="mt-1 text-xs text-rose-700">
+                      {errors.password.message}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="mt-2 rounded-2xl bg-gradient-to-br from-brand-50 to-slate-50 p-4">
                 <button

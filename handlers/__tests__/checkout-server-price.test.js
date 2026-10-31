@@ -234,10 +234,11 @@ describe('create-payment — logado, o pedido é da conta (LOJA-40)', () => {
     expect(createPaymentPreference.mock.calls[0][2]).toBe('conta@escola.com');
   });
 
-  it('convidado (sem sessão) segue com o e-mail do formulário', async () => {
+  it('convidado (sem sessão) precisa criar ou acessar a conta', async () => {
     const { store, res } = await criarPedido({});
 
-    expect(res.statusCode).toBe(200);
-    expect(store.rows('orders')[0].customer_email).toBe('outro@exemplo.com');
+    expect(res.statusCode).toBe(401);
+    expect(res.body.error.code).toBe('CUSTOMER_SESSION_INVALID');
+    expect(store.rows('orders')).toHaveLength(0);
   });
 });

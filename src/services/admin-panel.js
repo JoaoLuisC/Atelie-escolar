@@ -105,6 +105,18 @@ export async function fetchAdminOrders(status = '') {
   return request(`/admin/orders${query}`);
 }
 
+export async function fetchRefundRequests() {
+  return request('/admin/refund-requests');
+}
+
+export async function updateRefundRequest(payload) {
+  return request('/admin/refund-requests', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function assignAdminProductSeller(productId, sellerId) {
   return request('/admin/product-seller', {
     method: 'PUT',
@@ -273,4 +285,16 @@ export async function requestAiAssist(task, input) {
     body: JSON.stringify({ task, input }),
   });
   return data.suggestion;
+}
+
+export async function fetchSocialConnections() {
+  return request('/admin/social-publish');
+}
+
+export async function publishSocialContent(payload) {
+  return request('/admin/social-publish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }

@@ -66,6 +66,12 @@ const NAV_SECTIONS = [
   },
   {
     type: 'item',
+    id: 'redes',
+    label: 'Publicar nas redes',
+    icon: 'share-fill',
+  },
+  {
+    type: 'item',
     id: 'usuarios',
     label: 'Usuários',
     icon: 'people-fill',

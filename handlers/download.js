@@ -7,6 +7,7 @@ const { extractClientIp, recordSecurityEvent } = require('../lib/security-logger
 const { enforceRateLimit, RATE_LIMITS } = require('../lib/rate-limit');
 const { ERROR_CODES, fail, methodNotAllowed } = require('../lib/http');
 const { createLogger } = require('../lib/logger');
+const { getCustomerSessionFromRequest } = require('../lib/customer-session');
 
 const log = createLogger('download');
 
@@ -92,6 +93,31 @@ module.exports = async function downloadHandler(req, res) {
         code: ERROR_CODES.DOWNLOAD_TOKEN_EXPIRED,
         message: 'Token expirado',
       });
+    }
+
+    // O token é credencial de portador (o link do e-mail abre sem login). Mas
+    // quem ESTÁ logado com outra conta não baixa o pedido alheio: token
+    // repassado ou vazado não vira acesso para um terceiro com conta na loja.
+    const session = getCustomerSessionFromRequest(req);
+    if (session?.uid) {
+      const order = await getTableRow('orders', {
+        select: 'id,customer_id',
+        filters: [{ column: 'id', value: tokenRecord.order_id }],
+      });
+      if (order?.customer_id && String(order.customer_id) !== String(session.uid)) {
+        await recordSecurityEvent({
+          eventName: 'download_token_other_customer',
+          severity: 'warn',
+          ip: extractClientIp(req),
+          userAgent: req.headers?.['user-agent'],
+          properties: { order_id: tokenRecord.order_id },
+        });
+        return fail(res, {
+          status: 403,
+          code: ERROR_CODES.FORBIDDEN,
+          message: 'Este download pertence a outra conta. Entre com a conta que fez a compra.',
+        });
+      }
     }
 
     const product = await getTableRow('products', {

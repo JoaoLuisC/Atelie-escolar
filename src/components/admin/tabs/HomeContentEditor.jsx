@@ -101,6 +101,7 @@ export function HomeContentEditor() {
   const [content, setContent] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
   const [uploading, setUploading] = useState(0);
   // O que está salvo no site, para a prévia dizer se há alteração pendente.
   const [savedSnapshot, setSavedSnapshot] = useState('');
@@ -235,6 +236,10 @@ export function HomeContentEditor() {
     ctaLink: linkProblem(content.hero.ctaLink),
     instagramUrl: linkProblem(content.socialProof.instagramUrl, { allowInternal: false }),
     tiktokUrl: linkProblem(content.socialProof.tiktokUrl, { allowInternal: false }),
+    footerInstagram: linkProblem(content.footer.instagramUrl, { allowInternal: false }),
+    footerFacebook: linkProblem(content.footer.facebookUrl, { allowInternal: false }),
+    footerPinterest: linkProblem(content.footer.pinterestUrl, { allowInternal: false }),
+    footerWhatsapp: linkProblem(content.footer.whatsappUrl, { allowInternal: false }),
   };
   const hasErrors = Object.values(errors).some(Boolean);
 
@@ -287,516 +292,717 @@ export function HomeContentEditor() {
   const dirty = JSON.stringify(content) !== savedSnapshot;
 
   return (
-    <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
-      <Card
-        title="Textos e imagens da página"
-        subtitle="Edite à esquerda e veja o resultado na prévia ao lado. Nada muda no site até você clicar em Salvar."
-        action={
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-violet-700 hover:underline"
-          >
-            Ver a página inicial <i className="bi bi-box-arrow-up-right" />
-          </a>
-        }
-      >
-        <div className="space-y-3">
-          <AiAssistPanel
-            title="Sugerir textos da página com IA"
-            description="A IA lê os nomes e categorias dos seus materiais e sugere o título do banner, a frase de apoio e os títulos das partes da página. Você vê na prévia antes de salvar."
-            buttonLabel="Sugerir textos"
-            onRequest={() =>
-              requestAiAssist('homeCopy', {
-                currentText: [
-                  content.hero.title,
-                  content.hero.subtitle,
-                  content.catalog.title,
-                  content.howItWorks.title,
-                ]
-                  .filter(Boolean)
-                  .join(' | '),
-              })
-            }
-            renderSuggestion={(suggestion) => (
-              <>
-                <dl className="space-y-2">
-                  {[
-                    ['Banner — título', suggestion.bannerTitulo],
-                    ['Banner — frase de apoio', suggestion.bannerSubtitulo],
-                    ['Vitrine — título', suggestion.vitrineTitulo],
-                    ['Passo a passo — título', suggestion.passoAPassoTitulo],
-                    ['Passo a passo — frase', suggestion.passoAPassoSubtitulo],
-                  ]
-                    .filter(([, value]) => value)
-                    .map(([label, value]) => (
-                      <div key={label}>
-                        <dt className="text-xs font-semibold text-slate-500">{label}</dt>
-                        <dd>{value}</dd>
-                      </div>
-                    ))}
-                </dl>
-                <Button size="sm" icon="check2" onClick={() => applyAiCopy(suggestion)}>
-                  Usar estes textos (aparecem na prévia)
-                </Button>
-              </>
-            )}
-          />
-          <Section
-            title="Ordem das partes da página"
-            description="Escolha o que aparece e em que ordem, de cima para baixo."
-          >
-            <ol className="space-y-2">
-              {content.blocks.map((block, index) => (
-                <li
-                  key={block.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
-                >
-                  <label className="flex items-center gap-2 text-sm text-slate-800">
-                    <input
-                      type="checkbox"
-                      checked={block.enabled}
-                      onChange={() => toggleBlock(index)}
-                      className="h-4 w-4 rounded border-slate-300 text-violet-600"
-                    />
-                    {blockLabel(block.id)}
-                    {!block.enabled ? (
-                      <span className="text-xs text-slate-400">(escondido)</span>
-                    ) : null}
-                  </label>
-                  <span className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon="arrow-up"
-                      aria-label={`Subir ${blockLabel(block.id)}`}
-                      disabled={index === 0}
-                      onClick={() => moveBlock(index, -1)}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon="arrow-down"
-                      aria-label={`Descer ${blockLabel(block.id)}`}
-                      disabled={index === content.blocks.length - 1}
-                      onClick={() => moveBlock(index, 1)}
-                    />
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </Section>
-
-          <Section
-            title={blockLabel('hero')}
-            description="A primeira coisa que o cliente vê: título grande, botão e imagem."
-          >
-            <Field
-              label="Título"
-              value={content.hero.title}
-              onChange={(v) => update('hero', 'title', v)}
-              help={HIGHLIGHT_HELP}
-              maxLength={160}
-            />
-            <Field
-              label="Subtítulo (opcional)"
-              value={content.hero.subtitle}
-              onChange={(v) => update('hero', 'subtitle', v)}
-              multiline
-              maxLength={600}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Modo de edição da página">
+        <Button
+          variant={!previewMode ? 'primary' : 'secondary'}
+          onClick={() => setPreviewMode(false)}
+        >
+          Editar
+        </Button>
+        <Button
+          variant={previewMode ? 'primary' : 'secondary'}
+          icon="arrows-fullscreen"
+          onClick={() => setPreviewMode(true)}
+        >
+          Expandir visualização
+        </Button>
+      </div>
+      {!previewMode ? (
+        <Card
+          title="Textos e imagens da página"
+          subtitle="Abra uma seção para editar e use Expandir visualização para conferir. As mudanças só são publicadas ao salvar."
+          action={
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-violet-700 hover:underline"
+            >
+              Ver a página inicial <i className="bi bi-box-arrow-up-right" />
+            </a>
+          }
+        >
+          <div className="space-y-3">
+            <Section title="Barra de navegação" description="Nome e altura do cabeçalho da loja.">
               <Field
-                label="Texto do botão"
-                value={content.hero.ctaLabel}
-                onChange={(v) => update('hero', 'ctaLabel', v)}
+                label="Título da navegação"
+                value={content.navigation.title}
+                onChange={(v) => update('navigation', 'title', v)}
+                maxLength={80}
+              />
+              <label className="block text-sm font-medium text-slate-700">
+                Tamanho da barra
+                <select
+                  className={inputClass}
+                  value={content.navigation.size}
+                  onChange={(event) => update('navigation', 'size', event.target.value)}
+                >
+                  <option value="small">Pequeno</option>
+                  <option value="medium">Médio</option>
+                  <option value="large">Grande</option>
+                </select>
+              </label>
+            </Section>
+            <Section
+              title="Rodapé"
+              description="Edite os textos e os endereços de contato e redes sociais."
+            >
+              <Field
+                label="Nome no rodapé"
+                value={content.footer.title}
+                onChange={(v) => update('footer', 'title', v)}
+                maxLength={80}
+              />
+              <Field
+                label="Descrição do rodapé"
+                value={content.footer.description}
+                onChange={(v) => update('footer', 'description', v)}
+                maxLength={600}
+                multiline
+              />
+              <Field
+                label="Título da seção de navegação"
+                value={content.footer.navigationTitle}
+                onChange={(v) => update('footer', 'navigationTitle', v)}
+                maxLength={80}
+              />
+              <Field
+                label="Título da seção de contato"
+                value={content.footer.contactTitle}
+                onChange={(v) => update('footer', 'contactTitle', v)}
+                maxLength={80}
+              />
+              {[
+                ['Instagram do rodapé', 'instagramUrl', errors.footerInstagram],
+                ['Facebook do rodapé', 'facebookUrl', errors.footerFacebook],
+                ['Pinterest do rodapé', 'pinterestUrl', errors.footerPinterest],
+                ['Link do WhatsApp', 'whatsappUrl', errors.footerWhatsapp],
+              ].map(([label, field, error]) => (
+                <Field
+                  key={field}
+                  label={label}
+                  value={content.footer[field]}
+                  onChange={(v) => update('footer', field, v)}
+                  error={error}
+                  help="Use um endereço https:// ou deixe vazio para ocultar."
+                  maxLength={500}
+                />
+              ))}
+              <Field
+                label="Texto do WhatsApp"
+                value={content.footer.whatsappLabel}
+                onChange={(v) => update('footer', 'whatsappLabel', v)}
+                maxLength={80}
+              />
+              <p className="text-xs text-slate-500">
+                Esses elementos aparecem na loja publicada; a prévia abaixo mostra somente o
+                conteúdo da página inicial.
+              </p>
+            </Section>
+            <AiAssistPanel
+              title="Sugerir textos da página com IA"
+              description="A IA lê os nomes e categorias dos seus materiais e sugere o título do banner, a frase de apoio e os títulos das partes da página. Você vê na prévia antes de salvar."
+              buttonLabel="Sugerir textos"
+              onRequest={() =>
+                requestAiAssist('homeCopy', {
+                  currentText: [
+                    content.hero.title,
+                    content.hero.subtitle,
+                    content.catalog.title,
+                    content.howItWorks.title,
+                  ]
+                    .filter(Boolean)
+                    .join(' | '),
+                })
+              }
+              renderSuggestion={(suggestion) => (
+                <>
+                  <dl className="space-y-2">
+                    {[
+                      ['Banner — título', suggestion.bannerTitulo],
+                      ['Banner — frase de apoio', suggestion.bannerSubtitulo],
+                      ['Vitrine — título', suggestion.vitrineTitulo],
+                      ['Passo a passo — título', suggestion.passoAPassoTitulo],
+                      ['Passo a passo — frase', suggestion.passoAPassoSubtitulo],
+                    ]
+                      .filter(([, value]) => value)
+                      .map(([label, value]) => (
+                        <div key={label}>
+                          <dt className="text-xs font-semibold text-slate-500">{label}</dt>
+                          <dd>{value}</dd>
+                        </div>
+                      ))}
+                  </dl>
+                  <Button size="sm" icon="check2" onClick={() => applyAiCopy(suggestion)}>
+                    Usar estes textos (aparecem na prévia)
+                  </Button>
+                </>
+              )}
+            />
+            <Section
+              title="Ordem das partes da página"
+              description="Escolha o que aparece e em que ordem, de cima para baixo."
+            >
+              <ol className="space-y-2">
+                {content.blocks.map((block, index) => (
+                  <li
+                    key={block.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                  >
+                    <label className="flex items-center gap-2 text-sm text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={block.enabled}
+                        onChange={() => toggleBlock(index)}
+                        className="h-4 w-4 rounded border-slate-300 text-violet-600"
+                      />
+                      {blockLabel(block.id)}
+                      {!block.enabled ? (
+                        <span className="text-xs text-slate-400">(escondido)</span>
+                      ) : null}
+                    </label>
+                    <span className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="arrow-up"
+                        aria-label={`Subir ${blockLabel(block.id)}`}
+                        disabled={index === 0}
+                        onClick={() => moveBlock(index, -1)}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="arrow-down"
+                        aria-label={`Descer ${blockLabel(block.id)}`}
+                        disabled={index === content.blocks.length - 1}
+                        onClick={() => moveBlock(index, 1)}
+                      />
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </Section>
+
+            <Section
+              title={blockLabel('hero')}
+              description="A primeira coisa que o cliente vê: título grande, botão e imagem."
+            >
+              <Field
+                label="Título"
+                value={content.hero.title}
+                onChange={(v) => update('hero', 'title', v)}
+                help={HIGHLIGHT_HELP}
+                maxLength={160}
+              />
+              <Field
+                label="Subtítulo (opcional)"
+                value={content.hero.subtitle}
+                onChange={(v) => update('hero', 'subtitle', v)}
+                multiline
+                maxLength={600}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="Texto do botão"
+                  value={content.hero.ctaLabel}
+                  onChange={(v) => update('hero', 'ctaLabel', v)}
+                  help="Deixe vazio para esconder o botão."
+                  maxLength={80}
+                />
+                <Field
+                  label="Link do botão"
+                  value={content.hero.ctaLink}
+                  onChange={(v) => update('hero', 'ctaLink', v)}
+                  error={errors.ctaLink}
+                  help="Ex.: /produtos"
+                  maxLength={500}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  [
+                    'Posição da imagem',
+                    'imagePosition',
+                    [
+                      ['right', 'À direita'],
+                      ['left', 'À esquerda'],
+                    ],
+                  ],
+                  [
+                    'Animação da imagem',
+                    'imageAnimation',
+                    [
+                      ['none', 'Sem animação'],
+                      ['fade', 'Aparecer'],
+                      ['slide', 'Deslizar'],
+                    ],
+                  ],
+                  [
+                    'Tamanho do banner',
+                    'bannerSize',
+                    [
+                      ['small', 'Pequeno'],
+                      ['medium', 'Médio'],
+                      ['large', 'Grande'],
+                    ],
+                  ],
+                  [
+                    'Alinhamento do texto',
+                    'textAlign',
+                    [
+                      ['left', 'À esquerda'],
+                      ['center', 'Centralizado'],
+                      ['right', 'À direita'],
+                    ],
+                  ],
+                  [
+                    'Fundo do banner',
+                    'backgroundStyle',
+                    [
+                      ['default', 'Padrão'],
+                      ['solid', 'Cor sólida'],
+                      ['linear', 'Degradê linear'],
+                      ['radial', 'Degradê radial'],
+                    ],
+                  ],
+                ].map(([label, field, options]) => (
+                  <label key={field} className="block text-sm font-medium text-slate-700">
+                    {label}
+                    <select
+                      className={inputClass}
+                      value={content.hero[field]}
+                      onChange={(event) => update('hero', field, event.target.value)}
+                    >
+                      {options.map(([value, text]) => (
+                        <option key={value} value={value}>
+                          {text}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+                {content.hero.backgroundStyle !== 'default' &&
+                  ['backgroundColor', 'backgroundColorEnd'].map((field, index) => (
+                    <label key={field} className="block text-sm font-medium text-slate-700">
+                      {index ? 'Segunda cor do degradê' : 'Cor principal'}
+                      <input
+                        type="color"
+                        className="mt-1 block h-10 w-full"
+                        value={content.hero[field]}
+                        onChange={(event) => update('hero', field, event.target.value)}
+                      />
+                    </label>
+                  ))}
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={content.hero.showIcons}
+                    onChange={(event) => update('hero', 'showIcons', event.target.checked)}
+                  />
+                  Mostrar ícones decorativos
+                </label>
+              </div>
+              {content.hero.showIcons && (
+                <>
+                  <Field
+                    label="Ícones do banner"
+                    value={content.hero.icons}
+                    onChange={(v) => update('hero', 'icons', v)}
+                    help="Separe os emojis por vírgula, por exemplo: 📚, ✏️, ⭐. Deixe vazio para usar os ícones padrão."
+                    maxLength={100}
+                  />
+                  <label className="block text-sm font-medium text-slate-700">
+                    Tamanho dos ícones
+                    <select
+                      className={inputClass}
+                      value={content.hero.iconSize}
+                      onChange={(event) => update('hero', 'iconSize', event.target.value)}
+                    >
+                      <option value="small">Pequeno</option>
+                      <option value="medium">Médio</option>
+                      <option value="large">Grande</option>
+                    </select>
+                  </label>
+                </>
+              )}
+              <div className="rounded-lg border border-dashed border-slate-300 p-3">
+                <p className="text-sm font-medium text-slate-700">Imagem do topo (opcional)</p>
+                <p className="text-xs text-slate-500">
+                  Aparece ao lado do título, inteira, sem cortes. JPG, PNG ou WebP até 1 MB.
+                </p>
+                {content.hero.imageUrl ? (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img
+                      src={content.hero.imageUrl}
+                      alt="Prévia da imagem do topo"
+                      className="h-24 w-36 rounded-lg bg-slate-50 object-contain ring-1 ring-slate-200"
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon="trash"
+                      onClick={() => update('hero', 'imageUrl', '')}
+                    >
+                      Remover imagem
+                    </Button>
+                  </div>
+                ) : null}
+                <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
+                  <i className="bi bi-upload" />
+                  {uploading
+                    ? `Enviando… ${uploading}%`
+                    : content.hero.imageUrl
+                      ? 'Trocar imagem'
+                      : 'Enviar imagem'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    disabled={Boolean(uploading)}
+                    onChange={handleHeroImage}
+                  />
+                </label>
+                {content.hero.imageUrl ? (
+                  <div className="mt-3">
+                    <Field
+                      label="Descrição da imagem (para acessibilidade)"
+                      value={content.hero.imageAlt}
+                      onChange={(v) => update('hero', 'imageAlt', v)}
+                      maxLength={160}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </Section>
+
+            <Section
+              title={blockLabel('marquee')}
+              description="Palavras curtas que passam na faixa colorida logo abaixo do banner."
+            >
+              <Field
+                label="Palavras"
+                value={(content.marquee.items || []).join(', ')}
+                onChange={(v) =>
+                  update(
+                    'marquee',
+                    'items',
+                    // trimStart: sem ele o espaço depois da vírgula se acumula a
+                    // cada tecla, porque o campo exibe a lista com ', '.
+                    v.split(',').map((item) => item.trimStart()),
+                  )
+                }
+                help="Separe por vírgula. Até 12 palavras. Deixe vazio para esconder a faixa."
+              />
+            </Section>
+
+            <Section
+              title={blockLabel('catalog')}
+              description="Título da área de produtos. Quais produtos aparecem se escolhe no cartão “Faixas de produtos”, abaixo."
+            >
+              <Field
+                label="Etiqueta acima do título (texto curtinho)"
+                value={content.catalog.eyebrow}
+                onChange={(v) => update('catalog', 'eyebrow', v)}
+                maxLength={80}
+              />
+              <Field
+                label="Título"
+                value={content.catalog.title}
+                onChange={(v) => update('catalog', 'title', v)}
+                help={HIGHLIGHT_HELP}
+                maxLength={160}
+              />
+              <Field
+                label="Texto do botão do catálogo"
+                value={content.catalog.ctaLabel}
+                onChange={(v) => update('catalog', 'ctaLabel', v)}
                 help="Deixe vazio para esconder o botão."
                 maxLength={80}
               />
+            </Section>
+
+            <Section
+              title={blockLabel('howItWorks')}
+              description="Explica em poucos passos como comprar e baixar o material."
+            >
               <Field
-                label="Link do botão"
-                value={content.hero.ctaLink}
-                onChange={(v) => update('hero', 'ctaLink', v)}
-                error={errors.ctaLink}
-                help="Ex.: /produtos"
-                maxLength={500}
+                label="Etiqueta acima do título (texto curtinho)"
+                value={content.howItWorks.eyebrow}
+                onChange={(v) => update('howItWorks', 'eyebrow', v)}
+                maxLength={80}
               />
-            </div>
-            <div className="rounded-lg border border-dashed border-slate-300 p-3">
-              <p className="text-sm font-medium text-slate-700">Imagem do topo (opcional)</p>
-              <p className="text-xs text-slate-500">
-                Aparece ao lado do título, inteira, sem cortes. JPG, PNG ou WebP até 1 MB.
-              </p>
-              {content.hero.imageUrl ? (
-                <div className="mt-3 flex items-center gap-3">
-                  <img
-                    src={content.hero.imageUrl}
-                    alt="Prévia da imagem do topo"
-                    className="h-24 w-36 rounded-lg bg-slate-50 object-contain ring-1 ring-slate-200"
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon="trash"
-                    onClick={() => update('hero', 'imageUrl', '')}
-                  >
-                    Remover imagem
-                  </Button>
-                </div>
-              ) : null}
-              <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
-                <i className="bi bi-upload" />
-                {uploading
-                  ? `Enviando… ${uploading}%`
-                  : content.hero.imageUrl
-                    ? 'Trocar imagem'
-                    : 'Enviar imagem'}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="sr-only"
-                  disabled={Boolean(uploading)}
-                  onChange={handleHeroImage}
-                />
-              </label>
-              {content.hero.imageUrl ? (
-                <div className="mt-3">
-                  <Field
-                    label="Descrição da imagem (para acessibilidade)"
-                    value={content.hero.imageAlt}
-                    onChange={(v) => update('hero', 'imageAlt', v)}
-                    maxLength={160}
-                  />
-                </div>
-              ) : null}
-            </div>
-          </Section>
-
-          <Section
-            title={blockLabel('marquee')}
-            description="Palavras curtas que passam na faixa colorida logo abaixo do banner."
-          >
-            <Field
-              label="Palavras"
-              value={(content.marquee.items || []).join(', ')}
-              onChange={(v) =>
-                update(
-                  'marquee',
-                  'items',
-                  // trimStart: sem ele o espaço depois da vírgula se acumula a
-                  // cada tecla, porque o campo exibe a lista com ', '.
-                  v.split(',').map((item) => item.trimStart()),
-                )
-              }
-              help="Separe por vírgula. Até 12 palavras. Deixe vazio para esconder a faixa."
-            />
-          </Section>
-
-          <Section
-            title={blockLabel('catalog')}
-            description="Título da área de produtos. Quais produtos aparecem se escolhe no cartão “Faixas de produtos”, abaixo."
-          >
-            <Field
-              label="Etiqueta acima do título (texto curtinho)"
-              value={content.catalog.eyebrow}
-              onChange={(v) => update('catalog', 'eyebrow', v)}
-              maxLength={80}
-            />
-            <Field
-              label="Título"
-              value={content.catalog.title}
-              onChange={(v) => update('catalog', 'title', v)}
-              help={HIGHLIGHT_HELP}
-              maxLength={160}
-            />
-            <Field
-              label="Texto do botão do catálogo"
-              value={content.catalog.ctaLabel}
-              onChange={(v) => update('catalog', 'ctaLabel', v)}
-              help="Deixe vazio para esconder o botão."
-              maxLength={80}
-            />
-          </Section>
-
-          <Section
-            title={blockLabel('howItWorks')}
-            description="Explica em poucos passos como comprar e baixar o material."
-          >
-            <Field
-              label="Etiqueta acima do título (texto curtinho)"
-              value={content.howItWorks.eyebrow}
-              onChange={(v) => update('howItWorks', 'eyebrow', v)}
-              maxLength={80}
-            />
-            <Field
-              label="Título"
-              value={content.howItWorks.title}
-              onChange={(v) => update('howItWorks', 'title', v)}
-              help={HIGHLIGHT_HELP}
-              maxLength={160}
-            />
-            <Field
-              label="Subtítulo"
-              value={content.howItWorks.subtitle}
-              onChange={(v) => update('howItWorks', 'subtitle', v)}
-              maxLength={600}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              {steps.map((step, index) => (
-                <div key={index} className="rounded-lg border border-slate-200 p-3">
-                  <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
-                    Passo {index + 1}
-                  </p>
-                  <Field
-                    label={`Título do passo ${index + 1}`}
-                    value={step.title}
-                    onChange={(v) =>
-                      updateListItem('howItWorks', 'steps', index, 'title', v, STEP_SLOTS)
-                    }
-                    maxLength={80}
-                  />
-                  <div className="mt-2">
+              <Field
+                label="Título"
+                value={content.howItWorks.title}
+                onChange={(v) => update('howItWorks', 'title', v)}
+                help={HIGHLIGHT_HELP}
+                maxLength={160}
+              />
+              <Field
+                label="Subtítulo"
+                value={content.howItWorks.subtitle}
+                onChange={(v) => update('howItWorks', 'subtitle', v)}
+                maxLength={600}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                {steps.map((step, index) => (
+                  <div key={index} className="rounded-lg border border-slate-200 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
+                      Passo {index + 1}
+                    </p>
                     <Field
-                      label={`Texto do passo ${index + 1}`}
-                      value={step.text}
+                      label={`Título do passo ${index + 1}`}
+                      value={step.title}
                       onChange={(v) =>
-                        updateListItem('howItWorks', 'steps', index, 'text', v, STEP_SLOTS)
+                        updateListItem('howItWorks', 'steps', index, 'title', v, STEP_SLOTS)
                       }
-                      multiline
-                      rows={2}
-                      maxLength={600}
+                      maxLength={80}
+                    />
+                    <div className="mt-2">
+                      <Field
+                        label={`Texto do passo ${index + 1}`}
+                        value={step.text}
+                        onChange={(v) =>
+                          updateListItem('howItWorks', 'steps', index, 'text', v, STEP_SLOTS)
+                        }
+                        multiline
+                        rows={2}
+                        maxLength={600}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">Passo sem título e sem texto não aparece.</p>
+              <Field
+                label="Quadro de aviso — título"
+                value={content.howItWorks.infoTitle}
+                onChange={(v) => update('howItWorks', 'infoTitle', v)}
+                maxLength={80}
+              />
+              <Field
+                label="Quadro de aviso — texto"
+                value={content.howItWorks.infoText}
+                onChange={(v) => update('howItWorks', 'infoText', v)}
+                maxLength={600}
+              />
+            </Section>
+
+            <Section
+              title={blockLabel('socialProof')}
+              description="O que clientes dizem, números da loja e links do Instagram e TikTok."
+            >
+              <Field
+                label="Etiqueta acima do título (texto curtinho)"
+                value={content.socialProof.eyebrow}
+                onChange={(v) => update('socialProof', 'eyebrow', v)}
+                maxLength={80}
+              />
+              <Field
+                label="Título"
+                value={content.socialProof.title}
+                onChange={(v) => update('socialProof', 'title', v)}
+                help={HIGHLIGHT_HELP}
+                maxLength={160}
+              />
+              <Field
+                label="Subtítulo"
+                value={content.socialProof.subtitle}
+                onChange={(v) => update('socialProof', 'subtitle', v)}
+                maxLength={600}
+              />
+
+              <p className="pt-2 text-sm font-medium text-slate-700">Números</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {stats.map((stat, index) => (
+                  <div key={index} className="grid grid-cols-2 gap-2">
+                    <Field
+                      label={`Número em destaque ${index + 1} (ex.: 500+)`}
+                      value={stat.value}
+                      onChange={(v) =>
+                        updateListItem('socialProof', 'stats', index, 'value', v, STAT_SLOTS)
+                      }
+                      maxLength={20}
+                    />
+                    <Field
+                      label={`O que o número ${index + 1} significa`}
+                      value={stat.label}
+                      onChange={(v) =>
+                        updateListItem('socialProof', 'stats', index, 'label', v, STAT_SLOTS)
+                      }
+                      maxLength={40}
                     />
                   </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500">Passo sem título e sem texto não aparece.</p>
-            <Field
-              label="Quadro de aviso — título"
-              value={content.howItWorks.infoTitle}
-              onChange={(v) => update('howItWorks', 'infoTitle', v)}
-              maxLength={80}
-            />
-            <Field
-              label="Quadro de aviso — texto"
-              value={content.howItWorks.infoText}
-              onChange={(v) => update('howItWorks', 'infoText', v)}
-              maxLength={600}
-            />
-          </Section>
+                ))}
+              </div>
 
-          <Section
-            title={blockLabel('socialProof')}
-            description="O que clientes dizem, números da loja e links do Instagram e TikTok."
-          >
-            <Field
-              label="Etiqueta acima do título (texto curtinho)"
-              value={content.socialProof.eyebrow}
-              onChange={(v) => update('socialProof', 'eyebrow', v)}
-              maxLength={80}
-            />
-            <Field
-              label="Título"
-              value={content.socialProof.title}
-              onChange={(v) => update('socialProof', 'title', v)}
-              help={HIGHLIGHT_HELP}
-              maxLength={160}
-            />
-            <Field
-              label="Subtítulo"
-              value={content.socialProof.subtitle}
-              onChange={(v) => update('socialProof', 'subtitle', v)}
-              maxLength={600}
-            />
-
-            <p className="pt-2 text-sm font-medium text-slate-700">Números</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {stats.map((stat, index) => (
-                <div key={index} className="grid grid-cols-2 gap-2">
+              <p className="pt-2 text-sm font-medium text-slate-700">Depoimentos</p>
+              {testimonials.map((item, index) => (
+                <div key={index} className="space-y-2 rounded-lg border border-slate-200 p-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Field
+                      label={`Nome ${index + 1}`}
+                      value={item.name}
+                      onChange={(v) =>
+                        updateListItem(
+                          'socialProof',
+                          'testimonials',
+                          index,
+                          'name',
+                          v,
+                          testimonials.length,
+                        )
+                      }
+                      maxLength={80}
+                    />
+                    <Field
+                      label={`Profissão ou cidade de quem deu o depoimento ${index + 1}`}
+                      value={item.role}
+                      onChange={(v) =>
+                        updateListItem(
+                          'socialProof',
+                          'testimonials',
+                          index,
+                          'role',
+                          v,
+                          testimonials.length,
+                        )
+                      }
+                      maxLength={80}
+                    />
+                  </div>
                   <Field
-                    label={`Número em destaque ${index + 1} (ex.: 500+)`}
-                    value={stat.value}
-                    onChange={(v) =>
-                      updateListItem('socialProof', 'stats', index, 'value', v, STAT_SLOTS)
-                    }
-                    maxLength={20}
-                  />
-                  <Field
-                    label={`O que o número ${index + 1} significa`}
-                    value={stat.label}
-                    onChange={(v) =>
-                      updateListItem('socialProof', 'stats', index, 'label', v, STAT_SLOTS)
-                    }
-                    maxLength={40}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <p className="pt-2 text-sm font-medium text-slate-700">Depoimentos</p>
-            {testimonials.map((item, index) => (
-              <div key={index} className="space-y-2 rounded-lg border border-slate-200 p-3">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Field
-                    label={`Nome ${index + 1}`}
-                    value={item.name}
+                    label={`Depoimento ${index + 1}`}
+                    value={item.text}
                     onChange={(v) =>
                       updateListItem(
                         'socialProof',
                         'testimonials',
                         index,
-                        'name',
+                        'text',
                         v,
                         testimonials.length,
                       )
                     }
-                    maxLength={80}
+                    multiline
+                    rows={2}
+                    maxLength={600}
                   />
-                  <Field
-                    label={`Profissão ou cidade de quem deu o depoimento ${index + 1}`}
-                    value={item.role}
-                    onChange={(v) =>
-                      updateListItem(
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="trash"
+                    onClick={() =>
+                      update(
                         'socialProof',
                         'testimonials',
-                        index,
-                        'role',
-                        v,
-                        testimonials.length,
+                        testimonials.filter((_, i) => i !== index),
                       )
                     }
-                    maxLength={80}
-                  />
+                  >
+                    Remover depoimento
+                  </Button>
                 </div>
-                <Field
-                  label={`Depoimento ${index + 1}`}
-                  value={item.text}
-                  onChange={(v) =>
-                    updateListItem(
-                      'socialProof',
-                      'testimonials',
-                      index,
-                      'text',
-                      v,
-                      testimonials.length,
-                    )
-                  }
-                  multiline
-                  rows={2}
-                  maxLength={600}
-                />
+              ))}
+              {testimonials.length < MAX_TESTIMONIALS ? (
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
-                  icon="trash"
+                  icon="plus-lg"
                   onClick={() =>
-                    update(
-                      'socialProof',
-                      'testimonials',
-                      testimonials.filter((_, i) => i !== index),
-                    )
+                    update('socialProof', 'testimonials', [
+                      ...testimonials,
+                      { name: '', role: '', text: '' },
+                    ])
                   }
                 >
-                  Remover depoimento
+                  Adicionar depoimento
                 </Button>
+              ) : null}
+
+              <p className="pt-2 text-sm font-medium text-slate-700">Redes sociais</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="Link do Instagram"
+                  value={content.socialProof.instagramUrl}
+                  onChange={(v) => update('socialProof', 'instagramUrl', v)}
+                  error={errors.instagramUrl}
+                  help="Vazio esconde o botão."
+                  maxLength={500}
+                />
+                <Field
+                  label="Texto do botão do Instagram"
+                  value={content.socialProof.instagramLabel}
+                  onChange={(v) => update('socialProof', 'instagramLabel', v)}
+                  maxLength={80}
+                />
+                <Field
+                  label="Link do TikTok"
+                  value={content.socialProof.tiktokUrl}
+                  onChange={(v) => update('socialProof', 'tiktokUrl', v)}
+                  error={errors.tiktokUrl}
+                  help="Vazio esconde o botão."
+                  maxLength={500}
+                />
+                <Field
+                  label="Texto do botão do TikTok"
+                  value={content.socialProof.tiktokLabel}
+                  onChange={(v) => update('socialProof', 'tiktokLabel', v)}
+                  maxLength={80}
+                />
               </div>
-            ))}
-            {testimonials.length < MAX_TESTIMONIALS ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon="plus-lg"
-                onClick={() =>
-                  update('socialProof', 'testimonials', [
-                    ...testimonials,
-                    { name: '', role: '', text: '' },
-                  ])
-                }
-              >
-                Adicionar depoimento
-              </Button>
-            ) : null}
+            </Section>
 
-            <p className="pt-2 text-sm font-medium text-slate-700">Redes sociais</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field
-                label="Link do Instagram"
-                value={content.socialProof.instagramUrl}
-                onChange={(v) => update('socialProof', 'instagramUrl', v)}
-                error={errors.instagramUrl}
-                help="Vazio esconde o botão."
-                maxLength={500}
-              />
-              <Field
-                label="Texto do botão do Instagram"
-                value={content.socialProof.instagramLabel}
-                onChange={(v) => update('socialProof', 'instagramLabel', v)}
-                maxLength={80}
-              />
-              <Field
-                label="Link do TikTok"
-                value={content.socialProof.tiktokUrl}
-                onChange={(v) => update('socialProof', 'tiktokUrl', v)}
-                error={errors.tiktokUrl}
-                help="Vazio esconde o botão."
-                maxLength={500}
-              />
-              <Field
-                label="Texto do botão do TikTok"
-                value={content.socialProof.tiktokLabel}
-                onChange={(v) => update('socialProof', 'tiktokLabel', v)}
-                maxLength={80}
-              />
-            </div>
-          </Section>
-
-          <Section
-            title="Como a loja aparece no Google"
-            description="Título da aba do navegador e o texto que aparece na busca."
-          >
-            <Field
-              label="Título na aba e no Google"
-              value={content.seo.title}
-              onChange={(v) => update('seo', 'title', v)}
-              maxLength={160}
-            />
-            <Field
-              label="Descrição no Google"
-              value={content.seo.description}
-              onChange={(v) => update('seo', 'description', v)}
-              multiline
-              maxLength={600}
-            />
-          </Section>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon="arrow-counterclockwise"
-            onClick={handleRestoreDefaults}
-          >
-            Restaurar textos padrão
-          </Button>
-          <div className="flex items-center gap-3">
-            {hasErrors ? (
-              <span className="text-xs text-rose-600">Corrija os links marcados para salvar.</span>
-            ) : null}
-            <Button
-              icon="check2"
-              onClick={handleSave}
-              disabled={saving || hasErrors || Boolean(uploading)}
+            <Section
+              title="Como a loja aparece no Google"
+              description="Título da aba do navegador e o texto que aparece na busca."
             >
-              {saving ? 'Salvando…' : 'Salvar página'}
-            </Button>
+              <Field
+                label="Título na aba e no Google"
+                value={content.seo.title}
+                onChange={(v) => update('seo', 'title', v)}
+                maxLength={160}
+              />
+              <Field
+                label="Descrição no Google"
+                value={content.seo.description}
+                onChange={(v) => update('seo', 'description', v)}
+                multiline
+                maxLength={600}
+              />
+            </Section>
           </div>
-        </div>
-      </Card>
-      <div className="xl:sticky xl:top-20">
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="arrow-counterclockwise"
+              onClick={handleRestoreDefaults}
+            >
+              Restaurar textos padrão
+            </Button>
+            <div className="flex items-center gap-3">
+              {hasErrors ? (
+                <span className="text-xs text-rose-600">
+                  Corrija os links marcados para salvar.
+                </span>
+              ) : null}
+              <Button
+                icon="check2"
+                onClick={handleSave}
+                disabled={saving || hasErrors || Boolean(uploading)}
+              >
+                {saving ? 'Salvando…' : 'Salvar página'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : (
         <HomePreview content={buildPayload()} dirty={dirty} />
-      </div>
+      )}
     </div>
   );
 }

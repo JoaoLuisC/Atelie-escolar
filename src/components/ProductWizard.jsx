@@ -426,7 +426,7 @@ ${prev.description}`.trim(),
           <Field
             label="Imagens do produto *"
             htmlFor="product-images"
-            hint="Selecione cada imagem do seu computador. JPG, PNG ou WebP até 500kB — imagens leves deixam a loja rápida."
+            hint="Recomendado: 1200 × 1200 px (quadrada), que preenche os cards da página inicial e a página do produto sem cortes. Foto 4:3? Use 1200 × 900 px: ela aparece inteira, com faixas nas laterais. JPG, PNG ou WebP até 500 kB."
           >
             <div id="product-images" className="flex flex-col gap-3">
               {images.map((image, idx) => (
@@ -454,7 +454,7 @@ ${prev.description}`.trim(),
           <Field
             label="Vídeos (opcional)"
             htmlFor="product-videos"
-            hint="MP4, WebM ou MOV até 50MB."
+            hint="Envie um arquivo MP4, WebM ou MOV de até 50 MB. Ele será armazenado no Supabase."
           >
             <div id="product-videos" className="flex flex-col gap-3">
               {videos.map((video, idx) => (
@@ -879,9 +879,7 @@ function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToa
             )}
           </p>
           {hasValue ? (
-            <p className="truncate text-[11px] text-slate-500" title={value}>
-              {value}
-            </p>
+            <p className="text-[11px] text-slate-500">Arquivo enviado.</p>
           ) : (
             <p className="text-[11px] text-slate-500">Clique em &quot;Escolher&quot;.</p>
           )}

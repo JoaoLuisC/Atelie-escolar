@@ -14,6 +14,7 @@ import {
   loginCustomerWithGoogle,
   logoutCustomerSession,
   registerCustomerWithEmail,
+  updateCustomerProfile,
 } from '../services/customer-auth';
 
 export const AuthContext = createContext(null);
@@ -188,6 +189,11 @@ export function AuthProvider({ children }) {
           throw error;
         }
         setCustomerSession(null);
+      },
+      async updateCustomerName(name) {
+        const session = await updateCustomerProfile(name);
+        setCustomerSession(session);
+        return session;
       },
       setCustomerSession(session) {
         const email = String(session?.email || '').trim();

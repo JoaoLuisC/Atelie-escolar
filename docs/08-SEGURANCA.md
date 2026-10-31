@@ -8,8 +8,8 @@
 
 | Ator                                               | Acesso esperado                                      | Como é garantido                                                                                   |
 | -------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Visitante anônimo                                  | Catálogo público, criar pedido                       | RLS: `categories`/`products` com `active = true`, colunas liberadas por grant (sem `download_url`) |
-| Cliente logado                                     | Próprios pedidos e downloads                         | Cookie `customer_session`; handler filtra pelo uid da sessão; RLS por `auth.uid()` como reforço    |
+| Visitante anônimo                                  | Catálogo público (comprar exige conta)               | RLS: `categories`/`products` com `active = true`, colunas liberadas por grant (sem `download_url`) |
+| Cliente logado                                     | Próprios pedidos, downloads, devoluções e perfil     | Cookie `customer_session`; handler filtra pelo uid da sessão; RLS por `auth.uid()` como reforço    |
 | Professor(a)                                       | Só os próprios produtos, em `/api/teacher/*`         | Cookie `admin_session` com `role = seller`; filtro por `seller_id` no handler                      |
 | Dona da loja (professora em `settings.storeOwner`) | Painel da loja, só com dados dos produtos dela       | `storeOwner: true` assinado no cookie; `ensureStoreSession`; recorte por `seller_id` no servidor   |
 | Admin / master                                     | Plataforma inteira, Usuários, Segurança, professores | `ensureAdminSession`; 2º fator opcional                                                            |
@@ -99,8 +99,12 @@
   (nunca o cliente compartilhado). Senha errada responde 400 (não 401, para o painel não tratar
   como sessão expirada).
 - Limite `staff-account-reauth`: 5 tentativas / 10 min por IP + conta.
-- Senha nova: 8+ caracteres com maiúscula, minúscula e número; diferente da atual. Troca na hora
-  pela Admin API.
+- Senha nova: 8+ caracteres com maiúscula, minúscula, número e caractere especial; diferente da
+  atual. Troca na hora pela Admin API. É a mesma política do cadastro de cliente, do checkout e do
+  Supabase Auth (`supabase/config.toml`: `minimum_password_length = 8`,
+  `password_requirements = "lower_upper_letters_digits_symbols"`). O `config.toml` só vale para o
+  Supabase local: em produção a política é ligada no painel do Supabase (ver
+  [10-ROADMAP](./10-ROADMAP.md), §1.1).
 - E-mail novo: pedido em nome da pessoa (`updateUser`); só muda depois do clique no link de
   confirmação. O trigger `on_auth_user_email_changed` atualiza `profiles.email`.
 - Conta só com Google não troca senha nem e-mail por aqui.
@@ -111,7 +115,9 @@
 
 Um mecanismo só: `enforceRateLimit` no início do handler, com contador atômico no Postgres
 (`rate_limit_hit()`), válido em produção. Configuração em `RATE_LIMITS`
-([`lib/rate-limit.js`](../lib/rate-limit.js)); quatro baldes são declarados no próprio handler.
+([`lib/rate-limit.js`](../lib/rate-limit.js)); sete baldes são declarados no próprio handler
+(`ai-assist`, `sales-study`, `settings`, `teacher/account`, `refund-request`, `me-profile`,
+`social-publish`).
 
 | Endpoint                                                                 | Balde                               | Limite                        | Contador fora do ar |
 | ------------------------------------------------------------------------ | ----------------------------------- | ----------------------------- | ------------------- |
@@ -128,6 +134,7 @@ Um mecanismo só: `enforceRateLimit` no início do handler, com contador atômic
 | `/admin/ai-assist`                                                       | `admin-ai-assist`                   | 30 / hora                     | passa               |
 | `/teacher/products`                                                      | `teacher-products`                  | 60 / hora                     | passa               |
 | `/admin/sales-study`                                                     | `admin-sales-study`                 | 10 / hora                     | passa               |
+| `/admin/social-publish` (POST)                                           | `admin-social-publish`              | 20 / hora                     | passa               |
 | `/verify-payment`                                                        | `verify-payment` (por pedido)       | 600 / 10 min                  | passa               |
 | ⤷ teto por conexão                                                       | `verify-payment-scan` (IP)          | 40 pedidos distintos / 10 min | passa               |
 | `/download`                                                              | `download` (por token)              | 20 / 10 min                   | passa               |
@@ -143,6 +150,8 @@ Um mecanismo só: `enforceRateLimit` no início do handler, com contador atômic
 | `/send-confirmation-email`                                               | `send-confirmation-email`           | 5 / 10 min                    | passa               |
 | `/me-delete-account`                                                     | `me-delete-account`                 | 5 / min                       | passa               |
 | `/me-export-data`                                                        | `me-export-data`                    | 5 / 5 min                     | passa               |
+| `/me-profile`                                                            | `me-profile`                        | 20 / 10 min                   | passa               |
+| `/refund-request`                                                        | `refund-request`                    | 10 / 10 min                   | passa               |
 | catálogo público (`products`, `product-details`, `home-*`, `cross-sell`) | `catalog`                           | 120 / min                     | passa               |
 
 - **"Contador fora do ar"**: o padrão é passar (fail-open), porque a mesma queda derrubaria o
@@ -158,7 +167,7 @@ Um mecanismo só: `enforceRateLimit` no início do handler, com contador atômic
 
 ### 2.8 Banco: RLS e funções privilegiadas
 
-- RLS ligada nas 18 tabelas; só `categories`, `products`, `orders`, `order_items`, `profiles` e
+- RLS ligada nas 20 tabelas; só `categories`, `products`, `orders`, `order_items`, `profiles` e
   `user_products` têm policy de leitura para o navegador. O resto é só backend.
 - `products`: RLS filtra linha, não coluna; por isso o SELECT de `anon`/`authenticated` é
   concedido coluna a coluna, sem `download_url`.
@@ -168,6 +177,9 @@ Um mecanismo só: `enforceRateLimit` no início do handler, com contador atômic
 - Toda função `SECURITY DEFINER` tem `search_path` fixo e `EXECUTE` revogado de
   `public`/`anon`/`authenticated`.
 - `admin_audit_log` é só-INSERT, até para `service_role`.
+- `refund_requests` e `coupon_customer_usage`: RLS ligada, grants de `anon`/`authenticated`
+  revogados, só `service_role`. O limite de cupom por cliente é reservado em
+  `increment_coupon_usage(bigint, text)` com `FOR UPDATE` (sem corrida entre dois checkouts).
 
 ### 2.9 Validação de entrada
 
@@ -175,30 +187,34 @@ Um mecanismo só: `enforceRateLimit` no início do handler, com contador atômic
   `validate-coupon` e `verify-payment`; `parse` nos handlers do painel e de `/api/teacher/products`.
   - `payment.schemas.js`: 1–100 itens, `productId` UUID obrigatório, quantidade inteira 1–99,
     tetos de nome/e-mail/telefone/CPF.
-  - `admin.schemas.js`: categorias, cupons, produto (`name`, `price`), PATCH de produto
+  - `admin.schemas.js`: categorias, cupons (público, até 500 e-mails válidos, limite por cliente
+    ≥ 1, meta de compras ≥ 1, datas em Brasília), produto (`name`, `price`), PATCH de produto
     (`active`/`featured`), usuário (papel só `customer`/`seller`).
 - **Preço sempre vem do banco**, nunca do cliente.
 - **Mídia do produto** (`lib/product-media.js`, admin e professor): imagens e vídeos só `https://`
-  com host; `download_url` precisa ser referência ao Storage aceita pela entrega (bucket da
-  allowlist, sem travessia de caminho). `javascript:`, `data:` e links externos são recusados na
+  com host; `download_url` precisa ser referência ao Storage aceita pela entrega (só o bucket
+  privado `product_files` ou o de `SUPABASE_STORAGE_BUCKET`, sem travessia de caminho). `javascript:`, `data:` e links externos são recusados na
   gravação.
 - Atribuição (UTM etc.) passa por `lib/attribution-sanitize.js`: 9 campos, 200 caracteres.
+- Devolução: `orderId` até 100, motivo até 2.000, telefone opcional `^[\d\s()+.-]{8,40}$`.
+  Perfil: nome de 2 a 120 caracteres. Publicação social: só links `https://`.
 
 ## 3. Segredos
 
 Só no servidor (Vercel e `.env.local`), nunca com prefixo `VITE_`:
 
-| Segredo                                            | Uso                                               |
-| -------------------------------------------------- | ------------------------------------------------- |
-| `SUPABASE_SERVICE_ROLE_KEY`                        | Backend com acesso total ao banco                 |
-| `MERCADOPAGO_ACCESS_TOKEN`                         | Cobranças e consultas no MP                       |
-| `WEBHOOK_SECRET`                                   | HMAC do webhook do MP                             |
-| `ADMIN_SESSION_SECRET` / `CUSTOMER_SESSION_SECRET` | Assinatura das sessões                            |
-| `ADMIN_2FA_ENC_KEY`                                | Cifra do `totpSecret`                             |
-| `CRON_SECRET`                                      | Autentica o workflow do cron de e-mail            |
-| `SMTP_PASS`                                        | Chave do Resend                                   |
-| `GEMINI_API_KEY`                                   | IA do painel (opcional)                           |
-| `SECURITY_ALERT_WEBHOOK_URL`                       | Alerta externo de eventos de segurança (opcional) |
+| Segredo                                                                                            | Uso                                                                                                       |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_SERVICE_ROLE_KEY`                                                                        | Backend com acesso total ao banco                                                                         |
+| `MERCADOPAGO_ACCESS_TOKEN`                                                                         | Cobranças e consultas no MP                                                                               |
+| `WEBHOOK_SECRET`                                                                                   | HMAC do webhook do MP                                                                                     |
+| `ADMIN_SESSION_SECRET` / `CUSTOMER_SESSION_SECRET`                                                 | Assinatura das sessões                                                                                    |
+| `ADMIN_2FA_ENC_KEY`                                                                                | Cifra do `totpSecret`                                                                                     |
+| `CRON_SECRET`                                                                                      | Autentica o workflow do cron de e-mail                                                                    |
+| `SMTP_PASS`                                                                                        | Chave do Resend                                                                                           |
+| `GEMINI_API_KEY`                                                                                   | IA do painel (opcional)                                                                                   |
+| `SECURITY_ALERT_WEBHOOK_URL`                                                                       | Alerta externo de eventos de segurança (opcional)                                                         |
+| `META_PAGE_ACCESS_TOKEN`, `PINTEREST_ACCESS_TOKEN`, `TIKTOK_ACCESS_TOKEN`, `WHATSAPP_ACCESS_TOKEN` | Publicação nas redes pelo painel (opcional). O `GET /api/admin/social-publish` só diz se está configurado |
 
 Públicas por design: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_GA4_ID`,
 `VITE_META_PIXEL_ID`. `VITE_ALLOW_ADMIN_BYPASS` só tem efeito em `import.meta.env.DEV`.
@@ -218,17 +234,24 @@ de cliente ou código de pedido.
 
 ## 5. Downloads
 
-- Token opaco de 256 bits, criado na aprovação, TTL de 72h, em `download_tokens`.
+- Token opaco de 256 bits, criado na aprovação, TTL de 72h, em `download_tokens`. É credencial de
+  portador: sem login, o link do e-mail abre. **Com sessão de cliente de outra conta** (o
+  `customer_id` do pedido é outro), o `/api/download` devolve 403 e grava
+  `download_token_other_customer`, antes de gastar o token.
 - `/api/download?token=…` confere existência, validade e uso; o claim `used = true` é um UPDATE
   condicional atômico (requisição repetida ou concorrente recebe 401).
 - Reemissão: para pedido aprovado, `/api/verify-payment` (código + e-mail) troca token usado ou
   vencido por um novo, até 5 downloads por item contados em `download_logs`.
-- Entrega por signed URL do Storage de 5 min, só dos buckets `product_images`/`product_videos`/
-  `product_files`, sem travessia de caminho. `download_url` fora do Storage → 500 +
+- Entrega por signed URL do Storage de 5 min, **só do bucket privado `product_files`** (e do de
+  `SUPABASE_STORAGE_BUCKET`, se configurado), sem travessia de caminho. `product_images` e
+  `product_videos` são públicos (vitrine): arquivo pago apontado para lá ficaria aberto a qualquer
+  um, então é recusado na gravação (`lib/product-media.js`) e na entrega. `download_url` fora do Storage → 500 +
   `download_url_not_storage`, sem consumir o token.
 - Resposta com `Referrer-Policy: no-referrer` e `Cache-Control: no-store`.
-- `product_files` precisa ser privado: se o upload o encontra público, volta a fechá-lo e emite
-  `storage_bucket_unexpectedly_public`.
+- Visibilidade fixada no banco (migration `20261031020000_storage_buckets_visibility.sql`):
+  `product_files` privado, `product_images` e `product_videos` públicos. O upload ainda converge:
+  se encontra `product_files` público, fecha e emite `storage_bucket_unexpectedly_public`; se
+  encontra imagem/vídeo privado, abre.
 
 ## 6. Verify-payment (anti-enumeração)
 
@@ -243,7 +266,14 @@ de cliente ou código de pedido.
   (confirmação de compra, carrinho abandonado, newsletter, pós-compra, reativação) saem pelo SMTP
   do Resend (`smtp.resend.com`), com domínio verificado (SPF, DKIM, DMARC).
 - O app usa nodemailer com `SMTP_HOST/PORT/USER/PASS/FROM` (`lib/email-sender.js`).
-- E-mails de marketing têm descadastro em 1 clique e headers `List-Unsubscribe` (RFC 8058).
+- E-mails de marketing têm descadastro em 1 clique e headers `List-Unsubscribe` (RFC 8058),
+  apontando para `/api/unsubscribe?token=` (o POST automático do provedor precisa cair na API). O
+  rodapé sem token leva a `/desinscrever` sem o e-mail na URL.
+- Todo e-mail vai também em texto puro, com os links preservados ("texto (url)"). Tetos de SMTP:
+  conexão e saudação 10 s, socket 20 s — um SMTP lento não segura o webhook.
+- Templates do Supabase Auth em `supabase/templates/` (`confirmation.html`, `recovery.html`); o
+  de recuperação usa `{{ .SiteURL }}/reset-password?token_hash=…&type=recovery&next={{ .RedirectTo }}`,
+  e o `token_hash` só é consumido quando a pessoa abre a página.
 
 ## 8. Eventos de segurança
 
@@ -267,7 +297,8 @@ o handler.
 | `webhook_invalid_signature`          | `webhook.js`                              | warn       | HMAC do MP ausente ou inválido                                                   |
 | `payment_amount_mismatch`            | `webhook.js`, `verify-payment.js`         | error      | Valor pago diferente do pedido                                                   |
 | `verify_payment_email_mismatch`      | `verify-payment.js`                       | warn       | Pedido existe, e-mail não bate                                                   |
-| `download_url_not_storage`           | `download.js`                             | error      | Produto com arquivo fora do Storage                                              |
+| `download_url_not_storage`           | `download.js`                             | error      | Produto com arquivo fora do Storage ou fora de `product_files`                   |
+| `download_token_other_customer`      | `download.js`                             | warn       | Token aberto com sessão de cliente de outra conta (403)                          |
 | `storage_bucket_unexpectedly_public` | `admin/upload-url.js`                     | error      | `product_files` estava público (o upload o fecha de novo)                        |
 | `rate_limit_exceeded`                | `lib/rate-limit.js`                       | warn       | Balde estourou (429); no máximo um alerta por balde por minuto, por instância    |
 | `rate_limit_unavailable`             | `lib/rate-limit.js`                       | error      | Contador no Postgres não respondeu                                               |
@@ -296,7 +327,8 @@ Funções e jobs `pg_cron` em [04-BANCO-DE-DADOS](./04-BANCO-DE-DADOS.md).
 ## 10. LGPD
 
 - **Finalidade:** Política de Privacidade em `/privacidade`, Termos em `/termos`.
-- **Minimização:** nome e e-mail no checkout; CPF e telefone opcionais; sem endereço (produto
+- **Minimização:** nome, e-mail e conta no checkout; CPF e telefone opcionais (telefone também na
+  devolução, opcional); sem endereço (produto
   digital); dados de cartão vão direto ao Mercado Pago.
 - **Consentimento:** banner Aceitar / Rejeitar / Personalizar (`ConsentBanner.jsx`, estado em
   `src/utils/consent.js`); GA4 e Meta Pixel só carregam com consentimento.
@@ -304,9 +336,14 @@ Funções e jobs `pg_cron` em [04-BANCO-DE-DADOS](./04-BANCO-DE-DADOS.md).
 - **Exclusão:** `/api/me-delete-account` em 2 passos (pedido com sessão → link por e-mail com token
   HMAC de 1h). Apaga a conta do Auth, anonimiza os pedidos (histórico fiscal fica), apaga tokens
   de download e carrinhos, limpa e-mails legados em `analytics_events` e descadastra da newsletter.
-- **Acesso/portabilidade:** `GET /api/me-export-data` devolve pedidos, newsletter e carrinhos do
-  titular, com `Cache-Control: no-store`.
-- **Logs:** IP e user agent em claro (mitigação de ataque); e-mail só em hash.
+- **Acesso/portabilidade:** `GET /api/me-export-data` devolve o nome do perfil, pedidos,
+  solicitações de devolução, newsletter e carrinhos do titular, com `Cache-Control: no-store`.
+- **Retificação:** o cliente edita o nome em `/downloads` → Minha conta (`PUT /api/me-profile`).
+- **Logs:** IP e user agent em claro (mitigação de ataque). Eventos de segurança levam o e-mail só
+  em hash. O log da aplicação (`lib/logger.js`) mascara e-mail como `a***@dominio` (em campos
+  `email`, `customer_email`, `to`, `pendingEmail`, `newEmail` e em qualquer texto) e troca CPF e
+  telefone (`cpf`, `customer_cpf`, `phone`, `customer_phone`, `telefone`) por `[redacted]`. A
+  publicação social não grava a legenda no audit log.
 - **Transferência internacional:** Supabase em `sa-east-1`; Resend e Google (Gemini) fora do
   Brasil.
 

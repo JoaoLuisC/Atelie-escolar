@@ -15,6 +15,11 @@ function emptyForm() {
     discountValue: '',
     minOrderAmount: '',
     maxUses: '',
+    maxUsesPerCustomer: '1',
+    audience: 'all',
+    eligibleEmails: '',
+    purchasesRequired: '5',
+    validFrom: '',
     validUntil: '',
     active: true,
   };
@@ -23,26 +28,31 @@ function emptyForm() {
 // ════════════════════════════════════════════════════════════════════
 // VALIDADE DO CUPOM (ADM-39). O `<input type="date">` dá "2026-12-31"; ele ia
 // cru para o servidor, que gravava 2026-12-31T00:00Z — 30/12 às 21h em São
-// Paulo. A tela mostrava "Vale até 30/12", a edição trazia "2026-12-30" e cada
-// salvamento sem mudança encurtava a validade em mais um dia.
+// Paulo — e cada salvamento sem mudança encurtava a validade em um dia.
 //
-// Agora a data escolhida vira o FIM daquele dia no fuso do navegador (o mesmo
-// em que a dona da loja lê a data), e a leitura usa a data LOCAL do instante
-// gravado. Ida e volta dão o mesmo dia.
+// As datas valem no horário de BRASÍLIA (UTC−3, sem horário de verão desde
+// 2019), não no fuso de quem abre o painel: o início é 00:00 e o fim 23:59:59
+// do dia escolhido. A leitura converte o instante gravado de volta para o dia
+// de Brasília, então ida e volta dão o mesmo dia em qualquer computador.
 // ════════════════════════════════════════════════════════════════════
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+const DATE_INPUT = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 export function toDateInputValue(iso) {
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return new Date(date.getTime() - BRT_OFFSET_MS).toISOString().slice(0, 10);
 }
 
-export function endOfLocalDayIso(dateInputValue) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateInputValue || ''));
-  if (!match) return null;
-  const [, year, month, day] = match.map(Number);
-  return new Date(year, month - 1, day, 23, 59, 59, 999).toISOString();
+export function startOfBrtDayIso(dateInputValue) {
+  if (!DATE_INPUT.test(String(dateInputValue || ''))) return null;
+  return new Date(`${dateInputValue}T00:00:00.000-03:00`).toISOString();
+}
+
+export function endOfBrtDayIso(dateInputValue) {
+  if (!DATE_INPUT.test(String(dateInputValue || ''))) return null;
+  return new Date(`${dateInputValue}T23:59:59.999-03:00`).toISOString();
 }
 
 // Mesmo alfabeto que o servidor aceita (couponCode em validation/admin.schemas.js).
@@ -69,6 +79,13 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
         minOrderAmount:
           initialCoupon.minOrderAmount != null ? String(initialCoupon.minOrderAmount) : '',
         maxUses: initialCoupon.maxUses != null ? String(initialCoupon.maxUses) : '',
+        maxUsesPerCustomer:
+          initialCoupon.maxUsesPerCustomer != null ? String(initialCoupon.maxUsesPerCustomer) : '',
+        audience: initialCoupon.audience || 'all',
+        eligibleEmails: (initialCoupon.eligibleEmails || []).join('\n'),
+        purchasesRequired:
+          initialCoupon.purchasesRequired != null ? String(initialCoupon.purchasesRequired) : '5',
+        validFrom: toDateInputValue(initialCoupon.validFrom),
         validUntil: toDateInputValue(initialCoupon.validUntil),
         active: initialCoupon.active !== false,
       });
@@ -83,7 +100,13 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
     if (name === 'code') {
       nextValue = sanitizeCouponCode(value);
     }
-    setFormData((prev) => ({ ...prev, [name]: nextValue }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: nextValue,
+      ...(name === 'audience' && nextValue === 'purchase_milestone'
+        ? { maxUsesPerCustomer: '' }
+        : {}),
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -116,7 +139,17 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
         discountValue: value,
         minOrderAmount: formData.minOrderAmount === '' ? null : Number(formData.minOrderAmount),
         maxUses: formData.maxUses === '' ? null : Number(formData.maxUses),
-        validUntil: endOfLocalDayIso(formData.validUntil),
+        maxUsesPerCustomer:
+          formData.maxUsesPerCustomer === '' ? null : Number(formData.maxUsesPerCustomer),
+        audience: formData.audience,
+        eligibleEmails: formData.eligibleEmails
+          .split(/[\n,;]+/)
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean),
+        purchasesRequired:
+          formData.audience === 'purchase_milestone' ? Number(formData.purchasesRequired) : null,
+        validFrom: startOfBrtDayIso(formData.validFrom),
+        validUntil: endOfBrtDayIso(formData.validUntil),
         active: formData.active,
       });
     } finally {
@@ -195,7 +228,82 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
               className={INPUT_CLASS}
             />
           </div>
+          <div>
+            <label htmlFor="coupon-max-per-customer" className={LABEL_CLASS}>
+              Usos por cliente
+            </label>
+            <input
+              id="coupon-max-per-customer"
+              type="number"
+              name="maxUsesPerCustomer"
+              value={formData.maxUsesPerCustomer}
+              onChange={handleChange}
+              step="1"
+              min="1"
+              placeholder="Vazio = sem limite individual"
+              className={INPUT_CLASS}
+            />
+          </div>
         </div>
+
+        <div>
+          <label htmlFor="coupon-audience" className={LABEL_CLASS}>
+            Quem pode usar
+          </label>
+          <select
+            id="coupon-audience"
+            name="audience"
+            value={formData.audience}
+            onChange={handleChange}
+            className={INPUT_CLASS}
+          >
+            <option value="all">Todos</option>
+            <option value="customers">Somente clientes com conta</option>
+            <option value="new_customers">Somente primeira compra</option>
+            <option value="returning_customers">Clientes que já compraram</option>
+            <option value="emails">Pessoas específicas</option>
+            <option value="purchase_milestone">Recompensa por número de compras</option>
+          </select>
+        </div>
+
+        {formData.audience === 'emails' ? (
+          <div>
+            <label htmlFor="coupon-emails" className={LABEL_CLASS}>
+              E-mails permitidos
+            </label>
+            <textarea
+              id="coupon-emails"
+              name="eligibleEmails"
+              value={formData.eligibleEmails}
+              onChange={handleChange}
+              rows={4}
+              placeholder="um@email.com por linha"
+              className={INPUT_CLASS}
+            />
+          </div>
+        ) : null}
+
+        {formData.audience === 'purchase_milestone' ? (
+          <div>
+            <label htmlFor="coupon-purchases-required" className={LABEL_CLASS}>
+              Compras aprovadas para ganhar cada uso
+            </label>
+            <input
+              id="coupon-purchases-required"
+              type="number"
+              name="purchasesRequired"
+              value={formData.purchasesRequired}
+              onChange={handleChange}
+              min="1"
+              step="1"
+              required
+              className={INPUT_CLASS}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Exemplo: 5 libera um uso após 5, outro após 10, e assim por diante.
+            </p>
+          </div>
+        ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -230,6 +338,23 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
               className={INPUT_CLASS}
             />
           </div>
+        </div>
+
+        <div>
+          <label htmlFor="coupon-valid-from" className={LABEL_CLASS}>
+            Válido a partir de
+          </label>
+          <input
+            id="coupon-valid-from"
+            type="date"
+            name="validFrom"
+            value={formData.validFrom}
+            onChange={handleChange}
+            className={INPUT_CLASS}
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Vazio = já vale. As datas seguem o horário de Brasília.
+          </p>
         </div>
 
         <div>
@@ -278,6 +403,11 @@ CouponWizard.propTypes = {
     discountValue: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     minOrderAmount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     maxUses: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    maxUsesPerCustomer: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    audience: PropTypes.string,
+    eligibleEmails: PropTypes.arrayOf(PropTypes.string),
+    purchasesRequired: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    validFrom: PropTypes.string,
     validUntil: PropTypes.string,
     active: PropTypes.bool,
   }),

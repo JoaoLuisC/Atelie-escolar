@@ -17,3 +17,9 @@ vi.mock('../utils/analytics', () => ({
 vi.mock('../components/SEO', () => ({
   SEO: () => null,
 }));
+
+// O cabeçalho busca a configuração pública em todas as telas; testes que não
+// tratam dessa configuração não devem consumir suas respostas HTTP simuladas.
+vi.mock('../services/store-settings', () => ({
+  fetchStoreSettings: vi.fn(async () => ({})),
+}));

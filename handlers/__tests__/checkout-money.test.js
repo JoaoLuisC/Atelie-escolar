@@ -57,6 +57,14 @@ function arrange({ products, coupon = null }) {
   installSupabaseMock(store);
   installSecurityLoggerMock();
   installRateLimitPassthrough();
+  installPartialMock('../../lib/customer-session', {
+    getCustomerSessionFromRequest: vi.fn(() => ({
+      uid: 'customer-1',
+      email: CUSTOMER.email,
+      name: CUSTOMER.name,
+      role: 'customer',
+    })),
+  });
 
   // A preference é capturada para conferir os itens que o cliente REALMENTE
   // pagaria — é a outra metade do invariante.

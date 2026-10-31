@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Shell } from '../Shell';
+import { fetchStoreSettings } from '../../services/store-settings';
 
 // ════════════════════════════════════════════════════════════════════
 // Cabeçalho e rodapé da loja — achados LOJA-09, 13, 28, 30, 39 e 49.
@@ -49,6 +50,23 @@ afterEach(() => {
 });
 
 describe('Shell · menu mobile (LOJA-28)', () => {
+  it('mostra o título e o rodapé configurados pelo painel', async () => {
+    fetchStoreSettings.mockResolvedValueOnce({
+      navigation: { title: 'Minha loja', size: 'large' },
+      footer: {
+        title: 'Minha marca',
+        description: 'Materiais da minha loja',
+        facebookUrl: 'https://facebook.com/exemplo',
+      },
+    });
+    renderShell();
+    expect(await screen.findByText('Minha loja')).toBeInTheDocument();
+    expect(screen.getByText('Materiais da minha loja')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Facebook' })).toHaveAttribute(
+      'href',
+      'https://facebook.com/exemplo',
+    );
+  });
   it('Esc fecha o menu', () => {
     renderShell();
     fireEvent.click(screen.getByRole('button', { name: 'Abrir menu' }));

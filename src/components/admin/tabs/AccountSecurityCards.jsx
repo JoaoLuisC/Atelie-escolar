@@ -55,7 +55,7 @@ export function PasswordCard({ onForgot, sendingReset = false }) {
   return (
     <Card
       title="Trocar senha"
-      subtitle="Ao menos 8 caracteres, com letra maiúscula, minúscula e número."
+      subtitle="Ao menos 8 caracteres, com letra maiúscula, minúscula, número e caractere especial."
     >
       <form onSubmit={onSubmit} className="space-y-3">
         <TextInput

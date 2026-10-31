@@ -17,7 +17,7 @@ Os painéis em si (abas, cards, ações) estão em [06-PAINEIS](./06-PAINEIS.md)
 3. [Carrinho e checkout](#3-carrinho-e-checkout)
 4. [Pagamento e confirmação](#4-pagamento-e-confirmação)
 5. [Webhook do Mercado Pago](#5-webhook-do-mercado-pago)
-6. [Download](#6-download)
+6. [Download](#6-download) · [6a. Solicitação de devolução](#6a-solicitação-de-devolução)
 7. [Pós-venda: e-mails automáticos](#7-pós-venda-e-mails-automáticos)
 8. [Newsletter (double opt-in)](#8-newsletter-double-opt-in)
 
@@ -45,7 +45,7 @@ Os painéis em si (abas, cards, ações) estão em [06-PAINEIS](./06-PAINEIS.md)
 flowchart LR
     A[Descoberta<br/>home, catálogo, filtros] --> B[Página do produto<br/>galeria, FAQ, depoimentos]
     B --> C[Carrinho<br/>drawer lateral]
-    C --> D[Checkout<br/>nome + e-mail + cupom]
+    C --> D[Checkout<br/>conta + nome + cupom]
     D --> E[Mercado Pago<br/>cartão, Pix, boleto]
     E --> F[Downloads<br/>links de uso único]
     F --> G[Pós-venda<br/>confirmação, conta, e-mails]
@@ -56,7 +56,7 @@ flowchart LR
 | Descoberta | Home, catálogo com filtros, página do produto  | [2](#2-descoberta-e-página-do-produto)                       |
 | Compra     | Carrinho, checkout, pagamento em nova aba      | [3](#3-carrinho-e-checkout), [4](#4-pagamento-e-confirmação) |
 | Entrega    | `/downloads` com um botão "Baixar" por arquivo | [6](#6-download)                                             |
-| Pós-venda  | E-mail de confirmação, conta criada, lembretes | [7](#7-pós-venda-e-mails-automáticos)                        |
+| Pós-venda  | E-mail de confirmação, devolução, lembretes    | [7](#7-pós-venda-e-mails-automáticos)                        |
 
 Eventos de analytics (GA4 e Meta Pixel) só disparam depois do consentimento no banner LGPD
 (`utils/consent.js`, `ConsentBanner.jsx`). Os eventos de funil próprios (`view_catalog` →
@@ -97,18 +97,36 @@ flowchart TD
     A[Adicionar ao carrinho] --> A1[Toast, sem navegar<br/>CartProvider grava em localStorage]
     A1 --> B[CartDrawer: Finalizar compra]
     B --> C[/checkout/]
-    C --> C1[Nome + e-mail, página única<br/>Google opcional]
+    C --> C1[Conta obrigatória, página única<br/>logado: nome · sem login: nome + e-mail + senha nova<br/>ou Continuar com Google]
     C1 --> C2[E-mail digitado com carrinho cheio<br/>debounce 1,5 s → POST /api/abandoned-cart<br/>falha silenciosa]
-    C --> C3[Cupom → POST /api/validate-coupon<br/>só prévia; vale o que o create-payment decidir]
+    C --> C3[Cupom → POST /api/validate-coupon<br/>prévia com público e limite por cliente;<br/>vale o que o create-payment decidir]
     C --> D[Ir para pagamento → seção 4]
 ```
 
 **Cliente vê.** Resumo dos itens (pode remover), formulário curto, campo de cupom com o desconto
-previsto e o botão "Ir para pagamento". Não precisa ter conta: a conta é criada depois da primeira
-compra aprovada (seção 7).
+previsto e o botão "Ir para pagamento". **A compra exige conta**: sem login, o próprio checkout
+cria a conta (senha 8+ com maiúscula, minúscula, número e caractere especial) antes de pagar; se o
+Supabase pedir confirmação de e-mail, a tela avisa e o pagamento espera o login. O e-mail do pedido
+é sempre o da conta.
 
 **Sistema.** `add_to_cart` e `begin_checkout` vão para o funil. O carrinho abandonado é gravado
 por e-mail + sessão; o total é recalculado no servidor e cada atualização zera o lembrete.
+
+**Cupom por público.** Além de validade, mínimo, limite total e produtos/categorias, o cupom tem um
+público (`lib/coupons.js`, `validateCouponAudience`) e um limite opcional de usos por cliente:
+
+| Público               | Quem pode usar                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| `all`                 | Qualquer pessoa                                                                                     |
+| `customers`           | Quem está logado                                                                                    |
+| `new_customers`       | Sem pedido aprovado — procurado pela conta (`customer_id`) e pelo e-mail sem diferenciar maiúsculas |
+| `returning_customers` | Com pelo menos um pedido aprovado (mesma busca)                                                     |
+| `emails`              | Só os e-mails da lista do cupom                                                                     |
+| `purchase_milestone`  | Recompensa: a cada N compras aprovadas da conta, um uso (N = `purchases_required`)                  |
+
+O `validate-coupon` só antecipa a resposta; quem decide é o `create-payment`, que confere o público
+de novo e reserva o uso global e o individual na mesma transação (`increment_coupon_usage`). As
+datas do cupom são de Brasília: o início vale desde 00:00 e o fim até 23:59:59.
 
 ---
 
@@ -118,7 +136,9 @@ por e-mail + sessão; o total é recalculado no servidor e cada atualização ze
 flowchart TD
     A[Ir para pagamento] --> B[POST /api/create-payment<br/>items, customer, attribution, couponCode]
     B --> B1[Revalida produtos no banco<br/>até 100 itens, quantidade 1–99]
-    B1 --> B2[Recalcula total e aplica cupom no servidor<br/>reserva atômica: rpc increment_coupon_usage<br/>sem reserva → segue sem desconto]
+    B --> B0{Sessão de cliente?}
+    B0 -->|não| B0X[401 CUSTOMER_SESSION_INVALID]
+    B1 --> B2[Recalcula total e aplica cupom no servidor<br/>público + reserva atômica global e por cliente<br/>rpc increment_coupon_usage<br/>recusado → 422, sem pedido]
     B2 --> B3[INSERT orders + order_items<br/>status pending, order_code de 128 bits]
     B3 --> B4[Preferência no Mercado Pago<br/>back_urls + notification_url, installments 1]
     B4 --> B5[Devolve initPoint]
@@ -126,7 +146,7 @@ flowchart TD
     B5 --> C[window.open em nova aba<br/>botão Abrir pagamento se o popup for bloqueado]
     B5 --> D[Polling a cada 4 s - até 150 tentativas<br/>POST /api/verify-payment orderId + email]
     D --> D1{paymentStatus}
-    D1 -->|approved| E[Limpa carrinho<br/>/downloads?order=X&email=Y&success=1]
+    D1 -->|approved| E[Limpa carrinho<br/>/downloads?order=X&success=1]
     D1 -->|rejected / cancelled| F[Toast de erro, polling para]
     D1 -->|pending| D
     D1 -->|limite| G[Cliente confere depois em /downloads]
@@ -203,17 +223,19 @@ tratado como sucesso) e os tokens gravados são relidos. O e-mail de confirmaç�
 
 ```mermaid
 flowchart TD
-    A[/downloads?order=X&email=Y/] --> B[POST /api/verify-payment]
+    A[/downloads?order=X<br/>e-mail da sessão ou digitado/] --> B[POST /api/verify-payment]
     B --> C{approved?}
     C -->|não| C1[Polling a cada 10 s, até 12 vezes]
     C -->|sim| D[Lista os tokens válidos<br/>purchase event uma vez por pedido]
     D --> E[Baixar → GET /api/download?token=]
     E --> F[Token existe, não usado, não expirou?]
     F -->|não| F1[401 Token já utilizado / expirado]
-    F -->|sim| G[Claim atômico used=false → true<br/>antes de gerar a URL]
+    F -->|sim| S{Sessão de cliente<br/>de outra conta?}
+    S -->|sim| S1[403 + download_token_other_customer]
+    S -->|não ou sem login| G[Claim atômico used=false → true<br/>antes de gerar a URL]
     G --> H{download_url é do Storage?}
     H -->|não| H1[500 DOWNLOAD_UNAVAILABLE<br/>token preservado + download_url_not_storage]
-    H -->|sim| I[URL assinada de 5 min<br/>302 + Referrer-Policy no-referrer + no-store]
+    H -->|sim, bucket product_files| I[URL assinada de 5 min<br/>302 + Referrer-Policy no-referrer + no-store]
     I --> J[download_logs: IP, UA, data]
     D --> K[Atualizar: reemite link usado ou vencido<br/>novo token +72 h, até 5 downloads por item]
 ```
@@ -221,10 +243,45 @@ flowchart TD
 **Cliente vê.** Um botão "Baixar" por arquivo. O link vale uma vez e por 72 h; o botão "Atualizar"
 gera link novo até 5 downloads por item — depois disso o item aparece sem botão. Cliente logado
 vê o histórico em `/downloads` via `GET /api/customer-orders` (filtrado pelo `customer_id` do
-cookie; pedidos de convidado com o mesmo e-mail confirmado são adotados pela conta).
+cookie; pedidos antigos de convidado com o mesmo e-mail confirmado são adotados pela conta). Sem
+login, o link do e-mail continua valendo; logado com **outra** conta, o download é recusado (403).
+
+**Abas de `/downloads` (cliente logado).** Produtos, Histórico de pedidos (com "Solicitar
+devolução" e a situação da solicitação) e Minha conta (editar o nome — `PUT /api/me-profile`; o
+link leva a `/conta` para privacidade e exclusão).
 
 **Quem vende garante.** Todo produto com arquivo enviado pelo painel (bucket privado
-`product_files`). Link externo (Google Drive etc.) é recusado no cadastro e não é entregue.
+`product_files`). Link externo (Google Drive etc.) é recusado no cadastro e não é entregue;
+`download_url` em `product_images`/`product_videos` (públicos) também é recusado na entrega.
+
+---
+
+## 6a. Solicitação de devolução
+
+```mermaid
+flowchart TD
+    A["/downloads → Histórico<br/>pedido aprovado sem solicitação"] --> B[Solicitar devolução<br/>motivo e telefone opcionais]
+    B --> C[POST /api/refund-request<br/>orderId = order_code]
+    C --> C1{Pedido aprovado<br/>desta conta?}
+    C1 -->|não| C2[404]
+    C1 -->|sim| C3{Já há uma aberta?}
+    C3 -->|sim, ou corrida no índice único| C4[200 alreadyRequested]
+    C3 -->|não| C5[201 refund_requests status open]
+    C5 --> D[Painel da loja → Pedidos<br/>Solicitações de devolução]
+    D --> E[PUT /api/admin/refund-requests<br/>status + resposta]
+    E --> F[Cliente vê a situação e a resposta<br/>no histórico]
+    E -.->|aceita| G[Estorno feito à mão no Mercado Pago<br/>webhook marca refunded e queima os links]
+```
+
+**Cliente vê.** Um formulário curto (motivo e telefone opcionais; telefone só com dígitos e
+pontuação, 8 a 40 caracteres) e depois a situação: aberta, em conversa, aceita, não aceita ou
+resolvida, com a resposta da loja. Os Termos (`/termos`) explicam o direito de arrependimento de
+7 dias e apontam para esse botão.
+
+**Sistema.** Exige sessão de cliente; rate limit 10 / 10 min. Uma solicitação não encerrada por
+pedido (índice único parcial; `declined` e `resolved` encerram e liberam uma nova). **Não há
+estorno automático**: aceitar no painel só muda o status; o dinheiro volta pelo Mercado Pago (ver
+"Reembolso" na seção 18). A professora vê e responde só as solicitações dos pedidos dela.
 
 ---
 
@@ -232,8 +289,8 @@ cookie; pedidos de convidado com o mesmo e-mail confirmado são adotados pela co
 
 ```mermaid
 flowchart TD
-    A[1ª aprovação do pedido<br/>webhook ou verify-payment] --> A1[Conta Supabase do comprador convidado<br/>ensureCustomerAccountFromCheckout]
-    A1 --> A2[E-mail para definir senha<br/>resetPasswordForEmail]
+    A[1ª aprovação do pedido<br/>webhook ou verify-payment] --> A1[ensureCustomerAccountFromCheckout<br/>conta já existe: nada a fazer]
+    A1 -->|e-mail sem conta, pedido antigo| A2[Cria a conta e manda e-mail para definir senha<br/>resetPasswordForEmail]
     A --> A3[E-mail Pagamento confirmado<br/>lib/order-confirmation.js]
 
     C[GitHub Actions email-cron.yml<br/>de hora em hora] --> D[POST /api/cron-email-jobs<br/>X-Cron-Secret]
@@ -243,9 +300,10 @@ flowchart TD
     E & F & G --> H[email_sent_log - idempotência<br/>descadastro respeitado em tudo]
 ```
 
-**Cliente vê.** Logo após pagar: "Pagamento confirmado" (itens e link para os downloads) e, na
-primeira compra, um e-mail para criar a senha da conta criada para ele. Depois, os e-mails da
-sequência, cada um com link de descadastro de 1 clique.
+**Cliente vê.** Logo após pagar: "Pagamento confirmado" (itens e link para os downloads). Depois,
+os e-mails da sequência, cada um com link de descadastro de 1 clique. Todo e-mail vai também em
+texto puro, com os links preservados como "texto (url)"; o `List-Unsubscribe` aponta para
+`/api/unsubscribe?token=` (o POST de 1 clique do Gmail/Outlook precisa cair na API, não na SPA).
 
 **Regras.**
 
@@ -303,7 +361,7 @@ flowchart TD
     C2 --> C3[Volta ao redirect ou /checkout]
     C1 -->|erro| C4[E-mail ou senha incorretos<br/>dica de não confirmado só se o Supabase sinalizar]
 
-    D --> D1{Senha forte?<br/>8+ com maiúscula, minúscula e número}
+    D --> D1{Senha forte?<br/>8+ com maiúscula, minúscula, número e especial}
     D1 -->|não| D2[Erro na tela]
     D1 -->|sim| D3[Supabase signup]
     D3 -->|com token| D4[Cookie + navega]
@@ -313,8 +371,10 @@ flowchart TD
 
 As duas telas de login abrem com o seletor **Sou cliente | Sou professor(a)**
 (`LoginChooser.jsx`): ele só leva de `/login` a `/admin` e vice-versa, sem mudar a autenticação.
-A política de senha é validada na tela; o servidor revalida o mínimo e traduz o erro de senha
-fraca do Supabase. Em `/conta`, o cliente logado vê os dados, exporta (`/api/me-export-data`) ou
+A política de senha (8+ com maiúscula, minúscula, número e caractere especial) é a mesma no
+cadastro, no checkout, na troca de senha do staff (`lib/staff-account.js`) e no Supabase Auth
+(`supabase/config.toml`, `password_requirements`): validada na tela, revalidada no servidor, e o
+erro de senha fraca do Supabase é traduzido. O nome da sessão vem de `profiles.display_name`. Em `/conta`, o cliente logado vê os dados, exporta (`/api/me-export-data`) ou
 exclui a conta (`/api/me-delete-account`, que anonimiza os pedidos).
 
 ---
@@ -358,13 +418,17 @@ flowchart TD
     A3[Staff: login do painel → Esqueci minha senha<br/>abre /login?mode=forgot&redirect=/admin] --> B
     B[supabase.auth.resetPasswordForEmail<br/>redirectTo /reset-password?redirect=...] --> C[E-mail via SMTP Resend]
     C --> D[ResetPasswordPage]
-    D --> E[?code= → exchangeCodeForSession<br/>#tokens → setSession]
+    D --> E[?token_hash=&type=recovery → verifyOtp<br/>?code= / #tokens → sessão do supabase-js]
     E -->|ok| F[Nova senha + confirmação → updateUser]
     E -->|expirado| G[Peça um novo link]
     F --> H[Volta para /checkout, /downloads ou /admin]
 ```
 
-O destino depois da troca só pode ser `/checkout`, `/downloads` ou `/admin`. Pela aba Minha conta
+O link do e-mail vem do template `supabase/templates/recovery.html`:
+`{{ .SiteURL }}/reset-password?token_hash=…&type=recovery&next={{ .RedirectTo }}`. O `token_hash` só
+é consumido quando a pessoa abre a página (scanner de e-mail que segue o link não gasta o código),
+e o destino pedido vai em `next`. O destino depois da troca só pode ser `/checkout`, `/downloads`
+ou `/admin`. Pela aba Minha conta
 e pelo link "Esqueci minha senha" da tela de login do painel, o link volta ao `/admin` (login do
 painel).
 
@@ -477,7 +541,8 @@ flowchart TD
 ou "Administração da plataforma"), forma de login e data de criação. Contas Google veem só o botão
 de criar senha: o e-mail delas é o da conta Google.
 
-**Sistema.** Senha nova: 8+ caracteres com maiúscula, minúscula e número, diferente da atual. A
+**Sistema.** Senha nova: 8+ caracteres com maiúscula, minúscula, número e caractere especial,
+diferente da atual. A
 senha atual é pedida porque a sessão do painel dura 8 h. Erro de senha atual volta 400 (401 o
 painel leria como sessão expirada). Cada troca grava evento de segurança e entrada no audit log.
 Se a opção "Secure email change" do Supabase estiver ligada, a confirmação também passa pelo
@@ -589,7 +654,7 @@ Fica com a administração da plataforma: rotação de segredos e auditoria de `
 
 **Cliente pagou e não recebeu o arquivo.**
 
-1. Pedir para abrir `/downloads?order=<order_code>&email=<e-mail>` e clicar em "Atualizar": o
+1. Pedir para entrar na conta e abrir `/downloads?order=<order_code>` e clicar em "Atualizar": o
    `verify-payment` consulta o Mercado Pago, aprova se for o caso e reemite link usado ou vencido
    (até 5 downloads por item).
 2. A dona confere em Pedidos se o pagamento está aprovado. A administração da plataforma não tem
@@ -599,7 +664,8 @@ Fica com a administração da plataforma: rotação de segredos e auditoria de `
 4. Erro `DOWNLOAD_UNAVAILABLE`: o produto não tem arquivo do Storage. Reenviar o arquivo pelo
    painel; o token não foi gasto.
 
-**Reembolso.** Devolver pelo painel do Mercado Pago. O webhook marca o pedido como `refunded` (ou
+**Reembolso.** Pedido do cliente chega em Pedidos → Solicitações de devolução (seção 6a). Devolver
+pelo painel do Mercado Pago. O webhook marca o pedido como `refunded` (ou
 `charged_back`) e queima os links. Se o webhook não chegar, nada marca o pedido: o `verify-payment`
 não trata estorno e a aba Pedidos não altera status.
 
@@ -618,8 +684,9 @@ curl -X PUT "$SUPABASE_URL/auth/v1/admin/users/<uid>" \
   -d '{"password":"<senha temporária forte>"}'
 ```
 
-**Cupom expirou entre o abandono e a volta.** O servidor recalcula e o pedido segue sem o
-desconto; a tela não sugere alternativa.
+**Cupom expirou entre o abandono e a volta.** O `create-payment` recusa com 422 (cupom inválido,
+esgotado, fora do público ou acima do limite por cliente) e não cria o pedido; o cliente tira o
+cupom e paga.
 
 **Professora não consegue entrar com Google.** 401 "não cadastrada como professor(a)": a conta é de
 cliente — promover em "Professores e clientes". 403: é conta da administração, que entra com
