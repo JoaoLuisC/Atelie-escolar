@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { SkeletonDownloadList } from '../components/Skeleton';
+import { RefundForm } from '../components/RefundForm';
 import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
@@ -148,16 +149,25 @@ export function DownloadsPage() {
   const [refundPending, setRefundPending] = useState(false);
   const [refundReceipt, setRefundReceipt] = useState('');
   const [refundRequests, setRefundRequests] = useState([]);
+  const [refundEligibility, setRefundEligibility] = useState({});
+  const [refundCategory, setRefundCategory] = useState('');
   // null = ainda não editado (mostra o nome da sessão); '' = a pessoa apagou o campo.
   const [accountName, setAccountName] = useState(null);
   const [accountSaving, setAccountSaving] = useState(false);
 
+  const loadRefunds = useCallback(() => {
+    fetchMyRefundRequests()
+      .then(({ requests, eligibility }) => {
+        setRefundRequests(requests);
+        setRefundEligibility(Object.fromEntries(eligibility.map((item) => [item.orderId, item])));
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!customerSession?.email) return;
-    fetchMyRefundRequests()
-      .then(setRefundRequests)
-      .catch(() => {});
-  }, [customerSession?.email]);
+    loadRefunds();
+  }, [customerSession?.email, loadRefunds]);
 
   async function saveAccount(event) {
     event.preventDefault();
@@ -370,19 +380,27 @@ export function DownloadsPage() {
     }
   }
 
+  const refundFlow = refundEligibility[refundOrder]?.flow || 'simple';
+
   async function submitRefund(event) {
     event.preventDefault();
     setRefundPending(true);
     try {
-      await requestRefund({ orderId: refundOrder, reason: refundReason, phone: refundPhone });
+      await requestRefund({
+        orderId: refundOrder,
+        reasonCategory: refundFlow === 'support' ? refundCategory : 'desistencia',
+        reason: refundReason,
+        phone: refundPhone,
+      });
       setRefundReceipt(
-        `Solicitação do pedido #${refundOrder} recebida. A loja entrará em contato pelo e-mail da conta.`,
+        refundFlow === 'support'
+          ? `Pedido de suporte do pedido #${refundOrder} recebido. A loja responde em até 5 dias úteis pelo e-mail da conta.`
+          : `Desistência do pedido #${refundOrder} registrada. A loja faz o reembolso pelo Mercado Pago e avisa pelo e-mail da conta.`,
       );
-      fetchMyRefundRequests()
-        .then(setRefundRequests)
-        .catch(() => {});
+      loadRefunds();
       setRefundOrder('');
       setRefundReason('');
+      setRefundCategory('');
       setRefundPhone('');
     } catch (error) {
       pushToast(error.message || 'Não foi possível registrar a solicitação.', 'error');
@@ -758,11 +776,14 @@ export function DownloadsPage() {
                             type="button"
                             onClick={() => {
                               setRefundReceipt('');
+                              setRefundCategory('');
                               setRefundOrder(entry.orderId);
                             }}
                             className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700"
                           >
-                            Solicitar devolução
+                            {refundEligibility[entry.orderId]?.flow === 'support'
+                              ? 'Pedir suporte ou devolução'
+                              : 'Desistir da compra'}
                           </button>
                         ) : null}
                       </li>
@@ -778,53 +799,19 @@ export function DownloadsPage() {
                   </p>
                 ) : null}
                 {refundOrder ? (
-                  <form
+                  <RefundForm
+                    orderId={refundOrder}
+                    eligibility={refundEligibility[refundOrder]}
+                    category={refundCategory}
+                    reason={refundReason}
+                    phone={refundPhone}
+                    pending={refundPending}
+                    onCategoryChange={setRefundCategory}
+                    onReasonChange={setRefundReason}
+                    onPhoneChange={setRefundPhone}
                     onSubmit={submitRefund}
-                    className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4"
-                  >
-                    <h5 className="font-semibold text-slate-900">
-                      Solicitar devolução do pedido #{refundOrder}
-                    </h5>
-                    <p className="text-xs text-slate-600">
-                      Você pode informar o motivo e telefone para facilitar o atendimento; eles são
-                      opcionais.
-                    </p>
-                    <label className="block text-sm text-slate-700">
-                      Motivo (opcional)
-                      <textarea
-                        value={refundReason}
-                        maxLength={2000}
-                        onChange={(event) => setRefundReason(event.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-300 p-2"
-                      />
-                    </label>
-                    <label className="block text-sm text-slate-700">
-                      Telefone (opcional)
-                      <input
-                        type="tel"
-                        value={refundPhone}
-                        maxLength={40}
-                        onChange={(event) => setRefundPhone(event.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-300 p-2"
-                      />
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        disabled={refundPending}
-                        type="submit"
-                        className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                      >
-                        {refundPending ? 'Enviando…' : 'Enviar solicitação'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRefundOrder('')}
-                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
+                    onCancel={() => setRefundOrder('')}
+                  />
                 ) : null}
               </div>
             ) : null}

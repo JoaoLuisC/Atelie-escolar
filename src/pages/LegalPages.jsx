@@ -104,7 +104,8 @@ export function PrivacyPage() {
       <ul>
         <li>
           <strong>Na compra:</strong> nome e e-mail (obrigatórios) e, se você informar, CPF e
-          telefone; os produtos do pedido, valores, cupom usado e a situação do pagamento.
+          telefone; os produtos do pedido, valores, cupom usado, a situação do pagamento e a data e
+          hora em que você confirmou ter lido como funcionam o download e a devolução.
         </li>
         <li>
           <strong>Na conta de cliente:</strong> e-mail e senha (guardada apenas como resumo
@@ -118,7 +119,9 @@ export function PrivacyPage() {
         </li>
         <li>
           <strong>Na entrega:</strong> ao baixar um arquivo, registramos data, endereço IP e o tipo
-          de navegador, para prevenir fraude e resolver disputas.
+          de navegador, para prevenir fraude, resolver disputas e analisar pedidos de devolução
+          (saber se e quando o arquivo foi baixado define o caminho da devolução — veja os Termos,
+          seção 7).
         </li>
         <li>
           <strong>Carrinho salvo:</strong> se você digitar o e-mail no checkout e não concluir a
@@ -126,8 +129,10 @@ export function PrivacyPage() {
           seção 4).
         </li>
         <li>
-          <strong>Solicitação de devolução:</strong> o pedido, a data e, se você quiser informar, o
-          motivo e um telefone para contato, além das respostas da loja ao longo do atendimento.
+          <strong>Solicitação de devolução:</strong> o pedido, a data, o motivo (opcional na
+          desistência; categoria e descrição no pedido de suporte), um telefone se você quiser
+          informar, as respostas da loja e, como registro do momento do pedido, se o arquivo já
+          tinha sido baixado, quando e quantas vezes.
         </li>
         <li>
           <strong>Newsletter:</strong> e-mail e a confirmação da inscrição, apenas se você se
@@ -179,6 +184,12 @@ export function PrivacyPage() {
             Prevenir fraude, proteger contas e o site, e defender direitos em disputas
           </strong>{' '}
           — legítimo interesse e exercício regular de direitos (art. 7º, VI e IX).
+        </li>
+        <li>
+          <strong>Atender devoluções e reclamações</strong>, incluindo conferir o registro de
+          download e o aceite feito no checkout — execução de contrato e exercício regular de
+          direitos (art. 7º, V e VI). A decisão sobre o reembolso é sempre de uma pessoa da loja,
+          nunca automática.
         </li>
         <li>
           <strong>E-mails depois da compra</strong> (pedido de avaliação, sugestões relacionadas e
@@ -408,6 +419,11 @@ export function TermsPage() {
           Se tiver qualquer problema para baixar, escreva para <ContactLink /> com o número do
           pedido.
         </li>
+        <li>
+          Antes de pagar, o checkout pede que você confirme que o download é liberado imediatamente
+          e que, depois de baixar, a devolução vale para arquivo com defeito ou diferente do
+          anunciado (seção 7). A data e a hora dessa confirmação ficam registradas no pedido.
+        </li>
       </ul>
 
       <h2 id="licenca">6. Licença de uso</h2>
@@ -443,24 +459,47 @@ export function TermsPage() {
         caso de dúvida sobre um uso específico, escreva para <ContactLink />.
       </p>
 
-      <h2>7. Direito de arrependimento e reembolso</h2>
+      {/* Texto PENDENTE DE REVISÃO JURÍDICA (regra de devolução por download,
+          01/11/2026) — ver docs/05-FLUXOS.md. */}
+      <h2 id="devolucao">7. Desistência, devolução e reembolso</h2>
+      <p>
+        O material é digital e fica disponível para download assim que o pagamento é aprovado. Por
+        isso a devolução segue o caminho abaixo, conforme o arquivo já tenha sido baixado ou não. Os
+        pedidos são feitos em <strong>Meus produtos</strong> (botão ao lado do pedido) ou pelo
+        e-mail <ContactLink />, com o número do pedido.
+      </p>
       <ul>
         <li>
-          Pelo Código de Defesa do Consumidor (art. 49), você pode desistir da compra em até{' '}
-          <strong>7 dias</strong> contados da contratação ou da disponibilização do produto ou
-          serviço, conforme aplicável. Você não precisa justificar o arrependimento nem informar
-          telefone. Para solicitar, use &quot;Solicitar devolução&quot; em Meus produtos ou escreva
-          para <ContactLink /> com o número do pedido. A solicitação não gera estorno automático: a
-          loja responde por ali mesmo e combina o reembolso com você.
+          <strong>Até 7 dias da aprovação e sem nenhum download:</strong> você pode desistir da
+          compra (Código de Defesa do Consumidor, art. 49) com um clique, sem justificar e sem
+          informar telefone. A loja devolve o valor integral.
         </li>
         <li>
-          O reembolso é feito pelo Mercado Pago, no mesmo meio de pagamento usado na compra. Com o
-          reembolso, a licença de uso do item é encerrada: os arquivos baixados não podem mais ser
-          usados e devem ser apagados.
+          <strong>Depois de baixar qualquer arquivo do pedido, ou depois de 7 dias:</strong> o
+          pedido vira uma <strong>solicitação de suporte</strong>. Você escolhe o que aconteceu (o
+          arquivo não abre, tem defeito, é diferente do anunciado ou outro problema) e descreve em
+          poucas palavras. A loja tenta resolver primeiro — reenviando, corrigindo ou trocando o
+          arquivo — e devolve o valor se não houver solução ou se o produto for diferente do
+          anunciado.
         </li>
         <li>
-          Se o arquivo vier com defeito, incompleto ou diferente do anunciado, corrigimos,
-          substituímos ou devolvemos o valor, à sua escolha.
+          <strong>Defeito sempre dá direito a solução:</strong> se o arquivo vier com defeito,
+          incompleto ou diferente do anunciado, você tem direito à correção, à troca ou à devolução
+          do valor (arts. 18 e 20 do CDC),{' '}
+          <strong>com ou sem download e em qualquer prazo legal</strong>.
+        </li>
+        <li>
+          <strong>Prazo de resposta:</strong> a loja responde toda solicitação em até{' '}
+          <strong>5 dias úteis</strong>, pelo e-mail da sua conta e no histórico do pedido.
+        </li>
+        <li>
+          Nenhum pedido é estornado automaticamente: o reembolso é feito pela loja, pelo Mercado
+          Pago, no mesmo meio de pagamento da compra. Com o reembolso, a licença de uso do item é
+          encerrada: os arquivos baixados não podem mais ser usados e devem ser apagados.
+        </li>
+        <li>
+          Para decidir o caminho, a loja usa o registro de download do pedido (data, quantidade e
+          endereço IP), guardado conforme a Política de Privacidade.
         </li>
       </ul>
 

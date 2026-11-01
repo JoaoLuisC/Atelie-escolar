@@ -17,6 +17,29 @@ const STATUS_OPTIONS = [
   { value: 'failed', label: 'Falhou' },
 ];
 
+// Rótulos do motivo e do fluxo (lib/refund-policy.js decide o fluxo no servidor).
+const REASON_LABELS = {
+  desistencia: 'Desistência',
+  nao_abre: 'O arquivo não abre',
+  defeito: 'Arquivo com defeito',
+  diferente_do_anunciado: 'Diferente do anunciado',
+  outro: 'Outro',
+};
+const FLOW_LABELS = {
+  simple: 'Desistência simples (até 7 dias, sem download)',
+  support: 'Suporte (já baixou ou passou de 7 dias)',
+};
+
+/** "Nunca baixou" ou "Baixou em dd/mm hh:mm · N downloads · IP". */
+export function downloadProofText(item) {
+  const count = Number(item?.download_count || 0);
+  if (!count || !item?.first_download_at) return 'Nunca baixou';
+  const parts = [`Baixou em ${formatDateTime(item.first_download_at)}`];
+  parts.push(`${count} download${count === 1 ? '' : 's'}`);
+  if (item.firstDownloadIp) parts.push(`IP ${item.firstDownloadIp}`);
+  return parts.join(' · ');
+}
+
 export function OrdersTab({ orders, statusFilter, onStatusFilterChange, onOpenOrder }) {
   const [refunds, setRefunds] = useState([]);
   const [refundError, setRefundError] = useState('');
@@ -87,7 +110,14 @@ export function OrdersTab({ orders, statusFilter, onStatusFilterChange, onOpenOr
               <p>
                 {item.order?.customer_name || 'Cliente'} · {item.order?.customer_email}
               </p>
-              <p className="mt-1">Motivo: {item.reason || 'Não informado'}</p>
+              <p className="mt-1 font-semibold text-slate-700">
+                {FLOW_LABELS[item.flow] || FLOW_LABELS.simple}
+              </p>
+              <p>{downloadProofText(item)}</p>
+              <p className="mt-1">
+                Motivo: {REASON_LABELS[item.reason_category] || 'Não informado'}
+                {item.reason ? ` — ${item.reason}` : ''}
+              </p>
               <p>Telefone: {item.phone || 'Não informado'}</p>
               <div className="mt-3 grid gap-2 sm:grid-cols-[180px_1fr_auto]">
                 <select

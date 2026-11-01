@@ -93,7 +93,7 @@ function requestFor(items, couponCode) {
     method: 'POST',
     headers: {},
     query: {},
-    body: { items, customer: CUSTOMER, couponCode },
+    body: { items, customer: CUSTOMER, couponCode, acceptedDownloadTerms: true },
   };
 }
 
@@ -273,6 +273,26 @@ describe('checkout — invariante de dinheiro (regra E3)', () => {
     expect(res.statusCode).toBe(400);
     expect(store.spies.listTableRows).not.toHaveBeenCalled();
     expect(store.spies.supabaseRequest).not.toHaveBeenCalled();
+  });
+
+  it('sem o aceite da caixa de ciência: 400 e nenhum pedido (Termos, seção 7)', async () => {
+    const { store, handler } = arrange({ products: [productRow(uuid(1), 5)] });
+    for (const accepted of [undefined, false, 'true']) {
+      const req = requestFor([{ productId: uuid(1), quantity: 1 }]);
+      req.body.acceptedDownloadTerms = accepted;
+      const res = createMockRes();
+      await handler(req, res);
+      expect(res.statusCode).toBe(400);
+    }
+    expect(store.rows('orders')).toHaveLength(0);
+  });
+
+  it('com o aceite, o pedido guarda a data e a hora da ciência', async () => {
+    const { store, handler } = arrange({ products: [productRow(uuid(1), 5)] });
+    const res = createMockRes();
+    await handler(requestFor([{ productId: uuid(1), quantity: 1 }]), res);
+    const [order] = store.rows('orders');
+    expect(Number.isNaN(Date.parse(order.download_terms_accepted_at))).toBe(false);
   });
 
   it('devolve a reserva do cupom se falhar antes de criar a preferência', async () => {

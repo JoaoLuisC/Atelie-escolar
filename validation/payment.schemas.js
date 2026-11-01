@@ -118,6 +118,12 @@ const createPaymentSchema = z.object({
     .transform((value) => cleanText(value).toUpperCase().slice(0, 40))
     .default(''),
   attribution: z.unknown().optional(),
+  // Caixa de ciência do checkout (Termos, seção 7): o download é liberado na
+  // hora e, depois de baixar, a devolução vale para defeito ou produto
+  // diferente do anunciado. Sem o aceite explícito, não há pedido.
+  acceptedDownloadTerms: z.literal(true, {
+    error: 'Confirme que leu como funcionam o download e a devolução antes de pagar.',
+  }),
 });
 
 /**

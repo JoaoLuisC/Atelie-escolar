@@ -57,24 +57,29 @@ export async function fetchMyOrders({ signal } = {}) {
   return { orders: data.orders || [], sessionExpired: false };
 }
 
-export async function requestRefund({ orderId, reason, phone }) {
+export async function requestRefund({ orderId, reasonCategory, reason, phone }) {
   const { response, data } = await apiRequest('/refund-request', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orderId, reason, phone }),
+    body: JSON.stringify({ orderId, reasonCategory, reason, phone }),
   });
   if (!response.ok || !data.success)
     throw apiError(data, 'Não foi possível registrar a solicitação.');
   return data;
 }
 
+/**
+ * Solicitações da conta + o fluxo de devolução que vale para cada pedido
+ * aprovado (`simple` = desistência; `support` = já baixou ou passou de 7 dias).
+ * Quem decide o fluxo é o servidor; aqui é só para mostrar o formulário certo.
+ */
 export async function fetchMyRefundRequests() {
   const { response, data } = await apiRequest('/refund-request', { credentials: 'include' });
   if (!response.ok || !data.success) {
     throw apiError(data, 'Não foi possível consultar as solicitações.');
   }
-  return data.requests || [];
+  return { requests: data.requests || [], eligibility: data.eligibility || [] };
 }
 
 /**

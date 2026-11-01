@@ -17,7 +17,7 @@ Os painéis em si (abas, cards, ações) estão em [06-PAINEIS](./06-PAINEIS.md)
 3. [Carrinho e checkout](#3-carrinho-e-checkout)
 4. [Pagamento e confirmação](#4-pagamento-e-confirmação)
 5. [Webhook do Mercado Pago](#5-webhook-do-mercado-pago)
-6. [Download](#6-download) · [6a. Solicitação de devolução](#6a-solicitação-de-devolução)
+6. [Download](#6-download) · [6a. Desistência e devolução (regra por download)](#6a-solicitação-de-devolução)
 7. [Pós-venda: e-mails automáticos](#7-pós-venda-e-mails-automáticos)
 8. [Newsletter (double opt-in)](#8-newsletter-double-opt-in)
 
@@ -256,32 +256,50 @@ link leva a `/conta` para privacidade e exclusão).
 
 ---
 
-## 6a. Solicitação de devolução
+## 6a. Desistência e devolução (regra por download)
+
+> **Pendente de revisão jurídica.** A regra abaixo e o texto da seção 7 dos Termos foram
+> definidos em 01/11/2026 e ainda não passaram por advogado.
+
+| Situação do pedido                            | Fluxo (`refund_requests.flow`)                                                                                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Até 7 dias da aprovação e **nenhum download** | `simple`: desistência com um clique, motivo opcional. A loja reembolsa                                                                                                         |
+| **Já baixou** qualquer item do pedido         | `support`: categoria + descrição obrigatórias. A loja tenta resolver (reenviar, corrigir, trocar) e reembolsa se não houver solução ou se o produto for diferente do anunciado |
+| Mais de 7 dias                                | `support`, só por defeito                                                                                                                                                      |
 
 ```mermaid
 flowchart TD
-    A["/downloads → Histórico<br/>pedido aprovado sem solicitação"] --> B[Solicitar devolução<br/>motivo e telefone opcionais]
-    B --> C[POST /api/refund-request<br/>orderId = order_code]
-    C --> C1{Pedido aprovado<br/>desta conta?}
+    K[Checkout: caixa de ciência obrigatória<br/>orders.download_terms_accepted_at] --> A
+    A["/downloads → Histórico<br/>GET /api/refund-request traz o fluxo de cada pedido"] --> B{flow}
+    B -->|simple| S[Desistir da compra<br/>motivo opcional]
+    B -->|support| P[Pedir suporte ou devolução<br/>aviso: baixado em dd/mm<br/>categoria + descrição 20+]
+    S --> C[POST /api/refund-request]
+    P --> C
+    C --> C1{Pedido aprovado desta conta?}
     C1 -->|não| C2[404]
     C1 -->|sim| C3{Já há uma aberta?}
     C3 -->|sim, ou corrida no índice único| C4[200 alreadyRequested]
-    C3 -->|não| C5[201 refund_requests status open]
-    C5 --> D[Painel da loja → Pedidos<br/>Solicitações de devolução]
-    D --> E[PUT /api/admin/refund-requests<br/>status + resposta]
-    E --> F[Cliente vê a situação e a resposta<br/>no histórico]
-    E -.->|aceita| G[Estorno feito à mão no Mercado Pago<br/>webhook marca refunded e queima os links]
+    C3 -->|não| R[lib/refund-policy.js decide o fluxo<br/>download_logs + completed_at]
+    R --> R1{motivo válido p/ o fluxo?}
+    R1 -->|não| R2[400 VALIDATION_FAILED]
+    R1 -->|sim| C5[201 refund_requests<br/>flow, categoria, first_download_at, download_count]
+    C5 --> D[Painel → Pedidos: fluxo, categoria e<br/>Nunca baixou / Baixou em dd/mm hh:mm · N downloads · IP]
+    D --> E[PUT /api/admin/refund-requests<br/>status + resposta, em até 5 dias úteis]
+    E -.->|reembolso| G[Estorno feito à mão no Mercado Pago<br/>webhook marca refunded e queima os links]
 ```
 
-**Cliente vê.** Um formulário curto (motivo e telefone opcionais; telefone só com dígitos e
-pontuação, 8 a 40 caracteres) e depois a situação: aberta, em conversa, aceita, não aceita ou
-resolvida, com a resposta da loja. Os Termos (`/termos`) explicam o direito de arrependimento de
-7 dias e apontam para esse botão.
+**Cliente vê.** No checkout, a caixa "Entendo que o download é liberado imediatamente e que,
+depois de baixar, a devolução vale para arquivo com defeito ou diferente do anunciado" — sem ela o
+botão de pagar não envia e o servidor recusa (400). Em Meus produtos, o botão muda conforme o
+pedido: "Desistir da compra" (confirmação, motivo e telefone opcionais) ou "Pedir suporte ou
+devolução" (aviso com a data do download ou do fim do prazo, categoria e descrição).
 
-**Sistema.** Exige sessão de cliente; rate limit 10 / 10 min. Uma solicitação não encerrada por
-pedido (índice único parcial; `declined` e `resolved` encerram e liberam uma nova). **Não há
-estorno automático**: aceitar no painel só muda o status; o dinheiro volta pelo Mercado Pago (ver
-"Reembolso" na seção 18). A professora vê e responde só as solicitações dos pedidos dela.
+**Sistema.** O fluxo é decidido **no servidor** (`lib/refund-policy.js`), nunca pelo front: conta os
+`download_logs` do pedido e o prazo de 7 dias a partir de `completed_at`. A prova do download vai
+gravada na solicitação. Exige sessão de cliente; rate limit 10 / 10 min; uma solicitação não
+encerrada por pedido. **Não há estorno automático**, em nenhum fluxo: o reembolso é manual (ver
+"Reembolso" na seção 18). O reembolso por defeito (CDC, arts. 18 e 20) existe nos dois fluxos. A
+professora vê e responde só as solicitações dos pedidos dela.
 
 ---
 

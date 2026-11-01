@@ -217,6 +217,7 @@ describe('create-payment — logado, o pedido é da conta (LOJA-40)', () => {
         {
           items: [{ productId: P1, quantity: 1 }],
           customer: { name: 'Ana Silva', email: 'outro@exemplo.com' },
+          acceptedDownloadTerms: true,
         },
         headers,
       ),

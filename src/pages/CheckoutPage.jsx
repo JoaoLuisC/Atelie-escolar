@@ -390,6 +390,8 @@ export function CheckoutPage() {
         customer: { name, email },
         attribution: getAttributionPayload(),
         couponCode: activeCoupon?.code || null,
+        // O formulário só chega aqui com a caixa marcada (required no register).
+        acceptedDownloadTerms: formData.acceptedDownloadTerms === true,
       };
 
       // O serviço já valida o envelope e a presença da URL de pagamento — sem
@@ -749,6 +751,38 @@ export function CheckoutPage() {
                   ) : null}
                 </div>
               ) : null}
+
+              {/* Caixa de ciência (Termos, seção 7): sem ela o servidor recusa o pedido. */}
+              <div>
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    disabled={processing}
+                    aria-invalid={Boolean(errors.acceptedDownloadTerms)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                    {...register('acceptedDownloadTerms', {
+                      required:
+                        'Confirme que leu como funcionam o download e a devolução antes de pagar.',
+                    })}
+                  />
+                  <span>
+                    Entendo que o download é liberado imediatamente e que, depois de baixar, a
+                    devolução vale para arquivo com defeito ou diferente do anunciado.{' '}
+                    <Link
+                      to={{ pathname: ROUTES.termos, hash: '#devolucao' }}
+                      target="_blank"
+                      className="font-semibold text-brand-700 underline"
+                    >
+                      Ver a regra completa
+                    </Link>
+                  </span>
+                </label>
+                {errors.acceptedDownloadTerms ? (
+                  <p role="alert" className="mt-1 text-xs text-rose-700">
+                    {errors.acceptedDownloadTerms.message}
+                  </p>
+                ) : null}
+              </div>
 
               <div className="mt-2 rounded-2xl bg-gradient-to-br from-brand-50 to-slate-50 p-4">
                 <button

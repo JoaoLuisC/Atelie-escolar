@@ -54,7 +54,7 @@ Atores técnicos:
 - Carrinho em `localStorage`, em drawer (não navega).
 - Checkout numa página só: conta, nome, cupom e pagamento. Comprar exige conta: quem não tem cria ali mesmo (e-mail + senha) ou entra com Google.
 - Cupom pré-validado na tela e validado de verdade no servidor, no `create-payment`; pode valer para todos, só a primeira compra, quem já comprou, e-mails específicos ou como recompensa a cada N compras, com limite por cliente.
-- Solicitação de devolução pelo histórico em `/downloads`, respondida pela loja no painel (o estorno continua manual, no Mercado Pago).
+- Devolução pelo histórico em `/downloads` com regra por download: até 7 dias e sem baixar, desistência com um clique; depois de baixar (ou de 7 dias), pedido de suporte com motivo. O checkout exige a caixa de ciência dessa regra. O estorno continua manual, no Mercado Pago (texto dos Termos pendente de revisão jurídica).
 - Aprovação pelo webhook do Mercado Pago, com polling na tela como reserva.
 - E-mail de confirmação do pedido na primeira aprovação (idempotente).
 - Download por token de uso único, entregue por URL assinada do Storage; até 5 downloads por item, com reemissão do link pelo botão "Atualizar" em `/downloads`.

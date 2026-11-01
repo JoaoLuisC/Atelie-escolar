@@ -418,6 +418,8 @@ module.exports = async function createPaymentHandler(req, res) {
       coupon_code: appliedCouponCode,
       coupon_customer_key: appliedCouponCode ? couponCustomerKey : null,
       discount_amount: discountAmountApplied,
+      // Prova do aceite da caixa de ciência (o schema já recusou sem ele).
+      download_terms_accepted_at: new Date().toISOString(),
     });
 
     // Gravamos os items com o preço **original** (sem o desconto rateado).

@@ -198,16 +198,21 @@ produtos ativos (`/produtos/<slug>`). `application/xml`, cache público de 1 h.
 
 Cria pedido e preferência do Mercado Pago. **Exige `customer_session`**: sem ela, 401
 `CUSTOMER_SESSION_INVALID` (o checkout cria a conta antes). O e-mail do pedido é sempre o da conta
-e o pedido grava `customer_id`.
+e o pedido grava `customer_id`. A sessão é conferida antes do corpo (regra A3).
 
 ```json
 {
   "customer": { "email": "...", "name": "...", "cpf": "...", "phone": "..." },
   "items": [{ "productId": "<uuid>", "quantity": 1 }],
   "couponCode": "VOLTEI15",
-  "attribution": { "session_id": "...", "utm_source": "..." }
+  "attribution": { "session_id": "...", "utm_source": "..." },
+  "acceptedDownloadTerms": true
 }
 ```
+
+`acceptedDownloadTerms` é a caixa de ciência do checkout (Termos, seção 7) e precisa ser
+exatamente `true`; senão 400 `VALIDATION_FAILED` e nenhum pedido. O pedido grava a data e a hora
+em `orders.download_terms_accepted_at`.
 
 Resposta: `{ success, orderId, orderInternalId, preferenceId, initPoint, sandboxInitPoint,
 subtotal, discount, total, couponApplied }`.
@@ -322,13 +327,21 @@ em `auth.users` são adotados pela conta antes da listagem.
 
 Solicitação de devolução, com `customer_session` (401 sem ela).
 
-- **GET:** `{ success, requests: [{ id, order_id, reason, phone, status, admin_response, created_at, updated_at }] }`
-  da conta.
-- **POST** `{ orderId, reason?, phone? }`: `orderId` é o `order_code` (até 100); motivo até 2.000;
-  telefone opcional, só dígitos, espaço e `()+.-`, 8 a 40 caracteres — senão 400
-  `VALIDATION_FAILED`. Pedido não aprovado ou de outra conta → 404. Cria com status `open` → 201
-  `{ requestId }`. Já existe uma não encerrada (inclusive na corrida, pelo índice único) → 200
-  `{ requestId, alreadyRequested: true }`. **Não estorna nada.**
+Regra por download (Termos, seção 7; `lib/refund-policy.js`): até 7 dias da aprovação e nenhum
+download → fluxo `simple`; já baixou ou passou de 7 dias → `support`. O servidor decide.
+
+- **GET:** `{ success, requests: [{ id, order_id, reason, reason_category, flow, phone, status,
+admin_response, created_at, updated_at }], eligibility: [{ orderId, flow, flowReason
+('ok'|'downloaded'|'expired'), deadline, firstDownloadAt, downloadCount }] }` — `eligibility` tem
+  uma linha por pedido aprovado da conta, para o front mostrar o formulário certo.
+- **POST** `{ orderId, reasonCategory?, reason?, phone? }`: `orderId` é o `order_code` (até 100);
+  telefone opcional, só dígitos, espaço e `()+.-`, 8 a 40 caracteres. Fluxo `simple`: categoria
+  opcional (padrão `desistencia`). Fluxo `support`: `reasonCategory` em `nao_abre`, `defeito`,
+  `diferente_do_anunciado`, `outro` e `reason` com 20 a 2.000 caracteres. Fora disso → 400
+  `VALIDATION_FAILED`. Pedido não aprovado ou de outra conta → 404. Cria com status `open`,
+  gravando `flow`, `reason_category`, `first_download_at` e `download_count` → 201
+  `{ requestId, flow }`. Já existe uma não encerrada (inclusive na corrida, pelo índice único) →
+  200 `{ requestId, alreadyRequested: true }`. **Não estorna nada.**
 
 ### `GET|PUT /api/me-profile`
 
@@ -457,7 +470,7 @@ Todas as respostas do painel saem `private, no-store`. Toda escrita grava audito
 | `/api/admin/categories`      | GET, POST, PUT, DELETE        | CRUD de categorias (slug normalizado; 409 em duplicata)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `/api/admin/coupons`         | GET, POST, PUT, DELETE        | CRUD de cupons. Campos: `code`, `discountType`, `discountValue`, `validFrom` (data pura = 00:00 de Brasília), `validUntil` (23:59:59 de Brasília), `maxUses`, `maxUsesPerCustomer` (≥ 1 ou vazio), `minOrderAmount`, `audience` (`all`, `customers`, `new_customers`, `returning_customers`, `emails`, `purchase_milestone`), `eligibleEmails` (obrigatório em `emails`, até 500), `purchasesRequired` (obrigatório em `purchase_milestone`), `active`                                                                                                                                                                                                                                                |
 | `/api/admin/orders`          | GET                           | Pedidos com itens; `?status=` filtra por `payment_status`. Para a dona, só pedidos com material dela                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `/api/admin/refund-requests` | GET, PUT                      | GET: solicitações com `order: { order_code, customer_name, customer_email }`, só dos pedidos no recorte da professora. PUT `{ id, status, response }` — `status` em `open`, `contacted`, `accepted`, `declined`, `resolved`; resposta até 4.000 — grava e audita (`refund_request`); pedido fora do recorte → 403. Não estorna                                                                                                                                                                                                                                                                                                                                                                        |
+| `/api/admin/refund-requests` | GET, PUT                      | GET: solicitações com `flow`, `reason_category`, `first_download_at`, `download_count`, `firstDownloadIp` (IP do 1º download, de `download_logs`) e `order: { order_code, customer_name, customer_email }`, só dos pedidos no recorte da professora. PUT `{ id, status, response }` — `status` em `open`, `contacted`, `accepted`, `declined`, `resolved`; resposta até 4.000 — grava e audita (`refund_request`); pedido fora do recorte → 403. Não estorna                                                                                                                                                                                                                                          |
 | `/api/admin/settings`        | GET, PUT                      | `?key=` entre `homeSections`, `homeContent`, `productDefaults` e `adminConfig`. `homeContent`/`productDefaults` são limpos no PUT (`lib/store-content.js`; descartes voltam em `ignoredFields`). `adminConfig` (TOTP, PIN) é só de admin (403 para a dona), nunca devolve segredos (`has2FA`/`hasPin`) e mudar o 2º fator exige o fator vigente (`SECOND_FACTOR_REQUIRED`)                                                                                                                                                                                                                                                                                                                            |
 | `/api/admin/upload-url`      | POST                          | `{ kind, action }` com `kind` = `image`, `video` ou `download` e `action` = `sign` (padrão, gera signed upload URL) ou `confirm` (confere o objeto enviado). Whitelist de extensão/MIME; SVG/HTML barrados em bucket público                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `/api/admin/ai-assist`       | POST                          | `{ task, input }`, `task` = `productCopy` (descrição, benefícios, FAQ), `productSeo` (nome, Google, faixa de preço) ou `homeCopy` (textos da loja). Só gera no clique, nada é gravado. Cota do Gemini → 429 `RATE_LIMITED`; IA indisponível → 503                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -531,7 +544,7 @@ curl http://localhost:3000/api/customer-orders -b cookies.txt
 
 # Criar pagamento (exige a sessão de cliente do passo acima)
 curl -X POST http://localhost:3000/api/create-payment -b cookies.txt -H "Content-Type: application/json" \
-  -d '{"customer":{"email":"x@y.com","name":"Teste"},"items":[{"productId":"<id-real>","quantity":1}]}'
+  -d '{"customer":{"email":"x@y.com","name":"Teste"},"items":[{"productId":"<id-real>","quantity":1}],"acceptedDownloadTerms":true}'
 
 # Webhook assinado
 PAYMENT_ID=12345; WEBHOOK_SECRET=<seu-secret>; TS=$(date +%s)

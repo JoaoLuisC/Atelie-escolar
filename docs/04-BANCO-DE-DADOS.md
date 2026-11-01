@@ -84,6 +84,7 @@ Pedidos. O cliente logado lê os próprios (`customer_id = auth.uid()`); o resto
 | `coupon_code`                                                               | text nullable                   |                                                                                                                                          |
 | `coupon_released_at`                                                        | timestamptz nullable            | Quando o uso reservado do cupom foi devolvido (pedido não pago). NULL = uso ainda contado                                                |
 | `coupon_customer_key`                                                       | text nullable                   | Chave do cliente no uso individual do cupom (`user:<uuid>`); devolvida junto com o uso global                                            |
+| `download_terms_accepted_at`                                                | timestamptz                     | Data e hora do aceite da caixa de ciência do checkout (Termos, seção 7). Obrigatório em pedido novo; `null` em pedidos antigos           |
 | `status`                                                                    | text                            | `pending` → `completed` (aprovado), `failed` ou `refunded` (estorno/chargeback); gravado por webhook/verify-payment, ajustável no painel |
 | `payment_status`                                                            | text                            | `pending` \| `approved` \| `rejected` \| `cancelled` \| `refunded` \| `charged_back`                                                     |
 | `payment_provider`                                                          | text                            | `mercadopago`                                                                                                                            |
@@ -226,15 +227,18 @@ Uso do cupom por cliente. Só backend; escrita só pelas funções de cupom.
 Solicitação de devolução aberta pelo cliente em `/downloads`. Só backend. Não gera estorno: a loja
 responde pelo painel e o reembolso, se aceito, é feito no Mercado Pago.
 
-| Coluna                      | Tipo                   | Notas                                                                                                                  |
-| --------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `id`                        | uuid PK                |                                                                                                                        |
-| `order_id`                  | uuid FK → `orders`     | ON DELETE CASCADE. Índice único parcial `refund_requests_one_open_per_order`: uma solicitação não encerrada por pedido |
-| `customer_id`               | uuid FK → `auth.users` | ON DELETE CASCADE                                                                                                      |
-| `reason` / `phone`          | text                   | Opcionais (`''`); até 2.000 e 40 caracteres                                                                            |
-| `status`                    | text                   | `open` \| `contacted` \| `accepted` \| `declined` \| `resolved` (CHECK). `declined` e `resolved` encerram              |
-| `admin_response`            | text                   | Resposta da loja, mostrada ao cliente (até 4.000)                                                                      |
-| `created_at` / `updated_at` | timestamptz            | `updated_at` gravado pelo handler (sem trigger)                                                                        |
+| Coluna                                 | Tipo                   | Notas                                                                                                                  |
+| -------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `id`                                   | uuid PK                |                                                                                                                        |
+| `order_id`                             | uuid FK → `orders`     | ON DELETE CASCADE. Índice único parcial `refund_requests_one_open_per_order`: uma solicitação não encerrada por pedido |
+| `customer_id`                          | uuid FK → `auth.users` | ON DELETE CASCADE                                                                                                      |
+| `reason` / `phone`                     | text                   | Até 2.000 e 40 caracteres. Opcionais no fluxo `simple`; no `support` o `reason` (descrição) é obrigatório              |
+| `reason_category`                      | text                   | `desistencia` \| `nao_abre` \| `defeito` \| `diferente_do_anunciado` \| `outro` (CHECK)                                |
+| `flow`                                 | text                   | `simple` (até 7 dias, sem download) \| `support` (já baixou ou passou de 7 dias). Decidido pelo servidor               |
+| `first_download_at` / `download_count` | timestamptz / int      | Prova gravada no momento do pedido, a partir de `download_logs`                                                        |
+| `status`                               | text                   | `open` \| `contacted` \| `accepted` \| `declined` \| `resolved` (CHECK). `declined` e `resolved` encerram              |
+| `admin_response`                       | text                   | Resposta da loja, mostrada ao cliente (até 4.000)                                                                      |
+| `created_at` / `updated_at`            | timestamptz            | `updated_at` gravado pelo handler (sem trigger)                                                                        |
 
 ### `abandoned_carts`
 
@@ -401,7 +405,7 @@ Toda função `SECURITY DEFINER` tem `set search_path = public, pg_temp` e `EXEC
 Sem `pg_cron` habilitado, as migrations só emitem um `notice` e as limpezas precisam ser rodadas à
 mão (`select public.purge_old_logs();` etc.). Conferir os jobs: `select jobname, schedule from cron.job;`.
 
-## Migrations (27)
+## Migrations (28)
 
 Em ordem, aplicadas com `npm run supabase:db:push`.
 
@@ -433,6 +437,7 @@ Em ordem, aplicadas com `npm run supabase:db:push`.
 | `20261027000000_profiles_email_sync.sql`                 | `sync_profile_email()` e trigger `on_auth_user_email_changed`                                                                                                                                                             |
 | `20261031000000_refund_requests.sql`                     | Cria `refund_requests` (RLS, só `service_role`) e o índice de uma solicitação aberta por pedido                                                                                                                           |
 | `20261031010000_coupon_audience_and_customer_limits.sql` | Público e limite por cliente em `coupons`, `orders.coupon_customer_key`, `coupon_customer_usage`; funções de cupom com 2 argumentos e trigger de recontagem atualizado                                                    |
+| `20261101000000_refund_policy_download_evidence.sql`     | `refund_requests`: `reason_category`, `flow`, `first_download_at`, `download_count`; `orders.download_terms_accepted_at` (aceite da caixa de ciência do checkout)                                                         |
 | `20261031020000_storage_buckets_visibility.sql`          | Visibilidade dos buckets no banco: `product_files` privado; `product_images` e `product_videos` públicos                                                                                                                  |
 
 ### Criar uma migration

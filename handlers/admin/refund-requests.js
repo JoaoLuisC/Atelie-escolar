@@ -3,6 +3,12 @@ const {
   serviceRoleHelpers: { getTableRow, listTableRows, updateTable },
 } = require('../../lib/supabase');
 const { getSellerScope, scopeOrderRows } = require('../../lib/seller-scope');
+const { loadDownloadEvidence } = require('../../lib/refund-policy');
+
+// Cada solicitação vai com o fluxo (simple/support), a categoria do motivo e a
+// prova de download: o que foi gravado no momento do pedido
+// (first_download_at, download_count) e o IP do primeiro download, lido de
+// download_logs — a dona da loja decide o reembolso com isso na tela.
 
 module.exports = createAdminResourceHandler({
   storeResource: true,
@@ -13,7 +19,8 @@ module.exports = createAdminResourceHandler({
   operations: {
     GET: async (req) => {
       const requests = await listTableRows('refund_requests', {
-        select: 'id,order_id,reason,phone,status,admin_response,created_at,updated_at',
+        select:
+          'id,order_id,reason,reason_category,flow,first_download_at,download_count,phone,status,admin_response,created_at,updated_at',
         orderBy: 'created_at',
         ascending: false,
       });
@@ -25,12 +32,16 @@ module.exports = createAdminResourceHandler({
       });
       const scoped = await scopeOrderRows(orders, getSellerScope(req));
       const byId = new Map(scoped.orders.map((order) => [String(order.id), order]));
+      const visible = requests.filter((item) => byId.has(String(item.order_id)));
+      const evidence = await loadDownloadEvidence(visible.map((item) => item.order_id));
       return {
         status: 200,
         body: {
-          requests: requests
-            .filter((item) => byId.has(String(item.order_id)))
-            .map((item) => ({ ...item, order: byId.get(String(item.order_id)) })),
+          requests: visible.map((item) => ({
+            ...item,
+            order: byId.get(String(item.order_id)),
+            firstDownloadIp: evidence[String(item.order_id)]?.firstIp || '',
+          })),
         },
       };
     },

@@ -34,6 +34,13 @@ export function formatDateTime(value) {
   });
 }
 
+/** `13/08/2026`. Devolve `-` quando a data não é legível. */
+export function formatDate(value) {
+  const dt = toDateSafe(value);
+  if (!dt) return '-';
+  return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 /** `13 de agosto de 2026`. Usado no cabeçalho do painel. */
 export function formatToday() {
   return new Date().toLocaleDateString('pt-BR', {

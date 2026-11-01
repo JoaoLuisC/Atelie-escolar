@@ -49,6 +49,12 @@ function renderAt(url = '/checkout') {
   );
 }
 
+/** Marca a caixa de ciência (obrigatória) e clica em pagar. */
+function payNow() {
+  fireEvent.click(screen.getByRole('checkbox', { name: /download é liberado imediatamente/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
+}
+
 describe('CheckoutPage', () => {
   beforeEach(() => {
     resetMockState();
@@ -108,7 +114,7 @@ describe('CheckoutPage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
+    payNow();
 
     await waitFor(() => {
       expect(screen.getByText(/Não conseguimos confirmar este pagamento/i)).toBeInTheDocument();
@@ -160,7 +166,7 @@ describe('CheckoutPage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
+    payNow();
 
     // Aguarda o onSubmit resolver e o efeito registrar o intervalo (poll).
     // Flush por macrotask; sem waitFor para não colidir com o setInterval mock.
@@ -197,7 +203,7 @@ describe('CheckoutPage', () => {
     fireEvent.change(screen.getByLabelText('Nome completo'), { target: { value: 'Maria Silva' } });
     fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'maria@exemplo.com' } });
     fireEvent.change(screen.getByLabelText('Crie uma senha'), { target: { value: 'Segura123!' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
+    payNow();
     expect(await screen.findByText(/Confirme seu e-mail/)).toBeInTheDocument();
     expect(authState.registerCustomer).toHaveBeenCalledWith({
       name: 'Maria Silva',
@@ -259,7 +265,7 @@ describe('CheckoutPage', () => {
     renderAt();
     expect(screen.getByText('Seu carrinho foi atualizado')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
+    payNow();
 
     await waitFor(() => {
       expect(screen.getByText(/Confira o novo total/)).toBeInTheDocument();
@@ -280,7 +286,7 @@ describe('CheckoutPage', () => {
     });
 
     renderAt();
-    fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
+    payNow();
 
     await waitFor(() => {
       const chamada = globalThis.fetch.mock.calls.find(([url]) =>
@@ -290,5 +296,16 @@ describe('CheckoutPage', () => {
       expect(chamada[1].credentials).toBe('include');
       expect(JSON.parse(chamada[1].body).customer.email).toBe('cliente@teste.com');
     });
+  });
+
+  it('sem marcar a caixa de ciência, o pagamento não é criado', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    renderAt();
+    fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
+    expect(
+      await screen.findByText(/Confirme que leu como funcionam o download e a devolução/),
+    ).toBeInTheDocument();
+    const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+    expect(calls.some((url) => url.includes('/create-payment'))).toBe(false);
   });
 });

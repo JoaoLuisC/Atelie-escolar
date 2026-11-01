@@ -215,7 +215,9 @@ Fonte: `GET /api/admin/orders?status=`. A API também aceita `PUT` (status, clie
 apagar.
 
 **Solicitações de devolução** (cartão na mesma aba). Uma linha por pedido do cliente: código,
-cliente, motivo, telefone (ou "Não informado"), data, um seletor de situação — Aberta, Em conversa,
+cliente, o fluxo — "Desistência simples (até 7 dias, sem download)" ou "Suporte (já baixou ou
+passou de 7 dias)" —, a prova do download ("Nunca baixou" ou "Baixou em dd/mm hh:mm · N downloads ·
+IP"), a categoria e a descrição do motivo, telefone (ou "Não informado"), data, um seletor de situação — Aberta, Em conversa,
 Devolução aceita, Não aceita, Resolvida — e a resposta que o cliente vê em `/downloads`. Salvar
 grava status e resposta e entra no audit log (`refund_request`). **Nada é estornado por aqui**: o
 reembolso aceito é feito no Mercado Pago, e o webhook marca o pedido como `refunded`. Fonte:

@@ -130,28 +130,80 @@ describe('DownloadsPage', () => {
     );
   });
 
-  it('permite solicitar devolução sem motivo ou telefone', async () => {
-    authState.customerSession = { email: 'cliente@teste.com' };
-    globalThis.fetch = vi.fn(async (url) => ({
+  function mockRefundApi(eligibility) {
+    globalThis.fetch = vi.fn(async (url, init = {}) => ({
       ok: true,
-      json: async () =>
-        String(url).includes('/customer-orders')
-          ? { success: true, orders: [{ orderId: 'ORD-1', paymentStatus: 'approved', items: [] }] }
-          : { success: true, requestId: 'r1' },
+      json: async () => {
+        if (String(url).includes('/customer-orders')) {
+          return {
+            success: true,
+            orders: [{ orderId: 'ORD-1', paymentStatus: 'approved', items: [] }],
+          };
+        }
+        if (String(url).includes('/refund-request') && init.method !== 'POST') {
+          return { success: true, requests: [], eligibility: [eligibility] };
+        }
+        return { success: true, requestId: 'r1' };
+      },
     }));
+  }
+
+  function postedRefund() {
+    const [, options] = globalThis.fetch.mock.calls.find(
+      ([url, init]) => String(url).includes('/refund-request') && init?.method === 'POST',
+    );
+    return JSON.parse(options.body);
+  }
+
+  it('sem download e no prazo: desistência com um clique, sem motivo nem telefone', async () => {
+    authState.customerSession = { email: 'cliente@teste.com' };
+    mockRefundApi({ orderId: 'ORD-1', flow: 'simple', deadline: '2026-11-08T12:00:00.000Z' });
     render(
       <MemoryRouter initialEntries={['/downloads']}>
         <DownloadsPage />
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Histórico de pedidos' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Solicitar devolução' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Enviar solicitação' }));
-    expect(await screen.findByText(/Solicitação do pedido #ORD-1 recebida/)).toBeInTheDocument();
-    const [, options] = globalThis.fetch.mock.calls.find(
-      ([url, init]) => String(url).includes('/refund-request') && init.method === 'POST',
+    fireEvent.click(await screen.findByRole('button', { name: 'Desistir da compra' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar desistência' }));
+    expect(await screen.findByText(/Desistência do pedido #ORD-1 registrada/)).toBeInTheDocument();
+    expect(postedRefund()).toEqual({
+      orderId: 'ORD-1',
+      reasonCategory: 'desistencia',
+      reason: '',
+      phone: '',
+    });
+  });
+
+  it('já baixou: mostra a data do download e pede categoria e descrição', async () => {
+    authState.customerSession = { email: 'cliente@teste.com' };
+    mockRefundApi({
+      orderId: 'ORD-1',
+      flow: 'support',
+      flowReason: 'downloaded',
+      firstDownloadAt: '2026-10-30T12:00:00.000Z',
+      downloadCount: 2,
+    });
+    render(
+      <MemoryRouter initialEntries={['/downloads']}>
+        <DownloadsPage />
+      </MemoryRouter>,
     );
-    expect(JSON.parse(options.body)).toEqual({ orderId: 'ORD-1', reason: '', phone: '' });
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de pedidos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Pedir suporte ou devolução' }));
+    expect(screen.getByRole('note')).toHaveTextContent(/já foi baixado em 30\/10\/2026/);
+    const select = screen.getByLabelText('O que aconteceu?');
+    const descricao = screen.getByLabelText(/Descreva o problema/);
+    expect(select).toBeRequired();
+    expect(descricao).toBeRequired();
+    fireEvent.change(select, { target: { value: 'nao_abre' } });
+    fireEvent.change(descricao, { target: { value: 'O PDF abre em branco no computador.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar pedido de suporte' }));
+    expect(await screen.findByText(/responde em até 5 dias úteis/)).toBeInTheDocument();
+    expect(postedRefund()).toMatchObject({
+      reasonCategory: 'nao_abre',
+      reason: 'O PDF abre em branco no computador.',
+    });
   });
 
   it('pedido sem e-mail: o campo prometido existe e consulta o pedido (LOJA-42)', async () => {
