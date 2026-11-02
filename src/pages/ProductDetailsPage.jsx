@@ -232,8 +232,9 @@ export function ProductDetailsPage() {
 
         {!loading && !error && product ? (
           <article className="grid gap-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 md:p-6">
-            {/* GALERIA */}
-            <div>
+            {/* GALERIA — `min-w-0`: sem isso a fileira de miniaturas (5 × 64 px) vira a
+                largura mínima da coluna e a página rola de lado no celular. */}
+            <div className="min-w-0">
               {/* Imagem INTEIRA (object-contain): a foto que a professora sobe
                   não é cortada para caber no quadro quadrado. */}
               <div
@@ -273,6 +274,8 @@ export function ProductDetailsPage() {
                         type="button"
                         key={`${m.type}-${i}`}
                         onClick={() => setActiveMediaIndex(i)}
+                        aria-label={`${m.type === 'image' ? 'Ver foto' : 'Ver vídeo'} ${i + 1} de ${mediaList.length}`}
+                        aria-pressed={isActive}
                         className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition ${
                           isActive
                             ? 'border-brand-600 ring-2 ring-brand-200'
@@ -282,14 +285,14 @@ export function ProductDetailsPage() {
                         {m.type === 'image' ? (
                           <img
                             src={m.url}
-                            alt={`Mídia ${i + 1}`}
+                            alt=""
                             loading="lazy"
                             decoding="async"
                             className="h-full w-full bg-slate-50 object-contain"
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-slate-900 text-white">
-                            <i className="bi bi-play-circle-fill text-2xl" />
+                            <i className="bi bi-play-circle-fill text-2xl" aria-hidden="true" />
                           </div>
                         )}
                       </button>
@@ -300,7 +303,7 @@ export function ProductDetailsPage() {
             </div>
 
             {/* DETALHES */}
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <div className="flex flex-wrap items-center gap-2">
                 {product.category ? (
                   <span className="inline-flex rounded-full bg-brand-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">

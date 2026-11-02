@@ -417,8 +417,12 @@ Todo push na `main` (ou disparo manual) roda `.github/workflows/release-producti
 
 1. **validate** — `npm ci` + `npm run check`.
 2. **migrate_and_deploy** (environment `production`):
-   - `supabase db push --db-url "$SUPABASE_DB_URL"` pelo session pooler (o runner do GitHub não tem
-     IPv6). **Migration nova vai para produção no mesmo push**: revise o SQL antes do merge.
+   - `supabase db push --remote="$SUPABASE_DB_URL" --yes` pelo session pooler (o runner do GitHub
+     não tem IPv6), com o CLI numa **versão fixa** (`supabase/setup-cli` `version: 3.0.0`): em
+     02/11/2026 o `latest` virou 3.0.0 e três releases falharam na leitura do `config.toml` (a
+     seção `[inbucket]` virou `[local_smtp]`). Antes de subir a versão, teste com
+     `npx supabase@<versão> db push --dry-run --remote=<url de um banco local>`.
+     **Migration nova vai para produção no mesmo push**: revise o SQL antes do merge.
    - `vercel pull --environment=production` → `vercel build --prod` → `vercel deploy --prebuilt --prod`.
 
 A integração direta GitHub → Vercel está desligada: o deploy só sai depois da migration. A

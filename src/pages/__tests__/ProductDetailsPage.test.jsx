@@ -117,4 +117,29 @@ describe('ProductDetailsPage', () => {
     expect(screen.getByText('Painel de boas-vindas')).toBeInTheDocument();
     expect(screen.getByText('Crachás')).toBeInTheDocument();
   });
+
+  it('miniaturas da galeria têm nome acessível e marcam a mídia ativa', async () => {
+    fetchProductByIdentifier.mockResolvedValue({
+      id: 'p1',
+      slug: 'kit',
+      name: 'Kit Volta às Aulas',
+      price: 64.9,
+      images: ['https://cdn.test/a.webp', 'https://cdn.test/b.webp'],
+      videos: ['https://cdn.test/demo.mp4'],
+    });
+    renderEm('/produtos/kit');
+
+    const foto1 = await screen.findByRole('button', { name: 'Ver foto 1 de 3' });
+    expect(foto1).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Ver foto 2 de 3' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+
+    const video = screen.getByRole('button', { name: 'Ver vídeo 3 de 3' });
+    fireEvent.click(video);
+    expect(video).toHaveAttribute('aria-pressed', 'true');
+    expect(foto1).toHaveAttribute('aria-pressed', 'false');
+    expect(document.querySelector('video')).toHaveAttribute('src', 'https://cdn.test/demo.mp4');
+  });
 });

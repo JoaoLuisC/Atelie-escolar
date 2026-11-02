@@ -64,15 +64,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # O runner hospedado do GitHub não tem saída IPv6. A URL do Session
-      # Pooler do Supabase fornece a conexão IPv4 necessária para migrations.
+      # Versão FIXA: em 02/11/2026 o CLI 3.0.0 saiu e, com `latest`, três
+      # releases falharam aqui antes de conectar ao banco (o config.toml ainda
+      # tinha a seção [inbucket], removida na 3.x). Para subir de versão, rode
+      # `npx supabase@<versao> db push --dry-run --remote=<url local>` antes.
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.0.0
 
+      # O runner hospedado do GitHub não tem saída IPv6. A URL do Session
+      # Pooler do Supabase fornece a conexão IPv4 necessária para migrations.
       - name: Apply database migrations
-        run: supabase db push --db-url "$SUPABASE_DB_URL" --yes
+        run: supabase db push --remote="$SUPABASE_DB_URL" --yes
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
