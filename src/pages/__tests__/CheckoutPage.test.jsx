@@ -206,6 +206,7 @@ describe('CheckoutPage', () => {
     payNow();
     expect(await screen.findByText(/Confirme seu e-mail/)).toBeInTheDocument();
     expect(authState.registerCustomer).toHaveBeenCalledWith({
+      source: 'checkout',
       name: 'Maria Silva',
       email: 'maria@exemplo.com',
       password: 'Segura123!',

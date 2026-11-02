@@ -87,7 +87,7 @@ describe('DownloadsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Nenhum pedido encontrado na sua conta.')).toBeInTheDocument();
+    expect(await screen.findByText(/Nenhum produto liberado ainda/)).toBeInTheDocument();
     expect(screen.queryByText(/entre na sua conta/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Histórico de pedidos' }));
     expect(screen.getByText(/Escolha um pedido no seu histórico/)).toBeInTheDocument();
@@ -137,7 +137,22 @@ describe('DownloadsPage', () => {
         if (String(url).includes('/customer-orders')) {
           return {
             success: true,
-            orders: [{ orderId: 'ORD-1', paymentStatus: 'approved', items: [] }],
+            orders: [
+              {
+                orderId: 'ORD-1',
+                internalOrderId: 'pedido-1',
+                paymentStatus: 'approved',
+                totalAmount: 20,
+                createdAt: '2026-10-30T12:00:00.000Z',
+                items: [{ id: 'p1', title: 'Kit de leitura' }],
+              },
+            ],
+          };
+        }
+        if (String(url).includes('/verify-payment')) {
+          return {
+            success: true,
+            order: { orderId: 'ORD-1', paymentStatus: 'approved', items: [], downloadTokens: [] },
           };
         }
         if (String(url).includes('/refund-request') && init.method !== 'POST') {
@@ -155,11 +170,40 @@ describe('DownloadsPage', () => {
     return JSON.parse(options.body);
   }
 
-  it('sem download e no prazo: desistência com um clique, sem motivo nem telefone', async () => {
+  it('"Seus produtos" conta PRODUTOS liberados, não pedidos', async () => {
+    authState.customerSession = { email: 'cliente@teste.com' };
+    mockRefundApi({ orderId: 'ORD-1', flow: 'simple' });
+    render(
+      <MemoryRouter initialEntries={['/downloads']}>
+        <DownloadsPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Kit de leitura')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Seus produtos\s*1/ })).toBeInTheDocument();
+    expect(screen.queryByText(/pedido\(s\)/)).not.toBeInTheDocument();
+  });
+
+  it('histórico: a linha inteira abre o pedido, com data, itens, total e situação', async () => {
+    authState.customerSession = { email: 'cliente@teste.com' };
+    mockRefundApi({ orderId: 'ORD-1', flow: 'simple' });
+    render(
+      <MemoryRouter initialEntries={['/downloads']}>
+        <DownloadsPage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de pedidos' }));
+    const row = await screen.findByRole('button', { name: 'Abrir pedido ORD-1' });
+    expect(row).toHaveTextContent('30/10/2026');
+    expect(row).toHaveTextContent('1 item');
+    expect(row).toHaveTextContent('Aprovado');
+    expect(screen.queryByRole('button', { name: /Desistir da compra/ })).not.toBeInTheDocument();
+  });
+
+  it('sem download e no prazo: desistência com um clique dentro do pedido aberto', async () => {
     authState.customerSession = { email: 'cliente@teste.com' };
     mockRefundApi({ orderId: 'ORD-1', flow: 'simple', deadline: '2026-11-08T12:00:00.000Z' });
     render(
-      <MemoryRouter initialEntries={['/downloads']}>
+      <MemoryRouter initialEntries={['/downloads?order=ORD-1']}>
         <DownloadsPage />
       </MemoryRouter>,
     );
@@ -185,7 +229,7 @@ describe('DownloadsPage', () => {
       downloadCount: 2,
     });
     render(
-      <MemoryRouter initialEntries={['/downloads']}>
+      <MemoryRouter initialEntries={['/downloads?order=ORD-1']}>
         <DownloadsPage />
       </MemoryRouter>,
     );

@@ -405,7 +405,7 @@ Toda função `SECURITY DEFINER` tem `set search_path = public, pg_temp` e `EXEC
 Sem `pg_cron` habilitado, as migrations só emitem um `notice` e as limpezas precisam ser rodadas à
 mão (`select public.purge_old_logs();` etc.). Conferir os jobs: `select jobname, schedule from cron.job;`.
 
-## Migrations (28)
+## Migrations (29)
 
 Em ordem, aplicadas com `npm run supabase:db:push`.
 
@@ -438,6 +438,7 @@ Em ordem, aplicadas com `npm run supabase:db:push`.
 | `20261031000000_refund_requests.sql`                     | Cria `refund_requests` (RLS, só `service_role`) e o índice de uma solicitação aberta por pedido                                                                                                                           |
 | `20261031010000_coupon_audience_and_customer_limits.sql` | Público e limite por cliente em `coupons`, `orders.coupon_customer_key`, `coupon_customer_usage`; funções de cupom com 2 argumentos e trigger de recontagem atualizado                                                    |
 | `20261101000000_refund_policy_download_evidence.sql`     | `refund_requests`: `reason_category`, `flow`, `first_download_at`, `download_count`; `orders.download_terms_accepted_at` (aceite da caixa de ciência do checkout)                                                         |
+| `20261102000000_storage_bucket_limits.sql`               | `file_size_limit` e `allowed_mime_types` dos três buckets gravados no banco (iguais aos de `handlers/admin/upload-url.js`), para não depender do PUT em runtime                                                           |
 | `20261031020000_storage_buckets_visibility.sql`          | Visibilidade dos buckets no banco: `product_files` privado; `product_images` e `product_videos` públicos                                                                                                                  |
 
 ### Criar uma migration

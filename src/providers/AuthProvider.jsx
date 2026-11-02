@@ -162,8 +162,8 @@ export function AuthProvider({ children }) {
       async loginCustomerGoogle(redirectPath = '/checkout') {
         await loginCustomerWithGoogle(redirectPath);
       },
-      async registerCustomer({ name, email, password }) {
-        const result = await registerCustomerWithEmail(name, email, password);
+      async registerCustomer({ name, email, password, source }) {
+        const result = await registerCustomerWithEmail(name, email, password, { source });
         if (result.verificationRequired) {
           return result;
         }

@@ -46,12 +46,14 @@ export async function loginCustomerWithEmail(email, password) {
   return user;
 }
 
-export async function registerCustomerWithEmail(name, email, password) {
+// `source: 'checkout'` = conta criada no meio da compra; o servidor a confirma e
+// já abre a sessão (ver confirmCheckoutAccount em lib/customer-auth-handlers.js).
+export async function registerCustomerWithEmail(name, email, password, { source } = {}) {
   const { response, data } = await apiRequest('/auth/customer/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ name, email, password }),
+    body: JSON.stringify({ name, email, password, ...(source ? { source } : {}) }),
   });
 
   ensureAuthSuccess(response, data, 'Não foi possível criar a conta.');

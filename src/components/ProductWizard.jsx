@@ -454,7 +454,7 @@ ${prev.description}`.trim(),
           <Field
             label="Vídeos (opcional)"
             htmlFor="product-videos"
-            hint="Envie um arquivo MP4, WebM ou MOV de até 50 MB. Ele será armazenado no Supabase."
+            hint="MP4, WebM ou MOV de até 50 MB (limite do armazenamento). Vídeo maior? Publique no YouTube e cole o link: a página do produto mostra o player."
           >
             <div id="product-videos" className="flex flex-col gap-3">
               {videos.map((video, idx) => (
@@ -791,8 +791,13 @@ Field.propTypes = {
   className: PropTypes.string,
 };
 
+// Link de vídeo do YouTube aceito no lugar do arquivo (a página do produto
+// incorpora o player — getYoutubeEmbedUrl em ProductDetailsPage.jsx).
+const YOUTUBE_URL = /^https:\/\/(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[\w-]{6,}/i;
+
 function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToast }) {
   const inputRef = useRef(null);
+  const [youtubeLink, setYoutubeLink] = useState('');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
@@ -928,6 +933,41 @@ function AssetUploader({ kind, accept, label, value, onChange, onRemove, pushToa
           ) : null}
         </div>
       </div>
+
+      {kind === 'video' ? (
+        <form
+          className="mt-2 flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const link = String(youtubeLink || '').trim();
+            if (!YOUTUBE_URL.test(link)) {
+              setError('Cole um link do YouTube (youtube.com/watch?v=… ou youtu.be/…).');
+              return;
+            }
+            setError('');
+            setYoutubeLink('');
+            onChange(link);
+          }}
+        >
+          <label className="sr-only" htmlFor={`${label}-youtube`}>
+            Link do YouTube para {label}
+          </label>
+          <input
+            id={`${label}-youtube`}
+            type="url"
+            value={youtubeLink}
+            onChange={(event) => setYoutubeLink(event.target.value)}
+            placeholder="Ou cole um link do YouTube"
+            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
+          />
+          <button
+            type="submit"
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            Usar link
+          </button>
+        </form>
+      ) : null}
 
       <input ref={inputRef} type="file" accept={accept} onChange={handleFile} className="hidden" />
     </div>

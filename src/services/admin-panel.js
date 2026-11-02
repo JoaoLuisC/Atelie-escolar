@@ -215,6 +215,45 @@ export async function fetchAdminKpis({ window = 12 } = {}) {
 // Retorna { url, bucket, path } — url é o que deve ser salvo em
 // products.image_url / videos[] / download_url.
 // ════════════════════════════════════════════════════════════════════
+// O Storage responde JSON com `message` quando recusa um upload. Antes o
+// painel só dizia "Upload falhou (HTTP 400)" e ninguém sabia o motivo.
+const STORAGE_MESSAGES = [
+  [
+    /exceeded the maximum allowed size|payload too large/i,
+    'O arquivo é maior do que o limite do armazenamento (50 MB no plano atual). Reduza o tamanho ou, no caso de vídeo, publique no YouTube e use o link.',
+  ],
+  [
+    /mime type .* is not supported/i,
+    'O tipo deste arquivo não é aceito pelo armazenamento. Use JPG, PNG, WebP (imagens) ou MP4, WebM, MOV (vídeos).',
+  ],
+  [
+    /row-level security|violates/i,
+    'O armazenamento recusou a gravação por falta de permissão no bucket. Avise o suporte técnico (política de upload do Supabase Storage).',
+  ],
+  [
+    /bucket not found/i,
+    'A pasta de armazenamento deste tipo de arquivo ainda não existe no Supabase. Avise o suporte técnico.',
+  ],
+  [/invalid.*token|jwt|expired/i, 'A autorização de envio expirou. Tente de novo.'],
+];
+
+function storageUploadError(xhr) {
+  let raw = '';
+  try {
+    const body = JSON.parse(xhr.responseText || '{}');
+    raw = String(body.message || body.error || '');
+  } catch {
+    raw = '';
+  }
+  const friendly = STORAGE_MESSAGES.find(([pattern]) => pattern.test(raw))?.[1];
+  if (friendly) return new Error(friendly);
+  return new Error(
+    raw
+      ? `O armazenamento recusou o envio (HTTP ${xhr.status}): ${raw}`
+      : `Upload falhou (HTTP ${xhr.status}).`,
+  );
+}
+
 export async function uploadProductAsset({ kind, file, onProgress }) {
   if (!file) throw new Error('Arquivo não informado.');
   if (!['image', 'video', 'download'].includes(kind)) {
@@ -252,7 +291,7 @@ export async function uploadProductAsset({ kind, file, onProgress }) {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve();
       } else {
-        reject(new Error(`Upload falhou (HTTP ${xhr.status}).`));
+        reject(storageUploadError(xhr));
       }
     });
     xhr.addEventListener('error', () => reject(new Error('Erro de rede no upload.')));

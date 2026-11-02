@@ -73,7 +73,7 @@ export function categoryPath(categoryName) {
  * @param {unknown} value  valor cru vindo da query string
  * @param {string} fallback destino quando o valor não é um caminho local
  */
-export function sanitizeRedirectPath(value, fallback = ROUTES.checkout) {
+export function sanitizeRedirectPath(value, fallback = ROUTES.downloads) {
   const raw = String(value || '').trim();
   if (!raw) return fallback;
   // `//host` é protocol-relative; `://` cobre esquema absoluto; `\` é tratado

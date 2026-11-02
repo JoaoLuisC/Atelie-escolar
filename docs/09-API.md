@@ -370,14 +370,14 @@ segurança — o campo `naoIncluido` declara isso. `Cache-Control: no-store`; ev
 
 ### Autenticação de cliente
 
-| Endpoint                             | Método | O que faz                                                                                               |
-| ------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------- |
-| `/api/auth/customer/login`           | POST   | E-mail + senha; emite `customer_session`                                                                |
-| `/api/auth/customer/register`        | POST   | Cadastro com e-mail, senha e nome. Senha 8+ com maiúscula, minúscula, número e caractere especial (400) |
-| `/api/auth/customer/google/start`    | GET    | Inicia o OAuth do Google pelo Supabase                                                                  |
-| `/api/auth/customer/google/callback` | POST   | Conclui o OAuth e abre a sessão                                                                         |
-| `/api/auth/customer/session`         | GET    | Sessão atual ou `null`                                                                                  |
-| `/api/auth/customer/logout`          | POST   | Limpa o cookie; exige requisição same-origin (CSRF)                                                     |
+| Endpoint                             | Método | O que faz                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/auth/customer/login`           | POST   | E-mail + senha; emite `customer_session`                                                                                                                                                                                                                                                                            |
+| `/api/auth/customer/register`        | POST   | Cadastro com e-mail, senha e nome. Senha 8+ com maiúscula, minúscula, número e caractere especial (400). Com `source: "checkout"` (conta criada na compra), o servidor confirma o e-mail pela Admin API e já abre a sessão; sem isso, e com a confirmação ligada no Supabase, responde `verificationRequired: true` |
+| `/api/auth/customer/google/start`    | GET    | Inicia o OAuth do Google pelo Supabase                                                                                                                                                                                                                                                                              |
+| `/api/auth/customer/google/callback` | POST   | Conclui o OAuth e abre a sessão                                                                                                                                                                                                                                                                                     |
+| `/api/auth/customer/session`         | GET    | Sessão atual ou `null`                                                                                                                                                                                                                                                                                              |
+| `/api/auth/customer/logout`          | POST   | Limpa o cookie; exige requisição same-origin (CSRF)                                                                                                                                                                                                                                                                 |
 
 ---
 

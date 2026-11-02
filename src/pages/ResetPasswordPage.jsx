@@ -26,13 +26,17 @@ function getSafeRedirect(search) {
   const params = new URLSearchParams(search);
   const redirect = readRedirectParam(params);
 
-  // Allowlist fixa (nada de caminho livre vindo da URL): downloads, o login do
-  // painel (troca de senha pela aba "Minha conta") ou, por padrão, o checkout.
-  if (redirect === '/downloads' || redirect === ROUTES.admin) return redirect;
-  return '/checkout';
+  // Allowlist fixa (nada de caminho livre vindo da URL): o checkout, o login do
+  // painel (troca de senha pela aba "Minha conta") ou, por padrão, Meus produtos.
+  if (redirect === ROUTES.checkout || redirect === ROUTES.admin) return redirect;
+  return ROUTES.downloads;
 }
 
-const REDIRECT_LABELS = { '/downloads': 'Downloads', [ROUTES.admin]: 'o login do painel' };
+const REDIRECT_LABELS = {
+  [ROUTES.downloads]: 'Meus produtos',
+  [ROUTES.checkout]: 'o checkout',
+  [ROUTES.admin]: 'o login do painel',
+};
 
 /**
  * Erro do SDK do Supabase em português (LOJA-45).
@@ -284,7 +288,7 @@ export function ResetPasswordPage() {
 
           <p className="text-xs text-slate-500">
             Após concluir, você será redirecionado para{' '}
-            <strong>{REDIRECT_LABELS[redirectTo] || 'Checkout'}</strong>.
+            <strong>{REDIRECT_LABELS[redirectTo] || 'Meus produtos'}</strong>.
           </p>
         </form>
       </article>

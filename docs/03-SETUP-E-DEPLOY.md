@@ -61,16 +61,16 @@ O pré-commit (Husky + lint-staged) roda ESLint e Prettier só nos arquivos em s
 
 ### 1.4 Scripts utilitários (`scripts/`)
 
-| Script                               | Uso                                                                   | Precisa de                                                |
-| ------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------- |
-| `node scripts/check-rls.js`          | O que a chave anon consegue ler em produção (só leitura)              | `SUPABASE_URL`, `SUPABASE_ANON_KEY` (+ service role opc.) |
-| `node scripts/check-schema-drift.js` | Migrations locais × banco remoto: funções, triggers, policies, grants | `supabase link` feito + Docker rodando                    |
-| `node scripts/check-advisor.js`      | Lê o Security Advisor do Supabase                                     | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                    |
-| `node scripts/configure-auth.js`     | Acrescenta `APP_URL` às URLs de redirect do Supabase Auth (§3.4)      | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`, `APP_URL`         |
-| `node scripts/db-inspect.js`         | Inventário de tabelas via REST                                        | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, service role         |
-| `node scripts/check-utf8.js`         | Audita encoding de textos no banco                                    | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                    |
-| `node scripts/fix-utf8.js`           | Corrige encoding corrompido                                           | idem                                                      |
-| `scripts/fix-dns.ps1` (admin)        | Conserta DNS do Windows quando `*.supabase.co` não resolve            | —                                                         |
+| Script                               | Uso                                                                                                                                                                   | Precisa de                                                |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `node scripts/check-rls.js`          | O que a chave anon consegue ler em produção (só leitura)                                                                                                              | `SUPABASE_URL`, `SUPABASE_ANON_KEY` (+ service role opc.) |
+| `node scripts/check-schema-drift.js` | Migrations locais × banco remoto: funções, triggers, policies, grants                                                                                                 | `supabase link` feito + Docker rodando                    |
+| `node scripts/check-advisor.js`      | Lê o Security Advisor do Supabase                                                                                                                                     | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                    |
+| `node scripts/configure-auth.js`     | Sincroniza o Supabase Auth de produção: URLs de redirect, política de senha, templates de e-mail e remetente (§3.4 e §3.6). `--show` só mostra, `--dry-run` não grava | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`, `APP_URL`         |
+| `node scripts/db-inspect.js`         | Inventário de tabelas via REST                                                                                                                                        | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, service role         |
+| `node scripts/check-utf8.js`         | Audita encoding de textos no banco                                                                                                                                    | `SUPABASE_PAT`, `SUPABASE_PROJECT_REF`                    |
+| `node scripts/fix-utf8.js`           | Corrige encoding corrompido                                                                                                                                           | idem                                                      |
+| `scripts/fix-dns.ps1` (admin)        | Conserta DNS do Windows quando `*.supabase.co` não resolve                                                                                                            | —                                                         |
 
 ### 1.5 Ícones
 
@@ -336,17 +336,27 @@ O `supabase/config.toml` declara, para o Supabase local:
 - `[auth.email.template.confirmation]` e `[auth.email.template.recovery]`, com assunto em português
   e corpo em `supabase/templates/confirmation.html` e `recovery.html`.
 
-**O release não envia o `config.toml`** (só faz `supabase db push`). Em produção, configure à mão no
-Dashboard do Supabase:
+**O release não envia o `config.toml`** (só faz `supabase db push`). Enquanto isso não for feito,
+produção fica com o template padrão do Supabase — em inglês e com link para `supabase.co`, que o
+Gmail marca como "pode ser perigoso" — e com senha mínima de 6 caracteres. Para sincronizar:
 
-1. Authentication → Sign In / Providers → Email: senha mínima **8** e requisito "letras
-   minúsculas, maiúsculas, dígitos e símbolos".
-2. Authentication → Email Templates: em "Confirm signup" e "Reset password", cole o HTML de
-   `supabase/templates/` e o assunto do `config.toml`. O de recuperação monta o link como
-   `{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery&next={{ .RedirectTo }}`:
-   o `token_hash` só é trocado pela sessão quando a pessoa abre a página, então o scanner de
-   e-mail que segue links não gasta o código.
-3. Confirme que `/reset-password` está coberto pela allow list (§3.4).
+```bash
+SUPABASE_PAT=... SUPABASE_PROJECT_REF=... APP_URL=https://professoramarcia.ateliedaescola.com.br \
+  node scripts/configure-auth.js            # --show só lê; --dry-run mostra sem gravar
+```
+
+O script grava, pela Management API: `site_url` e a allow list (§3.4), senha mínima **8** com
+minúsculas, maiúsculas, dígitos e símbolos, o assunto e o HTML dos e-mails de recuperação e de
+confirmação (`supabase/templates/`, assuntos do `config.toml`) e o nome do remetente. Se a API
+recusar o valor de `password_required_characters`, escolha o requisito "símbolos" no Dashboard
+(Authentication → Sign In / Providers → Email) e rode o script de novo.
+
+O template de recuperação monta o link como
+`{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery&next={{ .RedirectTo }}`:
+abre primeiro a loja, no nosso domínio, e só então troca o `token_hash` pela sessão — por isso
+funciona em outro navegador ou celular e não é gasto por scanner de e-mail. Depois de rodar, peça
+uma recuperação de senha e confira o e-mail: em português, remetente "Ateliê da Escola" e botão
+para o domínio da loja.
 
 ---
 

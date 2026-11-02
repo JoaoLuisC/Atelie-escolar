@@ -16,6 +16,7 @@ import {
 } from '../services/downloads';
 import { errorMessageOf } from '../utils/api';
 import { formatPrice } from '../utils/currency';
+import { formatDate } from '../utils/date';
 import { trackPurchaseOnce } from '../utils/analytics';
 import { ROUTES } from '../constants/routes';
 
@@ -115,6 +116,30 @@ const PAYMENT_STATUS_LABELS = {
   failed: 'Não concluído',
   refunded: 'Estornado',
   charged_back: 'Estornado',
+};
+
+/** Itens de pedidos aprovados = o que a cliente pode baixar. */
+function countAvailableProducts(orders) {
+  return (orders || [])
+    .filter((entry) => entry.paymentStatus === 'approved')
+    .reduce((total, entry) => total + (entry.items || []).length, 0);
+}
+
+const PAYMENT_STATUS_STYLES = {
+  approved: 'bg-emerald-100 text-emerald-800',
+  completed: 'bg-emerald-100 text-emerald-800',
+  pending: 'bg-amber-100 text-amber-800',
+  in_process: 'bg-amber-100 text-amber-800',
+  refunded: 'bg-slate-200 text-slate-700',
+  charged_back: 'bg-slate-200 text-slate-700',
+};
+
+const REFUND_STATUS_LABELS = {
+  open: 'aberta',
+  contacted: 'em conversa',
+  accepted: 'aceita',
+  declined: 'não aceita',
+  resolved: 'resolvida',
 };
 
 function paymentStatusLabel(status) {
@@ -322,10 +347,11 @@ export function DownloadsPage() {
         }
 
         setOrders(meusPedidos);
+        const produtos = countAvailableProducts(meusPedidos);
         setEmailStatus(
-          meusPedidos.length === 0
-            ? 'Nenhum pedido encontrado na sua conta.'
-            : `Encontramos ${meusPedidos.length} pedido(s).`,
+          produtos === 0
+            ? 'Nenhum produto liberado ainda. Quando um pedido for aprovado, os arquivos aparecem aqui.'
+            : `${produtos} ${produtos === 1 ? 'produto disponível' : 'produtos disponíveis'} para baixar.`,
         );
       } catch (error) {
         if (error?.name === 'AbortError' || signal?.aborted) return;
@@ -422,6 +448,14 @@ export function DownloadsPage() {
   // Pede o e-mail quando há pedido e o e-mail que temos não serve (ausente ou
   // inválido). Também depois de o servidor não achar o par pedido+e-mail.
   const needsEmail = Boolean(orderId) && (!orderEmailIsValid || Boolean(orderError));
+
+  // O pedido aberto, na lista da conta (a devolução só existe para pedido da conta).
+  const openedEntry = orders.find(
+    (entry) => String(entry.orderId || entry.internalOrderId) === String(orderId),
+  );
+  const openedRefund = openedEntry
+    ? refundRequests.find((item) => String(item.order_id) === String(openedEntry.internalOrderId))
+    : null;
 
   let statusStep = 0;
   if (order?.paymentStatus === 'approved') {
@@ -520,14 +554,30 @@ export function DownloadsPage() {
 
         {customerSession?.email && activeTab === 'products' ? (
           <article className="mb-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="font-heading text-lg font-bold text-slate-900">Seus produtos</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-heading text-lg font-bold text-slate-900">
+                Seus produtos{' '}
+                <span className="ml-1 rounded-full bg-brand-50 px-2.5 py-0.5 align-middle text-sm font-bold text-brand-700">
+                  {countAvailableProducts(orders)}
+                </span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => loadMyOrders()}
+                disabled={searchingByEmail}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-60"
+              >
+                <i className="bi bi-arrow-clockwise" aria-hidden="true" />{' '}
+                {searchingByEmail ? 'Atualizando…' : 'Atualizar'}
+              </button>
+            </div>
             {searchingByEmail ? (
               <p className="mt-2 text-sm text-slate-500">Carregando seus produtos...</p>
             ) : null}
-            {!searchingByEmail &&
-            !orders.some((entry) => entry.paymentStatus === 'approved' && entry.items?.length) ? (
+            {!searchingByEmail && countAvailableProducts(orders) === 0 ? (
               <p className="mt-2 text-sm text-slate-500">
-                {emailStatus || 'Nenhum produto disponível ainda.'}
+                {emailStatus ||
+                  'Nenhum produto liberado ainda. Quando um pedido for aprovado, os arquivos aparecem aqui.'}
               </p>
             ) : null}
             <ul className="mt-3 space-y-3">
@@ -656,21 +706,12 @@ export function DownloadsPage() {
 
             {customerSession?.email ? (
               <div className="mt-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Seus pedidos{' '}
-                    <span className="normal-case text-slate-400">({customerSession.email})</span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => loadMyOrders()}
-                    disabled={searchingByEmail}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-60"
-                  >
-                    {searchingByEmail ? 'Atualizando…' : 'Atualizar'}
-                  </button>
-                </div>
-                {emailStatus ? <p className="mt-2 text-xs text-slate-500">{emailStatus}</p> : null}
+                {searchingByEmail ? (
+                  <p className="text-xs text-slate-500">Carregando seus pedidos…</p>
+                ) : null}
+                {!searchingByEmail && orders.length === 0 ? (
+                  <p className="text-sm text-slate-500">Você ainda não fez nenhum pedido.</p>
+                ) : null}
               </div>
             ) : (
               <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -734,71 +775,99 @@ export function DownloadsPage() {
                 </h4>
                 <ul className="flex flex-col gap-2">
                   {orders.map((entry) => {
+                    const code = entry.orderId || entry.internalOrderId;
                     const refund = refundRequests.find(
                       (item) => String(item.order_id) === String(entry.internalOrderId),
                     );
+                    const isOpen = String(code) === String(orderId);
+                    const itemCount = (entry.items || []).length;
+                    const paymentStatus = entry.paymentStatus || entry.status;
                     return (
-                      <li
-                        key={`${entry.orderId}-${entry.internalOrderId || ''}`}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5"
-                      >
-                        <div className="min-w-0">
-                          <strong className="block text-sm text-slate-800">
-                            Pedido #{entry.orderId || entry.internalOrderId}
-                          </strong>
-                          <p className="text-xs text-slate-500">
-                            Status: {paymentStatusLabel(entry.paymentStatus || entry.status)} ·
-                            Total: {formatPrice(entry.totalAmount)}
-                          </p>
-                          {refund ? (
-                            <p className="mt-1 text-xs font-semibold text-violet-700">
-                              Devolução:{' '}
-                              {{
-                                open: 'aberta',
-                                contacted: 'em conversa',
-                                accepted: 'aceita',
-                                declined: 'não aceita',
-                                resolved: 'resolvida',
-                              }[refund.status] || refund.status}
-                              {refund.admin_response ? ` — ${refund.admin_response}` : ''}
-                            </p>
-                          ) : null}
-                        </div>
+                      <li key={`${entry.orderId}-${entry.internalOrderId || ''}`}>
+                        {/* A linha inteira abre o pedido: um alvo só, sem botões soltos. */}
                         <button
                           type="button"
+                          aria-label={`Abrir pedido ${code}`}
+                          aria-current={isOpen ? 'true' : undefined}
                           onClick={() => openOrder(entry.orderId, entry.internalOrderId)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
+                            isOpen
+                              ? 'bg-brand-50 ring-1 ring-brand-200'
+                              : 'bg-slate-50 hover:bg-slate-100'
+                          }`}
                         >
-                          Abrir pedido
-                        </button>
-                        {entry.paymentStatus === 'approved' && entry.orderId && !refund ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRefundReceipt('');
-                              setRefundCategory('');
-                              setRefundOrder(entry.orderId);
-                            }}
-                            className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700"
+                          <div className="min-w-0 flex-1">
+                            <strong className="block text-sm text-slate-900">Pedido #{code}</strong>
+                            <span className="block text-xs text-slate-500">
+                              {entry.createdAt ? `${formatDate(entry.createdAt)} · ` : ''}
+                              {itemCount} {itemCount === 1 ? 'item' : 'itens'} ·{' '}
+                              {formatPrice(entry.totalAmount)}
+                            </span>
+                            {refund ? (
+                              <span className="mt-1 block text-xs font-semibold text-violet-700">
+                                Devolução {REFUND_STATUS_LABELS[refund.status] || refund.status}
+                              </span>
+                            ) : null}
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                              PAYMENT_STATUS_STYLES[String(paymentStatus || '').toLowerCase()] ||
+                              'bg-rose-100 text-rose-800'
+                            }`}
                           >
-                            {refundEligibility[entry.orderId]?.flow === 'support'
-                              ? 'Pedir suporte ou devolução'
-                              : 'Desistir da compra'}
-                          </button>
-                        ) : null}
+                            {paymentStatusLabel(paymentStatus)}
+                          </span>
+                          <i
+                            className="bi bi-chevron-right shrink-0 text-slate-400"
+                            aria-hidden="true"
+                          />
+                        </button>
                       </li>
                     );
                   })}
                 </ul>
-                {refundReceipt ? (
-                  <p
-                    role="status"
-                    className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"
-                  >
+              </div>
+            ) : null}
+
+            {/* Devolução: dentro do pedido aberto, não na lista. */}
+            {openedEntry && customerSession?.email && order?.paymentStatus === 'approved' ? (
+              <div className="mt-5 rounded-xl border border-slate-200 p-4">
+                {openedRefund ? (
+                  <p className="text-sm text-slate-700">
+                    <strong className="text-violet-700">
+                      Devolução {REFUND_STATUS_LABELS[openedRefund.status] || openedRefund.status}.
+                    </strong>
+                    {openedRefund.admin_response
+                      ? ` Resposta da loja: ${openedRefund.admin_response}`
+                      : ' A loja responde pelo e-mail da sua conta e aqui mesmo.'}
+                  </p>
+                ) : refundReceipt ? (
+                  <p role="status" className="text-sm text-emerald-800">
                     {refundReceipt}
                   </p>
-                ) : null}
-                {refundOrder ? (
+                ) : refundOrder === openedEntry.orderId ? null : (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-slate-600">
+                      {refundEligibility[openedEntry.orderId]?.flow === 'support'
+                        ? 'Problema com o arquivo? Peça suporte ou devolução.'
+                        : 'Mudou de ideia? Você pode desistir desta compra.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRefundReceipt('');
+                        setRefundCategory('');
+                        setRefundOrder(openedEntry.orderId);
+                      }}
+                      className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700"
+                    >
+                      {refundEligibility[openedEntry.orderId]?.flow === 'support'
+                        ? 'Pedir suporte ou devolução'
+                        : 'Desistir da compra'}
+                    </button>
+                  </div>
+                )}
+                {refundOrder && refundOrder === openedEntry.orderId ? (
                   <RefundForm
                     orderId={refundOrder}
                     eligibility={refundEligibility[refundOrder]}

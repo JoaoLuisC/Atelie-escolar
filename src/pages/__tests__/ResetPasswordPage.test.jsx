@@ -53,13 +53,13 @@ describe('recuperação de senha', () => {
     expect(await screen.findByText('o login do painel')).toBeInTheDocument();
   });
 
-  it('next apontando para fora da allowlist cai no checkout', async () => {
+  it('next apontando para fora da allowlist cai em Meus produtos', async () => {
     const next = encodeURIComponent('https://evil.test/x?redirect=https://evil.test');
     render(
       <MemoryRouter initialEntries={[`/reset-password?token_hash=abc&type=recovery&next=${next}`]}>
         <ResetPasswordPage />
       </MemoryRouter>,
     );
-    expect(await screen.findByText('Checkout')).toBeInTheDocument();
+    expect(await screen.findByText('Meus produtos')).toBeInTheDocument();
   });
 });

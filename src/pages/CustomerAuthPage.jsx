@@ -766,14 +766,14 @@ export function CustomerAuthPage() {
                 Sessão ativa para <strong>{customerSession.email}</strong>.
               </p>
               {/* Respeita o ?redirect= de quem mandou para cá (LOJA-47): quem veio
-                  de /downloads não quer ir para o checkout. */}
+                  do checkout volta para ele; o padrão é Meus produtos. */}
               <Link
-                to={hasExplicitRedirect ? redirectTo : ROUTES.checkout}
+                to={hasExplicitRedirect ? redirectTo : ROUTES.downloads}
                 className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
               >
-                {!hasExplicitRedirect || redirectTo.startsWith(ROUTES.checkout)
+                {hasExplicitRedirect && redirectTo.startsWith(ROUTES.checkout)
                   ? 'Ir para checkout'
-                  : redirectTo.startsWith(ROUTES.downloads)
+                  : !hasExplicitRedirect || redirectTo.startsWith(ROUTES.downloads)
                     ? 'Ir para Meus produtos'
                     : 'Continuar'}{' '}
                 <i className="bi bi-arrow-right" />

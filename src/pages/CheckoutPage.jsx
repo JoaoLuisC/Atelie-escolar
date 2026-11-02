@@ -371,7 +371,12 @@ export function CheckoutPage() {
 
     try {
       if (!customerSession?.email) {
-        const registration = await registerCustomer({ name, email, password: formData.password });
+        const registration = await registerCustomer({
+          name,
+          email,
+          password: formData.password,
+          source: 'checkout',
+        });
         setValue('password', '');
         if (registration?.verificationRequired) {
           setProcessing(false);

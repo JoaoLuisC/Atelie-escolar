@@ -1,14 +1,44 @@
 <!doctype html>
 <html lang="pt-BR">
-  <body>
-    <h1>Redefina sua senha</h1>
-    <p>Recebemos uma solicitação para alterar a senha da sua conta no Ateliê da Escola.</p>
-    <!-- O link abre primeiro a loja e só então troca o token_hash por sessão.
-         Isso evita que scanners de segurança do e-mail consumam o link de uso
-         único antes do clique da pessoa. O caminho vem do SiteURL (sempre
-         válido); o RedirectTo pedido vai em `next` e a página lê dali o
-         destino permitido (checkout, downloads ou painel). -->
-    <p><a href="{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next={{ .RedirectTo }}">Escolher uma nova senha</a></p>
-    <p>Se você não pediu a alteração, ignore esta mensagem. Sua senha atual não será alterada.</p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redefina sua senha do Ateliê da Escola</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f5f3ff;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
+    <!-- O link abre primeiro a loja (SiteURL, sempre válido) e só então troca o
+         token_hash por sessão: scanners de e-mail que abrem links não consomem o
+         código de uso único, e o link funciona em outro navegador ou celular. O
+         RedirectTo pedido vai em `next`; a página só aceita destinos da loja. -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;border:1px solid #e9d5ff;">
+            <tr>
+              <td style="padding:28px 32px 8px;">
+                <p style="margin:0;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#7c3aed;">Ateliê da Escola</p>
+                <h1 style="margin:12px 0 0;font-size:22px;line-height:1.3;color:#0f172a;">Redefina sua senha</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 32px 0;font-size:15px;line-height:1.6;">
+                <p style="margin:0 0 12px;">Olá! Recebemos um pedido para trocar a senha da sua conta no Ateliê da Escola.</p>
+                <p style="margin:0 0 20px;">Clique no botão para escolher uma senha nova. O link vale por 1 hora e só pode ser usado uma vez.</p>
+                <p style="margin:0 0 24px;">
+                  <a href="{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next={{ .RedirectTo }}"
+                     style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px;padding:12px 22px;border-radius:10px;">Escolher nova senha</a>
+                </p>
+                <p style="margin:0 0 12px;font-size:13px;color:#475569;">Se você não pediu a troca, pode ignorar este e-mail: sua senha atual continua a mesma.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 32px 28px;font-size:12px;line-height:1.6;color:#64748b;border-top:1px solid #f1f5f9;">
+                <p style="margin:12px 0 0;">Ateliê da Escola · professoramarcia.ateliedaescola.com.br<br />Materiais pedagógicos digitais da Profa. Márcia · Carmo do Rio Claro/MG</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>
