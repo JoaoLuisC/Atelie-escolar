@@ -36,7 +36,8 @@ beforeEach(() => {
   installModuleMock('../../lib/rate-limit', { enforceRateLimit });
   runAiAssist = vi.fn(async () => ({ model: 'm', suggestion: { descricao: 'ok' } }));
   installModuleMock('../../lib/ai-assist', {
-    TASK_NAMES: ['productCopy', 'productSeo', 'homeCopy'],
+    TASK_NAMES: ['productCopy', 'productSeo', 'homeHero'],
+    isHomeTask: (task) => String(task).startsWith('home'),
     runAiAssist,
   });
   handler = loadHandler('../admin/ai-assist.js');
@@ -82,7 +83,7 @@ describe('admin/ai-assist', () => {
     ['AI_FAILED', 503, 'SERVICE_UNAVAILABLE'],
   ])('%s vira %s com mensagem amigável', async (aiCode, status, code) => {
     runAiAssist.mockRejectedValueOnce(Object.assign(new Error('x'), { code: aiCode }));
-    const res = await call({ task: 'homeCopy', input: {} });
+    const res = await call({ task: 'homeHero', input: {} });
     expectApiError(res, { status, code });
   });
 });

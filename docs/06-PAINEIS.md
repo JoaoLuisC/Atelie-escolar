@@ -53,12 +53,12 @@ explicação no arquivo.
 "Usar…", e nada é gravado sem salvar. A IA recebe só o que foi digitado e nomes, categorias e
 preços do catálogo — nunca dado de cliente.
 
-| Onde                         | Botão                           | O que sugere                                                         |
-| ---------------------------- | ------------------------------- | -------------------------------------------------------------------- |
-| Cadastro de produto, passo 1 | Escrever descrição com IA       | Descrição de venda, benefícios e FAQ                                 |
-| Cadastro de produto, passo 1 | Sugerir nome, Google e preço    | Nome, resumo para o Google e faixa de preço comparada ao catálogo    |
-| Página da loja               | Sugerir textos da página com IA | Banner, vitrine e passo a passo (aparecem na prévia antes de salvar) |
-| Vendas → Estudo de vendas    | Gerar nova análise              | Leitura dos números do período                                       |
+| Onde                         | Botão                          | O que sugere                                                                                                                                            |
+| ---------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cadastro de produto, passo 1 | Escrever descrição com IA      | Descrição de venda, benefícios e FAQ                                                                                                                    |
+| Cadastro de produto, passo 1 | Sugerir nome, Google e preço   | Nome, resumo para o Google e faixa de preço comparada ao catálogo                                                                                       |
+| Página da loja               | Aprimorar seção (um por parte) | Banner, vitrine, passo a passo, depoimentos (só títulos), rodapé e Google — melhora os textos atuais daquela parte; nunca inventa depoimento nem número |
+| Vendas → Estudo de vendas    | Gerar nova análise             | Leitura dos números do período                                                                                                                          |
 
 Backend: `POST /api/admin/ai-assist` (`lib/ai-assist.js` sobre `lib/gemini.js`; tarefas
 `productCopy`, `productSeo`, `homeCopy`; 30 pedidos/hora) e `POST /api/admin/sales-study`
@@ -309,36 +309,54 @@ entra no audit log sem a legenda (só rede, id externo e se tinha mídia/link). 
 
 ### Página da loja (`vitrine`)
 
-Tudo o que aparece na home pública, em dois cartões.
+Duas sub-abas: **Página** (tudo o que aparece na home e em volta dela) e **Vitrine (faixas de
+produtos)**.
 
-**Textos e imagens da página** (`HomeContentEditor`, setting `homeContent`). Seções que abrem e
-fecham, com dois modos: "Editar" e "Expandir visualização" — a prévia (`HomePreview`): a própria
-`HomePage` renderizada com o rascunho, numa tela de 1280 px reduzida e sem cliques (`inert`), com o
-selo "Alterações ainda não salvas" ou "Igual ao que está no site". Nada é publicado até salvar.
+**Página** (`HomeContentEditor`, setting `homeContent`). O mesmo rascunho tem dois modos, com o
+botão "Salvar página" sempre à mão; nada é publicado até salvar.
 
-- **Barra de navegação:** título e tamanho (pequeno, médio, grande) — vale em todas as páginas.
-- **Rodapé:** nome, descrição, títulos das seções de navegação e de contato, links `https://` de
-  Instagram, Facebook, Pinterest e WhatsApp e o texto do WhatsApp. O rodapé sempre traz o link
-  "Licença de uso" (`/termos#licenca`). O `Shell.jsx` lê esses dados de `GET /api/home-content`
-  (`src/services/store-settings.js`).
+- **Editar na página** (padrão): a prévia (`HomePreview`) é a própria `HomePage` com cabeçalho e
+  rodapé do rascunho, numa tela de computador, tablet ou celular (botões no topo) reduzida para
+  caber na coluna. Clicar num texto edita ali mesmo (`EditableText`; Enter confirma); cada parte
+  tem uma etiqueta roxa para **arrastar** e mudar a ordem, setas, "Esconder/Mostrar" e "Editar
+  campos" (abre a seção correspondente no outro modo). Links e botões da loja não navegam durante
+  a edição. O selo diz "Alterações ainda não salvas" ou "Igual ao que está no site".
+- **Editar pelos campos**: seções que abrem e fecham, **na ordem da página**: ordem e visibilidade
+  das partes · barra de navegação · banner principal · faixa de palavras · vitrine · passo a passo
+  · depoimentos, números e redes · rodapé · como a loja aparece no Google. As seções com texto têm
+  o botão **Aprimorar seção** no cabeçalho (`useSectionAi` → `POST /api/admin/ai-assist`, tarefas
+  `home*`): só gera no clique, mostra a sugestão para revisar e "Usar estes textos" leva ao
+  rascunho.
 
-- **Ordem das partes da página:** ligar, desligar e reordenar os blocos.
-- **Banner principal (topo da página):** título (trecho entre `*asteriscos*` sai colorido),
-  subtítulo, texto e link do botão, imagem opcional (até 1 MB, exibida inteira) e texto
-  alternativo; posição da imagem (esquerda/direita), animação (nenhuma, surgir, deslizar), fundo
-  (padrão, cor sólida, gradiente linear ou radial, com duas cores), tamanho do banner, alinhamento
-  do texto e ícones opcionais com tamanho.
-- **Faixa de palavras que desliza**, **Vitrine de produtos** (título e botão da área de
-  produtos), **Passo a passo da compra**, **Depoimentos, números e redes sociais** (até 6
-  depoimentos, 4 números, Instagram e TikTok) e **Como a loja aparece no Google** (título e
-  descrição).
-- Botão de IA "Sugerir textos da página com IA" (banner, vitrine e passo a passo).
-- Campo vazio some da home; bloco vazio não aparece. "Restaurar textos padrão" volta ao texto
-  original (só grava ao salvar). Textos padrão em `src/constants/home-content.js`.
-- O servidor limpa o que é gravado (`lib/store-content.js`: só campos conhecidos, tetos de tamanho,
-  links `https://` ou caminho interno). A home lê `GET /api/home-content` (cache de CDN de ~1 min).
+O que cada parte permite:
 
-**Faixas de produtos** (`VitrineTab`, setting `homeSections`). Lista ordenada de faixas: por
+- **Barra de navegação:** logo (envio de imagem), nome ao lado do logo (com opção de esconder) e
+  altura — pequena, média ou grande, que muda também o tamanho do logo e do nome. Vale em todas
+  as páginas.
+- **Banner principal:** título (trecho entre `*asteriscos*` sai colorido), frase de apoio, texto e
+  destino do botão, alinhamento e altura; **fundo** padrão, uma cor, degradê em linha (2 a 4 cores
+  e direção em graus) ou a partir do centro; **enfeites flutuantes** com emojis ou imagens
+  enviadas (até 8, PNG transparente) e tamanho; **imagem ao lado do texto** (lado e animação de
+  entrada); e **foto ocupando o banner inteiro** com uma versão por tamanho de tela — computador
+  1920 × 640, tablet 1024 × 512, celular 800 × 800 — e a opção de pôr o título e o botão por
+  cima dela (`<picture>` escolhe a versão pela largura da tela; as que faltarem usam a maior).
+- **Faixa de palavras**, **Vitrine** (etiqueta, título e botão da área de produtos), **Passo a
+  passo** (4 passos e o quadro de aviso), **Depoimentos, números e redes** (até 6 depoimentos, 4
+  números, Instagram e TikTok) e **Google** (título da aba e descrição da busca).
+- **Rodapé:** logo próprio (vazio = o da barra), nome, descrição, títulos das colunas, e-mail de
+  contato (vazio = o cadastrado da loja), linha de direitos autorais, links `https://` de
+  Instagram, Facebook, Pinterest e WhatsApp e o texto do WhatsApp. A identificação legal da loja
+  (nome, CNPJ, cidade) e os links de Privacidade, Termos, Licença de uso e Cookies são fixos.
+- **Imagens:** todo envio mostra o tamanho recomendado (`IMAGE_SLOTS` em
+  `src/constants/home-content.js`) e avisa quando a imagem enviada foge muito das medidas
+  (`ImageUploadField`). Logo 512 × 512; imagem ao lado do texto 1200 × 900; enfeites 200 × 200.
+- Campo vazio some da home; bloco escondido não aparece. "Restaurar textos padrão" volta ao
+  texto original (só grava ao salvar). Textos padrão em `src/constants/home-content.js`.
+- O servidor limpa o que é gravado (`lib/store-content.js`: só campos conhecidos, tetos de
+  tamanho, cores `#rrggbb`, links e imagens só `https://` ou caminho interno). A home e o
+  `Shell.jsx` leem `GET /api/home-content` (cache de CDN de ~1 min).
+
+**Vitrine (faixas de produtos)** (`VitrineTab`, setting `homeSections`). Lista ordenada de faixas: por
 **Categoria**, **Mais vendidos** ou **Novidades** (no máximo uma de cada especial), com título e
 limite de 4 a 20 produtos. Adicionar, remover, subir/descer e "Salvar vitrine" (grava tudo de uma
 vez). A home lê `GET /api/home-sections`. A prévia mostra as faixas como estão salvas, não o

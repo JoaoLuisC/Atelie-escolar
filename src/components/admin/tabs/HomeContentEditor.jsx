@@ -2,21 +2,33 @@ import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { AiAssistPanel } from '../ui/AiAssistPanel';
+import { ImageUploadField } from '../ui/ImageUploadField';
+import { useSectionAi } from './SectionAi';
 import { useToast } from '../../../hooks/useToast';
+import { fetchAdminSetting, saveAdminSetting } from '../../../services/admin-panel';
 import {
-  fetchAdminSetting,
-  requestAiAssist,
-  saveAdminSetting,
-  uploadProductAsset,
-} from '../../../services/admin-panel';
-import { HOME_BLOCKS, mergeHomeContent } from '../../../constants/home-content';
+  HERO_MAX_FLOATING_IMAGES,
+  HERO_MAX_GRADIENT_STOPS,
+  HOME_BLOCKS,
+  IMAGE_SLOTS,
+  heroGradientStops,
+  mergeHomeContent,
+} from '../../../constants/home-content';
 import { HomePreview } from './HomePreview';
 import { friendlyAdminError } from '../utils/errors';
 
-// Imagem do topo da home: maior que a de produto (500kB), mas ainda leve — é o
-// primeiro elemento que o visitante baixa.
-const HERO_IMAGE_MAX_BYTES = 1024 * 1024;
+// ════════════════════════════════════════════════════════════════════
+// EDITOR DA PÁGINA DA LOJA (chave `homeContent` de settings).
+//
+// Dois jeitos de editar o MESMO rascunho:
+//   • "Editar na página": a prévia, com os textos editáveis no lugar e as
+//     partes arrastáveis (HomePreview + EditableText + BlockFrame);
+//   • "Editar pelos campos": as seções abaixo, NA ORDEM DA PÁGINA — barra de
+//     navegação, banner, faixa, vitrine, passo a passo, depoimentos, rodapé e
+//     Google —, cada uma com o seu botão "Aprimorar seção" (IA, só no clique).
+// Nada vai para o site antes de "Salvar página".
+// ════════════════════════════════════════════════════════════════════
+
 const MAX_TESTIMONIALS = 6;
 const STEP_SLOTS = 4;
 const STAT_SLOTS = 4;
@@ -35,8 +47,16 @@ function linkProblem(value, { allowInternal = true } = {}) {
     : 'Use um endereço começando com https://';
 }
 
+function emailProblem(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(text) ? '' : 'Digite um e-mail válido.';
+}
+
+let fieldSeq = 0;
 function Field({ label, value, onChange, help, error, multiline = false, maxLength, rows = 3 }) {
-  const id = `home-${label.replace(/\W+/g, '-').toLowerCase()}`;
+  // Id único por campo: o mesmo rótulo aparece em várias seções ("Título").
+  const [id] = useState(() => `home-field-${(fieldSeq += 1)}`);
   const Tag = multiline ? 'textarea' : 'input';
   return (
     <label htmlFor={id} className="block text-sm font-medium text-slate-700">
@@ -67,17 +87,56 @@ Field.propTypes = {
   rows: PropTypes.number,
 };
 
-function Section({ title, description, children }) {
+function Select({ label, value, onChange, options, help }) {
+  const [id] = useState(() => `home-select-${(fieldSeq += 1)}`);
   return (
-    <details className="group rounded-xl border border-slate-200 bg-slate-50/50 open:bg-white">
+    <label htmlFor={id} className="block text-sm font-medium text-slate-700">
+      {label}
+      <select
+        id={id}
+        className={inputClass}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map(([optionValue, text]) => (
+          <option key={optionValue} value={optionValue}>
+            {text}
+          </option>
+        ))}
+      </select>
+      {help ? <span className="mt-1 block text-xs text-slate-500">{help}</span> : null}
+    </label>
+  );
+}
+
+Select.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.string,
+  onChange: PropTypes.func.isRequired,
+  options: PropTypes.arrayOf(PropTypes.array).isRequired,
+  help: PropTypes.string,
+};
+
+/** Seção aberta/fechada do formulário, com o botão de IA no cabeçalho. */
+function Section({ id, title, description, open, onToggle, ai, children }) {
+  return (
+    <details
+      id={`secao-${id}`}
+      className="group rounded-xl border border-slate-200 bg-slate-50/50 open:bg-white"
+      open={open}
+      onToggle={(event) => onToggle(id, event.currentTarget.open)}
+    >
       <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3">
-        <span>
+        <span className="min-w-0">
           <span className="block text-sm font-semibold text-slate-800">{title}</span>
           {description ? (
             <span className="mt-0.5 block text-xs font-normal text-slate-500">{description}</span>
           ) : null}
         </span>
-        <i className="bi bi-chevron-down text-slate-400 transition group-open:rotate-180" />
+        <span className="flex shrink-0 items-center gap-2">
+          {ai}
+          <i className="bi bi-chevron-down text-slate-400 transition group-open:rotate-180" />
+        </span>
       </summary>
       <div className="space-y-3 border-t border-slate-200 px-4 py-4">{children}</div>
     </details>
@@ -85,24 +144,42 @@ function Section({ title, description, children }) {
 }
 
 Section.propTypes = {
+  id: PropTypes.string.isRequired,
   title: PropTypes.string.isRequired,
   description: PropTypes.string,
+  open: PropTypes.bool,
+  onToggle: PropTypes.func.isRequired,
+  ai: PropTypes.node,
   children: PropTypes.node,
 };
 
 const HIGHLIGHT_HELP = 'Coloque entre *asteriscos* a palavra que deve aparecer colorida.';
+const EMPTY_DRAFT = mergeHomeContent({});
+const SIZE_OPTIONS = [
+  ['small', 'Pequeno'],
+  ['medium', 'Médio'],
+  ['large', 'Grande'],
+];
 
-/**
- * Editor dos textos e blocos da página inicial (chave `homeContent`).
- * Busca e salva sozinho, como a aba de cupons — o AdminPage só o posiciona.
- */
+/** Rótulos dos campos que a IA devolve, por seção (chaves do lib/ai-assist.js). */
+const AI_LABELS = {
+  titulo: 'Título',
+  subtitulo: 'Subtítulo',
+  botao: 'Texto do botão',
+  etiqueta: 'Etiqueta',
+  passos: 'Passos',
+  avisoTitulo: 'Quadro de aviso — título',
+  avisoTexto: 'Quadro de aviso — texto',
+  descricao: 'Descrição',
+};
+
 export function HomeContentEditor() {
   const { pushToast } = useToast();
   const [content, setContent] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
-  const [uploading, setUploading] = useState(0);
+  const [mode, setMode] = useState('page');
+  const [openSections, setOpenSections] = useState(() => new Set(['hero']));
   // O que está salvo no site, para a prévia dizer se há alteração pendente.
   const [savedSnapshot, setSavedSnapshot] = useState('');
 
@@ -117,7 +194,7 @@ export function HomeContentEditor() {
       })
       .catch((error) => {
         if (!cancelled) {
-          setLoadError(friendlyAdminError(error, 'Erro ao carregar a página inicial.'));
+          setLoadError(friendlyAdminError(error, 'Erro ao carregar a página da loja.'));
         }
       });
     return () => {
@@ -125,45 +202,32 @@ export function HomeContentEditor() {
     };
   }, []);
 
-  if (loadError) {
-    return (
-      <Card title="Textos e imagens da página">
-        <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          {loadError}
-        </p>
-      </Card>
-    );
-  }
+  // Os hooks de IA rodam antes de qualquer return: com o conteúdo ainda
+  // carregando, trabalham sobre o padrão (nada é mostrado até carregar).
+  const draft = content || EMPTY_DRAFT;
+  const steps = Array.from(
+    { length: STEP_SLOTS },
+    (_, i) => draft.howItWorks.steps?.[i] || { title: '', text: '' },
+  );
+  const stats = Array.from(
+    { length: STAT_SLOTS },
+    (_, i) => draft.socialProof.stats?.[i] || { value: '', label: '' },
+  );
+  const testimonials = draft.socialProof.testimonials || [];
+  const gradientStops = heroGradientStops(draft.hero);
+  const floatingImages = draft.hero.floatingImages || [];
+  const banner = draft.hero.banner || {};
 
-  if (!content) {
-    return (
-      <Card title="Textos e imagens da página">
-        <p className="text-sm text-slate-500">Carregando…</p>
-      </Card>
-    );
+  function openOnAi(id) {
+    return () => setSectionOpen(id, true);
   }
 
   function update(section, field, value) {
     setContent((prev) => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
   }
 
-  // Sugestão da IA vai para o RASCUNHO: aparece na prévia, e só chega ao site
-  // quando a pessoa clicar em Salvar.
-  function applyAiCopy(suggestion) {
-    setContent((prev) => ({
-      ...prev,
-      hero: {
-        ...prev.hero,
-        title: suggestion.bannerTitulo || prev.hero.title,
-        subtitle: suggestion.bannerSubtitulo || prev.hero.subtitle,
-      },
-      catalog: { ...prev.catalog, title: suggestion.vitrineTitulo || prev.catalog.title },
-      howItWorks: {
-        ...prev.howItWorks,
-        title: suggestion.passoAPassoTitulo || prev.howItWorks.title,
-        subtitle: suggestion.passoAPassoSubtitulo || prev.howItWorks.subtitle,
-      },
-    }));
+  function updateMany(section, fields) {
+    setContent((prev) => ({ ...prev, [section]: { ...prev[section], ...fields } }));
   }
 
   function updateListItem(section, field, index, key, value, slots) {
@@ -194,43 +258,132 @@ export function HomeContentEditor() {
     }));
   }
 
-  async function handleHeroImage(event) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      pushToast('Escolha um arquivo de imagem (JPG, PNG ou WebP).', 'error');
-      return;
-    }
-    if (file.size > HERO_IMAGE_MAX_BYTES) {
-      pushToast('A imagem passa de 1 MB. Reduza o tamanho e tente de novo.', 'error');
-      return;
-    }
-    try {
-      setUploading(1);
-      const { url } = await uploadProductAsset({
-        kind: 'image',
-        file,
-        onProgress: (pct) => setUploading(Math.max(1, pct)),
-      });
-      update('hero', 'imageUrl', url);
-      pushToast('Imagem enviada. Clique em "Salvar página inicial" para publicar.', 'success');
-    } catch (error) {
-      pushToast(friendlyAdminError(error, 'Erro ao enviar a imagem.'), 'error');
-    } finally {
-      setUploading(0);
-    }
+  function setSectionOpen(id, open) {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (open) next.add(id);
+      else next.delete(id);
+      return next;
+    });
   }
 
-  const steps = Array.from(
-    { length: STEP_SLOTS },
-    (_, i) => content.howItWorks.steps?.[i] || { title: '', text: '' },
-  );
-  const stats = Array.from(
-    { length: STAT_SLOTS },
-    (_, i) => content.socialProof.stats?.[i] || { value: '', label: '' },
-  );
-  const testimonials = content.socialProof.testimonials || [];
+  function openSectionFromPage(id) {
+    setMode('form');
+    setSectionOpen(id, true);
+    globalThis.requestAnimationFrame?.(() =>
+      globalThis.document?.getElementById(`secao-${id}`)?.scrollIntoView({ block: 'start' }),
+    );
+  }
+
+  // ── IA por seção: o que mandar e como aplicar o que voltar ────────────
+  const heroAi = useSectionAi({
+    task: 'homeHero',
+    current: {
+      titulo: draft.hero.title,
+      subtitulo: draft.hero.subtitle,
+      botao: draft.hero.ctaLabel,
+    },
+    labels: AI_LABELS,
+    onStart: openOnAi('hero'),
+    onApply: (s) =>
+      updateMany('hero', {
+        title: s.titulo || draft.hero.title,
+        subtitle: s.subtitulo ?? draft.hero.subtitle,
+        ctaLabel: s.botao || draft.hero.ctaLabel,
+      }),
+  });
+  const catalogAi = useSectionAi({
+    task: 'homeCatalog',
+    current: {
+      etiqueta: draft.catalog.eyebrow,
+      titulo: draft.catalog.title,
+      botao: draft.catalog.ctaLabel,
+    },
+    labels: AI_LABELS,
+    onStart: openOnAi('catalog'),
+    onApply: (s) =>
+      updateMany('catalog', {
+        eyebrow: s.etiqueta || draft.catalog.eyebrow,
+        title: s.titulo || draft.catalog.title,
+        ctaLabel: s.botao || draft.catalog.ctaLabel,
+      }),
+  });
+  const howAi = useSectionAi({
+    task: 'homeHowItWorks',
+    current: {
+      etiqueta: draft.howItWorks.eyebrow,
+      titulo: draft.howItWorks.title,
+      subtitulo: draft.howItWorks.subtitle,
+      passos: steps.map((step) => `${step.title}: ${step.text}`).join(' | '),
+      avisoTitulo: draft.howItWorks.infoTitle,
+      avisoTexto: draft.howItWorks.infoText,
+    },
+    labels: AI_LABELS,
+    onStart: openOnAi('howItWorks'),
+    onApply: (s) =>
+      updateMany('howItWorks', {
+        eyebrow: s.etiqueta || draft.howItWorks.eyebrow,
+        title: s.titulo || draft.howItWorks.title,
+        subtitle: s.subtitulo || draft.howItWorks.subtitle,
+        infoTitle: s.avisoTitulo || draft.howItWorks.infoTitle,
+        infoText: s.avisoTexto || draft.howItWorks.infoText,
+        steps: s.passos?.length
+          ? s.passos.map((step) => ({ title: step.titulo, text: step.texto }))
+          : draft.howItWorks.steps,
+      }),
+  });
+  const socialAi = useSectionAi({
+    task: 'homeSocialProof',
+    current: {
+      etiqueta: draft.socialProof.eyebrow,
+      titulo: draft.socialProof.title,
+      subtitulo: draft.socialProof.subtitle,
+    },
+    labels: AI_LABELS,
+    onStart: openOnAi('socialProof'),
+    onApply: (s) =>
+      updateMany('socialProof', {
+        eyebrow: s.etiqueta || draft.socialProof.eyebrow,
+        title: s.titulo || draft.socialProof.title,
+        subtitle: s.subtitulo || draft.socialProof.subtitle,
+      }),
+  });
+  const footerAi = useSectionAi({
+    task: 'homeFooter',
+    current: { descricao: draft.footer.description },
+    labels: AI_LABELS,
+    onStart: openOnAi('footer'),
+    onApply: (s) => update('footer', 'description', s.descricao || draft.footer.description),
+  });
+  const seoAi = useSectionAi({
+    task: 'homeSeo',
+    current: { titulo: draft.seo.title, descricao: draft.seo.description },
+    labels: AI_LABELS,
+    onStart: openOnAi('seo'),
+    onApply: (s) =>
+      updateMany('seo', {
+        title: s.titulo || draft.seo.title,
+        description: s.descricao || draft.seo.description,
+      }),
+  });
+
+  if (loadError) {
+    return (
+      <Card title="Textos e imagens da página">
+        <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {loadError}
+        </p>
+      </Card>
+    );
+  }
+
+  if (!content) {
+    return (
+      <Card title="Textos e imagens da página">
+        <p className="text-sm text-slate-500">Carregando…</p>
+      </Card>
+    );
+  }
 
   const errors = {
     ctaLink: linkProblem(content.hero.ctaLink),
@@ -240,6 +393,7 @@ export function HomeContentEditor() {
     footerFacebook: linkProblem(content.footer.facebookUrl, { allowInternal: false }),
     footerPinterest: linkProblem(content.footer.pinterestUrl, { allowInternal: false }),
     footerWhatsapp: linkProblem(content.footer.whatsappUrl, { allowInternal: false }),
+    contactEmail: emailProblem(content.footer.contactEmail),
   };
   const hasErrors = Object.values(errors).some(Boolean);
 
@@ -247,6 +401,11 @@ export function HomeContentEditor() {
     const filled = (item, keys) => keys.some((key) => String(item?.[key] || '').trim());
     return {
       ...content,
+      hero: {
+        ...content.hero,
+        backgroundStops: (content.hero.backgroundStops || []).filter(Boolean),
+        floatingImages: floatingImages.filter(Boolean),
+      },
       marquee: {
         items: (content.marquee.items || []).map((item) => item.trim()).filter(Boolean),
       },
@@ -270,7 +429,7 @@ export function HomeContentEditor() {
       setSavedSnapshot(JSON.stringify(content));
       pushToast('Página salva. Ela aparece no site em até 1 minuto.', 'success');
     } catch (error) {
-      pushToast(friendlyAdminError(error, 'Erro ao salvar a página inicial.'), 'error');
+      pushToast(friendlyAdminError(error, 'Erro ao salvar a página da loja.'), 'error');
     } finally {
       setSaving(false);
     }
@@ -279,7 +438,7 @@ export function HomeContentEditor() {
   function handleRestoreDefaults() {
     if (
       !globalThis.window.confirm?.(
-        'Voltar todos os textos da página inicial ao padrão? Nada é salvo até você clicar em Salvar.',
+        'Voltar todos os textos da página ao padrão? Nada é salvo até você clicar em Salvar.',
       )
     ) {
       return;
@@ -288,721 +447,880 @@ export function HomeContentEditor() {
   }
 
   const blockLabel = (id) => HOME_BLOCKS.find((block) => block.id === id)?.label || id;
-
   const dirty = JSON.stringify(content) !== savedSnapshot;
+  const sectionProps = (id) => ({ id, open: openSections.has(id), onToggle: setSectionOpen });
+
+  const saveBar = (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Modo de edição da página">
+        <Button
+          variant={mode === 'page' ? 'primary' : 'secondary'}
+          icon="pencil-square"
+          onClick={() => setMode('page')}
+        >
+          Editar na página
+        </Button>
+        <Button
+          variant={mode === 'form' ? 'primary' : 'secondary'}
+          icon="sliders"
+          onClick={() => setMode('form')}
+        >
+          Editar pelos campos
+        </Button>
+        <a
+          href="/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 self-center text-sm font-medium text-violet-700 hover:underline"
+        >
+          Ver a loja <i className="bi bi-box-arrow-up-right" />
+        </a>
+      </div>
+      <div className="flex items-center gap-3">
+        {hasErrors ? (
+          <span className="text-xs text-rose-600">Corrija os campos marcados para salvar.</span>
+        ) : null}
+        <Button icon="check2" onClick={handleSave} disabled={saving || hasErrors}>
+          {saving ? 'Salvando…' : dirty ? 'Salvar página' : 'Página salva'}
+        </Button>
+      </div>
+    </div>
+  );
+
+  if (mode === 'page') {
+    return (
+      <div className="space-y-4">
+        {saveBar}
+        <HomePreview
+          content={content}
+          dirty={dirty}
+          editing
+          onChange={setContent}
+          onOpenSection={openSectionFromPage}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Modo de edição da página">
-        <Button
-          variant={!previewMode ? 'primary' : 'secondary'}
-          onClick={() => setPreviewMode(false)}
-        >
-          Editar
-        </Button>
-        <Button
-          variant={previewMode ? 'primary' : 'secondary'}
-          icon="arrows-fullscreen"
-          onClick={() => setPreviewMode(true)}
-        >
-          Expandir visualização
-        </Button>
-      </div>
-      {!previewMode ? (
-        <Card
-          title="Textos e imagens da página"
-          subtitle="Abra uma seção para editar e use Expandir visualização para conferir. As mudanças só são publicadas ao salvar."
-          action={
-            <a
-              href="/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-violet-700 hover:underline"
-            >
-              Ver a página inicial <i className="bi bi-box-arrow-up-right" />
-            </a>
-          }
-        >
-          <div className="space-y-3">
-            <Section title="Barra de navegação" description="Nome e altura do cabeçalho da loja.">
+      {saveBar}
+      <Card
+        title="Textos e imagens da página"
+        subtitle={
+          'As seções estão na ordem em que aparecem na página, de cima para baixo. Abra uma para editar; “Aprimorar seção” pede à IA uma versão melhor dos textos daquela parte.'
+        }
+      >
+        <div className="space-y-3">
+          <Section
+            {...sectionProps('blocks')}
+            title="Ordem e visibilidade das partes"
+            description="O que aparece e em que ordem. Na edição na página dá para arrastar."
+          >
+            <ol className="space-y-2">
+              {content.blocks.map((block, index) => (
+                <li
+                  key={block.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                >
+                  <label className="flex items-center gap-2 text-sm text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={block.enabled}
+                      onChange={() => toggleBlock(index)}
+                      className="h-4 w-4 rounded border-slate-300 text-violet-600"
+                    />
+                    {blockLabel(block.id)}
+                    {!block.enabled ? (
+                      <span className="text-xs text-slate-400">(escondido)</span>
+                    ) : null}
+                  </label>
+                  <span className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="arrow-up"
+                      aria-label={`Subir ${blockLabel(block.id)}`}
+                      disabled={index === 0}
+                      onClick={() => moveBlock(index, -1)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="arrow-down"
+                      aria-label={`Descer ${blockLabel(block.id)}`}
+                      disabled={index === content.blocks.length - 1}
+                      onClick={() => moveBlock(index, 1)}
+                    />
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </Section>
+
+          <Section
+            {...sectionProps('navigation')}
+            title="Barra de navegação"
+            description="Logo, nome e altura do cabeçalho, em todas as páginas da loja."
+          >
+            <ImageUploadField
+              label="Logo da loja"
+              slot={IMAGE_SLOTS.logo}
+              value={content.navigation.logoUrl}
+              onChange={(url) => update('navigation', 'logoUrl', url)}
+              onNotify={pushToast}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Título da navegação"
+                label="Nome ao lado do logo"
                 value={content.navigation.title}
                 onChange={(v) => update('navigation', 'title', v)}
                 maxLength={80}
               />
-              <label className="block text-sm font-medium text-slate-700">
-                Tamanho da barra
-                <select
-                  className={inputClass}
-                  value={content.navigation.size}
-                  onChange={(event) => update('navigation', 'size', event.target.value)}
-                >
-                  <option value="small">Pequeno</option>
-                  <option value="medium">Médio</option>
-                  <option value="large">Grande</option>
-                </select>
-              </label>
-            </Section>
-            <Section
-              title="Rodapé"
-              description="Edite os textos e os endereços de contato e redes sociais."
-            >
-              <Field
-                label="Nome no rodapé"
-                value={content.footer.title}
-                onChange={(v) => update('footer', 'title', v)}
-                maxLength={80}
+              <Select
+                label="Altura da barra"
+                value={content.navigation.size}
+                onChange={(v) => update('navigation', 'size', v)}
+                options={SIZE_OPTIONS}
+                help="Muda a altura, o tamanho do logo e do nome."
               />
-              <Field
-                label="Descrição do rodapé"
-                value={content.footer.description}
-                onChange={(v) => update('footer', 'description', v)}
-                maxLength={600}
-                multiline
+            </div>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={content.navigation.showTitle !== false}
+                onChange={(event) => update('navigation', 'showTitle', event.target.checked)}
               />
-              <Field
-                label="Título da seção de navegação"
-                value={content.footer.navigationTitle}
-                onChange={(v) => update('footer', 'navigationTitle', v)}
-                maxLength={80}
-              />
-              <Field
-                label="Título da seção de contato"
-                value={content.footer.contactTitle}
-                onChange={(v) => update('footer', 'contactTitle', v)}
-                maxLength={80}
-              />
-              {[
-                ['Instagram do rodapé', 'instagramUrl', errors.footerInstagram],
-                ['Facebook do rodapé', 'facebookUrl', errors.footerFacebook],
-                ['Pinterest do rodapé', 'pinterestUrl', errors.footerPinterest],
-                ['Link do WhatsApp', 'whatsappUrl', errors.footerWhatsapp],
-              ].map(([label, field, error]) => (
-                <Field
-                  key={field}
-                  label={label}
-                  value={content.footer[field]}
-                  onChange={(v) => update('footer', field, v)}
-                  error={error}
-                  help="Use um endereço https:// ou deixe vazio para ocultar."
-                  maxLength={500}
-                />
-              ))}
-              <Field
-                label="Texto do WhatsApp"
-                value={content.footer.whatsappLabel}
-                onChange={(v) => update('footer', 'whatsappLabel', v)}
-                maxLength={80}
-              />
-              <p className="text-xs text-slate-500">
-                Esses elementos aparecem na loja publicada; a prévia abaixo mostra somente o
-                conteúdo da página inicial.
-              </p>
-            </Section>
-            <AiAssistPanel
-              title="Sugerir textos da página com IA"
-              description="A IA lê os nomes e categorias dos seus materiais e sugere o título do banner, a frase de apoio e os títulos das partes da página. Você vê na prévia antes de salvar."
-              buttonLabel="Sugerir textos"
-              onRequest={() =>
-                requestAiAssist('homeCopy', {
-                  currentText: [
-                    content.hero.title,
-                    content.hero.subtitle,
-                    content.catalog.title,
-                    content.howItWorks.title,
-                  ]
-                    .filter(Boolean)
-                    .join(' | '),
-                })
-              }
-              renderSuggestion={(suggestion) => (
-                <>
-                  <dl className="space-y-2">
-                    {[
-                      ['Banner — título', suggestion.bannerTitulo],
-                      ['Banner — frase de apoio', suggestion.bannerSubtitulo],
-                      ['Vitrine — título', suggestion.vitrineTitulo],
-                      ['Passo a passo — título', suggestion.passoAPassoTitulo],
-                      ['Passo a passo — frase', suggestion.passoAPassoSubtitulo],
-                    ]
-                      .filter(([, value]) => value)
-                      .map(([label, value]) => (
-                        <div key={label}>
-                          <dt className="text-xs font-semibold text-slate-500">{label}</dt>
-                          <dd>{value}</dd>
-                        </div>
-                      ))}
-                  </dl>
-                  <Button size="sm" icon="check2" onClick={() => applyAiCopy(suggestion)}>
-                    Usar estes textos (aparecem na prévia)
-                  </Button>
-                </>
-              )}
-            />
-            <Section
-              title="Ordem das partes da página"
-              description="Escolha o que aparece e em que ordem, de cima para baixo."
-            >
-              <ol className="space-y-2">
-                {content.blocks.map((block, index) => (
-                  <li
-                    key={block.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
-                  >
-                    <label className="flex items-center gap-2 text-sm text-slate-800">
-                      <input
-                        type="checkbox"
-                        checked={block.enabled}
-                        onChange={() => toggleBlock(index)}
-                        className="h-4 w-4 rounded border-slate-300 text-violet-600"
-                      />
-                      {blockLabel(block.id)}
-                      {!block.enabled ? (
-                        <span className="text-xs text-slate-400">(escondido)</span>
-                      ) : null}
-                    </label>
-                    <span className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon="arrow-up"
-                        aria-label={`Subir ${blockLabel(block.id)}`}
-                        disabled={index === 0}
-                        onClick={() => moveBlock(index, -1)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon="arrow-down"
-                        aria-label={`Descer ${blockLabel(block.id)}`}
-                        disabled={index === content.blocks.length - 1}
-                        onClick={() => moveBlock(index, 1)}
-                      />
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </Section>
+              Mostrar o nome ao lado do logo
+            </label>
+          </Section>
 
-            <Section
-              title={blockLabel('hero')}
-              description="A primeira coisa que o cliente vê: título grande, botão e imagem."
-            >
+          <Section
+            {...sectionProps('hero')}
+            title={blockLabel('hero')}
+            description="A primeira coisa que o cliente vê: título grande, frase de apoio, botão, fundo e imagem."
+            ai={heroAi.button}
+          >
+            {heroAi.panel}
+            <Field
+              label="Título"
+              value={content.hero.title}
+              onChange={(v) => update('hero', 'title', v)}
+              help={HIGHLIGHT_HELP}
+              maxLength={160}
+            />
+            <Field
+              label="Frase de apoio (opcional)"
+              value={content.hero.subtitle}
+              onChange={(v) => update('hero', 'subtitle', v)}
+              multiline
+              maxLength={600}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Título"
-                value={content.hero.title}
-                onChange={(v) => update('hero', 'title', v)}
-                help={HIGHLIGHT_HELP}
-                maxLength={160}
+                label="Texto do botão"
+                value={content.hero.ctaLabel}
+                onChange={(v) => update('hero', 'ctaLabel', v)}
+                help="Vazio esconde o botão."
+                maxLength={80}
               />
               <Field
-                label="Subtítulo (opcional)"
-                value={content.hero.subtitle}
-                onChange={(v) => update('hero', 'subtitle', v)}
-                multiline
-                maxLength={600}
+                label="Para onde o botão leva"
+                value={content.hero.ctaLink}
+                onChange={(v) => update('hero', 'ctaLink', v)}
+                error={errors.ctaLink}
+                help="Ex.: /produtos (a lista de produtos) ou um endereço https://"
+                maxLength={500}
               />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field
-                  label="Texto do botão"
-                  value={content.hero.ctaLabel}
-                  onChange={(v) => update('hero', 'ctaLabel', v)}
-                  help="Deixe vazio para esconder o botão."
-                  maxLength={80}
+              <Select
+                label="Alinhamento do texto"
+                value={content.hero.textAlign}
+                onChange={(v) => update('hero', 'textAlign', v)}
+                options={[
+                  ['left', 'À esquerda'],
+                  ['center', 'Centralizado'],
+                  ['right', 'À direita'],
+                ]}
+              />
+              <Select
+                label="Altura do banner"
+                value={content.hero.bannerSize}
+                onChange={(v) => update('hero', 'bannerSize', v)}
+                options={SIZE_OPTIONS}
+                help="Quanto espaço o banner ocupa acima e abaixo do texto."
+              />
+            </div>
+
+            <p className="pt-2 text-sm font-semibold text-slate-800">Fundo</p>
+            <Select
+              label="Tipo de fundo"
+              value={content.hero.backgroundStyle}
+              onChange={(v) => update('hero', 'backgroundStyle', v)}
+              options={[
+                ['default', 'Padrão da loja (lilás com brilhos)'],
+                ['solid', 'Uma cor'],
+                ['linear', 'Degradê em linha'],
+                ['radial', 'Degradê a partir do centro'],
+              ]}
+            />
+            {content.hero.backgroundStyle === 'solid' ? (
+              <label className="block text-sm font-medium text-slate-700">
+                Cor do fundo
+                <input
+                  type="color"
+                  className="mt-1 block h-10 w-full"
+                  value={gradientStops[0]}
+                  onChange={(event) =>
+                    update('hero', 'backgroundStops', [
+                      event.target.value,
+                      ...gradientStops.slice(1),
+                    ])
+                  }
                 />
-                <Field
-                  label="Link do botão"
-                  value={content.hero.ctaLink}
-                  onChange={(v) => update('hero', 'ctaLink', v)}
-                  error={errors.ctaLink}
-                  help="Ex.: /produtos"
-                  maxLength={500}
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[
-                  [
-                    'Posição da imagem',
-                    'imagePosition',
-                    [
-                      ['right', 'À direita'],
-                      ['left', 'À esquerda'],
-                    ],
-                  ],
-                  [
-                    'Animação da imagem',
-                    'imageAnimation',
-                    [
-                      ['none', 'Sem animação'],
-                      ['fade', 'Aparecer'],
-                      ['slide', 'Deslizar'],
-                    ],
-                  ],
-                  [
-                    'Tamanho do banner',
-                    'bannerSize',
-                    [
-                      ['small', 'Pequeno'],
-                      ['medium', 'Médio'],
-                      ['large', 'Grande'],
-                    ],
-                  ],
-                  [
-                    'Alinhamento do texto',
-                    'textAlign',
-                    [
-                      ['left', 'À esquerda'],
-                      ['center', 'Centralizado'],
-                      ['right', 'À direita'],
-                    ],
-                  ],
-                  [
-                    'Fundo do banner',
-                    'backgroundStyle',
-                    [
-                      ['default', 'Padrão'],
-                      ['solid', 'Cor sólida'],
-                      ['linear', 'Degradê linear'],
-                      ['radial', 'Degradê radial'],
-                    ],
-                  ],
-                ].map(([label, field, options]) => (
-                  <label key={field} className="block text-sm font-medium text-slate-700">
-                    {label}
-                    <select
-                      className={inputClass}
-                      value={content.hero[field]}
-                      onChange={(event) => update('hero', field, event.target.value)}
-                    >
-                      {options.map(([value, text]) => (
-                        <option key={value} value={value}>
-                          {text}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-                {content.hero.backgroundStyle !== 'default' &&
-                  ['backgroundColor', 'backgroundColorEnd'].map((field, index) => (
-                    <label key={field} className="block text-sm font-medium text-slate-700">
-                      {index ? 'Segunda cor do degradê' : 'Cor principal'}
+              </label>
+            ) : null}
+            {content.hero.backgroundStyle === 'linear' ||
+            content.hero.backgroundStyle === 'radial' ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700">
+                  Cores do degradê (de {HERO_MAX_GRADIENT_STOPS > 2 ? '2 a ' : ''}
+                  {HERO_MAX_GRADIENT_STOPS})
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {gradientStops.map((stop, index) => (
+                    <span key={index} className="flex items-center gap-1">
                       <input
                         type="color"
-                        className="mt-1 block h-10 w-full"
-                        value={content.hero[field]}
-                        onChange={(event) => update('hero', field, event.target.value)}
+                        aria-label={`Cor ${index + 1} do degradê`}
+                        className="h-10 w-14"
+                        value={stop}
+                        onChange={(event) => {
+                          const next = [...gradientStops];
+                          next[index] = event.target.value;
+                          update('hero', 'backgroundStops', next);
+                        }}
                       />
-                    </label>
+                      {gradientStops.length > 2 ? (
+                        <button
+                          type="button"
+                          aria-label={`Remover cor ${index + 1}`}
+                          onClick={() =>
+                            update(
+                              'hero',
+                              'backgroundStops',
+                              gradientStops.filter((_, i) => i !== index),
+                            )
+                          }
+                          className="rounded-md px-1.5 py-1 text-xs text-slate-500 hover:bg-rose-50 hover:text-rose-700"
+                        >
+                          <i className="bi bi-x-lg" aria-hidden="true" />
+                        </button>
+                      ) : null}
+                    </span>
                   ))}
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={content.hero.showIcons}
-                    onChange={(event) => update('hero', 'showIcons', event.target.checked)}
-                  />
-                  Mostrar ícones decorativos
-                </label>
-              </div>
-              {content.hero.showIcons && (
-                <>
-                  <Field
-                    label="Ícones do banner"
-                    value={content.hero.icons}
-                    onChange={(v) => update('hero', 'icons', v)}
-                    help="Separe os emojis por vírgula, por exemplo: 📚, ✏️, ⭐. Deixe vazio para usar os ícones padrão."
-                    maxLength={100}
-                  />
-                  <label className="block text-sm font-medium text-slate-700">
-                    Tamanho dos ícones
-                    <select
-                      className={inputClass}
-                      value={content.hero.iconSize}
-                      onChange={(event) => update('hero', 'iconSize', event.target.value)}
-                    >
-                      <option value="small">Pequeno</option>
-                      <option value="medium">Médio</option>
-                      <option value="large">Grande</option>
-                    </select>
-                  </label>
-                </>
-              )}
-              <div className="rounded-lg border border-dashed border-slate-300 p-3">
-                <p className="text-sm font-medium text-slate-700">Imagem do topo (opcional)</p>
-                <p className="text-xs text-slate-500">
-                  Aparece ao lado do título, inteira, sem cortes. JPG, PNG ou WebP até 1 MB.
-                </p>
-                {content.hero.imageUrl ? (
-                  <div className="mt-3 flex items-center gap-3">
-                    <img
-                      src={content.hero.imageUrl}
-                      alt="Prévia da imagem do topo"
-                      className="h-24 w-36 rounded-lg bg-slate-50 object-contain ring-1 ring-slate-200"
-                    />
+                  {gradientStops.length < HERO_MAX_GRADIENT_STOPS ? (
                     <Button
                       variant="secondary"
                       size="sm"
-                      icon="trash"
-                      onClick={() => update('hero', 'imageUrl', '')}
+                      icon="plus-lg"
+                      onClick={() =>
+                        update('hero', 'backgroundStops', [
+                          ...gradientStops,
+                          gradientStops[gradientStops.length - 1],
+                        ])
+                      }
                     >
-                      Remover imagem
+                      Adicionar cor
                     </Button>
-                  </div>
-                ) : null}
-                <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
-                  <i className="bi bi-upload" />
-                  {uploading
-                    ? `Enviando… ${uploading}%`
-                    : content.hero.imageUrl
-                      ? 'Trocar imagem'
-                      : 'Enviar imagem'}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="sr-only"
-                    disabled={Boolean(uploading)}
-                    onChange={handleHeroImage}
-                  />
-                </label>
-                {content.hero.imageUrl ? (
-                  <div className="mt-3">
-                    <Field
-                      label="Descrição da imagem (para acessibilidade)"
-                      value={content.hero.imageAlt}
-                      onChange={(v) => update('hero', 'imageAlt', v)}
-                      maxLength={160}
+                  ) : null}
+                </div>
+                <div
+                  aria-hidden="true"
+                  className="h-6 rounded-lg ring-1 ring-slate-200"
+                  style={{
+                    background:
+                      content.hero.backgroundStyle === 'radial'
+                        ? `radial-gradient(circle, ${gradientStops.join(', ')})`
+                        : `linear-gradient(${content.hero.gradientAngle ?? 135}deg, ${gradientStops.join(', ')})`,
+                  }}
+                />
+                {content.hero.backgroundStyle === 'linear' ? (
+                  <label className="block text-sm font-medium text-slate-700">
+                    Direção do degradê: {content.hero.gradientAngle ?? 135}°
+                    <input
+                      type="range"
+                      min={0}
+                      max={360}
+                      step={5}
+                      value={content.hero.gradientAngle ?? 135}
+                      onChange={(event) =>
+                        update('hero', 'gradientAngle', Number(event.target.value))
+                      }
+                      className="mt-1 block w-full"
                     />
-                  </div>
+                  </label>
                 ) : null}
               </div>
-            </Section>
+            ) : null}
 
-            <Section
-              title={blockLabel('marquee')}
-              description="Palavras curtas que passam na faixa colorida logo abaixo do banner."
-            >
-              <Field
-                label="Palavras"
-                value={(content.marquee.items || []).join(', ')}
-                onChange={(v) =>
-                  update(
-                    'marquee',
-                    'items',
-                    // trimStart: sem ele o espaço depois da vírgula se acumula a
-                    // cada tecla, porque o campo exibe a lista com ', '.
-                    v.split(',').map((item) => item.trimStart()),
-                  )
-                }
-                help="Separe por vírgula. Até 12 palavras. Deixe vazio para esconder a faixa."
+            <p className="pt-2 text-sm font-semibold text-slate-800">Enfeites flutuantes</p>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={content.hero.showIcons}
+                onChange={(event) => update('hero', 'showIcons', event.target.checked)}
               />
-            </Section>
-
-            <Section
-              title={blockLabel('catalog')}
-              description="Título da área de produtos. Quais produtos aparecem se escolhe no cartão “Faixas de produtos”, abaixo."
-            >
-              <Field
-                label="Etiqueta acima do título (texto curtinho)"
-                value={content.catalog.eyebrow}
-                onChange={(v) => update('catalog', 'eyebrow', v)}
-                maxLength={80}
-              />
-              <Field
-                label="Título"
-                value={content.catalog.title}
-                onChange={(v) => update('catalog', 'title', v)}
-                help={HIGHLIGHT_HELP}
-                maxLength={160}
-              />
-              <Field
-                label="Texto do botão do catálogo"
-                value={content.catalog.ctaLabel}
-                onChange={(v) => update('catalog', 'ctaLabel', v)}
-                help="Deixe vazio para esconder o botão."
-                maxLength={80}
-              />
-            </Section>
-
-            <Section
-              title={blockLabel('howItWorks')}
-              description="Explica em poucos passos como comprar e baixar o material."
-            >
-              <Field
-                label="Etiqueta acima do título (texto curtinho)"
-                value={content.howItWorks.eyebrow}
-                onChange={(v) => update('howItWorks', 'eyebrow', v)}
-                maxLength={80}
-              />
-              <Field
-                label="Título"
-                value={content.howItWorks.title}
-                onChange={(v) => update('howItWorks', 'title', v)}
-                help={HIGHLIGHT_HELP}
-                maxLength={160}
-              />
-              <Field
-                label="Subtítulo"
-                value={content.howItWorks.subtitle}
-                onChange={(v) => update('howItWorks', 'subtitle', v)}
-                maxLength={600}
-              />
-              <div className="grid gap-3 sm:grid-cols-2">
-                {steps.map((step, index) => (
-                  <div key={index} className="rounded-lg border border-slate-200 p-3">
-                    <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
-                      Passo {index + 1}
-                    </p>
-                    <Field
-                      label={`Título do passo ${index + 1}`}
-                      value={step.title}
-                      onChange={(v) =>
-                        updateListItem('howItWorks', 'steps', index, 'title', v, STEP_SLOTS)
-                      }
-                      maxLength={80}
-                    />
-                    <div className="mt-2">
-                      <Field
-                        label={`Texto do passo ${index + 1}`}
-                        value={step.text}
-                        onChange={(v) =>
-                          updateListItem('howItWorks', 'steps', index, 'text', v, STEP_SLOTS)
+              Mostrar enfeites flutuando no fundo do banner
+            </label>
+            {content.hero.showIcons ? (
+              <div className="space-y-3">
+                <Select
+                  label="Tamanho dos enfeites"
+                  value={content.hero.iconSize}
+                  onChange={(v) => update('hero', 'iconSize', v)}
+                  options={SIZE_OPTIONS}
+                />
+                <Field
+                  label="Emojis"
+                  value={content.hero.icons}
+                  onChange={(v) => update('hero', 'icons', v)}
+                  help="Separe por vírgula, por exemplo: 📚, ✏️, ⭐. Vazio = os emojis padrão. Com imagens enviadas abaixo, os emojis não aparecem."
+                  maxLength={100}
+                />
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <p className="text-sm font-medium text-slate-700">
+                    Imagens no lugar dos emojis (até {HERO_MAX_FLOATING_IMAGES})
+                  </p>
+                  <p className="text-xs text-slate-500">{IMAGE_SLOTS.floating.hint}</p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {floatingImages.map((url, index) => (
+                      <ImageUploadField
+                        key={`${index}-${url}`}
+                        compact
+                        label={`Imagem ${index + 1}`}
+                        slot={IMAGE_SLOTS.floating}
+                        value={url}
+                        onNotify={pushToast}
+                        onChange={(next) =>
+                          update(
+                            'hero',
+                            'floatingImages',
+                            next
+                              ? floatingImages.map((item, i) => (i === index ? next : item))
+                              : floatingImages.filter((_, i) => i !== index),
+                          )
                         }
-                        multiline
-                        rows={2}
-                        maxLength={600}
                       />
-                    </div>
+                    ))}
                   </div>
-                ))}
+                  {floatingImages.length < HERO_MAX_FLOATING_IMAGES ? (
+                    <ImageUploadField
+                      compact
+                      label="Adicionar imagem"
+                      slot={IMAGE_SLOTS.floating}
+                      value=""
+                      onNotify={pushToast}
+                      onChange={(next) =>
+                        next && update('hero', 'floatingImages', [...floatingImages, next])
+                      }
+                    />
+                  ) : null}
+                </div>
               </div>
-              <p className="text-xs text-slate-500">Passo sem título e sem texto não aparece.</p>
-              <Field
-                label="Quadro de aviso — título"
-                value={content.howItWorks.infoTitle}
-                onChange={(v) => update('howItWorks', 'infoTitle', v)}
-                maxLength={80}
-              />
-              <Field
-                label="Quadro de aviso — texto"
-                value={content.howItWorks.infoText}
-                onChange={(v) => update('howItWorks', 'infoText', v)}
-                maxLength={600}
-              />
-            </Section>
+            ) : null}
 
-            <Section
-              title={blockLabel('socialProof')}
-              description="O que clientes dizem, números da loja e links do Instagram e TikTok."
-            >
-              <Field
-                label="Etiqueta acima do título (texto curtinho)"
-                value={content.socialProof.eyebrow}
-                onChange={(v) => update('socialProof', 'eyebrow', v)}
-                maxLength={80}
-              />
-              <Field
-                label="Título"
-                value={content.socialProof.title}
-                onChange={(v) => update('socialProof', 'title', v)}
-                help={HIGHLIGHT_HELP}
-                maxLength={160}
-              />
-              <Field
-                label="Subtítulo"
-                value={content.socialProof.subtitle}
-                onChange={(v) => update('socialProof', 'subtitle', v)}
-                maxLength={600}
-              />
+            <p className="pt-2 text-sm font-semibold text-slate-800">Imagem ao lado do texto</p>
+            <ImageUploadField
+              label="Imagem ao lado do título (opcional)"
+              slot={IMAGE_SLOTS.heroImage}
+              value={content.hero.imageUrl}
+              onChange={(url) => update('hero', 'imageUrl', url)}
+              onNotify={pushToast}
+            />
+            {content.hero.imageUrl ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field
+                  label="Descrição da imagem (acessibilidade)"
+                  value={content.hero.imageAlt}
+                  onChange={(v) => update('hero', 'imageAlt', v)}
+                  maxLength={160}
+                />
+                <Select
+                  label="Lado da imagem"
+                  value={content.hero.imagePosition}
+                  onChange={(v) => update('hero', 'imagePosition', v)}
+                  options={[
+                    ['right', 'À direita do texto'],
+                    ['left', 'À esquerda do texto'],
+                  ]}
+                />
+                <Select
+                  label="Entrada da imagem"
+                  value={content.hero.imageAnimation}
+                  onChange={(v) => update('hero', 'imageAnimation', v)}
+                  options={[
+                    ['none', 'Sem animação'],
+                    ['fade', 'Aparecer aos poucos'],
+                    ['slide', 'Deslizar'],
+                  ]}
+                />
+              </div>
+            ) : null}
 
-              <p className="pt-2 text-sm font-medium text-slate-700">Números</p>
+            <p className="pt-2 text-sm font-semibold text-slate-800">
+              Foto ocupando o banner inteiro (opcional)
+            </p>
+            <p className="text-xs text-slate-500">
+              Uma arte retangular (feita no Canva, por exemplo) no lugar do fundo. Envie uma versão
+              por tamanho de tela para ela não ficar cortada; as que faltarem usam a maior.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                ['desktop', 'Computador', IMAGE_SLOTS.bannerDesktop],
+                ['tablet', 'Tablet', IMAGE_SLOTS.bannerTablet],
+                ['mobile', 'Celular', IMAGE_SLOTS.bannerMobile],
+              ].map(([key, label, slot]) => (
+                <ImageUploadField
+                  key={key}
+                  compact
+                  label={label}
+                  slot={slot}
+                  value={banner[key]}
+                  onNotify={pushToast}
+                  onChange={(url) => update('hero', 'banner', { ...banner, [key]: url })}
+                />
+              ))}
+            </div>
+            {banner.desktop ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                {stats.map((stat, index) => (
-                  <div key={index} className="grid grid-cols-2 gap-2">
-                    <Field
-                      label={`Número em destaque ${index + 1} (ex.: 500+)`}
-                      value={stat.value}
-                      onChange={(v) =>
-                        updateListItem('socialProof', 'stats', index, 'value', v, STAT_SLOTS)
-                      }
-                      maxLength={20}
-                    />
-                    <Field
-                      label={`O que o número ${index + 1} significa`}
-                      value={stat.label}
-                      onChange={(v) =>
-                        updateListItem('socialProof', 'stats', index, 'label', v, STAT_SLOTS)
-                      }
-                      maxLength={40}
-                    />
-                  </div>
-                ))}
+                <Field
+                  label="Descrição da foto (acessibilidade)"
+                  value={banner.alt}
+                  onChange={(v) => update('hero', 'banner', { ...banner, alt: v })}
+                  maxLength={160}
+                />
+                <label className="flex items-center gap-2 self-end text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={banner.textOverlay !== false}
+                    onChange={(event) =>
+                      update('hero', 'banner', { ...banner, textOverlay: event.target.checked })
+                    }
+                  />
+                  Mostrar o título e o botão por cima da foto
+                </label>
               </div>
+            ) : null}
+          </Section>
 
-              <p className="pt-2 text-sm font-medium text-slate-700">Depoimentos</p>
-              {testimonials.map((item, index) => (
-                <div key={index} className="space-y-2 rounded-lg border border-slate-200 p-3">
-                  <div className="grid gap-2 sm:grid-cols-2">
+          <Section
+            {...sectionProps('marquee')}
+            title={blockLabel('marquee')}
+            description="Palavras curtas que passam na faixa colorida logo abaixo do banner."
+          >
+            <Field
+              label="Palavras"
+              value={(content.marquee.items || []).join(', ')}
+              onChange={(v) =>
+                update(
+                  'marquee',
+                  'items',
+                  // trimStart: sem ele o espaço depois da vírgula se acumula a
+                  // cada tecla, porque o campo exibe a lista com ', '.
+                  v.split(',').map((item) => item.trimStart()),
+                )
+              }
+              help="Separe por vírgula. Até 12 palavras. Vazio esconde a faixa."
+            />
+          </Section>
+
+          <Section
+            {...sectionProps('catalog')}
+            title={blockLabel('catalog')}
+            description="Os textos da área de produtos. Quais faixas aparecem se escolhe na sub-aba Vitrine."
+            ai={catalogAi.button}
+          >
+            {catalogAi.panel}
+            <Field
+              label="Etiqueta acima do título (texto curtinho)"
+              value={content.catalog.eyebrow}
+              onChange={(v) => update('catalog', 'eyebrow', v)}
+              maxLength={80}
+            />
+            <Field
+              label="Título"
+              value={content.catalog.title}
+              onChange={(v) => update('catalog', 'title', v)}
+              help={HIGHLIGHT_HELP}
+              maxLength={160}
+            />
+            <Field
+              label="Texto do botão do catálogo"
+              value={content.catalog.ctaLabel}
+              onChange={(v) => update('catalog', 'ctaLabel', v)}
+              help="Vazio esconde o botão."
+              maxLength={80}
+            />
+          </Section>
+
+          <Section
+            {...sectionProps('howItWorks')}
+            title={blockLabel('howItWorks')}
+            description="Explica em poucos passos como comprar e baixar o material."
+            ai={howAi.button}
+          >
+            {howAi.panel}
+            <Field
+              label="Etiqueta acima do título (texto curtinho)"
+              value={content.howItWorks.eyebrow}
+              onChange={(v) => update('howItWorks', 'eyebrow', v)}
+              maxLength={80}
+            />
+            <Field
+              label="Título"
+              value={content.howItWorks.title}
+              onChange={(v) => update('howItWorks', 'title', v)}
+              help={HIGHLIGHT_HELP}
+              maxLength={160}
+            />
+            <Field
+              label="Subtítulo"
+              value={content.howItWorks.subtitle}
+              onChange={(v) => update('howItWorks', 'subtitle', v)}
+              maxLength={600}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {steps.map((step, index) => (
+                <div key={index} className="rounded-lg border border-slate-200 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
+                    Passo {index + 1}
+                  </p>
+                  <Field
+                    label={`Título do passo ${index + 1}`}
+                    value={step.title}
+                    onChange={(v) =>
+                      updateListItem('howItWorks', 'steps', index, 'title', v, STEP_SLOTS)
+                    }
+                    maxLength={80}
+                  />
+                  <div className="mt-2">
                     <Field
-                      label={`Nome ${index + 1}`}
-                      value={item.name}
+                      label={`Texto do passo ${index + 1}`}
+                      value={step.text}
                       onChange={(v) =>
-                        updateListItem(
-                          'socialProof',
-                          'testimonials',
-                          index,
-                          'name',
-                          v,
-                          testimonials.length,
-                        )
+                        updateListItem('howItWorks', 'steps', index, 'text', v, STEP_SLOTS)
                       }
-                      maxLength={80}
-                    />
-                    <Field
-                      label={`Profissão ou cidade de quem deu o depoimento ${index + 1}`}
-                      value={item.role}
-                      onChange={(v) =>
-                        updateListItem(
-                          'socialProof',
-                          'testimonials',
-                          index,
-                          'role',
-                          v,
-                          testimonials.length,
-                        )
-                      }
-                      maxLength={80}
+                      multiline
+                      rows={2}
+                      maxLength={600}
                     />
                   </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">Passo sem título e sem texto não aparece.</p>
+            <Field
+              label="Quadro de aviso — título"
+              value={content.howItWorks.infoTitle}
+              onChange={(v) => update('howItWorks', 'infoTitle', v)}
+              maxLength={80}
+            />
+            <Field
+              label="Quadro de aviso — texto"
+              value={content.howItWorks.infoText}
+              onChange={(v) => update('howItWorks', 'infoText', v)}
+              maxLength={600}
+            />
+          </Section>
+
+          <Section
+            {...sectionProps('socialProof')}
+            title={blockLabel('socialProof')}
+            description="O que clientes dizem, números da loja e links do Instagram e TikTok. A IA só mexe nos títulos: depoimento e número são de verdade."
+            ai={socialAi.button}
+          >
+            {socialAi.panel}
+            <Field
+              label="Etiqueta acima do título (texto curtinho)"
+              value={content.socialProof.eyebrow}
+              onChange={(v) => update('socialProof', 'eyebrow', v)}
+              maxLength={80}
+            />
+            <Field
+              label="Título"
+              value={content.socialProof.title}
+              onChange={(v) => update('socialProof', 'title', v)}
+              help={HIGHLIGHT_HELP}
+              maxLength={160}
+            />
+            <Field
+              label="Subtítulo"
+              value={content.socialProof.subtitle}
+              onChange={(v) => update('socialProof', 'subtitle', v)}
+              maxLength={600}
+            />
+
+            <p className="pt-2 text-sm font-medium text-slate-700">Números</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {stats.map((stat, index) => (
+                <div key={index} className="grid grid-cols-2 gap-2">
                   <Field
-                    label={`Depoimento ${index + 1}`}
-                    value={item.text}
+                    label={`Número em destaque ${index + 1} (ex.: 500+)`}
+                    value={stat.value}
+                    onChange={(v) =>
+                      updateListItem('socialProof', 'stats', index, 'value', v, STAT_SLOTS)
+                    }
+                    maxLength={20}
+                  />
+                  <Field
+                    label={`O que o número ${index + 1} significa`}
+                    value={stat.label}
+                    onChange={(v) =>
+                      updateListItem('socialProof', 'stats', index, 'label', v, STAT_SLOTS)
+                    }
+                    maxLength={40}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <p className="pt-2 text-sm font-medium text-slate-700">Depoimentos</p>
+            {testimonials.map((item, index) => (
+              <div key={index} className="space-y-2 rounded-lg border border-slate-200 p-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Field
+                    label={`Nome ${index + 1}`}
+                    value={item.name}
                     onChange={(v) =>
                       updateListItem(
                         'socialProof',
                         'testimonials',
                         index,
-                        'text',
+                        'name',
                         v,
                         testimonials.length,
                       )
                     }
-                    multiline
-                    rows={2}
-                    maxLength={600}
+                    maxLength={80}
                   />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon="trash"
-                    onClick={() =>
-                      update(
+                  <Field
+                    label={`Profissão ou cidade de quem deu o depoimento ${index + 1}`}
+                    value={item.role}
+                    onChange={(v) =>
+                      updateListItem(
                         'socialProof',
                         'testimonials',
-                        testimonials.filter((_, i) => i !== index),
+                        index,
+                        'role',
+                        v,
+                        testimonials.length,
                       )
                     }
-                  >
-                    Remover depoimento
-                  </Button>
+                    maxLength={80}
+                  />
                 </div>
-              ))}
-              {testimonials.length < MAX_TESTIMONIALS ? (
+                <Field
+                  label={`Depoimento ${index + 1}`}
+                  value={item.text}
+                  onChange={(v) =>
+                    updateListItem(
+                      'socialProof',
+                      'testimonials',
+                      index,
+                      'text',
+                      v,
+                      testimonials.length,
+                    )
+                  }
+                  multiline
+                  rows={2}
+                  maxLength={600}
+                />
                 <Button
-                  variant="secondary"
+                  variant="ghost"
                   size="sm"
-                  icon="plus-lg"
+                  icon="trash"
                   onClick={() =>
-                    update('socialProof', 'testimonials', [
-                      ...testimonials,
-                      { name: '', role: '', text: '' },
-                    ])
+                    update(
+                      'socialProof',
+                      'testimonials',
+                      testimonials.filter((_, i) => i !== index),
+                    )
                   }
                 >
-                  Adicionar depoimento
+                  Remover depoimento
                 </Button>
-              ) : null}
-
-              <p className="pt-2 text-sm font-medium text-slate-700">Redes sociais</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field
-                  label="Link do Instagram"
-                  value={content.socialProof.instagramUrl}
-                  onChange={(v) => update('socialProof', 'instagramUrl', v)}
-                  error={errors.instagramUrl}
-                  help="Vazio esconde o botão."
-                  maxLength={500}
-                />
-                <Field
-                  label="Texto do botão do Instagram"
-                  value={content.socialProof.instagramLabel}
-                  onChange={(v) => update('socialProof', 'instagramLabel', v)}
-                  maxLength={80}
-                />
-                <Field
-                  label="Link do TikTok"
-                  value={content.socialProof.tiktokUrl}
-                  onChange={(v) => update('socialProof', 'tiktokUrl', v)}
-                  error={errors.tiktokUrl}
-                  help="Vazio esconde o botão."
-                  maxLength={500}
-                />
-                <Field
-                  label="Texto do botão do TikTok"
-                  value={content.socialProof.tiktokLabel}
-                  onChange={(v) => update('socialProof', 'tiktokLabel', v)}
-                  maxLength={80}
-                />
               </div>
-            </Section>
+            ))}
+            {testimonials.length < MAX_TESTIMONIALS ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon="plus-lg"
+                onClick={() =>
+                  update('socialProof', 'testimonials', [
+                    ...testimonials,
+                    { name: '', role: '', text: '' },
+                  ])
+                }
+              >
+                Adicionar depoimento
+              </Button>
+            ) : null}
 
-            <Section
-              title="Como a loja aparece no Google"
-              description="Título da aba do navegador e o texto que aparece na busca."
-            >
+            <p className="pt-2 text-sm font-medium text-slate-700">Redes sociais</p>
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Título na aba e no Google"
-                value={content.seo.title}
-                onChange={(v) => update('seo', 'title', v)}
+                label="Link do Instagram"
+                value={content.socialProof.instagramUrl}
+                onChange={(v) => update('socialProof', 'instagramUrl', v)}
+                error={errors.instagramUrl}
+                help="Vazio esconde o botão."
+                maxLength={500}
+              />
+              <Field
+                label="Texto do botão do Instagram"
+                value={content.socialProof.instagramLabel}
+                onChange={(v) => update('socialProof', 'instagramLabel', v)}
+                maxLength={80}
+              />
+              <Field
+                label="Link do TikTok"
+                value={content.socialProof.tiktokUrl}
+                onChange={(v) => update('socialProof', 'tiktokUrl', v)}
+                error={errors.tiktokUrl}
+                help="Vazio esconde o botão."
+                maxLength={500}
+              />
+              <Field
+                label="Texto do botão do TikTok"
+                value={content.socialProof.tiktokLabel}
+                onChange={(v) => update('socialProof', 'tiktokLabel', v)}
+                maxLength={80}
+              />
+            </div>
+          </Section>
+
+          <Section
+            {...sectionProps('footer')}
+            title="Rodapé"
+            description="Logo, textos, contato e redes do rodapé, em todas as páginas da loja."
+            ai={footerAi.button}
+          >
+            {footerAi.panel}
+            <ImageUploadField
+              label="Logo do rodapé (vazio = o mesmo da barra)"
+              slot={IMAGE_SLOTS.logo}
+              value={content.footer.logoUrl}
+              onChange={(url) => update('footer', 'logoUrl', url)}
+              onNotify={pushToast}
+            />
+            <Field
+              label="Nome no rodapé"
+              value={content.footer.title}
+              onChange={(v) => update('footer', 'title', v)}
+              maxLength={80}
+            />
+            <Field
+              label="Descrição da loja"
+              value={content.footer.description}
+              onChange={(v) => update('footer', 'description', v)}
+              maxLength={600}
+              multiline
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="Título da coluna de links"
+                value={content.footer.navigationTitle}
+                onChange={(v) => update('footer', 'navigationTitle', v)}
+                maxLength={80}
+              />
+              <Field
+                label="Título da coluna de contato"
+                value={content.footer.contactTitle}
+                onChange={(v) => update('footer', 'contactTitle', v)}
+                maxLength={80}
+              />
+              <Field
+                label="E-mail de contato"
+                value={content.footer.contactEmail}
+                onChange={(v) => update('footer', 'contactEmail', v)}
+                error={errors.contactEmail}
+                help="Vazio = o e-mail cadastrado da loja."
+                maxLength={254}
+              />
+              <Field
+                label="Linha de direitos autorais"
+                value={content.footer.copyright}
+                onChange={(v) => update('footer', 'copyright', v)}
                 maxLength={160}
               />
-              <Field
-                label="Descrição no Google"
-                value={content.seo.description}
-                onChange={(v) => update('seo', 'description', v)}
-                multiline
-                maxLength={600}
-              />
-            </Section>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon="arrow-counterclockwise"
-              onClick={handleRestoreDefaults}
-            >
-              Restaurar textos padrão
-            </Button>
-            <div className="flex items-center gap-3">
-              {hasErrors ? (
-                <span className="text-xs text-rose-600">
-                  Corrija os links marcados para salvar.
-                </span>
-              ) : null}
-              <Button
-                icon="check2"
-                onClick={handleSave}
-                disabled={saving || hasErrors || Boolean(uploading)}
-              >
-                {saving ? 'Salvando…' : 'Salvar página'}
-              </Button>
             </div>
-          </div>
-        </Card>
-      ) : (
-        <HomePreview content={buildPayload()} dirty={dirty} />
-      )}
+            {[
+              ['Instagram', 'instagramUrl', errors.footerInstagram],
+              ['Facebook', 'facebookUrl', errors.footerFacebook],
+              ['Pinterest', 'pinterestUrl', errors.footerPinterest],
+              ['Link do WhatsApp', 'whatsappUrl', errors.footerWhatsapp],
+            ].map(([label, field, error]) => (
+              <Field
+                key={field}
+                label={label}
+                value={content.footer[field]}
+                onChange={(v) => update('footer', field, v)}
+                error={error}
+                help="Endereço https:// ou vazio para esconder."
+                maxLength={500}
+              />
+            ))}
+            <Field
+              label="Texto do WhatsApp"
+              value={content.footer.whatsappLabel}
+              onChange={(v) => update('footer', 'whatsappLabel', v)}
+              maxLength={80}
+            />
+            <p className="text-xs text-slate-500">
+              A identificação da loja (nome, CNPJ e cidade) é obrigatória por lei e não se edita por
+              aqui.
+            </p>
+          </Section>
+
+          <Section
+            {...sectionProps('seo')}
+            title="Como a loja aparece no Google"
+            description="Título da aba do navegador e o texto que aparece na busca."
+            ai={seoAi.button}
+          >
+            {seoAi.panel}
+            <Field
+              label="Título na aba e no Google"
+              value={content.seo.title}
+              onChange={(v) => update('seo', 'title', v)}
+              maxLength={160}
+            />
+            <Field
+              label="Descrição no Google"
+              value={content.seo.description}
+              onChange={(v) => update('seo', 'description', v)}
+              multiline
+              maxLength={600}
+            />
+          </Section>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="arrow-counterclockwise"
+            onClick={handleRestoreDefaults}
+          >
+            Restaurar textos padrão
+          </Button>
+          <Button icon="check2" onClick={handleSave} disabled={saving || hasErrors}>
+            {saving ? 'Salvando…' : 'Salvar página'}
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

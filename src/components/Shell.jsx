@@ -11,6 +11,7 @@ import { ROUTES } from '../constants/routes';
 import { SELLER } from '../constants/seller';
 import { DEFAULT_HOME_CONTENT, mergeHomeContent } from '../constants/home-content';
 import { fetchStoreSettings } from '../services/store-settings';
+import { EditableText } from './EditableText';
 
 function navLinkClass({ isActive }) {
   return `inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
@@ -49,7 +50,41 @@ const CONTACT_EMAIL = SELLER.email;
 
 const DESKTOP_MEDIA_QUERY = '(min-width: 1024px)';
 
-export function Shell({ children }) {
+// Três alturas de barra de verdade: a altura do logo e o tamanho do nome
+// mudam junto com o espaçamento — só o padding não dava para notar.
+const NAV_SIZES = {
+  small: { pad: 'py-1', logo: 30, box: 'h-9 w-9', text: 'text-sm' },
+  medium: { pad: 'py-3', logo: 34, box: 'h-10 w-10', text: 'text-base' },
+  large: { pad: 'py-5', logo: 46, box: 'h-14 w-14', text: 'text-lg' },
+};
+
+/** Logo da loja: a imagem enviada no painel ou a coruja padrão. */
+function BrandLogo({ url, size }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        width={size}
+        height={size}
+        className="object-contain"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return <OwlLogo size={size} />;
+}
+
+BrandLogo.propTypes = {
+  url: PropTypes.string,
+  size: PropTypes.number.isRequired,
+};
+
+/**
+ * @param {object} [props.storeContent] conteúdo vindo da prévia do painel; com
+ *   ele o Shell não busca as configurações e mostra o rascunho.
+ */
+export function Shell({ children, storeContent: previewContent = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { customerSession, logoutCustomer } = useAuth();
@@ -58,29 +93,32 @@ export function Shell({ children }) {
   const { pushToast } = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
-  const [storeContent, setStoreContent] = useState(DEFAULT_HOME_CONTENT);
+  const [fetchedContent, setFetchedContent] = useState(DEFAULT_HOME_CONTENT);
   const navRef = useRef(null);
 
   useEffect(() => {
+    if (previewContent) return undefined;
     let active = true;
     fetchStoreSettings()
       .then((content) => {
-        if (active) setStoreContent(mergeHomeContent(content));
+        if (active) setFetchedContent(mergeHomeContent(content));
       })
       .catch(() => {});
     return () => {
       active = false;
     };
-  }, []);
+  }, [previewContent]);
 
+  const storeContent = previewContent || fetchedContent;
   const { navigation, footer } = storeContent;
+  const navSize = NAV_SIZES[navigation.size] || NAV_SIZES.medium;
+  const footerLogoUrl = footer.logoUrl || navigation.logoUrl;
+  const contactEmail = footer.contactEmail || CONTACT_EMAIL;
   const socialLinks = [
     { label: 'Instagram', icon: 'instagram', href: footer.instagramUrl },
     { label: 'Facebook', icon: 'facebook', href: footer.facebookUrl },
     { label: 'Pinterest', icon: 'pinterest', href: footer.pinterestUrl },
   ].filter((social) => social.href);
-  const navigationPadding = { small: 'py-1', medium: 'py-3', large: 'py-5' };
-
   const isAdminRole = ['admin', 'master'].includes(
     String(customerSession?.role || '').toLowerCase(),
   );
@@ -163,15 +201,23 @@ export function Shell({ children }) {
         className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur"
       >
         <div
-          className={`mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 lg:px-6 ${navigationPadding[navigation.size] || navigationPadding.medium}`}
+          className={`mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 lg:px-6 ${navSize.pad}`}
         >
           <Link to={ROUTES.home} className="flex items-center gap-2.5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-brand-100">
-              <OwlLogo size={34} />
+            <span
+              className={`flex ${navSize.box} items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-brand-100`}
+            >
+              <BrandLogo url={navigation.logoUrl} size={navSize.logo} />
             </span>
-            <span className="hidden font-display text-base font-bold uppercase tracking-wide text-slate-800 sm:inline">
-              {navigation.title}
-            </span>
+            {navigation.showTitle !== false ? (
+              <EditableText
+                path="navigation.title"
+                value={navigation.title}
+                className={`hidden font-display ${navSize.text} font-bold uppercase tracking-wide text-slate-800 sm:inline`}
+              >
+                {navigation.title}
+              </EditableText>
+            ) : null}
           </Link>
 
           <ul className="hidden items-center gap-1 lg:flex">
@@ -397,15 +443,24 @@ export function Shell({ children }) {
             <div className="md:col-span-2 md:pr-8">
               <Link to={ROUTES.home} className="inline-flex items-center gap-2.5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white">
-                  <OwlLogo size={30} />
+                  <BrandLogo url={footerLogoUrl} size={30} />
                 </span>
-                <span className="font-display text-sm font-semibold uppercase tracking-wider text-white">
+                <EditableText
+                  path="footer.title"
+                  value={footer.title}
+                  className="font-display text-sm font-semibold uppercase tracking-wider text-white"
+                >
                   {footer.title}
-                </span>
+                </EditableText>
               </Link>
-              <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-400">
+              <EditableText
+                path="footer.description"
+                value={footer.description}
+                as="p"
+                className="mt-4 max-w-md text-sm leading-relaxed text-slate-400"
+              >
                 {footer.description}
-              </p>
+              </EditableText>
               {socialLinks.length ? (
                 <div className="mt-5 flex gap-2">
                   {socialLinks.map((social) => (
@@ -425,9 +480,14 @@ export function Shell({ children }) {
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+              <EditableText
+                path="footer.navigationTitle"
+                value={footer.navigationTitle}
+                as="h4"
+                className="text-xs font-semibold uppercase tracking-widest text-slate-400"
+              >
                 {footer.navigationTitle}
-              </h4>
+              </EditableText>
               <ul className="mt-4 space-y-2.5 text-sm">
                 <li>
                   <Link to={ROUTES.home} className="text-slate-400 transition hover:text-white">
@@ -462,18 +522,23 @@ export function Shell({ children }) {
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+              <EditableText
+                path="footer.contactTitle"
+                value={footer.contactTitle}
+                as="h4"
+                className="text-xs font-semibold uppercase tracking-widest text-slate-400"
+              >
                 {footer.contactTitle}
-              </h4>
+              </EditableText>
               <ul className="mt-4 space-y-2.5 text-sm">
                 <li>
                   <a
-                    href={`mailto:${CONTACT_EMAIL}`}
+                    href={`mailto:${contactEmail}`}
                     className="flex items-center gap-2 text-slate-400 transition hover:text-white"
                   >
                     <i className="bi bi-envelope" aria-hidden="true" />
                     {/* break-all: a 768 px a coluna é estreita e o endereço vazava, criando rolagem horizontal. */}
-                    <span className="min-w-0 break-all">{CONTACT_EMAIL}</span>
+                    <span className="min-w-0 break-all">{contactEmail}</span>
                   </a>
                 </li>
                 {footer.whatsappUrl ? (
@@ -501,7 +566,9 @@ export function Shell({ children }) {
               (abaixo dos 4,5:1 do WCAG AA); slate-400 passa com folga. */}
           <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-slate-800 pt-6 text-xs text-slate-400 sm:flex-row">
             <div className="text-center sm:text-left">
-              <p>&copy; 2026 Profa. Marciar Cardoso. Todos os direitos reservados.</p>
+              <EditableText path="footer.copyright" value={footer.copyright} as="p">
+                {footer.copyright}
+              </EditableText>
               {/* Decreto 7.962/2013: identificação de quem vende, visível em toda página. */}
               <p className="mt-1">
                 {SELLER.name} · CNPJ {SELLER.cnpj} · {SELLER.city}
@@ -540,4 +607,5 @@ export function Shell({ children }) {
 
 Shell.propTypes = {
   children: PropTypes.node.isRequired,
+  storeContent: PropTypes.object,
 };

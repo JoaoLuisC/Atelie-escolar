@@ -88,3 +88,60 @@ describe('HomePage · conteúdo configurável', () => {
     expect(screen.queryByText('@profamarciarcardoso')).toBeNull();
   });
 });
+
+describe('HomePage · banner com foto, degradê e enfeites', () => {
+  it('com foto do banner, renderiza <picture> com uma versão por tela e o texto por cima', async () => {
+    fetchHomeContent.mockResolvedValue({
+      hero: {
+        title: 'Volta às aulas',
+        banner: {
+          desktop: 'https://x.supabase.co/d.jpg',
+          tablet: 'https://x.supabase.co/t.jpg',
+          mobile: 'https://x.supabase.co/m.jpg',
+          alt: 'Arte do banner',
+          textOverlay: true,
+        },
+      },
+    });
+    renderHome();
+
+    const img = await screen.findByAltText('Arte do banner');
+    expect(img).toHaveAttribute('src', 'https://x.supabase.co/d.jpg');
+    const sources = img.closest('picture').querySelectorAll('source');
+    expect([...sources].map((s) => s.getAttribute('srcset'))).toEqual([
+      'https://x.supabase.co/m.jpg',
+      'https://x.supabase.co/t.jpg',
+    ]);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('text-white');
+  });
+
+  it('degradê usa as cores e o ângulo configurados', async () => {
+    fetchHomeContent.mockResolvedValue({
+      hero: {
+        backgroundStyle: 'linear',
+        backgroundStops: ['#111111', '#222222', '#333333'],
+        gradientAngle: 90,
+      },
+    });
+    renderHome();
+
+    const h1 = await screen.findByRole('heading', { level: 1 });
+    const section = h1.closest('section');
+    expect(section.style.background).toContain('90deg');
+    // O jsdom normaliza a cor para rgb().
+    expect(section.style.background).toContain('rgb(17, 17, 17)');
+    expect(section.style.background).toContain('rgb(51, 51, 51)');
+  });
+
+  it('imagens flutuantes substituem os emojis', async () => {
+    fetchHomeContent.mockResolvedValue({
+      hero: { floatingImages: ['https://x.supabase.co/estrela.png'] },
+    });
+    renderHome();
+
+    await screen.findByRole('heading', { level: 1 });
+    const floating = document.querySelectorAll('img[src="https://x.supabase.co/estrela.png"]');
+    expect(floating.length).toBeGreaterThan(0);
+    expect(screen.queryByText('✏️')).toBeNull();
+  });
+});

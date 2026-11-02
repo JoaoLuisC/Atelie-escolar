@@ -9,10 +9,14 @@ import { formatPrice } from '../utils/currency';
 import { ROUTES } from '../constants/routes';
 import {
   DEFAULT_HOME_CONTENT,
+  HOME_BLOCKS,
+  heroGradientStops,
   mergeHomeContent,
   splitHighlights,
   stripHighlights,
 } from '../constants/home-content';
+import { EditableText } from '../components/EditableText';
+import { useEditContext } from '../components/edit-context';
 
 // LOJA-13: o JSON-LD apontava para `profamarciarcardoso.com.br`, domínio que
 // não resolve DNS. A origem agora é a do próprio site no ar (a mesma que o
@@ -52,6 +56,12 @@ function readOrigin() {
     return '';
   }
 }
+
+// `text-align` alinha só o texto: o botão é item de flex e o bloco tem largura
+// máxima. Sem estas classes, "Centralizado" e "À direita" deixavam o botão (e,
+// sem imagem, o bloco inteiro) encostados à esquerda do banner.
+const HERO_BUTTON_ALIGN = { center: 'justify-center', right: 'justify-end' };
+const HERO_BLOCK_ALIGN = { center: 'mx-auto', right: 'ml-auto' };
 
 const SCHOOL_ICONS = [
   { emoji: '✏️', position: 'left-[4%] top-[18%]' },
@@ -210,13 +220,21 @@ Marquee.propTypes = {
  * para não piscar o texto padrão antes do texto salvo pela admin.
  */
 function HeroBlock({ hero, prefersReducedMotion }) {
+  const { editing } = useEditContext();
   const hasImage = Boolean(hero?.imageUrl);
-  const colors = [hero?.backgroundColor || '#ede9fe', hero?.backgroundColorEnd || '#e0f2fe'];
+  const colors = heroGradientStops(hero);
+  const angle = Number.isFinite(Number(hero?.gradientAngle)) ? Number(hero.gradientAngle) : 135;
   const backgrounds = {
     solid: colors[0],
-    linear: `linear-gradient(135deg, ${colors.join(', ')})`,
+    linear: `linear-gradient(${angle}deg, ${colors.join(', ')})`,
     radial: `radial-gradient(circle, ${colors.join(', ')})`,
   };
+  const floatingImages = (Array.isArray(hero?.floatingImages) ? hero.floatingImages : []).filter(
+    Boolean,
+  );
+  const banner = hero?.banner || {};
+  const hasBanner = Boolean(banner.desktop);
+  const textOverBanner = hasBanner && banner.textOverlay !== false;
   const bannerPadding = {
     small: 'py-6 lg:py-8',
     medium: 'py-10 lg:py-14',
@@ -229,6 +247,95 @@ function HeroBlock({ hero, prefersReducedMotion }) {
     .filter(Boolean)
     .slice(0, SCHOOL_ICONS.length);
   const iconSize = { small: 'text-xl', medium: 'text-3xl', large: 'text-5xl' };
+  const imageSize = { small: 40, medium: 64, large: 96 };
+
+  // Texto do banner (título, frase, botão): por cima da foto ou no bloco de sempre.
+  const textBlock = hero ? (
+    <div
+      className={`max-w-3xl ${HERO_BLOCK_ALIGN[hero.textAlign] || ''}`}
+      style={{ textAlign: hero.textAlign || 'left' }}
+    >
+      <h1
+        className={`font-display text-2xl font-extrabold leading-tight sm:text-3xl lg:text-4xl ${
+          textOverBanner ? 'text-white drop-shadow' : 'text-slate-900'
+        }`}
+      >
+        <EditableText path="hero.title" value={hero.title}>
+          <HighlightedText value={hero.title} />
+        </EditableText>
+      </h1>
+      {hero.subtitle || editing ? (
+        <EditableText
+          path="hero.subtitle"
+          value={hero.subtitle}
+          as="p"
+          className={`mt-3 whitespace-pre-line text-base sm:text-lg ${
+            textOverBanner ? 'text-white/90' : 'text-slate-600'
+          }`}
+        >
+          {hero.subtitle}
+        </EditableText>
+      ) : null}
+
+      {hero.ctaLabel ? (
+        <div className={`mt-5 flex flex-wrap gap-3 ${HERO_BUTTON_ALIGN[hero.textAlign] || ''}`}>
+          <SmartLink
+            to={hero.ctaLink || ROUTES.produtos}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-5 py-2.5 text-sm font-semibold text-white shadow-brand transition hover:scale-105"
+          >
+            <EditableText path="hero.ctaLabel" value={hero.ctaLabel}>
+              {hero.ctaLabel}
+            </EditableText>{' '}
+            <i className="bi bi-arrow-right" />
+          </SmartLink>
+        </div>
+      ) : null}
+    </div>
+  ) : (
+    <div aria-busy="true" aria-label="Carregando" className="max-w-3xl space-y-3">
+      <div className="h-8 w-11/12 animate-pulse rounded-lg bg-white/70" />
+      <div className="h-8 w-2/3 animate-pulse rounded-lg bg-white/70" />
+      <div className="mt-5 h-10 w-36 animate-pulse rounded-xl bg-white/70" />
+    </div>
+  );
+
+  if (hasBanner) {
+    // Foto retangular ocupando o banner: uma versão por tamanho de tela
+    // (celular até 639 px, tablet até 1023 px, computador acima).
+    return (
+      <section className="relative overflow-hidden bg-slate-900">
+        <picture>
+          {banner.mobile ? <source media="(max-width: 639px)" srcSet={banner.mobile} /> : null}
+          {banner.tablet || banner.mobile ? (
+            <source media="(max-width: 1023px)" srcSet={banner.tablet || banner.mobile} />
+          ) : null}
+          <img
+            src={banner.desktop}
+            alt={banner.alt || ''}
+            decoding="async"
+            className="block h-auto w-full object-cover"
+          />
+        </picture>
+        {textOverBanner ? (
+          <div className="absolute inset-0 flex items-center bg-gradient-to-r from-slate-900/60 via-slate-900/30 to-transparent">
+            <div
+              className={`mx-auto w-full max-w-6xl px-4 lg:px-6 ${bannerPadding[hero?.bannerSize] || bannerPadding.medium}`}
+            >
+              {textBlock}
+            </div>
+          </div>
+        ) : null}
+        {!textOverBanner ? (
+          <div
+            className={`mx-auto max-w-6xl bg-white px-4 lg:px-6 ${bannerPadding[hero?.bannerSize] || bannerPadding.medium}`}
+          >
+            {textBlock}
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <section
       className="relative overflow-hidden bg-gradient-to-br from-brand-100 via-white to-sky-50"
@@ -253,22 +360,39 @@ function HeroBlock({ hero, prefersReducedMotion }) {
 
       {hero?.showIcons !== false && (
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden sm:block">
-          {SCHOOL_ICONS.slice(0, selectedIcons.length || SCHOOL_ICONS.length).map((icon, i) => (
-            <span
-              key={i}
-              className={`absolute ${iconSize[hero?.iconSize] || iconSize.medium} opacity-60 ${icon.position}`}
-              style={
-                prefersReducedMotion
-                  ? undefined
-                  : {
-                      animation: `float ${5 + i * 0.5}s ease-in-out infinite`,
-                      animationDelay: `${i * 0.3}s`,
-                    }
-              }
-            >
-              {selectedIcons[i] || icon.emoji}
-            </span>
-          ))}
+          {SCHOOL_ICONS.slice(
+            0,
+            floatingImages.length || selectedIcons.length || SCHOOL_ICONS.length,
+          ).map((icon, i) => {
+            const motion = prefersReducedMotion
+              ? undefined
+              : {
+                  animation: `float ${5 + i * 0.5}s ease-in-out infinite`,
+                  animationDelay: `${i * 0.3}s`,
+                };
+            // Imagens enviadas no painel no lugar dos emojis (PNG transparente).
+            if (floatingImages.length) {
+              const px = imageSize[hero?.iconSize] || imageSize.medium;
+              return (
+                <img
+                  key={i}
+                  src={floatingImages[i % floatingImages.length]}
+                  alt=""
+                  className={`absolute opacity-80 ${icon.position}`}
+                  style={{ ...motion, width: px, height: px, objectFit: 'contain' }}
+                />
+              );
+            }
+            return (
+              <span
+                key={i}
+                className={`absolute ${iconSize[hero?.iconSize] || iconSize.medium} opacity-60 ${icon.position}`}
+                style={motion}
+              >
+                {selectedIcons[i] || icon.emoji}
+              </span>
+            );
+          })}
         </div>
       )}
 
@@ -277,40 +401,7 @@ function HeroBlock({ hero, prefersReducedMotion }) {
           hasImage ? 'grid items-center gap-8 md:grid-cols-2' : ''
         }`}
       >
-        {hero ? (
-          <div
-            className={`max-w-3xl ${HERO_BLOCK_ALIGN[hero.textAlign] || ''}`}
-            style={{ textAlign: hero.textAlign || 'left' }}
-          >
-            <h1 className="font-display text-2xl font-extrabold leading-tight text-slate-900 sm:text-3xl lg:text-4xl">
-              <HighlightedText value={hero.title} />
-            </h1>
-            {hero.subtitle ? (
-              <p className="mt-3 whitespace-pre-line text-base text-slate-600 sm:text-lg">
-                {hero.subtitle}
-              </p>
-            ) : null}
-
-            {hero.ctaLabel ? (
-              <div
-                className={`mt-5 flex flex-wrap gap-3 ${HERO_BUTTON_ALIGN[hero.textAlign] || ''}`}
-              >
-                <SmartLink
-                  to={hero.ctaLink || ROUTES.produtos}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 px-5 py-2.5 text-sm font-semibold text-white shadow-brand transition hover:scale-105"
-                >
-                  {hero.ctaLabel} <i className="bi bi-arrow-right" />
-                </SmartLink>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div aria-busy="true" aria-label="Carregando" className="max-w-3xl space-y-3">
-            <div className="h-8 w-11/12 animate-pulse rounded-lg bg-white/70" />
-            <div className="h-8 w-2/3 animate-pulse rounded-lg bg-white/70" />
-            <div className="mt-5 h-10 w-36 animate-pulse rounded-xl bg-white/70" />
-          </div>
-        )}
+        {textBlock}
 
         {hasImage ? (
           <div
@@ -337,8 +428,95 @@ HeroBlock.propTypes = {
     ctaLink: PropTypes.string,
     imageUrl: PropTypes.string,
     imageAlt: PropTypes.string,
+    banner: PropTypes.object,
+    floatingImages: PropTypes.arrayOf(PropTypes.string),
   }),
   prefersReducedMotion: PropTypes.bool,
+};
+
+/**
+ * Moldura de cada parte da página na prévia do painel ("Editar na página"):
+ * rótulo, setas para mover, esconder/mostrar, "Editar campos" e arrastar.
+ * Fora da edição devolve só o bloco.
+ */
+function BlockFrame({ id, enabled, children }) {
+  const { editing, onMoveBlock, onToggleBlock, onOpenSection, onDropBlock } = useEditContext();
+  const [over, setOver] = useState(false);
+  if (!editing) return enabled ? children : null;
+  const label = HOME_BLOCKS.find((block) => block.id === id)?.label || id;
+  const tool =
+    'inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-semibold text-slate-700 shadow ring-1 ring-slate-200 hover:bg-violet-50';
+  return (
+    <div
+      data-block={id}
+      data-edit-ui="frame"
+      className={`relative ${over ? 'outline outline-4 outline-violet-400' : ''}`}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setOver(false);
+        const from = event.dataTransfer.getData('text/block-id');
+        if (from && from !== id) onDropBlock(from, id);
+      }}
+    >
+      <div
+        data-edit-ui="toolbar"
+        className="absolute left-3 top-3 z-20 flex flex-wrap items-center gap-1"
+      >
+        <span
+          draggable
+          onDragStart={(event) => {
+            event.dataTransfer.setData('text/block-id', id);
+            event.dataTransfer.effectAllowed = 'move';
+          }}
+          className="inline-flex cursor-grab items-center gap-1 rounded-md bg-violet-600 px-2 py-1 text-xs font-bold text-white shadow active:cursor-grabbing"
+          title="Arraste para mudar a ordem"
+        >
+          <i className="bi bi-grip-vertical" aria-hidden="true" /> {label}
+        </span>
+        <button
+          type="button"
+          className={tool}
+          aria-label={`Subir ${label}`}
+          onClick={() => onMoveBlock(id, -1)}
+        >
+          <i className="bi bi-arrow-up" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={tool}
+          aria-label={`Descer ${label}`}
+          onClick={() => onMoveBlock(id, 1)}
+        >
+          <i className="bi bi-arrow-down" aria-hidden="true" />
+        </button>
+        <button type="button" className={tool} onClick={() => onToggleBlock(id)}>
+          <i className={`bi ${enabled ? 'bi-eye-slash' : 'bi-eye'}`} aria-hidden="true" />{' '}
+          {enabled ? 'Esconder' : 'Mostrar'}
+        </button>
+        <button type="button" className={tool} onClick={() => onOpenSection(id)}>
+          <i className="bi bi-pencil-square" aria-hidden="true" /> Editar campos
+        </button>
+      </div>
+      {enabled ? (
+        <div className="pt-12">{children}</div>
+      ) : (
+        <div className="flex min-h-[88px] items-center justify-center bg-slate-100 pt-10 text-sm text-slate-500">
+          {label} está escondido — não aparece no site.
+        </div>
+      )}
+    </div>
+  );
+}
+
+BlockFrame.propTypes = {
+  id: PropTypes.string.isRequired,
+  enabled: PropTypes.bool,
+  children: PropTypes.node,
 };
 
 function ProductCard({ product }) {
@@ -392,12 +570,6 @@ ProductCard.propTypes = {
  * @param {boolean} [props.embedded] sem cabeçalho/rodapé da loja nem SEO —
  *        para a página caber dentro do painel.
  */
-// `text-align` alinha só o texto: o botão é item de flex e o bloco tem largura
-// máxima. Sem estas classes, "Centralizado" e "À direita" deixavam o botão (e,
-// sem imagem, o bloco inteiro) encostados à esquerda do banner.
-const HERO_BUTTON_ALIGN = { center: 'justify-center', right: 'justify-end' };
-const HERO_BLOCK_ALIGN = { center: 'mx-auto', right: 'ml-auto' };
-
 export function HomePage({ previewContent = null, embedded = false }) {
   // `null` até a configuração da home responder (ou falhar e cair no padrão).
   const [savedContent, setContent] = useState(null);
@@ -417,6 +589,7 @@ export function HomePage({ previewContent = null, embedded = false }) {
 
   const effective = content || mergeHomeContent({});
   const socialProof = effective.socialProof;
+  const { editing } = useEditContext();
 
   const homeJsonLd = useMemo(() => {
     const origin = readOrigin();
@@ -493,14 +666,21 @@ export function HomePage({ previewContent = null, embedded = false }) {
       <section key="catalog" className="mx-auto max-w-6xl px-4 py-16 lg:px-6">
         <div className="mb-8 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
           <div>
-            {catalog.eyebrow ? (
-              <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">
+            {catalog.eyebrow || editing ? (
+              <EditableText
+                path="catalog.eyebrow"
+                value={catalog.eyebrow}
+                as="p"
+                className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600"
+              >
                 {catalog.eyebrow}
-              </p>
+              </EditableText>
             ) : null}
-            {catalog.title ? (
+            {catalog.title || editing ? (
               <h2 className="max-w-xl font-display text-3xl font-bold text-slate-900 sm:text-4xl">
-                <HighlightedText value={catalog.title} single />
+                <EditableText path="catalog.title" value={catalog.title}>
+                  <HighlightedText value={catalog.title} single />
+                </EditableText>
               </h2>
             ) : null}
           </div>
@@ -509,7 +689,10 @@ export function HomePage({ previewContent = null, embedded = false }) {
               to={ROUTES.produtos}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
             >
-              {catalog.ctaLabel} <i className="bi bi-arrow-right" />
+              <EditableText path="catalog.ctaLabel" value={catalog.ctaLabel}>
+                {catalog.ctaLabel}
+              </EditableText>{' '}
+              <i className="bi bi-arrow-right" />
             </Link>
           ) : null}
         </div>
@@ -600,17 +783,33 @@ export function HomePage({ previewContent = null, embedded = false }) {
       <section key="howItWorks" id="como-funciona" className="scroll-mt-20 bg-slate-50 py-16">
         <div className="mx-auto max-w-6xl px-4 lg:px-6">
           <div className="mb-10 text-center">
-            {how.eyebrow ? (
-              <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">
+            {how.eyebrow || editing ? (
+              <EditableText
+                path="howItWorks.eyebrow"
+                value={how.eyebrow}
+                as="p"
+                className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600"
+              >
                 {how.eyebrow}
-              </p>
+              </EditableText>
             ) : null}
-            {how.title ? (
+            {how.title || editing ? (
               <h2 className="mx-auto max-w-2xl font-display text-3xl font-bold text-slate-900 sm:text-4xl">
-                <HighlightedText value={how.title} single />
+                <EditableText path="howItWorks.title" value={how.title}>
+                  <HighlightedText value={how.title} single />
+                </EditableText>
               </h2>
             ) : null}
-            {how.subtitle ? <p className="mt-3 text-sm text-slate-500">{how.subtitle}</p> : null}
+            {how.subtitle || editing ? (
+              <EditableText
+                path="howItWorks.subtitle"
+                value={how.subtitle}
+                as="p"
+                className="mt-3 text-sm text-slate-500"
+              >
+                {how.subtitle}
+              </EditableText>
+            ) : null}
           </div>
 
           {steps.length ? (
@@ -634,10 +833,22 @@ export function HomePage({ previewContent = null, embedded = false }) {
                       <i className={`bi bi-${style.icon}`} />
                     </div>
                     {/* LOJA-31: h3 logo abaixo do h2 da seção (era h5, pulando níveis). */}
-                    <h3 className="relative mt-3 font-heading text-lg font-bold text-slate-900">
+                    <EditableText
+                      path={`howItWorks.steps.${index}.title`}
+                      value={step.title}
+                      as="h3"
+                      className="relative mt-3 font-heading text-lg font-bold text-slate-900"
+                    >
                       {step.title}
-                    </h3>
-                    <p className="relative mt-1 text-sm text-slate-600">{step.text}</p>
+                    </EditableText>
+                    <EditableText
+                      path={`howItWorks.steps.${index}.text`}
+                      value={step.text}
+                      as="p"
+                      className="relative mt-1 text-sm text-slate-600"
+                    >
+                      {step.text}
+                    </EditableText>
                   </li>
                 );
               })}
@@ -649,11 +860,24 @@ export function HomePage({ previewContent = null, embedded = false }) {
               <div className="flex items-start gap-3">
                 <i className="bi bi-info-circle-fill text-2xl text-brand-600" />
                 <div>
-                  {how.infoTitle ? (
-                    <strong className="block font-semibold text-slate-900">{how.infoTitle}</strong>
+                  {how.infoTitle || editing ? (
+                    <EditableText
+                      path="howItWorks.infoTitle"
+                      value={how.infoTitle}
+                      as="strong"
+                      className="block font-semibold text-slate-900"
+                    >
+                      {how.infoTitle}
+                    </EditableText>
                   ) : null}
-                  {how.infoText ? (
-                    <span className="text-sm text-slate-600">{how.infoText}</span>
+                  {how.infoText || editing ? (
+                    <EditableText
+                      path="howItWorks.infoText"
+                      value={how.infoText}
+                      className="text-sm text-slate-600"
+                    >
+                      {how.infoText}
+                    </EditableText>
                   ) : null}
                 </div>
               </div>
@@ -684,20 +908,34 @@ export function HomePage({ previewContent = null, embedded = false }) {
 
         <div className="relative mx-auto max-w-6xl px-4 lg:px-6">
           <div className="mb-10 text-center">
-            {socialProof.eyebrow ? (
-              <p className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600">
+            {socialProof.eyebrow || editing ? (
+              <EditableText
+                path="socialProof.eyebrow"
+                value={socialProof.eyebrow}
+                as="p"
+                className="mb-2 text-xs font-bold uppercase tracking-widest text-brand-600"
+              >
                 {socialProof.eyebrow}
-              </p>
+              </EditableText>
             ) : null}
             {/* LOJA-34: número de audiência é dado do negócio — fica só nos
                 indicadores, num lugar só, não no título. */}
-            {socialProof.title ? (
+            {socialProof.title || editing ? (
               <h2 className="mx-auto max-w-2xl font-display text-3xl font-bold text-slate-900 sm:text-4xl">
-                <HighlightedText value={socialProof.title} single />
+                <EditableText path="socialProof.title" value={socialProof.title}>
+                  <HighlightedText value={socialProof.title} single />
+                </EditableText>
               </h2>
             ) : null}
-            {socialProof.subtitle ? (
-              <p className="mt-3 text-sm text-slate-500">{socialProof.subtitle}</p>
+            {socialProof.subtitle || editing ? (
+              <EditableText
+                path="socialProof.subtitle"
+                value={socialProof.subtitle}
+                as="p"
+                className="mt-3 text-sm text-slate-500"
+              >
+                {socialProof.subtitle}
+              </EditableText>
             ) : null}
           </div>
 
@@ -721,7 +959,14 @@ export function HomePage({ previewContent = null, embedded = false }) {
                       .toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-sm leading-relaxed text-slate-700">{t.text}</p>
+                    <EditableText
+                      path={`socialProof.testimonials.${i}.text`}
+                      value={t.text}
+                      as="p"
+                      className="text-sm leading-relaxed text-slate-700"
+                    >
+                      {t.text}
+                    </EditableText>
                     <span className="mt-2 block text-xs font-semibold text-slate-500">
                       {[t.name, t.role].filter(Boolean).join(' · ')}
                     </span>
@@ -784,13 +1029,22 @@ export function HomePage({ previewContent = null, embedded = false }) {
   const seo = content?.seo || DEFAULT_HOME_CONTENT.seo;
 
   const blocks = content ? (
-    content.blocks.filter((block) => block.enabled).map((block) => renderBlock(block.id))
+    content.blocks
+      // Na edição os blocos escondidos aparecem como um aviso, para poderem voltar.
+      .filter((block) => block.enabled || editing)
+      .map((block) => (
+        <BlockFrame key={block.id} id={block.id} enabled={block.enabled}>
+          {renderBlock(block.id)}
+        </BlockFrame>
+      ))
   ) : (
     // Configuração ainda chegando: só o fundo do hero, com esqueleto.
     <HeroBlock hero={null} prefersReducedMotion={prefersReducedMotion} />
   );
 
-  if (embedded) return <div className="bg-white">{blocks}</div>;
+  // Prévia do painel: a página inteira, com cabeçalho e rodapé do rascunho,
+  // sem SEO (não mexe no <head> do painel).
+  if (embedded) return <Shell storeContent={effective}>{blocks}</Shell>;
 
   return (
     <Shell>

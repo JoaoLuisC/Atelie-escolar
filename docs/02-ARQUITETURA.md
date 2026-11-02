@@ -135,6 +135,8 @@ Projeto-mae/
 │   │                                #   CustomerAuth (/login, /conta), ResetPassword, Legal,
 │   │                                #   Subscription, AdminLogin, AdminPage, TeachersPage, NotFound
 │   ├── components/                  # loja (Shell, CartDrawer, ProductGrid, wizards, SEO, consentimento…)
+│   │   ├── EditableText.jsx, edit-context.js   # edição na própria página (prévia do painel)
+│   │   └── admin/ui/ImageUploadField.jsx, admin/tabs/SectionAi.jsx  # envio com tamanho recomendado; IA por seção
 │   │   └── admin/                   # AdminLayout, OrderDetailModal, tabs/, ui/, utils/
 │   ├── providers/                   # AuthProvider, CartProvider, ToastProvider
 │   ├── hooks/                       # useAuth, useCart, useToast, useProductFilters

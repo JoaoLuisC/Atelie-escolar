@@ -167,3 +167,31 @@ describe('Shell · carrinho (CROSS-15)', () => {
     expect(screen.getByRole('button', { name: /Abrir carrinho/i })).toBeInTheDocument();
   });
 });
+
+describe('Shell · logo, rodapé e prévia', () => {
+  it('usa o logo enviado, o e-mail de contato e a linha de direitos do painel', async () => {
+    fetchStoreSettings.mockResolvedValueOnce({
+      navigation: { logoUrl: 'https://cdn.test/logo.png', title: 'Loja X', showTitle: false },
+      footer: { contactEmail: 'oi@loja.test', copyright: '© 2026 Loja X' },
+    });
+    renderShell();
+
+    await waitFor(() => expect(screen.getByRole('contentinfo')).toHaveTextContent('oi@loja.test'));
+    const logos = document.querySelectorAll('img[src="https://cdn.test/logo.png"]');
+    expect(logos.length).toBe(2); // barra e rodapé
+    expect(screen.getByRole('navigation')).not.toHaveTextContent('Loja X');
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('© 2026 Loja X');
+  });
+
+  it('com storeContent (prévia do painel) não busca as configurações', () => {
+    render(
+      <MemoryRouter>
+        <Shell storeContent={{ navigation: { title: 'Prévia', size: 'large' }, footer: {} }}>
+          <p>conteúdo</p>
+        </Shell>
+      </MemoryRouter>,
+    );
+    expect(fetchStoreSettings).not.toHaveBeenCalled();
+    expect(screen.getByRole('navigation')).toHaveTextContent('Prévia');
+  });
+});

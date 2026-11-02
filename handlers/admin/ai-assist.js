@@ -11,7 +11,7 @@ const {
 } = require('../../lib/http');
 const { createLogger } = require('../../lib/logger');
 const { logAdminAction } = require('../../lib/admin-audit');
-const { TASK_NAMES, runAiAssist } = require('../../lib/ai-assist');
+const { TASK_NAMES, isHomeTask, runAiAssist } = require('../../lib/ai-assist');
 
 // POST /api/admin/ai-assist { task, input } — sugestão de texto pela IA
 // (lib/ai-assist.js). Só sai quando o professor clica no botão: nada é gerado
@@ -48,7 +48,7 @@ module.exports = async function adminAiAssistHandler(req, res) {
     });
   }
   const input = req.body?.input && typeof req.body.input === 'object' ? req.body.input : {};
-  if (task !== 'homeCopy' && !String(input.name || '').trim()) {
+  if (!isHomeTask(task) && !String(input.name || '').trim()) {
     return fail(res, {
       status: 400,
       code: ERROR_CODES.VALIDATION_FAILED,

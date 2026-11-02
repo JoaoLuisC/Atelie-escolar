@@ -148,6 +148,7 @@ export function AdminPage({ variant = 'store' }) {
   const [orders, setOrders] = useState([]);
   const [ordersFilter, setOrdersFilter] = useState('');
   const [vitrineSections, setVitrineSections] = useState([]);
+  const [storePageTab, setStorePageTab] = useState('page');
   const [vitrineSaving, setVitrineSaving] = useState(false);
   const [adminConfig, setAdminConfig] = useState({});
   const [securitySaving, setSecuritySaving] = useState(false);
@@ -687,18 +688,46 @@ export function AdminPage({ variant = 'store' }) {
       case 'prod-saida':
         return <PerformanceTab productPerformance={productPerformance} />;
       case 'vitrine':
-        // Aba "Página da loja": textos e blocos da home (com prévia) em cima, faixas de
-        // produtos (a antiga Vitrine) embaixo.
+        // Aba "Página da loja" em duas sub-abas: a página (textos, imagens e
+        // prévia) e a vitrine (quais faixas de produtos aparecem nela).
         return (
           <div className="space-y-4">
-            <HomeContentEditor />
-            <VitrineTab
-              sections={vitrineSections}
-              categories={dashboardData.categories || []}
-              onChange={setVitrineSections}
-              onSave={handleVitrineSave}
-              saving={vitrineSaving}
-            />
+            <div
+              role="tablist"
+              aria-label="Partes da página da loja"
+              className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-1.5"
+            >
+              {[
+                ['page', 'Página', 'layout-text-window'],
+                ['shelves', 'Vitrine (faixas de produtos)', 'grid-3x3-gap'],
+              ].map(([id, label, icon]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={storePageTab === id}
+                  onClick={() => setStorePageTab(id)}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                    storePageTab === id
+                      ? 'bg-violet-600 text-white'
+                      : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <i className={`bi bi-${icon}`} aria-hidden="true" /> {label}
+                </button>
+              ))}
+            </div>
+            {storePageTab === 'shelves' ? (
+              <VitrineTab
+                sections={vitrineSections}
+                categories={dashboardData.categories || []}
+                onChange={setVitrineSections}
+                onSave={handleVitrineSave}
+                saving={vitrineSaving}
+              />
+            ) : (
+              <HomeContentEditor />
+            )}
           </div>
         );
       case 'seguranca':

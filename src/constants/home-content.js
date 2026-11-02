@@ -16,9 +16,63 @@ export const HOME_BLOCKS = Object.freeze([
   { id: 'socialProof', label: 'Depoimentos, números e redes sociais' },
 ]);
 
+/**
+ * Tamanho recomendado de CADA imagem que a loja aceita, num lugar só: o
+ * painel mostra a dica ao lado do envio e avisa quando a imagem enviada foge
+ * muito do recomendado. Largura × altura em pixels; `maxBytes` é o teto do
+ * arquivo que o painel aceita (o Storage tem o teto dele por bucket).
+ */
+export const IMAGE_SLOTS = Object.freeze({
+  logo: {
+    width: 512,
+    height: 512,
+    maxBytes: 300 * 1024,
+    hint: 'Quadrada, 512 × 512 px, PNG com fundo transparente. Aparece com 40 px na barra e 36 px no rodapé.',
+  },
+  heroImage: {
+    width: 1200,
+    height: 900,
+    maxBytes: 1024 * 1024,
+    hint: '1200 × 900 px (4:3). Aparece inteira ao lado do texto, sem cortes. JPG, PNG ou WebP até 1 MB.',
+  },
+  bannerDesktop: {
+    width: 1920,
+    height: 640,
+    maxBytes: 1024 * 1024,
+    hint: 'Computador: 1920 × 640 px (3:1), JPG ou WebP até 1 MB.',
+  },
+  bannerTablet: {
+    width: 1024,
+    height: 512,
+    maxBytes: 800 * 1024,
+    hint: 'Tablet: 1024 × 512 px (2:1). Vazio = usa a do computador.',
+  },
+  bannerMobile: {
+    width: 800,
+    height: 800,
+    maxBytes: 600 * 1024,
+    hint: 'Celular: 800 × 800 px (quadrada). Vazio = usa a do tablet ou do computador.',
+  },
+  floating: {
+    width: 200,
+    height: 200,
+    maxBytes: 200 * 1024,
+    hint: '200 × 200 px, PNG com fundo transparente, até 200 kB cada.',
+  },
+  product: {
+    width: 1200,
+    height: 1200,
+    maxBytes: 500 * 1024,
+    hint: '1200 × 1200 px (quadrada): preenche os cards e a página do produto sem cortes. Foto 4:3? 1200 × 900 px aparece inteira, com faixas. JPG, PNG ou WebP até 500 kB.',
+  },
+});
+
+export const HERO_MAX_GRADIENT_STOPS = 4;
+export const HERO_MAX_FLOATING_IMAGES = 8;
+
 export const DEFAULT_HOME_CONTENT = Object.freeze({
   blocks: HOME_BLOCKS.map(({ id }) => ({ id, enabled: true })),
-  navigation: { title: 'Profa. Marciar Cardoso', size: 'medium' },
+  navigation: { title: 'Profa. Marciar Cardoso', size: 'medium', logoUrl: '', showTitle: true },
   footer: {
     title: 'Profa. Marciar Cardoso',
     description:
@@ -30,6 +84,9 @@ export const DEFAULT_HOME_CONTENT = Object.freeze({
     pinterestUrl: '',
     whatsappUrl: '',
     whatsappLabel: '',
+    logoUrl: '',
+    copyright: '© 2026 Profa. Marciar Cardoso. Todos os direitos reservados.',
+    contactEmail: '',
   },
   seo: {
     title: 'Materiais educativos digitais para professores',
@@ -48,11 +105,21 @@ export const DEFAULT_HOME_CONTENT = Object.freeze({
     backgroundStyle: 'default',
     backgroundColor: '#ede9fe',
     backgroundColorEnd: '#e0f2fe',
+    // Degradê com até 4 cores. Vazio = usa backgroundColor/backgroundColorEnd
+    // (os dois campos antigos continuam valendo para o que já foi salvo).
+    backgroundStops: [],
+    gradientAngle: 135,
     bannerSize: 'medium',
     textAlign: 'left',
     showIcons: true,
     icons: '',
     iconSize: 'medium',
+    // Imagens no lugar dos emojis flutuantes (PNG transparente).
+    floatingImages: [],
+    // Foto retangular ocupando o banner inteiro, uma por tamanho de tela.
+    // Com `desktop` preenchida, o banner vira a foto; `textOverlay` põe o
+    // título e o botão por cima dela.
+    banner: { desktop: '', tablet: '', mobile: '', alt: '', textOverlay: true },
   },
   marquee: {
     items: ['BANNERS', 'PAINÉIS', 'ATIVIDADES', 'LEMBRANCINHAS', 'KITS'],
@@ -128,7 +195,9 @@ function mergeSection(defaults, saved) {
   const out = { ...defaults };
   for (const field of Object.keys(defaults)) {
     if (field in saved && saved[field] !== undefined && saved[field] !== null) {
-      out[field] = saved[field];
+      out[field] = isPlainObject(defaults[field])
+        ? mergeSection(defaults[field], saved[field])
+        : saved[field];
     }
   }
   return out;
@@ -171,6 +240,19 @@ export function mergeHomeContent(saved) {
     howItWorks: mergeSection(DEFAULT_HOME_CONTENT.howItWorks, source.howItWorks),
     socialProof: mergeSection(DEFAULT_HOME_CONTENT.socialProof, source.socialProof),
   };
+}
+
+/**
+ * As cores do degradê do banner: `backgroundStops` (2 a 4 cores) quando a
+ * admin preencheu; senão os dois campos antigos. Nunca menos de duas.
+ */
+export function heroGradientStops(hero) {
+  const stops = (Array.isArray(hero?.backgroundStops) ? hero.backgroundStops : [])
+    .filter(Boolean)
+    .slice(0, HERO_MAX_GRADIENT_STOPS);
+  if (stops.length >= 2) return stops;
+  const first = stops[0] || hero?.backgroundColor || DEFAULT_HOME_CONTENT.hero.backgroundColor;
+  return [first, hero?.backgroundColorEnd || DEFAULT_HOME_CONTENT.hero.backgroundColorEnd];
 }
 
 /**
