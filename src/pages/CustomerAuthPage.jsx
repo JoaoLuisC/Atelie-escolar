@@ -15,6 +15,7 @@ import {
   requestAccountDeletion,
 } from '../services/customer-auth';
 import { ROUTES, sanitizeRedirectPath } from '../constants/routes';
+import { isStrongPassword, passwordChecks } from '../constants/password-policy';
 import { AccountNameForm } from '../components/AccountNameForm';
 
 function getMode(search) {
@@ -134,13 +135,9 @@ function useCustomerAuthHandlers({
       pushToast(message, 'warning');
       return;
     }
-    if (
-      !/[a-z]/.test(password) ||
-      !/[A-Z]/.test(password) ||
-      !/\d/.test(password) ||
-      !/[^A-Za-z0-9\s]/.test(password)
-    ) {
-      const message = 'A senha deve ter letra maiúscula, minúscula, número e caractere especial.';
+    if (!isStrongPassword(password)) {
+      const message =
+        'A senha deve ter letra maiúscula, minúscula, número e caractere especial (! @ # $ % & * e outros; acento não conta).';
       setRegisterError(message);
       pushToast(message, 'warning');
       return;
@@ -626,13 +623,7 @@ export function CustomerAuthPage() {
           >
             <p>Requisitos da senha:</p>
             <ul>
-              {[
-                [registerForm.password.length >= 8, 'Pelo menos 8 caracteres'],
-                [/[A-Z]/.test(registerForm.password), 'Uma letra maiúscula'],
-                [/[a-z]/.test(registerForm.password), 'Uma letra minúscula'],
-                [/\d/.test(registerForm.password), 'Um número'],
-                [/[^A-Za-z0-9\s]/.test(registerForm.password), 'Um caractere especial'],
-              ].map(([met, label]) => (
+              {passwordChecks(registerForm.password).map(([met, label]) => (
                 <li key={label}>
                   <span aria-hidden="true">{met ? '✓' : '○'}</span>
                   <span className="sr-only">{met ? 'atendido:' : 'pendente:'}</span> {label}

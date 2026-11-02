@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '../hooks/useToast';
 import { getSupabaseBrowserClient } from '../services/supabase-browser';
 import { ROUTES } from '../constants/routes';
+import { isStrongPassword } from '../constants/password-policy';
 
 /**
  * O template de e-mail (supabase/templates/recovery.html) aponta sempre para
@@ -70,7 +71,7 @@ export function recoveryErrorMessage(error, fallback) {
     return 'A nova senha precisa ser diferente da anterior.';
   }
   if (code === 'weak_password' || message.includes('password')) {
-    return 'Senha fraca. Use ao menos 8 caracteres, com letra maiúscula, minúscula, número e caractere especial.';
+    return 'Senha fraca. Use ao menos 8 caracteres, com letra maiúscula, minúscula, número e caractere especial (! @ # $ % & * e outros; acento não conta).';
   }
   if (Number(error?.status) === 429 || code.includes('rate_limit')) {
     return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
@@ -178,14 +179,9 @@ export function ResetPasswordPage() {
       return;
     }
 
-    if (
-      !/[a-z]/.test(newPassword) ||
-      !/[A-Z]/.test(newPassword) ||
-      !/\d/.test(newPassword) ||
-      !/[^A-Za-z0-9\s]/.test(newPassword)
-    ) {
+    if (!isStrongPassword(newPassword)) {
       pushToast(
-        'A senha deve ter letra maiúscula, minúscula, número e caractere especial.',
+        'A senha deve ter letra maiúscula, minúscula, número e caractere especial (! @ # $ % & * e outros; acento não conta).',
         'warning',
       );
       return;

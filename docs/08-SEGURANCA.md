@@ -103,8 +103,10 @@
   atual. Troca na hora pela Admin API. É a mesma política do cadastro de cliente, do checkout e do
   Supabase Auth (`supabase/config.toml`: `minimum_password_length = 8`,
   `password_requirements = "lower_upper_letters_digits_symbols"`). O `config.toml` só vale para o
-  Supabase local: em produção a política é ligada no painel do Supabase (ver
-  [10-ROADMAP](./10-ROADMAP.md), §1.1).
+  Supabase local: em produção a política é gravada por `scripts/configure-auth.js` (aplicado em
+  02/11/2026). "Caractere especial" é um dos símbolos dessa lista do Supabase — acento, ç e espaço
+  não contam; a regex é a mesma em `lib/password-policy.js` e `src/constants/password-policy.js`
+  (o teste `lib/__tests__/password-policy.test.js` compara as duas).
 - E-mail novo: pedido em nome da pessoa (`updateUser`); só muda depois do clique no link de
   confirmação. O trigger `on_auth_user_email_changed` atualiza `profiles.email`.
 - Conta só com Google não troca senha nem e-mail por aqui.

@@ -16,6 +16,7 @@ import { cartSignatureOf } from '../utils/cart-storage';
 import { buildCartPayload, getAttributionPayload, trackEvent } from '../utils/analytics';
 import { getSessionId } from '../utils/attribution';
 import { ROUTES } from '../constants/routes';
+import { isStrongPassword } from '../constants/password-policy';
 
 // Debounce da captura de carrinho abandonado ao digitar o e-mail.
 const ABANDONED_CART_DEBOUNCE_MS = 1500;
@@ -741,13 +742,13 @@ export function CheckoutPage() {
                     {...register('password', {
                       required: 'Crie uma senha para sua conta.',
                       validate: (value) =>
-                        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).{8,}$/.test(value) ||
-                        'Use ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial.',
+                        isStrongPassword(value) ||
+                        'Use ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial (! @ # $ % & * e outros; acento não conta).',
                     })}
                   />
                   <p id="checkout-password-help" className="mt-1 text-xs text-slate-500">
                     Use ao menos 8 caracteres, com letra maiúscula, minúscula, número e caractere
-                    especial.
+                    especial (! @ # $ % & * e outros; acento não conta).
                   </p>
                   {errors.password ? (
                     <p role="alert" className="mt-1 text-xs text-rose-700">

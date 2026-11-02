@@ -49,13 +49,14 @@ const DEV_URLS =
     : [];
 
 // Formato que o GoTrue usa para "minúscula, maiúscula, número e símbolo": as
-// classes separadas por ":" (o ":" dentro dos símbolos vai escapado). É o
+// classes separadas por ":" (a barra invertida é um dos símbolos e o ":" vai
+// escapado: `\\:` — com uma barra só a API responde 400). É o
 // mesmo valor que a CLI grava para `password_requirements =
 // "lower_upper_letters_digits_symbols"`.
 const LOWER = 'abcdefghijklmnopqrstuvwxyz';
 const UPPER = LOWER.toUpperCase();
 const DIGITS = '0123456789';
-const SYMBOLS = '!@#$%^&*()_+-=[]{};\'\\:"|<>?,./`~';
+const SYMBOLS = '!@#$%^&*()_+-=[]{};\'\\\\:"|<>?,./`~';
 const PASSWORD_REQUIRED_CHARACTERS = [LOWER, UPPER, DIGITS, SYMBOLS].join(':');
 const PASSWORD_MIN_LENGTH = 8;
 const SMTP_SENDER_NAME = 'Ateliê da Escola';
