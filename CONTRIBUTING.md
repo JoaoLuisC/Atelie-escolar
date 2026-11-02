@@ -21,7 +21,7 @@ que já tinha sido declarado "0" e voltou a subir era contagem, não teste.
 | Gate                                             | Regra  | O que barra                                                                   |
 | ------------------------------------------------ | ------ | ----------------------------------------------------------------------------- |
 | `npm run format:check`                           | D1     | Arquivo fora do Prettier                                                      |
-| `npm run lint` (`--max-warnings=12`)             | D5     | Aviso de lint novo (catraca)                                                  |
+| `npm run lint` (`--max-warnings=11`)             | D5     | Aviso de lint novo (catraca)                                                  |
 | Thresholds de cobertura em `vite.config.js`      | D2     | Cobertura abaixo do piso (statements 48, branches 39, functions 41, lines 50) |
 | `handlers/__tests__/envelope-contract.test.js`   | A1, A2 | `error` como string, erro sem `code`                                          |
 | `handlers/__tests__/rate-limit-coverage.test.js` | E1     | Rota montada sem contador, guarda de sessão ou dispensa nomeada               |
@@ -32,7 +32,7 @@ que já tinha sido declarado "0" e voltou a subir era contagem, não teste.
 `npm run check` roda, nesta ordem, `check:env`, `format:check`, `lint`, `test`, `test:coverage` e
 `build` — a mesma lista do `.github/workflows/test.yml`, que acrescenta `npm audit`.
 
-**`D5` está em catraca, não em zero.** Sobram 12 avisos, todos do React Compiler: 11 de `setState`
+**`D5` está em catraca, não em zero.** Sobram 11 avisos, todos do React Compiler: 10 de `setState`
 dentro de efeito (exigem repensar o carregamento de dados componente a componente) e 1 de
 biblioteca incompatível em `CheckoutPage.jsx` (o `react-hook-form`, sem conserto do nosso lado).
 Ao corrigir um aviso, **baixe o teto no `package.json` no mesmo commit**.

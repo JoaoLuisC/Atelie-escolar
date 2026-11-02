@@ -15,6 +15,7 @@ import {
   requestAccountDeletion,
 } from '../services/customer-auth';
 import { ROUTES, sanitizeRedirectPath } from '../constants/routes';
+import { AccountNameForm } from '../components/AccountNameForm';
 
 function getMode(search) {
   const params = new URLSearchParams(search);
@@ -233,7 +234,6 @@ export function CustomerAuthPage() {
     loginCustomerGoogle,
     registerCustomer,
     logoutCustomer,
-    updateCustomerName,
     setCustomerSession,
   } = useAuth();
   const { pushToast } = useToast();
@@ -256,23 +256,6 @@ export function CustomerAuthPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteRequested, setDeleteRequested] = useState(false);
   const [exporting, setExporting] = useState(false);
-  // null = ainda não editado (mostra o nome da sessão); '' = a pessoa apagou o campo.
-  const [profileName, setProfileName] = useState(null);
-  const [savingProfile, setSavingProfile] = useState(false);
-
-  async function handleProfileSave(event) {
-    event.preventDefault();
-    setSavingProfile(true);
-    try {
-      await updateCustomerName(profileName ?? customerSession?.name ?? '');
-      pushToast('Nome atualizado.', 'success');
-    } catch (error) {
-      pushToast(error?.message || 'Não foi possível salvar seu perfil.', 'error');
-    } finally {
-      setSavingProfile(false);
-    }
-  }
-
   // O arquivo é montado NO NAVEGADOR a partir da resposta: o backend não gera
   // anexo, não guarda cópia e nada sai por e-mail. Um dossiê pessoal que só
   // existe no disco de quem pediu é o menor raio de exposição possível para
@@ -636,7 +619,11 @@ export function CustomerAuthPage() {
             }
             className={inputClass}
           />
-          <div id="customer-register-password-help" className="mt-1 text-xs text-slate-500">
+          <div
+            id="customer-register-password-help"
+            aria-live="polite"
+            className="mt-1 text-xs text-slate-500"
+          >
             <p>Requisitos da senha:</p>
             <ul>
               {[
@@ -647,7 +634,8 @@ export function CustomerAuthPage() {
                 [/[^A-Za-z0-9\s]/.test(registerForm.password), 'Um caractere especial'],
               ].map(([met, label]) => (
                 <li key={label}>
-                  {met ? '✓' : '○'} {label}
+                  <span aria-hidden="true">{met ? '✓' : '○'}</span>
+                  <span className="sr-only">{met ? 'atendido:' : 'pendente:'}</span> {label}
                 </li>
               ))}
             </ul>
@@ -731,35 +719,10 @@ export function CustomerAuthPage() {
           </div>
         ) : customerSession?.email ? (
           <div className="flex flex-col gap-4">
-            <form
-              onSubmit={handleProfileSave}
+            <AccountNameForm
+              title="Editar conta"
               className="rounded-2xl border border-slate-200 bg-white p-4"
-            >
-              <h3 className="text-sm font-bold text-slate-900">Editar conta</h3>
-              <label
-                htmlFor="customer-profile-name"
-                className="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Nome
-              </label>
-              <input
-                id="customer-profile-name"
-                value={profileName ?? customerSession?.name ?? ''}
-                onChange={(event) => setProfileName(event.target.value)}
-                minLength={2}
-                maxLength={120}
-                required
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              />
-              <p className="mt-2 text-xs text-slate-500">E-mail: {customerSession.email}</p>
-              <button
-                type="submit"
-                disabled={savingProfile}
-                className="mt-3 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
-              >
-                {savingProfile ? 'Salvando…' : 'Salvar nome'}
-              </button>
-            </form>
+            />
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <h3 className="font-bold text-emerald-900">Você já está conectado</h3>
               <p className="mt-1 text-sm text-emerald-800">

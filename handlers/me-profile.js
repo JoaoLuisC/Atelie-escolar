@@ -8,7 +8,13 @@ const {
 } = require('../lib/supabase');
 const { enforceRateLimit } = require('../lib/rate-limit');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+const { parse } = require('../validation');
+const { profileUpdateSchema } = require('../validation/customer.schemas');
 
+// /api/me-profile — o nome do cliente logado (GET lê, PUT grava em profiles).
+
+const log = createLogger('me-profile');
 const PROFILE_LIMIT = Object.freeze({
   bucket: 'me-profile',
   limit: 20,
@@ -17,17 +23,18 @@ const PROFILE_LIMIT = Object.freeze({
 });
 
 module.exports = async function meProfileHandler(req, res) {
+  // Ordem da regra A3: método → rate limit → autenticação → schema → try.
   if (guardMethod(req, res, ['GET', 'PUT'])) return;
+  const gate = await enforceRateLimit(req, res, PROFILE_LIMIT);
+  if (gate.blocked) return;
   const session = getCustomerSessionFromRequest(req);
   if (!session?.uid) {
     return fail(res, {
       status: 401,
-      code: ERROR_CODES.UNAUTHORIZED,
+      code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
       message: 'Entre na sua conta.',
     });
   }
-  const gate = await enforceRateLimit(req, res, PROFILE_LIMIT);
-  if (gate.blocked) return;
   if (!getSupabaseConfig()) {
     return fail(res, {
       status: 500,
@@ -45,16 +52,15 @@ module.exports = async function meProfileHandler(req, res) {
       return ok(res, { user: { ...session, name: profile?.display_name || session.name } });
     }
 
-    const name = String(req.body?.name || '')
-      .replaceAll(/\s+/g, ' ')
-      .trim();
-    if (name.length < 2 || name.length > 120) {
+    const parsed = parse(profileUpdateSchema, req.body || {});
+    if (!parsed.ok) {
       return fail(res, {
         status: 400,
         code: ERROR_CODES.VALIDATION_FAILED,
-        message: 'Informe um nome entre 2 e 120 caracteres.',
+        message: parsed.message || 'Informe um nome entre 2 e 120 caracteres.',
       });
     }
+    const { name } = parsed.data;
     const updated = await updateTable(
       'profiles',
       { id: `eq.${session.uid}` },
@@ -72,7 +78,8 @@ module.exports = async function meProfileHandler(req, res) {
     const user = { ...session, name };
     setCustomerSessionCookie(res, user);
     return ok(res, { user });
-  } catch {
+  } catch (error) {
+    log.error('handler_failed', { reason: error?.message || String(error) });
     return fail(res, {
       status: 500,
       code: ERROR_CODES.INTERNAL_ERROR,

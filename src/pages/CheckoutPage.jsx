@@ -284,7 +284,7 @@ export function CheckoutPage() {
           setStatusTone('success');
           pushToast('Pagamento aprovado.', 'success');
           setStatus('Tudo certo! Pagamento aprovado. Levando você para a área de downloads…');
-          navigate(`/downloads?order=${encodeURIComponent(pendingOrderId)}&success=1`);
+          navigate(`${ROUTES.downloads}?order=${encodeURIComponent(pendingOrderId)}&success=1`);
           return;
         }
 
@@ -764,6 +764,9 @@ export function CheckoutPage() {
                     type="checkbox"
                     disabled={processing}
                     aria-invalid={Boolean(errors.acceptedDownloadTerms)}
+                    aria-describedby={
+                      errors.acceptedDownloadTerms ? 'checkout-terms-error' : undefined
+                    }
                     className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                     {...register('acceptedDownloadTerms', {
                       required:
@@ -776,14 +779,16 @@ export function CheckoutPage() {
                     <Link
                       to={{ pathname: ROUTES.termos, hash: '#devolucao' }}
                       target="_blank"
+                      rel="noopener noreferrer"
                       className="font-semibold text-brand-700 underline"
                     >
                       Ver a regra completa
+                      <span className="sr-only"> (abre em nova aba)</span>
                     </Link>
                   </span>
                 </label>
                 {errors.acceptedDownloadTerms ? (
-                  <p role="alert" className="mt-1 text-xs text-rose-700">
+                  <p id="checkout-terms-error" role="alert" className="mt-1 text-xs text-rose-700">
                     {errors.acceptedDownloadTerms.message}
                   </p>
                 ) : null}

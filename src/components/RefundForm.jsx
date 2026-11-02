@@ -38,9 +38,13 @@ export function RefundForm({
         <>
           <h5 className="font-semibold text-slate-900">Suporte para o pedido #{orderId}</h5>
           <p role="note" className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
-            {eligibility?.flowReason === 'downloaded' && eligibility?.firstDownloadAt
-              ? `O arquivo deste pedido já foi baixado em ${formatDateTime(eligibility.firstDownloadAt)}.`
-              : `O prazo de desistência de 7 dias terminou em ${formatDate(eligibility?.deadline)}.`}{' '}
+            {eligibility?.flowReason === 'downloaded'
+              ? eligibility?.firstDownloadAt
+                ? `O arquivo deste pedido já foi baixado em ${formatDateTime(eligibility.firstDownloadAt)}.`
+                : 'O arquivo deste pedido já foi baixado.'
+              : eligibility?.deadline
+                ? `O prazo de desistência de 7 dias terminou em ${formatDate(eligibility.deadline)}.`
+                : 'O prazo de desistência de 7 dias terminou.'}{' '}
             Conte o que aconteceu: a loja tenta resolver primeiro (reenviar, corrigir ou trocar o
             arquivo) e devolve o valor se não houver solução ou se o produto for diferente do
             anunciado. Resposta em até 5 dias úteis.

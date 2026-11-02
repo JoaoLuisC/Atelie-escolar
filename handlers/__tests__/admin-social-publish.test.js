@@ -23,6 +23,7 @@ const ENV = {
 };
 
 let logAdminAction;
+let logger;
 let handler;
 let saved;
 
@@ -40,6 +41,10 @@ beforeEach(() => {
   saved = { ...process.env };
   Object.assign(process.env, ENV);
   logAdminAction = vi.fn(async () => {});
+  logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  // Antes dos demais mocks: quem requerer lib/logger (inclusive o módulo real
+  // de rate-limit) já recebe o logger falso.
+  installPartialMock('../../lib/logger', { createLogger: () => logger });
   installModuleMock('../../lib/admin-session', { ensureStoreSession: () => true });
   installModuleMock('../../lib/admin-audit', { logAdminAction });
   installPartialMock('../../lib/rate-limit', {
@@ -96,6 +101,57 @@ describe('admin/social-publish · entrada', () => {
     expect(res.statusCode).toBe(503);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
+
+  it('rede desconhecida, legenda longa e link http são 400 pelo schema, sem rede', async () => {
+    globalThis.fetch = vi.fn();
+    const casos = [
+      { platform: 'orkut', caption: 'Oi' },
+      { platform: 'facebook', caption: 'a'.repeat(2201) },
+      { platform: 'facebook', caption: 'Oi', link: 'http://inseguro.test' },
+      { platform: 'facebook', caption: 'Oi', mediaUrl: 'javascript:alert(1)' },
+    ];
+    for (const body of casos) {
+      const res = await publish(body);
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    }
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('responde com os headers CORS do painel, como os outros handlers admin', async () => {
+    globalThis.fetch = vi.fn();
+    const res = await publish({ platform: 'orkut' });
+    expect(res.headers['Access-Control-Allow-Methods']).toContain('POST');
+  });
+});
+
+describe('admin/social-publish · WhatsApp', () => {
+  it('aceita número formatado e anexa o link ao texto da mensagem', async () => {
+    globalThis.fetch = vi.fn(async () => reply(200, { messages: [{ id: 'wamid.1' }] }));
+    const res = await publish({
+      platform: 'whatsapp',
+      recipient: '+55 (11) 99999-0000',
+      caption: 'Chegou novidade',
+      link: 'https://loja.test/p/1',
+    });
+    expect(res.statusCode).toBe(200);
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(String(url)).toContain('/3/messages');
+    const body = JSON.parse(init.body);
+    expect(body.to).toBe('5511999990000');
+    expect(body.text).toEqual({
+      preview_url: true,
+      body: 'Chegou novidade\nhttps://loja.test/p/1',
+    });
+    expect(logAdminAction.mock.calls[0][0].targetId).toBe('whatsapp:wamid.1');
+  });
+
+  it('sem link, o texto vai limpo e sem prévia', async () => {
+    globalThis.fetch = vi.fn(async () => reply(200, { messages: [{ id: 'wamid.2' }] }));
+    await publish({ platform: 'whatsapp', recipient: '5511999990000', caption: 'Só texto' });
+    const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(body.text).toEqual({ preview_url: false, body: 'Só texto' });
+  });
 });
 
 describe('admin/social-publish · falha externa', () => {
@@ -107,6 +163,26 @@ describe('admin/social-publish · falha externa', () => {
     expect(res.statusCode).toBe(422);
     expect(res.body.error.message).toMatch(/Reconecte/);
     expect(JSON.stringify(res.body)).not.toContain('Session has expired');
+  });
+
+  it('registra publicacao_falhou com rede, status e motivo cru antes de traduzir', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      reply(401, { error: { message: 'Error validating access token: Session has expired' } }),
+    );
+    await publish({ platform: 'facebook', caption: 'Oi' });
+    const falha = logger.warn.mock.calls.find(([event]) => event === 'publicacao_falhou');
+    expect(falha).toBeTruthy();
+    expect(falha[1]).toMatchObject({
+      platform: 'facebook',
+      status: 401,
+      reason: expect.stringContaining('Session has expired'),
+    });
+  });
+
+  it('erro de entrada (400) não vira publicacao_falhou', async () => {
+    globalThis.fetch = vi.fn();
+    await publish({ platform: 'instagram', caption: 'Oi' });
+    expect(logger.warn.mock.calls.some(([event]) => event === 'publicacao_falhou')).toBe(false);
   });
 
   it('limite da rede (429) vira 429', async () => {

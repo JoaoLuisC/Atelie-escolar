@@ -203,13 +203,19 @@ describe('create-payment — logado, o pedido é da conta (LOJA-40)', () => {
     return String(res.headers['Set-Cookie']).split(';')[0];
   }
 
-  async function criarPedido(headers) {
-    const store = arrange({ products: [productRow(P1, 12.9)], coupons: [] });
+  /**
+   * `coupons`/`couponCode` ligam o cupom ao pedido; `prepare(store)` roda com o
+   * banco falso já montado, antes do handler — é onde um teste injeta a falha
+   * do banco que quer provocar.
+   */
+  async function criarPedido(headers, { coupons = [], couponCode, prepare } = {}) {
+    const store = arrange({ products: [productRow(P1, 12.9)], coupons });
     const createPaymentPreference = vi.fn(async () => ({
       id: 'pref-1',
       init_point: 'https://mp/pagar',
     }));
     installPartialMock('../../lib/mercadopago-config', { createPaymentPreference });
+    prepare?.(store);
     const handler = loadHandler('../create-payment.js');
     const res = createMockRes();
     await handler(
@@ -218,12 +224,23 @@ describe('create-payment — logado, o pedido é da conta (LOJA-40)', () => {
           items: [{ productId: P1, quantity: 1 }],
           customer: { name: 'Ana Silva', email: 'outro@exemplo.com' },
           acceptedDownloadTerms: true,
+          ...(couponCode ? { couponCode } : {}),
         },
         headers,
       ),
       res,
     );
     return { store, res, createPaymentPreference };
+  }
+
+  /** O 23503 que o PostgREST devolve numa FK violada (ex.: customer_id sem auth.users). */
+  function foreignKeyViolation(table = 'orders', constraint = 'orders_customer_id_fkey') {
+    const error = new Error(
+      `insert or update on table "${table}" violates foreign key constraint "${constraint}"`,
+    );
+    error.statusCode = 409;
+    error.details = { code: '23503' };
+    return error;
   }
 
   it('com sessão, grava o e-mail da CONTA, não o do formulário', async () => {
@@ -241,5 +258,74 @@ describe('create-payment — logado, o pedido é da conta (LOJA-40)', () => {
     expect(res.statusCode).toBe(401);
     expect(res.body.error.code).toBe('CUSTOMER_SESSION_INVALID');
     expect(store.rows('orders')).toHaveLength(0);
+  });
+
+  it('cookie válido de conta já excluída: 401 que limpa o cookie, não 500', async () => {
+    // A sessão é assinada e está na validade, mas a conta foi apagada (LGPD):
+    // o INSERT em orders viola a FK para auth.users. Para a cliente é "entre de
+    // novo", não "erro ao criar pagamento".
+    const cookie = sessionCookieFor({ uid: 'uid-apagado', email: 'ex@escola.com', name: 'Ex' });
+    const { store, res, createPaymentPreference } = await criarPedido(
+      { cookie },
+      {
+        prepare: (s) => s.spies.insertIntoTable.mockRejectedValueOnce(foreignKeyViolation()),
+      },
+    );
+
+    expectApiError(res, {
+      status: 401,
+      code: 'CUSTOMER_SESSION_INVALID',
+      message: 'Sua conta não foi encontrada. Entre de novo.',
+    });
+    expect(String(res.headers['Set-Cookie'])).toMatch(/Max-Age=0/);
+    expect(store.rows('orders')).toHaveLength(0);
+    expect(createPaymentPreference).not.toHaveBeenCalled();
+  });
+
+  it('a mesma falha devolve a reserva do cupom que já tinha sido feita', async () => {
+    const cookie = sessionCookieFor({ uid: 'uid-apagado', email: 'ex@escola.com', name: 'Ex' });
+    const { store, res } = await criarPedido(
+      { cookie },
+      {
+        coupons: [{ ...CUPOM_10, used_count: 0 }],
+        couponCode: CUPOM_10.code,
+        prepare: (s) => s.spies.insertIntoTable.mockRejectedValueOnce(foreignKeyViolation()),
+      },
+    );
+
+    expect(res.statusCode).toBe(401);
+    // Reservou (increment) e devolveu (decrement) — o cupom volta a zero.
+    const rpcs = store.spies.supabaseRequest.mock.calls.map(([path]) => path);
+    expect(rpcs).toEqual(['rpc/increment_coupon_usage', 'rpc/decrement_coupon_usage']);
+    expect(store.rows('coupons')[0].used_count).toBe(0);
+  });
+
+  it('23503 depois do pedido criado NÃO derruba a sessão: é erro do pedido, não conta apagada', async () => {
+    // Com `orders` já gravado, a FK que falha é de order_items. Segue pelo
+    // catch genérico (que espelha o status do PostgREST) — sem 401 e sem
+    // limpar o cookie de uma cliente que existe.
+    const cookie = sessionCookieFor({ uid: 'uid-1', email: 'conta@escola.com', name: 'Ana' });
+    const { res } = await criarPedido(
+      { cookie },
+      {
+        prepare: (s) =>
+          s.spies.insertIntoTable.mockImplementation(async (table, rows) => {
+            if (table === 'order_items') {
+              throw foreignKeyViolation('order_items', 'order_items_product_id_fkey');
+            }
+            const incoming = (Array.isArray(rows) ? rows : [rows]).map((row) => ({
+              id: 'o1',
+              ...row,
+            }));
+            s.state[table].push(...incoming);
+            return incoming;
+          }),
+      },
+    );
+
+    expect(res.body.success).toBe(false);
+    expect(res.statusCode).not.toBe(401);
+    expect(res.body.error.code).not.toBe('CUSTOMER_SESSION_INVALID');
+    expect(res.headers['Set-Cookie']).toBeUndefined();
   });
 });

@@ -134,7 +134,13 @@ export function ResetPasswordPage() {
           if (verifyError) throw verifyError;
           params.delete('token_hash');
           params.delete('type');
-          globalThis.history.replaceState({}, '', `${location.pathname}?${params.toString()}`);
+          // Sem parâmetro restante a URL fica limpa, não `/reset-password?`.
+          const query = params.toString();
+          globalThis.history.replaceState(
+            {},
+            '',
+            query ? `${location.pathname}?${query}` : location.pathname,
+          );
         }
         // No fluxo padrão/legado, o SDK já processa o código durante a
         // inicialização; não repetimos exchangeCodeForSession.

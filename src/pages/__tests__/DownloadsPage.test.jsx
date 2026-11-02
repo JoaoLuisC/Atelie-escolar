@@ -158,7 +158,7 @@ describe('DownloadsPage', () => {
         if (String(url).includes('/refund-request') && init.method !== 'POST') {
           return { success: true, requests: [], eligibility: [eligibility] };
         }
-        return { success: true, requestId: 'r1' };
+        return { success: true, requestId: 'r1', flow: eligibility.flow };
       },
     }));
   }

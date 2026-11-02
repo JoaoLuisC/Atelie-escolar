@@ -196,12 +196,12 @@ export function ProductWizard({
   if (!isOpen) return null;
 
   const steps = [
-    { id: 'basic', label: 'Básico' },
-    { id: 'media', label: 'Mídia' },
+    { id: 'basic', label: 'Nome e descrição' },
+    { id: 'media', label: 'Fotos, vídeo e arquivo' },
     // "Preço e tipo", e não "Preço & Variações": o passo não tem variação
     // nenhuma, só preço, preço original e tipo (ADM-30).
     { id: 'pricing', label: 'Preço e tipo' },
-    { id: 'conversion', label: 'Conversão' },
+    { id: 'conversion', label: 'Benefícios, perguntas e depoimentos' },
   ];
 
   // O que a IA recebe: só o que já está digitado no formulário.
@@ -248,7 +248,7 @@ export function ProductWizard({
               name="name"
               value={formData.name}
               onChange={handleInputChange}
-              placeholder="Ex: Kit Festa Junina Completo"
+              placeholder="Ex: Kit Festa Junina Completo (é o título do card e da página do produto)"
               className={INPUT_CLASS}
             />
           </Field>
@@ -299,7 +299,7 @@ export function ProductWizard({
               value={formData.description}
               onChange={handleInputChange}
               rows="5"
-              placeholder="Descreva o produto: o que está incluso, formatos de arquivo, para qual ocasião serve…"
+              placeholder="O texto principal da página do produto: para que serve, o que vem no arquivo (quantas páginas, formato), para qual série ou ocasião e como usar em sala."
               className={INPUT_CLASS}
             />
           </Field>
@@ -482,7 +482,7 @@ ${prev.description}`.trim(),
           <Field
             label="Arquivo para download *"
             htmlFor="product-download"
-            hint="PDF, ZIP ou similar até 50MB. Entregue ao cliente via URL assinada após pagamento aprovado."
+            hint="O que a cliente baixa depois de pagar: PDF, ZIP ou similar até 50 MB. Fica guardado em pasta privada e só sai por link de uso único, nunca aparece na loja."
           >
             <AssetUploader
               kind="download"
@@ -515,7 +515,7 @@ ${prev.description}`.trim(),
           <Field
             label="Preço original (opcional)"
             htmlFor="product-original-price"
-            hint='Exibe o "de R$..." riscado para destacar a economia.'
+            hint='Preço "de" riscado ao lado do preço atual, para mostrar o desconto. Só aparece se for maior que o preço.'
           >
             <input
               id="product-original-price"
@@ -534,7 +534,7 @@ ${prev.description}`.trim(),
             className="sm:col-span-2"
             label="Tipo de produto"
             htmlFor="product-type"
-            hint="Kits podem conter múltiplos produtos. Produtos individuais são vendidos isoladamente."
+            hint="Produto individual é um material só. Kit é um pacote com vários materiais: a página mostra a lista do que vem dentro."
           >
             <select
               id="product-type"
@@ -602,7 +602,7 @@ function BenefitsEditor({ value, onChange }) {
     <Field
       label="Benefícios"
       htmlFor="product-benefits"
-      hint="Bullets curtos exibidos na página do produto. Ícone Bootstrap opcional (ex.: printer-fill, file-pdf-fill). Se ficar vazio, a loja mostra 4 benefícios padrão."
+      hint="Frases curtas com ícone, logo abaixo do preço na página do produto (ex.: Pronto para imprimir). Ícone opcional (ex.: printer-fill, file-pdf-fill). Vazio = a loja mostra 4 benefícios padrão."
     >
       <div id="product-benefits" className="flex flex-col gap-2">
         {value.map((item, idx) => (
@@ -648,7 +648,7 @@ function FaqEditor({ value, onChange }) {
     <Field
       label="Perguntas frequentes (FAQ)"
       htmlFor="product-faq"
-      hint="Aparecem em accordion na página do produto. Pergunta + resposta. Linhas vazias são descartadas."
+      hint="Perguntas que a cliente faria antes de comprar, com a resposta; abrem e fecham na página do produto. Linhas vazias são descartadas."
     >
       <div id="product-faq" className="flex flex-col gap-3">
         {value.map((item, idx) => (
@@ -695,7 +695,7 @@ function ReviewsEditor({ value, onChange }) {
     <Field
       label="Depoimentos"
       htmlFor="product-reviews"
-      hint="Só depoimentos reais, de clientes de verdade. Autor e texto são obrigatórios; o resto é opcional."
+      hint="Aparecem na página do produto, com nome, cargo e cidade. Só depoimentos reais, de clientes de verdade. Autor e texto são obrigatórios; o resto é opcional."
     >
       <div id="product-reviews" className="flex flex-col gap-3">
         {value.map((item, idx) => (

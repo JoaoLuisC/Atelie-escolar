@@ -337,3 +337,37 @@ export async function publishSocialContent(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+/**
+ * Envia o vídeo para a URL de upload que o TikTok devolveu em
+ * `publishSocialContent` (fluxo FILE_UPLOAD da Content Posting API). PUT direto
+ * no domínio do TikTok, com `Content-Range` do arquivo inteiro num só pedaço;
+ * XHR em vez de fetch para ter progresso real, como em `uploadProductAsset`.
+ * Regra C1/C2: o componente não monta pedido HTTP — chama isto.
+ */
+export function uploadTikTokVideo(uploadUrl, file, onProgress) {
+  if (!uploadUrl) return Promise.reject(new Error('O TikTok não devolveu a URL de upload.'));
+  if (!file) return Promise.reject(new Error('Arquivo não informado.'));
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+    xhr.setRequestHeader('Content-Range', `bytes 0-${file.size - 1}/${file.size}`);
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && typeof onProgress === 'function') {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error('O TikTok recusou o envio do vídeo.'));
+      }
+    });
+    xhr.addEventListener('error', () => reject(new Error('Erro de rede no envio do vídeo.')));
+    xhr.addEventListener('abort', () => reject(new Error('Envio do vídeo cancelado.')));
+    xhr.send(file);
+  });
+}

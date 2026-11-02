@@ -1,6 +1,14 @@
 import { MemoryRouter } from 'react-router-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CheckoutPage } from '../CheckoutPage';
+import { ROUTES } from '../../constants/routes';
+
+// Só o `useNavigate` é substituído: o MemoryRouter continua real.
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 // Estado mutável dos mocks: cada teste ajusta o que precisa e o beforeEach
 // devolve ao padrão (cliente logado, carrinho com 1 item, sem mudança de preço).
@@ -58,6 +66,7 @@ function payNow() {
 describe('CheckoutPage', () => {
   beforeEach(() => {
     resetMockState();
+    navigateMock.mockClear();
     globalThis.fetch = vi.fn();
     globalThis.open = vi.fn();
   });
@@ -303,10 +312,58 @@ describe('CheckoutPage', () => {
     globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
     renderAt();
     fireEvent.click(screen.getByRole('button', { name: 'Ir para pagamento' }));
+    const erro = await screen.findByText(
+      /Confirme que leu como funcionam o download e a devolução/,
+    );
+    expect(erro).toBeInTheDocument();
+    // O leitor de tela liga o erro à caixa: o <p> tem id e a caixa aponta para ele.
+    expect(erro).toHaveAttribute('id', 'checkout-terms-error');
     expect(
-      await screen.findByText(/Confirme que leu como funcionam o download e a devolução/),
-    ).toBeInTheDocument();
+      screen.getByRole('checkbox', { name: /download é liberado imediatamente/i }),
+    ).toHaveAttribute('aria-describedby', 'checkout-terms-error');
     const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
     expect(calls.some((url) => url.includes('/create-payment'))).toBe(false);
+  });
+
+  it('o link dos Termos abre em nova aba com rel seguro e aviso acessível', () => {
+    renderAt();
+    const link = screen.getByRole('link', { name: /Ver a regra completa/ });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link).toHaveTextContent('(abre em nova aba)');
+    expect(link.getAttribute('href')).toContain(ROUTES.termos);
+  });
+
+  it('pagamento aprovado leva para a rota de downloads com o pedido', async () => {
+    vi.spyOn(globalThis, 'setInterval').mockImplementation((callback) => {
+      Promise.resolve().then(() => callback());
+      return 1;
+    });
+    vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => {});
+
+    globalThis.fetch.mockImplementation((url) => {
+      const u = String(url);
+      if (u.includes('/create-payment')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, orderId: 'ORD-OK', initPoint: 'https://mp/pagar' }),
+        });
+      }
+      if (u.includes('/verify-payment')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, order: { paymentStatus: 'approved' } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ success: true }) });
+    });
+
+    renderAt();
+    payNow();
+
+    await waitFor(() =>
+      expect(navigateMock).toHaveBeenCalledWith(`${ROUTES.downloads}?order=ORD-OK&success=1`),
+    );
+    expect(cartState.clearCart).toHaveBeenCalled();
   });
 });

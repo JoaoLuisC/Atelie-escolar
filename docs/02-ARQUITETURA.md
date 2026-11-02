@@ -125,7 +125,8 @@ Projeto-mae/
 │
 ├── middleware/error.middleware.js   # notFoundHandler + errorHandler (rede de segurança)
 ├── services/supabase-auth.js        # clientes Supabase (anon/admin) do servidor + role em profiles
-├── validation/                      # schemas Zod: common, payment, admin + parse/parseOrFail
+├── validation/                      # schemas Zod: common, payment, admin, customer + parse/parseOrFail
+│   ├── customer.schemas.js          # devolução e perfil do cliente (refundRequestSchema, profileUpdateSchema)
 ├── utils/app-error.js               # usado só pelo middleware de erro
 │
 ├── src/                             # frontend React (ESM)
@@ -136,6 +137,8 @@ Projeto-mae/
 │   │                                #   Subscription, AdminLogin, AdminPage, TeachersPage, NotFound
 │   ├── components/                  # loja (Shell, CartDrawer, ProductGrid, wizards, SEO, consentimento…)
 │   │   ├── EditableText.jsx, edit-context.js   # edição na própria página (prévia do painel)
+│   │   ├── AccountNameForm.jsx, RefundSection.jsx, PurchasedProductsList.jsx  # pedaços de Meus produtos / Minha conta
+│   │   ├── (src/hooks/useRefundRequests.js)      # solicitações e elegibilidade de devolução da conta
 │   │   └── admin/ui/ImageUploadField.jsx, admin/tabs/SectionAi.jsx  # envio com tamanho recomendado; IA por seção
 │   │   └── admin/                   # AdminLayout, OrderDetailModal, tabs/, ui/, utils/
 │   ├── providers/                   # AuthProvider, CartProvider, ToastProvider

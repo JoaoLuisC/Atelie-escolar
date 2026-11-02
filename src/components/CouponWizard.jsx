@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ModalWizard } from './ModalWizard';
 import { useToast } from '../hooks/useToast';
 
@@ -63,36 +63,56 @@ function sanitizeCouponCode(value) {
     .replaceAll(/[^A-Z0-9._-]/g, '');
 }
 
+/** Formulário a partir do cupom gravado (edição) ou vazio (novo). */
+function fromCoupon(initialCoupon) {
+  if (!initialCoupon) return emptyForm();
+  return {
+    id: initialCoupon.id || '',
+    code: initialCoupon.code || '',
+    discountType: initialCoupon.discountType || 'percent',
+    discountValue: initialCoupon.discountValue != null ? String(initialCoupon.discountValue) : '',
+    minOrderAmount:
+      initialCoupon.minOrderAmount != null ? String(initialCoupon.minOrderAmount) : '',
+    maxUses: initialCoupon.maxUses != null ? String(initialCoupon.maxUses) : '',
+    maxUsesPerCustomer:
+      initialCoupon.maxUsesPerCustomer != null ? String(initialCoupon.maxUsesPerCustomer) : '',
+    audience: initialCoupon.audience || 'all',
+    eligibleEmails: (initialCoupon.eligibleEmails || []).join('\n'),
+    purchasesRequired:
+      initialCoupon.purchasesRequired != null ? String(initialCoupon.purchasesRequired) : '5',
+    validFrom: toDateInputValue(initialCoupon.validFrom),
+    validUntil: toDateInputValue(initialCoupon.validUntil),
+    active: initialCoupon.active !== false,
+  };
+}
+
+/**
+ * O limite por cliente que vai para o servidor depende do público:
+ * - primeira compra: um uso por cliente por definição — o campo nem aparece;
+ * - recompensa por compras: quem limita é a própria recompensa (N compras
+ *   liberam um uso), então o limite fixo não se aplica;
+ * - demais: o que a dona digitou (vazio = sem limite individual).
+ */
+export function maxUsesPerCustomerFor(formData) {
+  if (formData.audience === 'new_customers') return 1;
+  if (formData.audience === 'purchase_milestone') return null;
+  return formData.maxUsesPerCustomer === '' ? null : Number(formData.maxUsesPerCustomer);
+}
+
+export function parseEligibleEmails(text) {
+  return String(text || '')
+    .split(/[\n,;]+/)
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+// O estado nasce do cupom recebido e NÃO é ressincronizado por efeito: quem
+// abre o wizard (CouponsTab) remonta o componente com `key` por cupom, então
+// cada abertura começa do zero sem `setState` dentro de `useEffect` (regra D5).
 export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }) {
   const { pushToast } = useToast();
-  const [formData, setFormData] = useState(emptyForm());
+  const [formData, setFormData] = useState(() => fromCoupon(initialCoupon));
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (initialCoupon) {
-      setFormData({
-        id: initialCoupon.id || '',
-        code: initialCoupon.code || '',
-        discountType: initialCoupon.discountType || 'percent',
-        discountValue:
-          initialCoupon.discountValue != null ? String(initialCoupon.discountValue) : '',
-        minOrderAmount:
-          initialCoupon.minOrderAmount != null ? String(initialCoupon.minOrderAmount) : '',
-        maxUses: initialCoupon.maxUses != null ? String(initialCoupon.maxUses) : '',
-        maxUsesPerCustomer:
-          initialCoupon.maxUsesPerCustomer != null ? String(initialCoupon.maxUsesPerCustomer) : '',
-        audience: initialCoupon.audience || 'all',
-        eligibleEmails: (initialCoupon.eligibleEmails || []).join('\n'),
-        purchasesRequired:
-          initialCoupon.purchasesRequired != null ? String(initialCoupon.purchasesRequired) : '5',
-        validFrom: toDateInputValue(initialCoupon.validFrom),
-        validUntil: toDateInputValue(initialCoupon.validUntil),
-        active: initialCoupon.active !== false,
-      });
-    } else {
-      setFormData(emptyForm());
-    }
-  }, [initialCoupon, isOpen]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -126,6 +146,14 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
       pushToast('Desconto percentual não pode passar de 100%.', 'error');
       return;
     }
+    // `eligibleEmails` só existe para "Pessoas específicas"; nos outros
+    // públicos nem viaja no payload (o servidor zera a lista de todo jeito).
+    const eligibleEmails =
+      formData.audience === 'emails' ? parseEligibleEmails(formData.eligibleEmails) : undefined;
+    if (formData.audience === 'emails' && eligibleEmails.length === 0) {
+      pushToast('Informe ao menos um e-mail.', 'error');
+      return;
+    }
 
     // Espera a resposta e não fecha sozinho: quem fecha é o pai, só no
     // sucesso. Um 409 ("Já existe um cupom com esse código.") deixa o que foi
@@ -139,13 +167,9 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
         discountValue: value,
         minOrderAmount: formData.minOrderAmount === '' ? null : Number(formData.minOrderAmount),
         maxUses: formData.maxUses === '' ? null : Number(formData.maxUses),
-        maxUsesPerCustomer:
-          formData.maxUsesPerCustomer === '' ? null : Number(formData.maxUsesPerCustomer),
+        maxUsesPerCustomer: maxUsesPerCustomerFor(formData),
         audience: formData.audience,
-        eligibleEmails: formData.eligibleEmails
-          .split(/[\n,;]+/)
-          .map((email) => email.trim().toLowerCase())
-          .filter(Boolean),
+        ...(eligibleEmails ? { eligibleEmails } : {}),
         purchasesRequired:
           formData.audience === 'purchase_milestone' ? Number(formData.purchasesRequired) : null,
         validFrom: startOfBrtDayIso(formData.validFrom),
@@ -160,6 +184,8 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
   if (!isOpen) return null;
 
   const isPercent = formData.discountType === 'percent';
+  const isFirstPurchase = formData.audience === 'new_customers';
+  const isMilestone = formData.audience === 'purchase_milestone';
 
   return (
     <ModalWizard
@@ -228,22 +254,33 @@ export function CouponWizard({ isOpen, onClose, onSubmit, initialCoupon = null }
               className={INPUT_CLASS}
             />
           </div>
-          <div>
-            <label htmlFor="coupon-max-per-customer" className={LABEL_CLASS}>
-              Usos por cliente
-            </label>
-            <input
-              id="coupon-max-per-customer"
-              type="number"
-              name="maxUsesPerCustomer"
-              value={formData.maxUsesPerCustomer}
-              onChange={handleChange}
-              step="1"
-              min="1"
-              placeholder="Vazio = sem limite individual"
-              className={INPUT_CLASS}
-            />
-          </div>
+          {isFirstPurchase || isMilestone ? (
+            <div>
+              <p className={LABEL_CLASS}>Usos por cliente</p>
+              <p className="text-xs text-slate-500">
+                {isFirstPurchase
+                  ? 'Cupom de primeira compra vale uma vez por cliente — o limite é fixo em 1.'
+                  : 'A recompensa já limita: cada vez que a pessoa completa as compras exigidas, ganha um uso.'}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="coupon-max-per-customer" className={LABEL_CLASS}>
+                Usos por cliente
+              </label>
+              <input
+                id="coupon-max-per-customer"
+                type="number"
+                name="maxUsesPerCustomer"
+                value={formData.maxUsesPerCustomer}
+                onChange={handleChange}
+                step="1"
+                min="1"
+                placeholder="Vazio = sem limite individual"
+                className={INPUT_CLASS}
+              />
+            </div>
+          )}
         </div>
 
         <div>

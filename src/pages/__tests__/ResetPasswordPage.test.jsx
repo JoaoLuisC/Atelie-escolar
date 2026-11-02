@@ -43,6 +43,32 @@ describe('recuperação de senha', () => {
     );
   });
 
+  it('limpa token_hash e type da URL sem deixar "?" sobrando', async () => {
+    const replaceState = vi.spyOn(globalThis.history, 'replaceState');
+    render(
+      <MemoryRouter initialEntries={['/reset-password?token_hash=abc&type=recovery']}>
+        <ResetPasswordPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(replaceState).toHaveBeenCalledWith({}, '', '/reset-password'));
+    replaceState.mockRestore();
+  });
+
+  it('mantém os parâmetros que sobram depois de consumir o token', async () => {
+    const replaceState = vi.spyOn(globalThis.history, 'replaceState');
+    render(
+      <MemoryRouter
+        initialEntries={['/reset-password?token_hash=abc&type=recovery&redirect=%2Fcheckout']}
+      >
+        <ResetPasswordPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() =>
+      expect(replaceState).toHaveBeenCalledWith({}, '', '/reset-password?redirect=%2Fcheckout'),
+    );
+    replaceState.mockRestore();
+  });
+
   it('link no formato do template (SiteURL + next) mostra o destino de dentro do next', async () => {
     const next = encodeURIComponent('https://loja.test/reset-password?redirect=/admin');
     render(

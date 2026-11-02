@@ -34,7 +34,7 @@ function usageLabel(coupon) {
   return `${used} ${used === 1 ? 'uso' : 'usos'} · ${limite}`;
 }
 
-function audienceLabel(coupon) {
+export function audienceLabel(coupon) {
   const labels = {
     all: 'Todos os clientes',
     customers: 'Clientes com conta',
@@ -43,7 +43,7 @@ function audienceLabel(coupon) {
     emails: `${coupon.eligibleEmails?.length || 0} pessoa(s) específica(s)`,
     purchase_milestone: `1 uso a cada ${coupon.purchasesRequired || 1} compras`,
   };
-  return labels[coupon.audience || 'all'];
+  return labels[coupon.audience || 'all'] || 'Público não reconhecido';
 }
 
 export function CouponsTab() {
@@ -235,12 +235,18 @@ export function CouponsTab() {
         )}
       </Card>
 
-      <CouponWizard
-        isOpen={wizardOpen}
-        onClose={closeWizard}
-        onSubmit={handleSave}
-        initialCoupon={editing}
-      />
+      {/* Montado só enquanto aberto, e com `key` por cupom: cada abertura é um
+          wizard novo, com o formulário nascendo do cupom certo — sem efeito
+          de ressincronização dentro do CouponWizard (regra D5). */}
+      {wizardOpen ? (
+        <CouponWizard
+          key={editing?.id ?? 'novo'}
+          isOpen
+          onClose={closeWizard}
+          onSubmit={handleSave}
+          initialCoupon={editing}
+        />
+      ) : null}
     </>
   );
 }

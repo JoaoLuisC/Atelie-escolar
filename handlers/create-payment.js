@@ -14,7 +14,10 @@ const { createPaymentSchema } = require('../validation/payment.schemas');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
 const { allocateDiscountCents, sumItemsCents, toCentsOrZero, toReais } = require('../lib/money');
 const { createLogger } = require('../lib/logger');
-const { getCustomerSessionFromRequest } = require('../lib/customer-session');
+const {
+  clearCustomerSessionCookie,
+  getCustomerSessionFromRequest,
+} = require('../lib/customer-session');
 
 const log = createLogger('create-payment');
 
@@ -258,9 +261,9 @@ module.exports = async function createPaymentHandler(req, res) {
     const attributionData = sanitizeAttribution(attribution);
 
     const customerData = { ...parsedCustomer, email: sessionEmail };
-    const couponCustomerKey = sessionUid
-      ? `user:${sessionUid}`
-      : `email:${String(customerData.email).trim().toLowerCase()}`;
+    // Sempre pela conta: o 401 acima garante `sessionUid`. É a mesma chave que
+    // a RPC `increment_coupon_usage` espera para a meta de compras (`user:<uuid>`).
+    const couponCustomerKey = `user:${sessionUid}`;
 
     if (!getSupabaseConfig()) {
       return fail(res, {
@@ -339,53 +342,48 @@ module.exports = async function createPaymentHandler(req, res) {
         return fail(res, { status: 422, code: audienceState.code, message: audienceState.message });
       }
 
-      if (audienceState.ok) {
-        const { eligible, restricted } = couponHelpers.buildEligibleSet(
-          coupon.applies_to,
-          validatedItems,
-        );
-        const eligibleSubtotalCents = sumItemsCents(eligible);
-        const eligibleSubtotal = toReais(eligibleSubtotalCents);
+      const { eligible, restricted } = couponHelpers.buildEligibleSet(
+        coupon.applies_to,
+        validatedItems,
+      );
+      const eligibleSubtotalCents = sumItemsCents(eligible);
+      const eligibleSubtotal = toReais(eligibleSubtotalCents);
 
-        // RESERVA o uso ANTES de aplicar o desconto. O UPDATE dentro de
-        // increment_coupon_usage é o que respeita max_uses de forma atômica; ele
-        // devolve o novo used_count, ou null se o cupom já estava esgotado.
-        // Antes esta chamada acontecia DEPOIS de criar o pedido e o retorno era
-        // descartado num catch — então um cupom esgotado seguia concedendo
-        // desconto indefinidamente (max_uses era decorativo sob concorrência).
-        // Se o pedido não virar pagamento, o uso volta sozinho depois de 2h
-        // (release_stale_coupon_reservations, migration 20261008000000) — e é
-        // recontado se o pagamento chegar tarde. Até lá erramos para o lado de
-        // contar demais, nunca de conceder de graça.
-        if (restricted && eligibleSubtotalCents === 0) {
-          return fail(res, {
-            status: 422,
-            code: ERROR_CODES.COUPON_NOT_ELIGIBLE,
-            message: 'Os itens do carrinho não são elegíveis para este cupom.',
-          });
-        }
-        if (!restricted || eligibleSubtotalCents > 0) {
-          const usageClaimed = await claimCouponUsage(coupon.id, couponCustomerKey);
-          if (usageClaimed) {
-            claimedCouponId = coupon.id;
-            claimedCouponCustomerKey = couponCustomerKey;
-            discountAmount = couponHelpers.computeDiscount(
-              coupon,
-              toReais(subtotalCents),
-              eligibleSubtotal,
-            );
-            appliedCouponCode = coupon.code;
-            if (restricted) {
-              eligibleItemIds = new Set(eligible.map((item) => item.id));
-            }
-          } else {
-            return fail(res, {
-              status: 422,
-              code: ERROR_CODES.COUPON_EXHAUSTED,
-              message: 'Este cupom atingiu o limite total ou o seu limite por cliente.',
-            });
-          }
-        }
+      // RESERVA o uso ANTES de aplicar o desconto. O UPDATE dentro de
+      // increment_coupon_usage é o que respeita max_uses de forma atômica; ele
+      // devolve o novo used_count, ou null se o cupom já estava esgotado.
+      // Antes esta chamada acontecia DEPOIS de criar o pedido e o retorno era
+      // descartado num catch — então um cupom esgotado seguia concedendo
+      // desconto indefinidamente (max_uses era decorativo sob concorrência).
+      // Se o pedido não virar pagamento, o uso volta sozinho depois de 2h
+      // (release_stale_coupon_reservations, migration 20261008000000) — e é
+      // recontado se o pagamento chegar tarde. Até lá erramos para o lado de
+      // contar demais, nunca de conceder de graça.
+      if (restricted && eligibleSubtotalCents === 0) {
+        return fail(res, {
+          status: 422,
+          code: ERROR_CODES.COUPON_NOT_ELIGIBLE,
+          message: 'Os itens do carrinho não são elegíveis para este cupom.',
+        });
+      }
+      const usageClaimed = await claimCouponUsage(coupon.id, couponCustomerKey);
+      if (!usageClaimed) {
+        return fail(res, {
+          status: 422,
+          code: ERROR_CODES.COUPON_EXHAUSTED,
+          message: 'Este cupom atingiu o limite total ou o seu limite por cliente.',
+        });
+      }
+      claimedCouponId = coupon.id;
+      claimedCouponCustomerKey = couponCustomerKey;
+      discountAmount = couponHelpers.computeDiscount(
+        coupon,
+        toReais(subtotalCents),
+        eligibleSubtotal,
+      );
+      appliedCouponCode = coupon.code;
+      if (restricted) {
+        eligibleItemIds = new Set(eligible.map((item) => item.id));
       }
     }
 
@@ -497,6 +495,23 @@ module.exports = async function createPaymentHandler(req, res) {
         await releaseUnattachedCouponUsage(claimedCouponId, claimedCouponCustomerKey);
       }
     }
+
+    // Cookie assinado e dentro da validade, mas de uma conta que já foi
+    // excluída (LGPD, me-delete-account): o INSERT em `orders` viola a FK
+    // `orders.customer_id → auth.users` (23503, em `error.details.code`). Não é
+    // erro interno — é sessão órfã. Sem o pedido criado, só a FK de `orders`
+    // pode ter falhado; com ele, um 23503 em `order_items` continua sendo 500.
+    // A reserva do cupom (se houve) já foi devolvida acima.
+    if (!createdOrder && error?.details?.code === '23503') {
+      log.warn('sessao_de_conta_excluida', { reason: error.message });
+      clearCustomerSessionCookie(res);
+      return fail(res, {
+        status: 401,
+        code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
+        message: 'Sua conta não foi encontrada. Entre de novo.',
+      });
+    }
+
     log.error('handler_failed', { reason: error?.message || String(error) });
     // Item P1.3: este era o ÚNICO dos quatro sites deste arquivo que não
     // passava por `fail()` — e é o `catch` do endpoint que cria o pagamento,

@@ -2,18 +2,32 @@ const { createAdminResourceHandler } = require('../../lib/admin-resource-handler
 const {
   serviceRoleHelpers: { getTableRow, listTableRows, updateTable },
 } = require('../../lib/supabase');
+const { ERROR_CODES } = require('../../lib/http');
 const { getSellerScope, scopeOrderRows } = require('../../lib/seller-scope');
 const { loadDownloadEvidence } = require('../../lib/refund-policy');
+const { parse } = require('../../validation');
+const { refundRequestUpdateSchema } = require('../../validation/admin.schemas');
 
 // Cada solicitação vai com o fluxo (simple/support), a categoria do motivo e a
 // prova de download: o que foi gravado no momento do pedido
 // (first_download_at, download_count) e o IP do primeiro download, lido de
 // download_logs — a dona da loja decide o reembolso com isso na tela.
 
+// `unique_violation` do Postgres. O índice `refund_requests_one_open_per_order`
+// (migration 20261031000000) só admite UMA solicitação fora de
+// declined/resolved por pedido: reabrir uma quando já existe outra ativa bate
+// nele. O código chega em `error.details.code`, que é o corpo que o PostgREST
+// devolve e lib/supabase.js preserva.
+const UNIQUE_VIOLATION = '23505';
+
 module.exports = createAdminResourceHandler({
   storeResource: true,
   targetType: 'refund_request',
-  errorMessage: 'Erro ao buscar solicitações de devolução.',
+  errorMessage: {
+    GET: 'Erro ao buscar solicitações de devolução.',
+    PUT: 'Erro ao salvar a solicitação.',
+    default: 'Erro ao buscar solicitações de devolução.',
+  },
   loggerName: 'admin-refund-requests',
   handlerName: 'adminRefundRequestsHandler',
   operations: {
@@ -46,29 +60,25 @@ module.exports = createAdminResourceHandler({
       };
     },
     PUT: async (req) => {
-      const id = String(req.body?.id || '').trim();
-      const status = String(req.body?.status || '').trim();
-      const response = String(req.body?.response || '').trim();
-      if (
-        !/^[0-9a-f-]{36}$/i.test(id) ||
-        !['open', 'contacted', 'accepted', 'declined', 'resolved'].includes(status) ||
-        response.length > 4000
-      ) {
+      // Regra B1: a forma do `id` é validada ANTES de ir para `id=eq.<valor>`.
+      const parsed = parse(refundRequestUpdateSchema, req.body || {});
+      if (!parsed.ok) {
         return {
-          error: {
-            status: 400,
-            code: 'VALIDATION_FAILED',
-            message: 'Confira o status e a resposta.',
-          },
+          error: { status: 400, code: ERROR_CODES.VALIDATION_FAILED, message: parsed.message },
         };
       }
+      const { id, status, response } = parsed.data;
       const request = await getTableRow('refund_requests', {
         select: 'id,order_id',
         filters: [{ column: 'id', value: id }],
       });
       if (!request)
         return {
-          error: { status: 404, code: 'NOT_FOUND', message: 'Solicitação não encontrada.' },
+          error: {
+            status: 404,
+            code: ERROR_CODES.NOT_FOUND,
+            message: 'Solicitação não encontrada.',
+          },
         };
       const order = await getTableRow('orders', {
         select: 'id,order_code,customer_name,customer_email',
@@ -76,16 +86,32 @@ module.exports = createAdminResourceHandler({
       });
       const scoped = await scopeOrderRows(order ? [order] : [], getSellerScope(req));
       if (!scoped.orders.length)
-        return { error: { status: 403, code: 'FORBIDDEN', message: 'Sem acesso a este pedido.' } };
-      await updateTable(
-        'refund_requests',
-        { id: `eq.${id}` },
-        {
-          status,
-          admin_response: response,
-          updated_at: new Date().toISOString(),
-        },
-      );
+        return {
+          error: { status: 403, code: ERROR_CODES.FORBIDDEN, message: 'Sem acesso a este pedido.' },
+        };
+      try {
+        await updateTable(
+          'refund_requests',
+          { id: `eq.${id}` },
+          {
+            status,
+            admin_response: response,
+            updated_at: new Date().toISOString(),
+          },
+        );
+      } catch (error) {
+        if (error?.details?.code === UNIQUE_VIOLATION) {
+          return {
+            error: {
+              status: 409,
+              code: ERROR_CODES.CONFLICT,
+              message:
+                'Este pedido já tem outra solicitação em andamento. Conclua ou recuse a outra antes de reabrir esta.',
+            },
+          };
+        }
+        throw error;
+      }
       return { status: 200, body: {} };
     },
   },

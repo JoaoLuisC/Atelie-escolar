@@ -1,7 +1,19 @@
 const { ensureStoreSession } = require('../../lib/admin-session');
 const { logAdminAction } = require('../../lib/admin-audit');
 const { enforceRateLimit } = require('../../lib/rate-limit');
-const { ERROR_CODES, fail, guardMethod, ok, setCachePolicy } = require('../../lib/http');
+const {
+  ERROR_CODES,
+  fail,
+  guardMethod,
+  ok,
+  setAdminCorsHeaders,
+  setCachePolicy,
+} = require('../../lib/http');
+const { createLogger } = require('../../lib/logger');
+const { parseOrFail } = require('../../validation');
+const { socialPublishSchema } = require('../../validation/admin.schemas');
+
+const log = createLogger('social-publish');
 
 const LIMIT = Object.freeze({
   bucket: 'admin-social-publish',
@@ -22,8 +34,9 @@ function configured(platform) {
   return ENV_BY_PLATFORM[platform].every((key) => String(process.env[key] || '').trim());
 }
 
-// Erro de entrada (mídia ausente, número inválido, vídeo grande): 400, antes de
-// qualquer chamada externa. Antes saía como 502, como se a rede tivesse caído.
+// Erro de entrada que o schema não enxerga sozinho (mídia ausente para a rede,
+// imagem/vídeo grande, privacidade que a conta não permite): 400, antes de
+// publicar. Antes saía como 502, como se a rede tivesse caído.
 class InputError extends Error {}
 
 // TikTok: arquivo de até 64 MB vai num pedaço só (`total_chunk_count: 1`); acima
@@ -109,6 +122,8 @@ async function jsonRequest(url, { token, method = 'POST', body }) {
 }
 
 module.exports = async function socialPublishHandler(req, res) {
+  // Ordem da regra A3: CORS → método → autenticação → rate limit → schema → try.
+  setAdminCorsHeaders(req, res);
   setCachePolicy(res, 'adminReport');
   if (guardMethod(req, res, ['GET', 'POST'])) return;
   if (!ensureStoreSession(req, res)) return;
@@ -123,26 +138,19 @@ module.exports = async function socialPublishHandler(req, res) {
 
   const gate = await enforceRateLimit(req, res, LIMIT);
   if (gate.blocked) return;
-  const platform = String(req.body?.platform || '')
-    .trim()
-    .toLowerCase();
-  const caption = String(req.body?.caption || '')
-    .trim()
-    .slice(0, 2200);
-  const mediaUrl = String(req.body?.mediaUrl || '').trim();
-  const link = String(req.body?.link || '').trim();
-  if (!ENV_BY_PLATFORM[platform] || !configured(platform)) {
+
+  // Regra B1: forma e tetos validados antes de qualquer chamada externa — o
+  // HEAD da imagem e as APIs das redes só rodam com entrada já aceita.
+  const parsed = parseOrFail(res, socialPublishSchema, req.body || {});
+  if (!parsed.ok) return;
+  const { platform, caption, mediaUrl, link, recipient, videoSize, title } = parsed.data;
+  const privacy = parsed.data.privacy || 'SELF_ONLY';
+
+  if (!configured(platform)) {
     return fail(res, {
       status: 503,
       code: ERROR_CODES.SERVICE_UNAVAILABLE,
       message: 'Conecte e autorize esta rede nas variáveis do ambiente antes de publicar.',
-    });
-  }
-  if ((mediaUrl && !mediaUrl.startsWith('https://')) || (link && !link.startsWith('https://'))) {
-    return fail(res, {
-      status: 400,
-      code: ERROR_CODES.VALIDATION_FAILED,
-      message: 'Use apenas links HTTPS.',
     });
   }
 
@@ -183,31 +191,27 @@ module.exports = async function socialPublishHandler(req, res) {
         token: process.env.PINTEREST_ACCESS_TOKEN,
         body: {
           board_id: process.env.PINTEREST_BOARD_ID,
-          title: String(req.body?.title || caption).slice(0, 100),
+          title: title || caption.slice(0, 100),
           description: caption,
           ...(link ? { link } : {}),
           media_source: { source_type: 'image_url', url: mediaUrl },
         },
       });
     } else if (platform === 'whatsapp') {
-      const recipient = String(req.body?.recipient || '').replace(/\D/g, '');
-      if (recipient.length < 8 || recipient.length > 15 || !caption) {
-        throw new InputError('Informe o número com DDI e a mensagem.');
-      }
+      // Mensagem de texto não tem campo de link: ele vai NO corpo, e
+      // `preview_url` só pede ao WhatsApp a prévia do link que está lá.
       result = await jsonRequest(`${graph}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
         token: process.env.WHATSAPP_ACCESS_TOKEN,
         body: {
           messaging_product: 'whatsapp',
           to: recipient,
           type: 'text',
-          text: { preview_url: Boolean(link), body: caption },
+          text: { preview_url: Boolean(link), body: link ? `${caption}\n${link}` : caption },
         },
       });
     } else {
-      const size = Number(req.body?.videoSize);
-      const privacy = String(req.body?.privacy || 'SELF_ONLY');
-      if (!Number.isSafeInteger(size) || size <= 0)
-        throw new InputError('Selecione um vídeo válido.');
+      // O schema já garante inteiro positivo quando a rede é o TikTok.
+      const size = videoSize;
       if (size > TIKTOK_MAX_SINGLE_CHUNK)
         throw new InputError('O vídeo para o TikTok precisa ter até 64 MB.');
       // A API exige consultar o criador antes de postar e só aceita uma das
@@ -258,7 +262,7 @@ module.exports = async function socialPublishHandler(req, res) {
       after: {
         platform,
         externalId,
-        hasMedia: Boolean(mediaUrl || req.body?.videoSize),
+        hasMedia: Boolean(mediaUrl || videoSize),
         hasLink: Boolean(link),
       },
     });
@@ -271,6 +275,13 @@ module.exports = async function socialPublishHandler(req, res) {
         message: error.message,
       });
     }
+    // O cliente recebe a tradução; o motivo cru fica no log (regra F1), que é
+    // onde dá para ver se foi token vencido, limite da rede ou mídia recusada.
+    log.warn('publicacao_falhou', {
+      platform,
+      status: Number(error?.statusCode) || null,
+      reason: error?.message || String(error),
+    });
     return fail(res, externalFailure(error));
   }
 };

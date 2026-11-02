@@ -78,7 +78,7 @@ segredos obrigatórios e como aplicar o schema no Supabase.
 | `npm run preview`          | Serve o build localmente                                                        |
 | `npm test`                 | Vitest                                                                          |
 | `npm run test:coverage`    | Vitest com relatório de cobertura                                               |
-| `npm run lint`             | ESLint (catraca em `--max-warnings=12`)                                         |
+| `npm run lint`             | ESLint (catraca em `--max-warnings=11`)                                         |
 | `npm run format`           | Prettier — escreve                                                              |
 | **`npm run check`**        | **O gate: env + format + lint + testes + cobertura + build.** Mesma ordem do CI |
 | `npm run supabase:db:push` | Aplica as migrations no Supabase remoto                                         |

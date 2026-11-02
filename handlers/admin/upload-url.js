@@ -198,16 +198,6 @@ async function resolveBucketVisibility(bucket, current) {
     return true;
   }
 
-  if (currentPublic !== bucket.isPublic) {
-    // Divergência sem risco de entrega paga: apenas reportar. Trocar o flag
-    // aqui mudaria como o site serve mídia de vitrine.
-    log.warn('visibilidade_divergente', {
-      bucket: bucket.name,
-      esperado: bucket.isPublic,
-      atual: currentPublic,
-    });
-  }
-
   return currentPublic;
 }
 

@@ -93,7 +93,7 @@
 
 ### 2.6 Minha conta: troca de senha e e-mail
 
-`POST /api/teacher/account` (`lib/staff-account.js`), para qualquer sessão de staff:
+`POST /api/teacher/account` (`lib/staff-account.js`; a regra de senha mora num lugar só, `lib/password-policy.js`, usada também pelo cadastro de cliente), para qualquer sessão de staff:
 
 - Exige a **senha atual**, conferida com um login de verdade num cliente Supabase descartável
   (nunca o cliente compartilhado). Senha errada responde 400 (não 401, para o painel não tratar

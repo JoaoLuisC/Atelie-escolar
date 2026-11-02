@@ -294,9 +294,13 @@ botão de pagar não envia e o servidor recusa (400). Em Meus produtos, o botão
 pedido: "Desistir da compra" (confirmação, motivo e telefone opcionais) ou "Pedir suporte ou
 devolução" (aviso com a data do download ou do fim do prazo, categoria e descrição).
 
-**Sistema.** O fluxo é decidido **no servidor** (`lib/refund-policy.js`), nunca pelo front: conta os
-`download_logs` do pedido e o prazo de 7 dias a partir de `completed_at`. A prova do download vai
-gravada na solicitação. Exige sessão de cliente; rate limit 10 / 10 min; uma solicitação não
+**Sistema.** O fluxo é decidido **no servidor** (`lib/refund-policy.js`), nunca pelo front. A prova
+de download junta duas fontes: `download_tokens.used = true` (canônica — o token é carimbado num
+claim atômico antes da entrega) e `download_logs` (gravado depois, best-effort; dá o IP). Vale o
+maior dos dois, e a primeira data é a mais antiga. O prazo de 7 dias conta de `completed_at`. A
+prova vai gravada na solicitação. Se a tela não conseguir carregar a elegibilidade, o botão fica
+desabilitado com "Tentar de novo" — ela nunca chuta "desistência" para quem já baixou; o recibo
+usa o `flow` e o `alreadyRequested` que o servidor devolve. Exige sessão de cliente; rate limit 10 / 10 min; uma solicitação não
 encerrada por pedido. **Não há estorno automático**, em nenhum fluxo: o reembolso é manual (ver
 "Reembolso" na seção 18). O reembolso por defeito (CDC, arts. 18 e 20) existe nos dois fluxos. A
 professora vê e responde só as solicitações dos pedidos dela.

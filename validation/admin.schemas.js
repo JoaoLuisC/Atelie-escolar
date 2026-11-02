@@ -154,12 +154,19 @@ function brtDate(timeOfDay) {
 const optionalDate = brtDate('23:59:59.999');
 const optionalStartDate = brtDate('00:00:00.000');
 
-/** Número opcional não-negativo: vazio ou não-numérico vira `null`. */
-const optionalNonNegative = z.union([z.string(), z.number(), z.null()]).transform((value) => {
-  if (value === null || String(value).trim() === '') return null;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
-});
+/**
+ * Número opcional não-negativo: vazio ou não-numérico vira `null`; negativo é
+ * ERRO. O nome já prometia isso, mas o transform devolvia o negativo intacto e
+ * o handler gravava `max_uses: 0`/`min_order_amount: -5` sem reclamar.
+ */
+const optionalNonNegative = z
+  .union([z.string(), z.number(), z.null()])
+  .transform((value) => {
+    if (value === null || String(value).trim() === '') return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  })
+  .refine((value) => value === null || value >= 0, { error: 'Valor não pode ser negativo.' });
 
 const couponCreateSchema = z
   .object({
@@ -200,6 +207,12 @@ const couponCreateSchema = z
     error: 'Informe ao menos um e-mail elegível.',
     path: ['eligibleEmails'],
   })
+  // Zero não é "sem limite": é um cupom que ninguém consegue usar. Vazio é a
+  // forma de dizer "sem limite" — a mesma regra do limite por cliente abaixo.
+  .refine((data) => data.maxUses == null || data.maxUses >= 1, {
+    error: 'O limite de usos precisa ser 1 ou mais (vazio = sem limite).',
+    path: ['maxUses'],
+  })
   .refine((data) => data.maxUsesPerCustomer == null || data.maxUsesPerCustomer >= 1, {
     error: 'O limite por cliente precisa ser 1 ou mais (vazio = sem limite).',
     path: ['maxUsesPerCustomer'],
@@ -237,6 +250,118 @@ const productPatchSchema = z
   });
 
 // ── Pedidos ──────────────────────────────────────────────────────────
+
+// ── Devoluções ───────────────────────────────────────────────────────
+
+// Os mesmos valores do CHECK de `refund_requests.status`
+// (migration 20261031000000). O índice único `refund_requests_one_open_per_order`
+// só deixa UMA solicitação fora de declined/resolved por pedido — é ele que
+// vira 409 no handler quando a dona da loja reabre uma com outra ativa.
+const REFUND_REQUEST_STATUSES = Object.freeze([
+  'open',
+  'contacted',
+  'accepted',
+  'declined',
+  'resolved',
+]);
+
+/**
+ * PUT do painel de devoluções. O `id` é uuid (PK de refund_requests) e, como
+ * nos demais recursos, validar a FORMA antes de interpolar em `id=eq.<valor>`
+ * é o motivo de o primitivo existir. A resposta é texto livre da dona da loja
+ * (pode ter quebras de linha, por isso não passa por `cleanText`), com o teto
+ * que o handler já aplicava.
+ */
+const refundRequestUpdateSchema = z.object({
+  id: uuidId,
+  status: z.enum(REFUND_REQUEST_STATUSES, { error: 'Status inválido.' }),
+  response: z
+    .string({ error: 'A resposta precisa ser texto.' })
+    .trim()
+    .max(4000, { error: 'A resposta pode ter até 4000 caracteres.' })
+    .nullish()
+    .transform((value) => value ?? ''),
+});
+
+// ── Publicação social ────────────────────────────────────────────────
+
+const SOCIAL_PLATFORMS = Object.freeze([
+  'facebook',
+  'instagram',
+  'pinterest',
+  'tiktok',
+  'whatsapp',
+]);
+
+/** Link opcional: vazio passa; preenchido tem de ser HTTPS (nunca http/data/js). */
+const optionalHttpsUrl = z
+  .string({ error: 'Use apenas links HTTPS.' })
+  .trim()
+  .max(2048, { error: 'Link muito longo.' })
+  .refine((value) => value === '' || value.startsWith('https://'), {
+    error: 'Use apenas links HTTPS.',
+  })
+  .optional()
+  .default('');
+
+/**
+ * POST /admin/social-publish. O painel manda o formulário inteiro para toda
+ * rede (`...form`), então os campos específicos de uma plataforma chegam
+ * vazios para as outras — por isso são opcionais aqui e cobrados por
+ * plataforma nos `refine` do fim.
+ *
+ * O número do WhatsApp aceita formatação ("+55 (11) 9…") e sai só com os
+ * dígitos: é o que a Cloud API espera em `to`.
+ */
+const socialPublishSchema = z
+  .object({
+    platform: z
+      .string({ error: 'Escolha a rede social.' })
+      .trim()
+      .toLowerCase()
+      .pipe(z.enum(SOCIAL_PLATFORMS, { error: 'Rede social inválida.' })),
+    caption: z
+      .string({ error: 'A legenda precisa ser texto.' })
+      .trim()
+      .max(2200, { error: 'A legenda pode ter até 2200 caracteres.' })
+      .optional()
+      .default(''),
+    mediaUrl: optionalHttpsUrl,
+    link: optionalHttpsUrl,
+    recipient: z
+      .string({ error: 'Informe o número com DDI.' })
+      .transform((value) => value.replaceAll(/\D/g, ''))
+      .optional()
+      .default(''),
+    videoSize: z
+      .union([z.number(), z.string()])
+      .transform(Number)
+      .refine((value) => Number.isSafeInteger(value) && value > 0, {
+        error: 'Selecione um vídeo válido.',
+      })
+      .optional(),
+    privacy: z
+      .string({ error: 'Privacidade inválida.' })
+      .trim()
+      .max(40, { error: 'Privacidade inválida.' })
+      .optional()
+      .default(''),
+    title: z
+      .string({ error: 'O título precisa ser texto.' })
+      .trim()
+      .max(100, { error: 'O título pode ter até 100 caracteres.' })
+      .optional()
+      .default(''),
+  })
+  .refine(
+    (data) =>
+      data.platform !== 'whatsapp' || (/^\d{8,15}$/.test(data.recipient) && data.caption !== ''),
+    { error: 'Informe o número com DDI e a mensagem.', path: ['recipient'] },
+  )
+  .refine((data) => data.platform !== 'tiktok' || data.videoSize !== undefined, {
+    error: 'Selecione um vídeo válido.',
+    path: ['videoSize'],
+  });
 
 // ── Usuários ─────────────────────────────────────────────────────────
 
@@ -277,7 +402,9 @@ module.exports = {
   normalizeSlug,
   productCreateSchema,
   productPatchSchema,
+  refundRequestUpdateSchema,
   slug,
+  socialPublishSchema,
   userUpdateSchema,
   uuidId,
 };

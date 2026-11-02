@@ -114,6 +114,10 @@ function installSupabase() {
         order_id: 1,
         customer_id: TITULAR.uid,
         reason: 'Arquivo errado',
+        reason_category: 'defeito',
+        flow: 'support',
+        first_download_at: '2026-08-04T12:00:00.000Z',
+        download_count: 2,
         phone: '(11) 90000-0000',
         status: 'open',
         admin_response: '',
@@ -267,6 +271,42 @@ describe('me-export-data · perfil e devoluções', () => {
       situacao: 'open',
     });
     expect(JSON.stringify(res.body)).not.toContain('Motivo da Bruna');
+  });
+
+  it('a devolução leva fluxo, categoria e a prova de download gravada no pedido', async () => {
+    // São dados da titular que pesam na decisão da loja: entram no dossiê.
+    const res = await exportar();
+
+    expect(res.body.solicitacoesDeDevolucao[0]).toMatchObject({
+      fluxo: 'support',
+      motivoCategoria: 'defeito',
+      primeiroDownloadEm: '2026-08-04T12:00:00.000Z',
+      downloads: 2,
+    });
+    const select = store.helpers.listTableRows.mock.calls.find(
+      (args) => args[0] === 'refund_requests',
+    )[1].select;
+    for (const coluna of ['flow', 'reason_category', 'first_download_at', 'download_count']) {
+      expect(select.split(',')).toContain(coluna);
+    }
+  });
+
+  it('devolução antiga sem as colunas novas sai com valores neutros, não undefined', async () => {
+    store.state.refund_requests[0] = {
+      order_id: 1,
+      customer_id: TITULAR.uid,
+      reason: 'Antiga',
+      status: 'resolved',
+    };
+
+    const res = await exportar();
+
+    expect(res.body.solicitacoesDeDevolucao[0]).toMatchObject({
+      fluxo: '',
+      motivoCategoria: '',
+      primeiroDownloadEm: null,
+      downloads: 0,
+    });
   });
 });
 

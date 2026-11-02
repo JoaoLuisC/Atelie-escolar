@@ -1,4 +1,5 @@
 import { apiError, apiRequest } from '../utils/api';
+import { CUSTOMER_RESET_PASSWORD_PATH } from '../constants/routes';
 import {
   buildOAuthRedirectUrl,
   getSupabaseBrowserClient,
@@ -110,7 +111,7 @@ export async function consumeCustomerSessionFromAuthCallback() {
 
   const url = new URL(globalThis.window.location.href);
   // Links de recuperação pertencem à página de redefinição, não ao Google.
-  if (url.pathname === '/reset-password') return null;
+  if (url.pathname === CUSTOMER_RESET_PASSWORD_PATH) return null;
   // Volta do Google do professor(a): quem conclui é o AdminLoginPage, com a
   // sessão de staff. Sem esta saída, o `code` na URL viraria também uma
   // sessão de CLIENTE para a mesma conta.

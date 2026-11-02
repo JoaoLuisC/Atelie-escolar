@@ -15,6 +15,7 @@ const DAY = 24 * 60 * 60 * 1000;
 let session;
 let order;
 let downloadLogs;
+let usedTokens;
 let getTableRow;
 let insertIntoTable;
 let listTableRows;
@@ -30,6 +31,7 @@ beforeEach(() => {
     completed_at: new Date(Date.now() - 2 * DAY).toISOString(),
   };
   downloadLogs = [];
+  usedTokens = [];
   getTableRow = vi.fn(async (table, options) => {
     if (table === 'refund_requests') return null;
     const fields = Object.fromEntries(options.filters.map(({ column, value }) => [column, value]));
@@ -37,6 +39,7 @@ beforeEach(() => {
   });
   listTableRows = vi.fn(async (table) => {
     if (table === 'download_logs') return downloadLogs;
+    if (table === 'download_tokens') return usedTokens;
     if (table === 'orders') return [order];
     return [];
   });
@@ -131,6 +134,24 @@ describe('solicitação de devolução · regra por download', () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.body.flow).toBe('support');
+  });
+
+  it('token usado conta como download mesmo sem linha em download_logs (fonte canônica)', async () => {
+    usedTokens = [{ order_id: 'pedido-1', used_at: '2026-10-30T12:00:00.000Z' }];
+    expect((await post({})).statusCode).toBe(400);
+    const res = await post({
+      reasonCategory: 'defeito',
+      reason: 'O arquivo veio sem as páginas 3 a 5.',
+    });
+    expect(res.statusCode).toBe(201);
+    expect(insertIntoTable).toHaveBeenCalledWith(
+      'refund_requests',
+      expect.objectContaining({
+        flow: 'support',
+        download_count: 1,
+        first_download_at: '2026-10-30T12:00:00.000Z',
+      }),
+    );
   });
 
   it('o front não escolhe o fluxo: mandar flow=simple depois de baixar não adianta', async () => {

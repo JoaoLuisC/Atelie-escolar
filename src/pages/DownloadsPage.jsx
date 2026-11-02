@@ -3,17 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { Shell } from '../components/Shell';
 import { SkeletonDownloadList } from '../components/Skeleton';
-import { RefundForm } from '../components/RefundForm';
+import { AccountNameForm } from '../components/AccountNameForm';
+import { PurchasedProductsList, countAvailableProducts } from '../components/PurchasedProductsList';
+import { REFUND_STATUS_LABELS, RefundSection } from '../components/RefundSection';
+import { useRefundRequests } from '../hooks/useRefundRequests';
 import { StatusStepper } from '../components/StatusStepper';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import {
-  buildDownloadUrl,
-  fetchMyRefundRequests,
-  fetchMyOrders,
-  fetchOrderStatus,
-  requestRefund,
-} from '../services/downloads';
+import { buildDownloadUrl, fetchMyOrders, fetchOrderStatus } from '../services/downloads';
 import { errorMessageOf } from '../utils/api';
 import { formatPrice } from '../utils/currency';
 import { formatDate } from '../utils/date';
@@ -118,13 +115,6 @@ const PAYMENT_STATUS_LABELS = {
   charged_back: 'Estornado',
 };
 
-/** Itens de pedidos aprovados = o que a cliente pode baixar. */
-function countAvailableProducts(orders) {
-  return (orders || [])
-    .filter((entry) => entry.paymentStatus === 'approved')
-    .reduce((total, entry) => total + (entry.items || []).length, 0);
-}
-
 const PAYMENT_STATUS_STYLES = {
   approved: 'bg-emerald-100 text-emerald-800',
   completed: 'bg-emerald-100 text-emerald-800',
@@ -132,14 +122,6 @@ const PAYMENT_STATUS_STYLES = {
   in_process: 'bg-amber-100 text-amber-800',
   refunded: 'bg-slate-200 text-slate-700',
   charged_back: 'bg-slate-200 text-slate-700',
-};
-
-const REFUND_STATUS_LABELS = {
-  open: 'aberta',
-  contacted: 'em conversa',
-  accepted: 'aceita',
-  declined: 'não aceita',
-  resolved: 'resolvida',
 };
 
 function paymentStatusLabel(status) {
@@ -150,7 +132,7 @@ export function DownloadsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { pushToast } = useToast();
-  const { customerSession, updateCustomerName } = useAuth();
+  const { customerSession } = useAuth();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
   const [order, setOrder] = useState(null);
@@ -166,46 +148,7 @@ export function DownloadsPage() {
   const [activeTab, setActiveTab] = useState(() =>
     new URLSearchParams(location.search).has('order') ? 'history' : 'products',
   );
-  const [preparedDownloads, setPreparedDownloads] = useState({});
-  const [preparingDownload, setPreparingDownload] = useState('');
-  const [refundOrder, setRefundOrder] = useState('');
-  const [refundReason, setRefundReason] = useState('');
-  const [refundPhone, setRefundPhone] = useState('');
-  const [refundPending, setRefundPending] = useState(false);
-  const [refundReceipt, setRefundReceipt] = useState('');
-  const [refundRequests, setRefundRequests] = useState([]);
-  const [refundEligibility, setRefundEligibility] = useState({});
-  const [refundCategory, setRefundCategory] = useState('');
-  // null = ainda não editado (mostra o nome da sessão); '' = a pessoa apagou o campo.
-  const [accountName, setAccountName] = useState(null);
-  const [accountSaving, setAccountSaving] = useState(false);
-
-  const loadRefunds = useCallback(() => {
-    fetchMyRefundRequests()
-      .then(({ requests, eligibility }) => {
-        setRefundRequests(requests);
-        setRefundEligibility(Object.fromEntries(eligibility.map((item) => [item.orderId, item])));
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!customerSession?.email) return;
-    loadRefunds();
-  }, [customerSession?.email, loadRefunds]);
-
-  async function saveAccount(event) {
-    event.preventDefault();
-    setAccountSaving(true);
-    try {
-      await updateCustomerName(accountName ?? customerSession?.name ?? '');
-      pushToast('Nome atualizado.', 'success');
-    } catch (error) {
-      pushToast(error?.message || 'Não foi possível salvar sua conta.', 'error');
-    } finally {
-      setAccountSaving(false);
-    }
-  }
+  const refunds = useRefundRequests(Boolean(customerSession?.email));
 
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order') || localStorage.getItem('lastOrderId') || '';
@@ -381,60 +324,6 @@ export function DownloadsPage() {
     navigate(`/downloads?order=${encodeURIComponent(id)}`);
   }
 
-  async function prepareDownload(entry, item) {
-    const orderCode = entry.orderId || entry.internalOrderId;
-    const key = `${orderCode}:${item.id}`;
-    setPreparingDownload(key);
-    try {
-      const { response, data } = await fetchOrderStatus({
-        orderId: orderCode,
-        email: customerSession.email,
-      });
-      if (!response.ok || !data.success || data.order?.paymentStatus !== 'approved') {
-        throw new Error(errorMessageOf(data) || 'Não foi possível preparar o download.');
-      }
-      const token = (data.order.downloadTokens || []).find(
-        (candidate) =>
-          String(candidate.productId) === String(item.id) && candidate.available !== false,
-      );
-      if (!token?.token) throw new Error('Arquivo indisponível. Entre em contato com a loja.');
-      setPreparedDownloads((previous) => ({ ...previous, [key]: token.token }));
-    } catch (error) {
-      pushToast(error.message || 'Não foi possível preparar o download.', 'error');
-    } finally {
-      setPreparingDownload('');
-    }
-  }
-
-  const refundFlow = refundEligibility[refundOrder]?.flow || 'simple';
-
-  async function submitRefund(event) {
-    event.preventDefault();
-    setRefundPending(true);
-    try {
-      await requestRefund({
-        orderId: refundOrder,
-        reasonCategory: refundFlow === 'support' ? refundCategory : 'desistencia',
-        reason: refundReason,
-        phone: refundPhone,
-      });
-      setRefundReceipt(
-        refundFlow === 'support'
-          ? `Pedido de suporte do pedido #${refundOrder} recebido. A loja responde em até 5 dias úteis pelo e-mail da conta.`
-          : `Desistência do pedido #${refundOrder} registrada. A loja faz o reembolso pelo Mercado Pago e avisa pelo e-mail da conta.`,
-      );
-      loadRefunds();
-      setRefundOrder('');
-      setRefundReason('');
-      setRefundCategory('');
-      setRefundPhone('');
-    } catch (error) {
-      pushToast(error.message || 'Não foi possível registrar a solicitação.', 'error');
-    } finally {
-      setRefundPending(false);
-    }
-  }
-
   function submitManualEmail(event) {
     event.preventDefault();
     const email = typedEmail.trim().toLowerCase();
@@ -453,10 +342,6 @@ export function DownloadsPage() {
   const openedEntry = orders.find(
     (entry) => String(entry.orderId || entry.internalOrderId) === String(orderId),
   );
-  const openedRefund = openedEntry
-    ? refundRequests.find((item) => String(item.order_id) === String(openedEntry.internalOrderId))
-    : null;
-
   let statusStep = 0;
   if (order?.paymentStatus === 'approved') {
     statusStep = 2;
@@ -516,112 +401,24 @@ export function DownloadsPage() {
         {customerSession?.email && activeTab === 'account' ? (
           <article className="mb-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="font-heading text-lg font-bold text-slate-900">Editar minha conta</h2>
-            <form onSubmit={saveAccount} className="mt-4 max-w-md space-y-3">
-              <div>
-                <label
-                  htmlFor="downloads-account-name"
-                  className="text-xs font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  Nome
-                </label>
-                <input
-                  id="downloads-account-name"
-                  value={accountName ?? customerSession?.name ?? ''}
-                  onChange={(event) => setAccountName(event.target.value)}
-                  minLength={2}
-                  maxLength={120}
-                  required
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                />
-              </div>
-              <p className="text-xs text-slate-500">E-mail: {customerSession.email}</p>
-              <button
-                type="submit"
-                disabled={accountSaving}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {accountSaving ? 'Salvando…' : 'Salvar alterações'}
-              </button>
+            <AccountNameForm className="mt-1 max-w-md" submitLabel="Salvar alterações">
               <Link
                 to={ROUTES.conta}
-                className="ml-3 text-xs font-semibold text-brand-700 hover:underline"
+                className="text-xs font-semibold text-brand-700 hover:underline"
               >
                 Privacidade e exclusão da conta
               </Link>
-            </form>
+            </AccountNameForm>
           </article>
         ) : null}
 
         {customerSession?.email && activeTab === 'products' ? (
-          <article className="mb-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-heading text-lg font-bold text-slate-900">
-                Seus produtos{' '}
-                <span className="ml-1 rounded-full bg-brand-50 px-2.5 py-0.5 align-middle text-sm font-bold text-brand-700">
-                  {countAvailableProducts(orders)}
-                </span>
-              </h2>
-              <button
-                type="button"
-                onClick={() => loadMyOrders()}
-                disabled={searchingByEmail}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-60"
-              >
-                <i className="bi bi-arrow-clockwise" aria-hidden="true" />{' '}
-                {searchingByEmail ? 'Atualizando…' : 'Atualizar'}
-              </button>
-            </div>
-            {searchingByEmail ? (
-              <p className="mt-2 text-sm text-slate-500">Carregando seus produtos...</p>
-            ) : null}
-            {!searchingByEmail && countAvailableProducts(orders) === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">
-                {emailStatus ||
-                  'Nenhum produto liberado ainda. Quando um pedido for aprovado, os arquivos aparecem aqui.'}
-              </p>
-            ) : null}
-            <ul className="mt-3 space-y-3">
-              {orders
-                .filter((entry) => entry.paymentStatus === 'approved')
-                .flatMap((entry) =>
-                  (entry.items || []).map((item) => {
-                    const key = `${entry.orderId || entry.internalOrderId}:${item.id}`;
-                    return (
-                      <li
-                        key={key}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-3"
-                      >
-                        <div>
-                          <strong className="block text-sm text-slate-800">{item.title}</strong>
-                          <span className="text-xs text-slate-500">
-                            Pedido #{entry.orderId || entry.internalOrderId}
-                          </span>
-                        </div>
-                        {preparedDownloads[key] ? (
-                          <a
-                            href={buildDownloadUrl(preparedDownloads[key])}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white"
-                          >
-                            Baixar arquivo
-                          </a>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={Boolean(preparingDownload)}
-                            onClick={() => prepareDownload(entry, item)}
-                            className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                          >
-                            {preparingDownload === key ? 'Preparando…' : 'Baixar'}
-                          </button>
-                        )}
-                      </li>
-                    );
-                  }),
-                )}
-            </ul>
-          </article>
+          <PurchasedProductsList
+            orders={orders}
+            loading={searchingByEmail}
+            statusText={emailStatus}
+            onRefresh={() => loadMyOrders()}
+          />
         ) : null}
 
         {hasSuccessFlag ? (
@@ -776,9 +573,7 @@ export function DownloadsPage() {
                 <ul className="flex flex-col gap-2">
                   {orders.map((entry) => {
                     const code = entry.orderId || entry.internalOrderId;
-                    const refund = refundRequests.find(
-                      (item) => String(item.order_id) === String(entry.internalOrderId),
-                    );
+                    const refund = refunds.requestFor(entry.internalOrderId);
                     const isOpen = String(code) === String(orderId);
                     const itemCount = (entry.items || []).length;
                     const paymentStatus = entry.paymentStatus || entry.status;
@@ -831,58 +626,11 @@ export function DownloadsPage() {
 
             {/* Devolução: dentro do pedido aberto, não na lista. */}
             {openedEntry && customerSession?.email && order?.paymentStatus === 'approved' ? (
-              <div className="mt-5 rounded-xl border border-slate-200 p-4">
-                {openedRefund ? (
-                  <p className="text-sm text-slate-700">
-                    <strong className="text-violet-700">
-                      Devolução {REFUND_STATUS_LABELS[openedRefund.status] || openedRefund.status}.
-                    </strong>
-                    {openedRefund.admin_response
-                      ? ` Resposta da loja: ${openedRefund.admin_response}`
-                      : ' A loja responde pelo e-mail da sua conta e aqui mesmo.'}
-                  </p>
-                ) : refundReceipt ? (
-                  <p role="status" className="text-sm text-emerald-800">
-                    {refundReceipt}
-                  </p>
-                ) : refundOrder === openedEntry.orderId ? null : (
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-slate-600">
-                      {refundEligibility[openedEntry.orderId]?.flow === 'support'
-                        ? 'Problema com o arquivo? Peça suporte ou devolução.'
-                        : 'Mudou de ideia? Você pode desistir desta compra.'}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRefundReceipt('');
-                        setRefundCategory('');
-                        setRefundOrder(openedEntry.orderId);
-                      }}
-                      className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700"
-                    >
-                      {refundEligibility[openedEntry.orderId]?.flow === 'support'
-                        ? 'Pedir suporte ou devolução'
-                        : 'Desistir da compra'}
-                    </button>
-                  </div>
-                )}
-                {refundOrder && refundOrder === openedEntry.orderId ? (
-                  <RefundForm
-                    orderId={refundOrder}
-                    eligibility={refundEligibility[refundOrder]}
-                    category={refundCategory}
-                    reason={refundReason}
-                    phone={refundPhone}
-                    pending={refundPending}
-                    onCategoryChange={setRefundCategory}
-                    onReasonChange={setRefundReason}
-                    onPhoneChange={setRefundPhone}
-                    onSubmit={submitRefund}
-                    onCancel={() => setRefundOrder('')}
-                  />
-                ) : null}
-              </div>
+              <RefundSection
+                orderCode={openedEntry.orderId}
+                internalOrderId={openedEntry.internalOrderId}
+                refunds={refunds}
+              />
             ) : null}
 
             {order?.paymentStatus === 'approved' ? (

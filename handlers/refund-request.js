@@ -4,6 +4,9 @@ const {
 const { getCustomerSessionFromRequest } = require('../lib/customer-session');
 const { enforceRateLimit } = require('../lib/rate-limit');
 const { ERROR_CODES, fail, guardMethod, ok } = require('../lib/http');
+const { createLogger } = require('../lib/logger');
+const { parse } = require('../validation');
+const { refundRequestSchema } = require('../validation/customer.schemas');
 const {
   decideRefundFlow,
   loadDownloadEvidence,
@@ -18,6 +21,7 @@ const {
 //          decidido AQUI (lib/refund-policy.js), com os downloads do pedido
 //          gravados junto como prova. Nunca estorna nada sozinho.
 
+const log = createLogger('refund-request');
 const RATE_LIMIT = { bucket: 'refund-request', limit: 10, windowSeconds: 600 };
 const ACTIVE_STATUSES = '(open,contacted,accepted)';
 
@@ -44,17 +48,30 @@ async function loadEligibility(uid) {
   });
 }
 
+function activeRequestFor(orderId) {
+  return getTableRow('refund_requests', {
+    select: 'id,flow',
+    filters: [
+      { column: 'order_id', value: orderId },
+      { column: 'status', operator: 'in', value: ACTIVE_STATUSES },
+    ],
+  });
+}
+
 module.exports = async function refundRequestHandler(req, res) {
+  // Ordem da regra A3: método → rate limit → autenticação → schema → try.
   if (guardMethod(req, res, ['GET', 'POST'])) return;
+  const gate = await enforceRateLimit(req, res, RATE_LIMIT);
+  if (gate.blocked) return;
   const session = getCustomerSessionFromRequest(req);
-  if (!session?.uid)
+  if (!session?.uid) {
     return fail(res, {
       status: 401,
       code: ERROR_CODES.CUSTOMER_SESSION_INVALID,
       message: 'Entre na sua conta para solicitar a devolução.',
     });
-  const gate = await enforceRateLimit(req, res, RATE_LIMIT);
-  if (gate.blocked) return;
+  }
+
   if (req.method === 'GET') {
     try {
       const [requests, eligibility] = await Promise.all([
@@ -68,7 +85,8 @@ module.exports = async function refundRequestHandler(req, res) {
         loadEligibility(session.uid),
       ]);
       return ok(res, { requests, eligibility });
-    } catch {
+    } catch (error) {
+      log.error('listagem_falhou', { reason: error?.message || String(error) });
       return fail(res, {
         status: 500,
         code: ERROR_CODES.INTERNAL_ERROR,
@@ -76,48 +94,43 @@ module.exports = async function refundRequestHandler(req, res) {
       });
     }
   }
-  const orderId = String(req.body?.orderId || '').trim();
-  const phone = String(req.body?.phone || '').trim();
-  // Telefone é opcional; preenchido, só dígitos e a pontuação de um número.
-  const phoneOk = !phone || /^[\d\s()+.-]{8,40}$/.test(phone);
-  if (
-    !orderId ||
-    orderId.length > 100 ||
-    String(req.body?.reason || '').length > 2000 ||
-    !phoneOk
-  ) {
+
+  const parsed = parse(refundRequestSchema, req.body || {});
+  if (!parsed.ok) {
     return fail(res, {
       status: 400,
       code: ERROR_CODES.VALIDATION_FAILED,
-      message: 'Confira os dados da solicitação.',
+      message: parsed.message || 'Confira os dados da solicitação.',
     });
   }
+  const { orderId, phone } = parsed.data;
+
+  // Fora do try: a recuperação da corrida (23505) precisa do pedido já lido —
+  // reler com filtro vazio devolveria a solicitação de OUTRO cliente.
+  let order = null;
   try {
-    const order = await getTableRow('orders', {
+    order = await getTableRow('orders', {
       select: 'id,payment_status,completed_at,created_at',
       filters: [
         { column: 'order_code', value: orderId },
         { column: 'customer_id', value: session.uid },
       ],
     });
-    if (!order || order.payment_status !== 'approved')
+    if (!order || order.payment_status !== 'approved') {
       return fail(res, {
         status: 404,
         code: ERROR_CODES.NOT_FOUND,
         message: 'Pedido aprovado não encontrado nesta conta.',
       });
-    const existing = await getTableRow('refund_requests', {
-      select: 'id',
-      filters: [
-        { column: 'order_id', value: order.id },
-        { column: 'status', operator: 'in', value: ACTIVE_STATUSES },
-      ],
-    });
-    if (existing) return ok(res, { requestId: existing.id, alreadyRequested: true });
+    }
+    const existing = await activeRequestFor(order.id);
+    if (existing) {
+      return ok(res, { requestId: existing.id, flow: existing.flow, alreadyRequested: true });
+    }
 
     const proof = (await loadDownloadEvidence([order.id]))[String(order.id)];
     const { flow } = decideRefundFlow({ order, evidence: proof });
-    const reason = validateRefundReason(flow, req.body || {});
+    const reason = validateRefundReason(flow, parsed.data);
     if (!reason.ok) {
       return fail(res, {
         status: 400,
@@ -141,23 +154,21 @@ module.exports = async function refundRequestHandler(req, res) {
   } catch (error) {
     // 23505 = unique_violation do índice "uma solicitação aberta por pedido".
     // O supabaseRequest põe o código em `details.code`, não na mensagem.
-    if (error?.details?.code === '23505' || String(error?.message || '').includes('23505')) {
-      const duplicateOrder = await getTableRow('orders', {
-        select: 'id',
-        filters: [
-          { column: 'order_code', value: orderId },
-          { column: 'customer_id', value: session.uid },
-        ],
-      }).catch(() => null);
-      const active = await getTableRow('refund_requests', {
-        select: 'id',
-        filters: [
-          { column: 'order_id', value: duplicateOrder?.id },
-          { column: 'status', operator: 'in', value: ACTIVE_STATUSES },
-        ],
-      }).catch(() => null);
-      return ok(res, { requestId: active?.id || null, alreadyRequested: true });
+    if (
+      order?.id &&
+      (error?.details?.code === '23505' || String(error?.message || '').includes('23505'))
+    ) {
+      const active = await activeRequestFor(order.id).catch(() => null);
+      return ok(res, {
+        requestId: active?.id || null,
+        flow: active?.flow || null,
+        alreadyRequested: true,
+      });
     }
+    log.error('registro_falhou', {
+      reason: error?.message || String(error),
+      status: error?.statusCode || error?.status,
+    });
     return fail(res, {
       status: 500,
       code: ERROR_CODES.INTERNAL_ERROR,

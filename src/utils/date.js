@@ -15,9 +15,13 @@
 /**
  * `Date` válido, ou `null`. Nunca devolve "Invalid Date", que é o valor que
  * atravessa a formatação inteira e só aparece na tela como `NaN/NaN/NaN`.
+ *
+ * Ausente (`null`, `undefined`, `''`) também é `null`: antes virava `new
+ * Date(0)` e a tela mostrava 31/12/1969 como se fosse uma data real.
  */
 export function toDateSafe(value) {
-  const dt = new Date(value || 0);
+  if (value == null || value === '') return null;
+  const dt = new Date(value);
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 

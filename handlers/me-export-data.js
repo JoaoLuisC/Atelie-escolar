@@ -167,17 +167,25 @@ async function montarPerfil(uid) {
 
 async function montarDevolucoes(uid) {
   const solicitacoes = await listTableRows('refund_requests', {
-    select: 'order_id,reason,phone,status,admin_response,created_at,updated_at',
+    select:
+      'order_id,reason,reason_category,flow,first_download_at,download_count,phone,status,admin_response,created_at,updated_at',
     filters: [{ column: 'customer_id', value: uid }],
     orderBy: 'created_at',
     ascending: false,
   });
+  // Fluxo, categoria e a prova de download (quando baixou pela primeira vez e
+  // quantas vezes) são dados DA PESSOA gravados no pedido de devolução: pesam
+  // na decisão da loja, então a titular tem direito de vê-los.
   return solicitacoes.map((item) => ({
     pedido: item.order_id,
     motivo: item.reason || '',
+    motivoCategoria: item.reason_category || '',
+    fluxo: item.flow || '',
     telefone: item.phone || '',
     situacao: item.status,
     respostaDaLoja: item.admin_response || '',
+    primeiroDownloadEm: item.first_download_at || null,
+    downloads: Number(item.download_count || 0),
     criadaEm: item.created_at,
     atualizadaEm: item.updated_at,
   }));
