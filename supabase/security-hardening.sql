@@ -62,6 +62,9 @@ alter table if exists public.settings          enable row level security;
 alter table if exists public.email_subscribers enable row level security;
 alter table if exists public.email_sent_log    enable row level security;
 alter table if exists public.admin_audit_log   enable row level security;
+alter table if exists public.rate_limit_hit    enable row level security;
+alter table if exists public.coupon_customer_usage enable row level security;
+alter table if exists public.refund_requests   enable row level security;
 
 
 -- ─── 2. Catálogo público: ler categorias e produtos ativos ────────

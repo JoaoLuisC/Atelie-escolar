@@ -99,12 +99,21 @@ module.exports = async function downloadHandler(req, res) {
     // quem ESTÁ logado com outra conta não baixa o pedido alheio: token
     // repassado ou vazado não vira acesso para um terceiro com conta na loja.
     const session = getCustomerSessionFromRequest(req);
-    if (session?.uid) {
-      const order = await getTableRow('orders', {
-        select: 'id,customer_id',
-        filters: [{ column: 'id', value: tokenRecord.order_id }],
+    const order = await getTableRow('orders', {
+      select: 'id,customer_id,payment_status',
+      filters: [{ column: 'id', value: tokenRecord.order_id }],
+    });
+    // Token vivo com pedido que deixou de ser `approved` (estorno fora do
+    // webhook, devolução aceita): o arquivo não sai.
+    if (!order || order.payment_status !== 'approved') {
+      return fail(res, {
+        status: 410,
+        code: ERROR_CODES.FORBIDDEN,
+        message: 'Este pedido não está mais ativo. Fale com a loja se precisar do material.',
       });
-      if (order?.customer_id && String(order.customer_id) !== String(session.uid)) {
+    }
+    if (session?.uid) {
+      if (order.customer_id && String(order.customer_id) !== String(session.uid)) {
         await recordSecurityEvent({
           eventName: 'download_token_other_customer',
           severity: 'warn',

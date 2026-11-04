@@ -206,10 +206,14 @@ async function loadDashboard(truncated, scope = null) {
       },
       truncated,
     ),
+    // SÓ a chave que o painel usa: a tabela também guarda adminConfig (2FA,
+    // PIN em hash) e os estudos de venda de outros professores — a dona da
+    // loja (seller) tem este endpoint, e settings.js lhe nega adminConfig.
     listCapped(
       'settings',
       {
         select: 'setting_key,setting_value',
+        filters: [{ column: 'setting_key', value: 'homeSections' }],
       },
       truncated,
     ),

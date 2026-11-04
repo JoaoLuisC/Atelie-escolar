@@ -68,7 +68,8 @@ function arrange({
   tokens = [tokenRow()],
   products = [productRow()],
   signedUrl = SIGNED_URL,
-  orders = [],
+  // O handler agora exige o pedido `approved` antes de entregar.
+  orders = [{ id: ORDER_ID, payment_status: 'approved' }],
   sessionUid = null,
 } = {}) {
   const store = createSupabaseStore({ download_tokens: tokens, products, orders });
@@ -322,7 +323,7 @@ describe('download — uso único do token', () => {
 
   it('logado com OUTRA conta: recusa sem queimar o token do comprador', async () => {
     const { handler, store } = arrange({
-      orders: [{ id: ORDER_ID, customer_id: 'dona-do-pedido' }],
+      orders: [{ id: ORDER_ID, customer_id: 'dona-do-pedido', payment_status: 'approved' }],
       sessionUid: 'outra-conta',
     });
     const res = createMockRes();
@@ -338,7 +339,7 @@ describe('download — uso único do token', () => {
     for (const sessionUid of ['dona-do-pedido', null]) {
       resetModuleRegistry();
       const { handler } = arrange({
-        orders: [{ id: ORDER_ID, customer_id: 'dona-do-pedido' }],
+        orders: [{ id: ORDER_ID, customer_id: 'dona-do-pedido', payment_status: 'approved' }],
         sessionUid,
       });
       const res = createMockRes();

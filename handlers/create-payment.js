@@ -57,10 +57,17 @@ async function claimCouponUsage(couponId, customerKey) {
     // PostgREST devolve o escalar da função (ou null). Alguns proxies embrulham
     // em array de uma posição — normalizamos os dois formatos.
     const value = Array.isArray(result) ? result[0] : result;
-    return Number.isFinite(Number(value));
+    return Number.isFinite(Number(value)) ? 'claimed' : 'exhausted';
   } catch (err) {
-    log.warn('falha_ao_reservar_uso_do_cupom', { reason: err.message });
-    return false;
+    // Timeout DEPOIS do commit reservaria um uso que ninguém devolve (sem
+    // pedido, o cron não o enxerga): logar para reconciliação e responder
+    // 500, não "esgotado" — mensagem falsa que faz o cliente desistir.
+    log.error('falha_ao_reservar_uso_do_cupom', {
+      reason: err.message,
+      coupon_id: couponId,
+      customer_key: customerKey || null,
+    });
+    return 'error';
   }
 }
 
@@ -366,8 +373,30 @@ module.exports = async function createPaymentHandler(req, res) {
           message: 'Os itens do carrinho não são elegíveis para este cupom.',
         });
       }
+      // Pedido de R$ 0 (cupom de 100% ou fixo maior que o carrinho) não passa
+      // pelo Mercado Pago nem pelo gate de integridade: recusa ANTES de
+      // reservar o uso, senão cada tentativa gastava um uso por 2 h.
+      const previewDiscount = couponHelpers.computeDiscount(
+        coupon,
+        toReais(subtotalCents),
+        eligibleSubtotal,
+      );
+      if (toCentsOrZero(previewDiscount) >= subtotalCents) {
+        return fail(res, {
+          status: 422,
+          code: ERROR_CODES.COUPON_NOT_ELIGIBLE,
+          message: 'Este cupom zeraria o pedido. Fale com a loja para receber o material.',
+        });
+      }
       const usageClaimed = await claimCouponUsage(coupon.id, couponCustomerKey);
-      if (!usageClaimed) {
+      if (usageClaimed === 'error') {
+        return fail(res, {
+          status: 500,
+          code: ERROR_CODES.INTERNAL_ERROR,
+          message: 'Não foi possível aplicar o cupom agora. Tente de novo em instantes.',
+        });
+      }
+      if (usageClaimed !== 'claimed') {
         return fail(res, {
           status: 422,
           code: ERROR_CODES.COUPON_EXHAUSTED,
@@ -376,11 +405,7 @@ module.exports = async function createPaymentHandler(req, res) {
       }
       claimedCouponId = coupon.id;
       claimedCouponCustomerKey = couponCustomerKey;
-      discountAmount = couponHelpers.computeDiscount(
-        coupon,
-        toReais(subtotalCents),
-        eligibleSubtotal,
-      );
+      discountAmount = previewDiscount;
       appliedCouponCode = coupon.code;
       if (restricted) {
         eligibleItemIds = new Set(eligible.map((item) => item.id));

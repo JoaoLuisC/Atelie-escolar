@@ -290,6 +290,17 @@ module.exports = async function webhookHandler(req, res) {
     // não há o que revogar. Estorno PARCIAL não chega aqui: o MP mantém o
     // pagamento `approved` (status_detail `partially_refunded`).
     if (payment.status === 'refunded' || payment.status === 'charged_back') {
+      // Quem pagou duas vezes a mesma preferência e teve a cobrança DUPLICADA
+      // estornada não pode perder a compra válida: só o pagamento que aprovou
+      // o pedido revoga. (Pedido antigo sem payment_id gravado segue o fluxo.)
+      if (order.payment_id && String(order.payment_id) !== String(payment.id)) {
+        log.warn('estorno_de_outro_pagamento', {
+          order_id: order.id,
+          payment_id: payment.id,
+          order_payment_id: order.payment_id,
+        });
+        return ok(res, { message: 'Refund is for another payment; order kept' });
+      }
       const revoked = await updateTable(
         'orders',
         { id: `eq.${order.id}`, payment_status: 'eq.approved' },

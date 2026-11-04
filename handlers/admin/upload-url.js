@@ -297,7 +297,7 @@ function rejectDeclaredFile(kind, bucket, filename, mimeType) {
   // Validação por EXTENSÃO (sempre roda — não depende do mimeType, que o cliente
   // pode omitir). Buckets com whitelist exigem extensão permitida; 'download'
   // apenas barra extensões perigosas.
-  if (EXT_ALLOW[kind]) {
+  if (Object.hasOwn(EXT_ALLOW, kind)) {
     if (!ext || !EXT_ALLOW[kind].has(ext)) {
       return `Extensão de arquivo não suportada para ${kind}.`;
     }
@@ -511,7 +511,8 @@ module.exports = async function adminUploadUrlHandler(req, res) {
   if (!ensureStoreSession(req, res)) return;
 
   const { kind, action } = req.body || {};
-  const bucket = BUCKETS[kind];
+  // hasOwn: `kind: "constructor"` acha Object.prototype e passava do `if`.
+  const bucket = Object.hasOwn(BUCKETS, String(kind)) ? BUCKETS[kind] : null;
   if (!bucket)
     return fail(res, {
       status: 400,

@@ -445,23 +445,28 @@ async function executeDeletion({ uid, email, req, res }) {
     };
   }
 
-  // 5. Marca unsubscribe na newsletter (best-effort).
+  // 5. Newsletter e log de envios: o e-mail do titular não fica em nenhuma
+  //    tabela (best-effort). Antes só marcava unsubscribed_at e o endereço
+  //    continuava em email_subscribers e email_sent_log por tempo indefinido.
   try {
     const subscriber = await getTableRow('email_subscribers', {
-      select: 'id,unsubscribed_at',
+      select: 'id',
       filters: [{ column: 'email', value: normalizedEmail }],
     });
-    if (subscriber && !subscriber.unsubscribed_at) {
+    if (subscriber) {
       await updateTable(
         'email_subscribers',
         { id: `eq.${subscriber.id}` },
-        {
-          unsubscribed_at: new Date().toISOString(),
-        },
+        { email: anonymizeEmail(normalizedEmail, uid), unsubscribed_at: new Date().toISOString() },
       );
     }
+    await updateTable(
+      'email_sent_log',
+      { email: `eq.${normalizedEmail}` },
+      { email: anonymizeEmail(normalizedEmail, uid) },
+    );
   } catch (err) {
-    log.warn('unsubscribe_falhou', { reason: err.message });
+    log.warn('anonimizar_email_marketing_falhou', { reason: err.message });
   }
 
   // 6. Log de segurança (sem PII).

@@ -400,10 +400,13 @@ erro de senha fraca do Supabase é traduzido. O nome da sessão vem de `profiles
 exclui a conta (`/api/me-delete-account`, que anonimiza os pedidos).
 
 **Conta criada no checkout.** Quem compra sem conta cria uma no próprio checkout
-(`registerCustomer` com `source: 'checkout'`): o servidor confirma o e-mail pela Admin API e abre
-a sessão na hora, mesmo com a confirmação de e-mail ligada no Supabase — a compra é a prova de uso
-da conta, como já acontece com o provisionamento na aprovação do pedido. Com o pagamento aprovado,
-a pessoa é levada para `/downloads` (Meus produtos) já logada. Depois de qualquer login o destino
+(`registerCustomer` com `source: 'checkout'`): o servidor abre uma sessão **provisória** de 1 hora
+(`pending`) sem confirmar o e-mail — dá para pagar e baixar na hora, mesmo com a confirmação de
+e-mail ligada no Supabase. O e-mail de confirmação que o Supabase manda no cadastro vale para os
+próximos logins. (A versão anterior confirmava o e-mail pela Admin API só porque o corpo dizia
+`source: 'checkout'`; isso deixava qualquer um "adotar" pedidos de convidado de outro e-mail e foi
+removido na revisão de 04/11/2026.) Com o pagamento aprovado, a pessoa é levada para `/downloads`
+(Meus produtos) já logada. Depois de qualquer login o destino
 padrão também é Meus produtos; só quem veio do checkout volta para ele (`?redirect=/checkout`).
 
 ---

@@ -328,17 +328,28 @@ describe('gate de reautenticação do adminConfig', () => {
     expect(decryptSecret(store.stored('adminConfig').totpSecret)).toBe(STORED_TOTP);
   });
 
-  it('chave não sensível (homeSections) segue livre', async () => {
+  it('homeSections passa pela sanitização: seção sem tipo válido cai, as outras saem normalizadas', async () => {
     const store = installSettingsStore([]);
     const res = await runHandler({
       method: 'PUT',
       query: { key: 'homeSections' },
       headers: {},
-      body: { key: 'homeSections', value: { sections: [{ key: 'novidades' }] } },
+      body: {
+        key: 'homeSections',
+        value: {
+          sections: [
+            { key: 'novidades' },
+            { type: 'best_sellers', title: '  Mais vendidos  ', limit: 99 },
+            { type: 'category', categoryId: 'não-é-uuid', title: 'x' },
+          ],
+        },
+      },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(store.stored('homeSections')).toEqual({ sections: [{ key: 'novidades' }] });
+    expect(store.stored('homeSections')).toEqual({
+      sections: [{ type: 'best_sellers', title: 'Mais vendidos', limit: 20, enabled: true }],
+    });
   });
 });
 

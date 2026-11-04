@@ -157,11 +157,6 @@ describe('checkout — invariante de dinheiro (regra E3)', () => {
       itens: [[uuid(1), 50.0, 1]],
       desconto: { discount_type: 'fixed', discount_value: 10.01 },
     },
-    {
-      nome: 'cupom maior que o carrinho',
-      itens: [[uuid(1), 5.0, 1]],
-      desconto: { discount_type: 'fixed', discount_value: 999 },
-    },
   ];
 
   for (const caso of casos) {
@@ -250,9 +245,15 @@ describe('checkout — invariante de dinheiro (regra E3)', () => {
 
     await handler(requestFor([{ productId: uuid(1), quantity: 1 }], 'GIGANTE'), res);
 
-    const orders = store.rows('orders');
-    if (orders.length === 0) return;
-    expect(Number(orders[0].total_amount)).toBeGreaterThanOrEqual(0);
+    // Pedido de R$ 0 não passa pelo Mercado Pago nem pelo gate de integridade:
+    // é recusado ANTES de reservar o uso do cupom e de gravar o pedido.
+    expect(res.statusCode).toBe(422);
+    expect(res.body.error.code).toBe('COUPON_NOT_ELIGIBLE');
+    expect(store.rows('orders')).toHaveLength(0);
+    const rpcs = store.spies.supabaseRequest.mock.calls.filter(([path]) =>
+      String(path).includes('rpc/increment_coupon_usage'),
+    );
+    expect(rpcs).toHaveLength(0);
   });
 
   it.each([

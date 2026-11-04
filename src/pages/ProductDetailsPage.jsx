@@ -48,16 +48,27 @@ function buildProductSeoDescription(product) {
   return fallback.slice(0, 200);
 }
 
+// Sempre no domínio youtube-nocookie.com (sem cookie de rastreio para quem só
+// visita) — é o que a CSP do vercel.json libera em frame-src.
+const YOUTUBE_HOSTS = new Set([
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'www.youtube-nocookie.com',
+]);
+const YOUTUBE_ID = /^[\w-]{6,20}$/;
+function toNocookieEmbed(id) {
+  return YOUTUBE_ID.test(id) ? `https://www.youtube-nocookie.com/embed/${id}` : null;
+}
 function getYoutubeEmbedUrl(url) {
   try {
     const u = new URL(url);
-    if (u.hostname.includes('youtu.be')) {
-      return `https://www.youtube.com/embed${u.pathname}`;
-    }
-    if (u.hostname.includes('youtube.com')) {
+    if (u.hostname === 'youtu.be') return toNocookieEmbed(u.pathname.slice(1));
+    if (YOUTUBE_HOSTS.has(u.hostname)) {
       const id = u.searchParams.get('v');
-      if (id) return `https://www.youtube.com/embed/${id}`;
-      if (u.pathname.startsWith('/embed/')) return url;
+      if (id) return toNocookieEmbed(id);
+      const m = u.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/);
+      if (m) return toNocookieEmbed(m[1]);
     }
     return null;
   } catch {

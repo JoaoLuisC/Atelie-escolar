@@ -104,6 +104,8 @@ const FECHADAS = [
   'email_sent_log',
   'admin_audit_log',
   'rate_limit_hit',
+  'coupon_customer_usage',
+  'refund_requests',
 ];
 
 /** GET sem linhas: só a contagem, pelo header. Nunca devolve conteúdo. */

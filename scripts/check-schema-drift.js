@@ -49,6 +49,12 @@ const FUNCOES = [
   'purge_stale_email_subscribers',
   'purge_old_rate_limit_hits',
   'increment_coupon_usage',
+  'decrement_coupon_usage',
+  'release_coupon_reservation',
+  'release_stale_coupon_reservations',
+  'reclaim_coupon_on_approval',
+  'sync_profile_email',
+  'product_sales_counts',
   'rate_limit_hit',
   'find_profile_id_by_email',
   'slugify',
@@ -88,6 +94,8 @@ const TABELAS_COM_RLS = [
   'email_sent_log',
   'admin_audit_log',
   'rate_limit_hit',
+  'coupon_customer_usage',
+  'refund_requests',
 ];
 
 const OK = '  OK  ';

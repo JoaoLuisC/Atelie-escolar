@@ -42,6 +42,23 @@ export function EditableText({ path, value, as: Tag = 'span', className = '', ch
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onInput={(event) => onEdit(path, event.currentTarget.textContent || '')}
+      onPaste={(event) => {
+        // Só texto puro, numa linha: colar com <div>/<br> do navegador fazia o
+        // React reescrever o nó e o texto aparecer duplicado.
+        event.preventDefault();
+        const text = (event.clipboardData.getData('text/plain') || '')
+          .replace(/\s*\n+\s*/g, ' ')
+          .trim();
+        const selection = globalThis.getSelection?.();
+        if (!selection?.rangeCount) return;
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(text));
+        range.collapse(false);
+        const el = event.currentTarget;
+        el.textContent = el.textContent || '';
+        onEdit(path, el.textContent);
+      }}
       onKeyDown={(event) => {
         // Enter confirma (sai do campo); quebra de linha é edição pelos campos.
         if (event.key === 'Enter') {

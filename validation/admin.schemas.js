@@ -373,7 +373,7 @@ const ASSIGNABLE_ROLES = Object.freeze(['customer', 'cliente', 'seller', 'vended
 const userUpdateSchema = z
   .object({
     id: uuidId,
-    name: z.string().trim().optional(),
+    name: z.string().trim().max(120, 'O nome pode ter até 120 caracteres.').optional(),
     role: z
       .string()
       .trim()

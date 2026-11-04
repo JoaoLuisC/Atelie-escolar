@@ -35,7 +35,11 @@ const {
   verifyPin,
 } = require('../../lib/admin-2fa');
 
-const { sanitizeHomeContent, sanitizeProductDefaults } = require('../../lib/store-content');
+const {
+  sanitizeHomeContent,
+  sanitizeHomeSections,
+  sanitizeProductDefaults,
+} = require('../../lib/store-content');
 
 const ALLOWED_KEYS = new Set(['homeSections', 'adminConfig', 'homeContent', 'productDefaults']);
 
@@ -45,6 +49,7 @@ const ALLOWED_KEYS = new Set(['homeSections', 'adminConfig', 'homeContent', 'pro
 const CONTENT_SANITIZERS = Object.freeze({
   homeContent: sanitizeHomeContent,
   productDefaults: sanitizeProductDefaults,
+  homeSections: sanitizeHomeSections,
 });
 
 const MIN_FALLBACK_PIN_LENGTH = 6;

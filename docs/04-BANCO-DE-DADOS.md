@@ -16,7 +16,7 @@ Arquivos:
 | Arquivo                                                                 | Papel                                                                                                                                                           |
 | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`supabase/schema.sql`](../supabase/schema.sql)                         | DDL base de 14 tabelas. Rode primeiro em projeto novo: as migrations assumem que elas existem                                                                   |
-| [`supabase/migrations/`](../supabase/migrations/)                       | 27 migrations versionadas (lista abaixo). Criam as outras 6 tabelas, as funções, os jobs, o `products.seller_id` e a visibilidade dos buckets                   |
+| [`supabase/migrations/`](../supabase/migrations/)                       | 30 migrations versionadas (lista abaixo). Criam as outras 6 tabelas, as funções, os jobs, o `products.seller_id` e a visibilidade dos buckets                   |
 | [`supabase/security-hardening.sql`](../supabase/security-hardening.sql) | Espelho, fora da sequência, do baseline de RLS/policies/grants da migration `20260702000000`                                                                    |
 | [`supabase/seed-sample-data.sql`](../supabase/seed-sample-data.sql)     | Dados de exemplo idempotentes (categorias e produtos com imagens placeholder)                                                                                   |
 | [`supabase/config.toml`](../supabase/config.toml)                       | Configuração do Supabase CLI/local                                                                                                                              |
@@ -109,14 +109,14 @@ Pedidos. O cliente logado lê os próprios (`customer_id = auth.uid()`); o resto
 
 Perfil de cada conta do Supabase Auth. Nasce pelo trigger `handle_new_user`.
 
-| Coluna                      | Tipo                      | Notas                                                                                                             |
-| --------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `id`                        | uuid PK FK → `auth.users` | ON DELETE CASCADE                                                                                                 |
-| `email`                     | text uniq                 | Espelho de `auth.users.email`, mantido pelo trigger `on_auth_user_email_changed`                                  |
-| `display_name`              | text                      | Única coluna que o próprio usuário consegue alterar                                                               |
-| `role`                      | text                      | `CUSTOMER` \| `SELLER` \| `ADMIN` \| `MASTER` (CHECK `check_valid_role`). O painel só atribui `CUSTOMER`/`SELLER` |
-| `provider`                  | text                      | `email` \| `google`                                                                                               |
-| `created_at` / `updated_at` | timestamptz               |                                                                                                                   |
+| Coluna                      | Tipo                      | Notas                                                                                                                      |
+| --------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | uuid PK FK → `auth.users` | ON DELETE CASCADE                                                                                                          |
+| `email`                     | text uniq                 | Espelho de `auth.users.email`, mantido pelo trigger `on_auth_user_email_changed`                                           |
+| `display_name`              | text                      | Alterado só por `/api/me-profile` (service role); até 120 caracteres. A policy de UPDATE para `authenticated` foi removida |
+| `role`                      | text                      | `CUSTOMER` \| `SELLER` \| `ADMIN` \| `MASTER` (CHECK `check_valid_role`). O painel só atribui `CUSTOMER`/`SELLER`          |
+| `provider`                  | text                      | `email` \| `google`                                                                                                        |
+| `created_at` / `updated_at` | timestamptz               |                                                                                                                            |
 
 O trigger `profiles_guard_privileged_cols` preserva `id`, `email`, `role` e `provider` quando quem
 grava não é `service_role`: o cliente não consegue se promover a admin.
@@ -289,8 +289,10 @@ Idempotência dos e-mails automáticos. Só backend. Retenção de 90 dias.
 
 ### `admin_audit_log`
 
-Trilha de escrita do painel. **Só INSERT**: UPDATE e DELETE são bloqueados por REVOKE e por
-trigger, inclusive para `service_role`. Retenção de 18 meses.
+Trilha de escrita do painel. **Só INSERT**: UPDATE, DELETE e TRUNCATE são bloqueados por REVOKE e
+por trigger, inclusive para `service_role`. **Permanente** — não entra em `purge_old_logs()`
+(migration `20261104000000`: a purga de 18 meses abortaria no trigger e levaria junto a retenção
+dos outros logs).
 
 | Coluna             | Tipo               | Notas                                                                                                                                 |
 | ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -388,7 +390,7 @@ Toda função `SECURITY DEFINER` tem `set search_path = public, pg_temp` e `EXEC
 
 | Função                                   | O que faz                                                                                                                                                                                                                                    | Agendamento (`pg_cron`)                             |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `purge_old_logs()`                       | Apaga `download_logs` > 12 meses, `security_events` e `page_views` > 6 meses, `admin_audit_log` > 18 meses                                                                                                                                   | `purge_old_logs_daily`, `0 3 * * *`                 |
+| `purge_old_logs()`                       | Apaga `download_logs` > 12 meses, `security_events` e `page_views` > 6 meses (`admin_audit_log` é permanente)                                                                                                                                | `purge_old_logs_daily`, `0 3 * * *`                 |
 | `cleanup_old_analytics_events()`         | `analytics_events` > 180 dias                                                                                                                                                                                                                | `cleanup-analytics-events`, `0 3 1 * *`             |
 | `cleanup_old_email_logs()`               | `email_sent_log` > 90 dias                                                                                                                                                                                                                   | `cleanup-email-logs-monthly`, `15 3 1 * *`          |
 | `cleanup_old_abandoned_carts()`          | `abandoned_carts` não recuperados com `updated_at` > 90 dias                                                                                                                                                                                 | `cleanup-abandoned-carts-monthly`, `20 3 1 * *`     |
@@ -405,7 +407,7 @@ Toda função `SECURITY DEFINER` tem `set search_path = public, pg_temp` e `EXEC
 Sem `pg_cron` habilitado, as migrations só emitem um `notice` e as limpezas precisam ser rodadas à
 mão (`select public.purge_old_logs();` etc.). Conferir os jobs: `select jobname, schedule from cron.job;`.
 
-## Migrations (29)
+## Migrations (30)
 
 Em ordem, aplicadas com `npm run supabase:db:push`.
 
@@ -438,8 +440,9 @@ Em ordem, aplicadas com `npm run supabase:db:push`.
 | `20261031000000_refund_requests.sql`                     | Cria `refund_requests` (RLS, só `service_role`) e o índice de uma solicitação aberta por pedido                                                                                                                           |
 | `20261031010000_coupon_audience_and_customer_limits.sql` | Público e limite por cliente em `coupons`, `orders.coupon_customer_key`, `coupon_customer_usage`; funções de cupom com 2 argumentos e trigger de recontagem atualizado                                                    |
 | `20261101000000_refund_policy_download_evidence.sql`     | `refund_requests`: `reason_category`, `flow`, `first_download_at`, `download_count`; `orders.download_terms_accepted_at` (aceite da caixa de ciência do checkout)                                                         |
-| `20261102000000_storage_bucket_limits.sql`               | `file_size_limit` e `allowed_mime_types` dos três buckets gravados no banco (iguais aos de `handlers/admin/upload-url.js`), para não depender do PUT em runtime                                                           |
 | `20261031020000_storage_buckets_visibility.sql`          | Visibilidade dos buckets no banco: `product_files` privado; `product_images` e `product_videos` públicos                                                                                                                  |
+| `20261102000000_storage_bucket_limits.sql`               | `file_size_limit` e `allowed_mime_types` dos três buckets gravados no banco (iguais aos de `handlers/admin/upload-url.js`), para não depender do PUT em runtime                                                           |
+| `20261104000000_review_hardening.sql`                    | `purge_old_logs()` sem `admin_audit_log` (permanente), `revoke truncate`, remove `profiles_own_update`, teto de 120 em `display_name`, `slugify()` com `extensions` no search_path                                        |
 
 ### Criar uma migration
 

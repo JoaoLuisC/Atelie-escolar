@@ -142,4 +142,22 @@ describe('ProductDetailsPage', () => {
     expect(foto1).toHaveAttribute('aria-pressed', 'false');
     expect(document.querySelector('video')).toHaveAttribute('src', 'https://cdn.test/demo.mp4');
   });
+
+  it('link do YouTube vira iframe no domínio youtube-nocookie (o que a CSP libera)', async () => {
+    fetchProductByIdentifier.mockResolvedValue({
+      id: 'p1',
+      slug: 'kit',
+      name: 'Kit Volta às Aulas',
+      price: 64.9,
+      images: ['https://cdn.test/a.webp'],
+      videos: ['https://youtu.be/dQw4w9WgXcQ?si=abc'],
+    });
+    renderEm('/produtos/kit');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver vídeo 2 de 2' }));
+    expect(screen.getByTitle('Vídeo do produto')).toHaveAttribute(
+      'src',
+      'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+    );
+  });
 });
